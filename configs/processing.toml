@@ -1,0 +1,39 @@
+# processing.toml -- settings of src/process_packet.py
+#
+# process_packet.py turns one packet (its manifest + the raw files) into training data:
+#   1. traces  -> decoded arrays (.npz) + trace features (features.json)
+#   2. images  -> decompressed FITS (.fits) -> WADERs (panaSKImg) -> sigma_e, gain, lambda
+#   3. grouping -> one row per (packet, board, channel) in dataset.csv / dataset.jsonl
+
+[output]
+dir = "../processed"          # relative paths are relative to this file's directory
+
+# The manifests store paths as seen on the DAQ machine.  When the files are processed on
+# another computer, map the DAQ directory prefix to the local copy (first match wins).
+[paths]
+"/home/damicm/run/PA_PQ_testing" = "../data"
+
+[traces]
+save_raw = true               # keep every decoded sample (values + flags) in a compressed .npz
+# The features (src/trace_features.py) always use the usable pixels (no row-start or charged pixels).
+
+[waders]
+# How to start panaSKImg.  On this laptop it lives in the conda environment "damic" ("conda run"
+# sets up ROOT's environment; importing ROOT without it crashes); on the DAQ machine it may
+# simply be ["panaSKImg"].
+command = ["/opt/homebrew/Caskroom/miniforge/base/bin/conda", "run", "-n", "damic", "panaSKImg"]
+# WADERs configuration (the one used for the 2026-10-06 image).  Its [input][image] geometry
+# (ccd_rows, ccd_cols = active region; the rest is overscan) must fit the packet images:
+# img_9.json is for 100 x 1000 images with 854 active columns.
+json = "/Users/dylanrosenmerkel/Documents/Software/json/img_9.json"
+extra_args = ["--acm"]        # the FITS file is an ACM multi-extension image (4 channels)
+timeout_s = 1800
+# Directory of the pysimdamicm checkout, used to record the WADERs version (git commit).
+pysimdamicm_dir = "/Users/dylanrosenmerkel/Documents/Software/pysimdamicm"
+
+# Optional: replace entries of the JSON's [input][image] block for these packets (the modified
+# JSON is saved next to the results).  Example for 100 x 130 images with 30 overscan columns:
+# [waders.image_overrides]
+# ccd_rows = 100
+# ccd_cols = 100
+[waders.image_overrides]

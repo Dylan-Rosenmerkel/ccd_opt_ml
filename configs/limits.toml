@@ -1,0 +1,125 @@
+# limits.toml -- allowed windows for every parameter the acquisition scripts may touch.
+#
+# HOW IT IS USED
+#   * ccd_limits.Limits.load() reads this file; each [limits."<pattern>"] table is an
+#     allowed window for every parameter whose name matches the glob <pattern>.
+#   * The FIRST matching table wins, so keep specific patterns above general ones.
+#   * A parameter with no matching table is REFUSED (unknown knobs are never touched).
+#   * max_step (voltages only) is the largest change applied in one go; a bigger change
+#     between two consecutive packets is ramped in steps of at most max_step, with every
+#     intermediate state checked again.
+#   * Hardware ranges (DAC / bias potentiometer) are enforced in addition, in code.
+#
+# !! PROVISIONAL !!
+#   The windows below are narrow placeholders centred on the reference configuration
+#   (reference.bcf / reference_v5_pumping.seq).  They have NOT been reviewed against the
+#   device manuals.  Review them (and add the bias/clock relationships to
+#   ccd_limits.relational_constraints), then set reviewed = true.  The acquisition
+#   scripts refuse to drive real hardware while reviewed = false.
+
+[meta]
+reviewed = false
+
+# ---------------------------------------------------------------- sequencer ---
+[limits.NDCM]            # number of skips per pixel
+min = 1
+max = 1000
+
+[limits.NROW]
+min = 1
+max = 200
+
+[limits.NCOL]
+min = 1
+max = 700
+
+[limits.NPBIN]           # parallel (row) binning
+min = 1
+max = 40
+
+[limits.NSBIN]           # serial (column) binning
+min = 1
+max = 40
+
+[limits.EXPOSURE]        # seconds
+min = 0
+max = 600
+
+[limits.NDCMPRE]         # fake skips before the integration
+min = 0
+max = 10
+
+[limits.NROWPRE]         # rows skipped before / after the image
+min = 0
+max = 200
+
+[limits.NROWPOST]
+min = 0
+max = 200
+
+[limits.NCOLPRE]         # columns skipped before / after the image
+min = 0
+max = 1000
+
+[limits.NCOLPOST]
+min = 0
+max = 1000
+
+[limits.BOOLCLR]         # clear the serial register before each row transfer (0/1)
+min = 0
+max = 1
+
+[limits."delay_V?"]      # vertical transfer hold times [10 ns cycles]
+min = 3000
+max = 9000
+
+[limits."delay_H?"]      # horizontal transfer hold times [10 ns cycles]
+min = 900
+max = 3000
+
+# ------------------------------------------------------------------ biases ---
+[limits.VSUB]
+min = 40.0
+max = 60.0
+max_step = 5.0
+
+[limits."VDD?"]
+min = -21.0
+max = -17.0
+max_step = 1.0
+
+[limits."VDRAIN?"]
+min = -25.0
+max = -21.0
+max_step = 1.0
+
+[limits."VR?"]
+min = -4.0
+max = -2.0
+max_step = 0.5
+
+# ------------------------------------------------------------ clock levels ---
+[limits."V?_?_H"]        # vertical clocks, high level
+min = 8.4
+max = 11.4
+max_step = 0.5
+
+[limits."V?_?_L"]        # vertical clocks, low level
+min = 6.4
+max = 9.4
+max_step = 0.5
+
+[limits."H?_?_H"]        # horizontal clocks, high level
+min = 8.0
+max = 11.0
+max_step = 0.5
+
+[limits."H?_?_L"]        # horizontal clocks, low level
+min = 5.2
+max = 8.2
+max_step = 0.5
+
+[limits."TG_?_?"]        # transfer gates
+min = 5.9
+max = 8.9
+max_step = 0.5

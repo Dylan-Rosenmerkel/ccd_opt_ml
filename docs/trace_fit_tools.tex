@@ -1,0 +1,473 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\title{Comparison Tools for Skipper-CCD Traces:\\Parametric Fits and Summary Measurements}
+\author{ML-assisted optimization of CCD operating parameters --- working note}
+\date{October 2026}
+
+\newcommand{\code}[1]{\texttt{#1}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note describes all 39 tools used by \code{compare\_trace.py} to decide whether two raw
+video-channel traces of a skipper CCD can be told apart: 11 parametric fits (time constants and amplitudes
+of small physical models), 19 summary measurements of the skip region, and 9 measurements of the horizontal
+and vertical transfer blocks. Of the 39, 35 enter the verdict; the 4 vertical-block tools are printed for
+information only. The note explains what each tool does and how it is computed, how the numbers are compared
+between two traces, and what the tests on real data showed: channel~0 against channel~3, and repeats of channel~0 with identical
+parameters (Sections~\ref{sec:results} and~\ref{sec:repeats}). All numbers are in
+uncalibrated ADU unless stated otherwise. The tools have so far been tried only on traces with
+\emph{identical} operating parameters; they have not yet been shown to respond to parameter changes.
+\end{abstract}
+
+\section{Purpose and context}
+
+The ML program needs tools that distinguish traces taken with different operating parameters. Simple
+summary numbers (edge heights, window means, noise power; Section~\ref{sec:other}) were implemented first. The fit
+tools (Section~\ref{sec:fits}) add a second kind of measurement: instead of reading a value off the waveform, they fit a small physical
+model and report its parameters. Time constants in particular are expected to depend on bandwidth and
+timing rather than on the gain of an individual amplifier, which makes them candidates for tools that
+are less sensitive to amplifier-to-amplifier differences. That expectation is a hypothesis; it has not
+been tested against parameter changes.
+
+\section{Data preparation shared by all fits}
+
+A trace is decoded (\code{decode\_trace.py}) and split into regions (\code{trace\_regions.py}). The fits
+described here work on the \emph{skip region} of one pixel. Let $X_{kj}$ be the raw ADC value of sample
+$j$ in skip cycle $k$. For the traces analysed so far, a cycle has $P=489$ samples (32.6~$\mu$s at
+15~MHz), a pedestal window of $n_{\rm ped}=150$ samples at the start of the cycle, and a signal window
+starting at sample $j_{\rm sig}=207$.
+
+\begin{description}
+  \item[Baseline.] $b_k = \frac{1}{n_{\rm ped}}\sum_{j<n_{\rm ped}} X_{kj}$, the mean of the pedestal
+        window of skip $k$. It walks slowly across the skips (reset-leakage droop).
+  \item[Baseline-removed cycle.] $s_{kj} = X_{kj} - b_k$.
+  \item[Template.] $m_j = \frac{1}{K-5}\sum_{k\ge 5} s_{kj}$, the mean shape of the cycle. The first five
+        skips are excluded because they behave differently.
+  \item[CDS.] $c_k$ = pedestal mean $-$ signal mean of skip $k$, taken from the inline level-1 records
+        written by the firmware. $c_{\ge 10}$ denotes the CDS values of skips $10,\dots,K-1$.
+\end{description}
+
+Each of the 10 pixels of a trace gives one set of fit results; the pixels are the replicates used in the
+statistical comparison (Section~\ref{sec:stats}).
+
+\section{The fit tools}
+\label{sec:fits}
+
+\subsection{Exponential fit by variable projection}
+\label{sec:exp}
+
+Three tools (settling after the pulse, dip recovery, baseline droop) share one routine,
+\code{fit\_exponential}, which fits
+\begin{equation}
+  y(x) = c + A\,e^{-x/\tau}.
+\end{equation}
+The parameters $A$ and $c$ enter linearly, so for any trial $\tau$ they are found exactly by linear
+least squares with basis $\{e^{-x/\tau},\,1\}$. Only $\tau$ is searched:
+\begin{enumerate}
+  \item 60 trial values, log-spaced between $\tau_{\min}$ and $\tau_{\max}$; keep the one with the
+        smallest sum of squared residuals.
+  \item 41 values, log-spaced over $[\tau^*/1.25,\;1.25\,\tau^*]$ around that point.
+  \item A parabola is fitted through the minimum and its two neighbours in $(\ln\tau,\ \mathrm{SSE})$,
+        and its vertex is taken as $\tau$. This removes the quantization that the grid would otherwise
+        impose on the reported time constants. (If the minimum sits at the edge of the fine grid, the grid
+        value is kept.)
+  \item $A$ and $c$ are recomputed by least squares at the final $\tau$.
+\end{enumerate}
+No gradient-based optimizer is used, so the fit cannot fail to converge; it can, however, return a value at
+the edge of the search range if the data do not contain an exponential. The routine returns NaN if fewer
+than five points are given or the data are not finite; such replicates are dropped from the test.
+
+\subsubsection{Settling after the pulse (\code{fit: settling time after pulse}, \code{fit: settling amplitude after pulse})}
+
+\textbf{What it measures.} Every skip cycle contains a large positive pulse after the signal window
+(visible in \code{plots/regions\_templates.png}: the pulse peaks at about 25~$\mu$s). After the peak the
+video signal relaxes back to its baseline. The relaxation is expected to reflect the finite bandwidth
+of the source follower and preamplifier, so its time constant should depend on the amplifier chain and
+on timing, and its amplitude on the size of the clock feedthrough.
+
+\textbf{How.} The template $m_j$ is cut at its maximum after the signal window,
+$j_{\rm peak} = j_{\rm sig}+n_{\rm ped}+\arg\max_j m_j$, and $m_j$ for $j\ge j_{\rm peak}$ is fitted against
+$x=(j-j_{\rm peak})/15$ in $\mu$s with $\tau\in[0.05,\,20]\ \mu$s. Reported: $\tau$ and $A$.
+
+\subsubsection{Dip recovery (\code{fit: dip recovery time}, \code{fit: dip recovery amplitude})}
+
+\textbf{What it measures.} Between the pedestal and the signal window the template shows a short
+negative dip (the summing-well/output-gate edge) followed by recovery. Its amplitude measures the size of
+that feedthrough; its time constant the speed of the recovery.
+
+\textbf{How.} $j_{\rm dip} = n_{\rm ped}+\arg\min_j m_j$ over $j\in[n_{\rm ped},\,j_{\rm sig})$. The template from the
+minimum up to the start of the signal window is fitted with $\tau\in[0.02,\,10]\ \mu$s. Reported: $\tau$ and
+$A$ (negative, since the dip points downward).
+
+\subsubsection{Baseline droop (\code{fit: baseline droop time constant}, \code{fit: baseline droop amplitude})}
+
+\textbf{What it measures.} The pedestal baseline $b_k$ rises across the skips of a pixel (in the sample trace
+from about $-22\,000$ to $-3\,500$ ADU over 500 skips). The node voltage creeps toward a limiting value; a
+saturating exponential describes it well. The time constant (in skips) is the characteristic time of this
+creep, which is related to the leakage current and the node capacitance (Eq.~(24) of the noise-landscape
+note); the amplitude is the total excursion.
+
+\textbf{How.} $b_k$ for $k=1,\dots,K-1$ (skip 0 is excluded) is fitted against $x=k$ with
+$\tau\in[5,\,5000]$ skips. Reported: $\tau$ (skips) and $A$ (ADU, negative for a rising baseline).
+
+\subsection{Damped ringing of the first skips (\code{fit: first-skip ringing ...})}
+
+\textbf{What it measures.} The CDS of the first skips of a pixel does not settle immediately: in the sample
+trace skip~0 is about 320~ADU above the later values, followed by swings of changing sign
+(\code{plots/skip\_evolution.png}, panel C). This tool describes that transient with a damped oscillation.
+
+\textbf{Model.} For $y_k = c_k - \mathrm{median}(c_{\ge 10})$, $k=0,\dots,19$:
+\begin{equation}
+  y_k = e^{-k/\tau}\bigl(a\cos 2\pi f k + b\sin 2\pi f k\bigr).
+\end{equation}
+The frequency $f$ (51 values from 0 to 0.5 cycles per skip; $f=0$ is a pure decay) and the decay length
+$\tau$ (25 log-spaced values from 1 to 30 skips) are searched on a grid; $a$ and $b$ are linear and solved by
+least squares for each pair. The pair with the smallest squared residual is kept.
+
+\textbf{Reported.} Frequency $f$ (cycles per skip), decay length $\tau$ (skips), and amplitude
+$\sqrt{a^2+b^2}$ (ADU).
+
+\textbf{Caveat.} Twenty points and four effective parameters are few. In the sample data the fitted frequency
+differed strongly between channels (0.03 against 0.17 cycles per skip), and for several pixels the best fit
+is essentially a pure decay. The decay length and amplitude are more trustworthy than the frequency.
+
+\subsection{Noise model (\code{fit: white noise per skip}, \code{fit: correlated noise floor})}
+
+\textbf{What it measures.} Averaging $N$ skips reduces uncorrelated (white) noise like $1/\sqrt{N}$ but
+cannot reduce correlated noise (1/$f$, drifts). The noise of an $N$-skip average is therefore expected to
+follow
+\begin{equation}
+  \sigma(N)^2 = \frac{\sigma_{\rm w}^2}{N} + \sigma_{\rm f}^2 ,
+\end{equation}
+where $\sigma_{\rm w}$ is the white noise per skip and $\sigma_{\rm f}$ the floor that averaging cannot remove.
+
+\textbf{How.} The CDS values $c_{\ge10}$ are detrended by subtracting a degree-4 polynomial in the skip number (this removes
+the slow drift and keeps the scatter; a short running mean must not be used, because it also cancels the average over
+blocks of the same length). For $N\in\{1,2,5,10,25,50\}$ the detrended values are divided into
+non-overlapping blocks of $N$ skips, and $\sigma(N)$ is the sample standard deviation (ddof $=1$) of the block
+means. $\sigma_{\rm w}^2$ and $\sigma_{\rm f}^2$ follow from a linear least-squares fit of $\sigma(N)^2$ against
+$(1/N,\,1)$; negative coefficients are set to zero. Reported: $\sigma_{\rm w}$ and $\sigma_{\rm f}$ in ADU.
+
+\textbf{Caveat.} The model assumes the skip-to-skip noise is white plus a constant floor. The measured noise of
+$N$-skip averages in the sample traces falls \emph{faster} than $1/\sqrt{N}$ (for example 0.34~ADU at $N=50$ against
+0.81~ADU expected from $\sigma(1)=5.7$~ADU), because the CDS values of nearby skips are anti-correlated (lag-2
+autocorrelation about $-0.2$). A floor cannot describe that, so the fitted floor is small (0.16 and 0.22~ADU on the two
+channels) and the model fits the data poorly; $\sigma_{\rm w}$ is close to $\sigma(1)$. The lag-2 autocorrelation
+is therefore also measured directly (Section~\ref{sec:other}).
+
+\section{The other tools (summary measurements)}
+\label{sec:other}
+
+The remaining 28 tools are direct measurements on the template, the baseline and the CDS values. They use
+the quantities defined in Section~2, with $n_{\rm ped}=150$ the pedestal-window length, $j_{\rm sig}$ the start of the
+signal window and $P$ the cycle length. Curves are block-averaged to at most 500 points before testing.
+
+\subsection{Skip region (19 tools, one value or curve per pixel)}
+
+\begin{description}
+  \item[mean shape] The template $m_j$ as a curve.
+  \item[baseline droop curve] $b_k-b_1$ for $k\ge1$, as a curve over the skips.
+  \item[dip height] $\min_j m_j$ over $j\in[n_{\rm ped},\,j_{\rm sig})$.
+  \item[signal-window level] mean of $m_j$ over the signal window, excluding 10 samples at each end.
+  \item[pulse peak height] $\max_j m_j$ over $j\ge j_{\rm sig}+n_{\rm ped}$.
+  \item[end-of-cycle tail level] mean of the last 30 samples of $m_j$.
+  \item[baseline at skip 1] $b_1$.
+  \item[droop total] $b_{K-1}-b_1$.
+  \item[droop half-time] the number of skips (counted from skip 1) after which the baseline has covered half of
+        its total change.
+  \item[CDS mean] mean of $c_{\ge10}$.
+  \item[CDS rms (detrended)] sample standard deviation of $c_{\ge10}$ after subtracting a degree-4 polynomial in the skip number.
+  \item[first-skip CDS excess] $c_0-\mathrm{median}(c_{\ge10})$.
+  \item[skips 1--4 CDS ringing] root-mean-square of $c_k-\mathrm{median}(c_{\ge10})$ for $k=1,\dots,4$.
+  \item[CDS autocorrelation at lag 2] correlation between $c_k$ and $c_{k+2}$ of the detrended CDS values
+        ($c_{\ge10}$): zero for white noise, about $-0.2$ in the sample traces.
+  \item[noise of 10-skip and 50-skip average] $\sigma(N)$ for $N=10$ and $N=50$, as defined for the noise model in
+        Section~\ref{sec:fits}.
+  \item[noise power in three bands] For skips $k\ge5$ the pedestal-window samples of $s_{kj}-m_j$ are taken, the
+        mean of each window is removed, and the squared magnitude of its Fourier transform is averaged over
+        the skips and divided by $n_{\rm ped}$. The tool is $\log_{10}$ of the summed power in
+        $0.1$--$1$, $1$--$3$ and $3$--$7.5$~MHz. The frequency resolution is 100~kHz.
+\end{description}
+
+\subsection{Horizontal block (5 tools, one value per pixel)}
+
+For each pixel, all (typically 19) horizontal transfers are stacked, the mean of the first 30 samples of each
+transfer is subtracted, and $h_j$ denotes the mean over the transfers.
+
+\begin{description}
+  \item[mean shape] $h_j$ as a curve.
+  \item[minimum, maximum] $\min_j h_j$ and $\max_j h_j$.
+  \item[end level] mean of the last 50 samples of $h_j$.
+  \item[scatter between transfers] median over time of the standard deviation across transfers.
+\end{description}
+
+\subsection{Vertical block (4 tools, one value per transfer; information only)}
+
+Same definitions as the horizontal block (mean shape, minimum, maximum, end level), but one replicate is one
+vertical transfer (typically 18 per trace) and no scatter tool exists. These tools are excluded from the verdict
+because consecutive transfers drift along the block and are not interchangeable (Section~\ref{sec:stats}).
+
+\subsection{What the tools measure: an annotated example}
+
+Figure~\ref{fig:annotated} shows one pixel of a healthy trace with the quantity each tool reports marked on the data
+(panels A, D, E, G, H), the fits drawn over the data (B, C, D, E, F), and the replicate structure used in the statistics (I).
+Two things can be read off directly. First, the single-exponential fits in panels B and C describe the dip recovery and
+the settling only approximately: the data have a slower tail than one exponential, so the fitted time constants are
+descriptive parameters, not circuit values. Second, panel F shows the noise of $N$-skip averages falling faster than the
+white-plus-floor model, as discussed in the noise-model caveat.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{../plots/tools_annotated.png}
+  \caption{What the tools measure (ACM 101 channel 0, pixel 6). A: skip-cycle template with the pedestal and signal
+  windows, the dip height, the pulse peak height, the signal-window level and the end-of-cycle tail level.
+  B, C: exponential fits to the recovery after the dip and to the settling after the pulse. D: baseline of every skip with
+  the droop fit, the baseline at skip 1, the total droop and the half-time. E: CDS of the first skips, the first-skip excess,
+  the damped-ringing fit and the CDS mean. F: noise of $N$-skip averages with the white-plus-floor fit and the $1/\sqrt{N}$
+  line. G: noise power of the pedestal window with the three frequency bands. H: horizontal transfer with minimum,
+  maximum and end level. I: the pulse peak height of each usable pixel (dots) and of each run (bars) for four repeat runs.}
+  \label{fig:annotated}
+\end{figure}
+
+\section{How two traces are compared}
+\label{sec:stats}
+
+Each tool gives one number per pixel (the \emph{replicate}). For traces A and B:
+\begin{itemize}
+  \item \textbf{Statistic.} Welch's $z=(\bar x_A-\bar x_B)/\sqrt{s_A^2/n_A+s_B^2/n_B}$; for a curve, the
+        root-mean-square of $z$ over the curve.
+  \item \textbf{Permutation test.} The A/B labels of the replicates are shuffled; the $p$-value is the
+        fraction of labelings that give a statistic at least as large as the real one. If there are at most 50\,000 distinct
+        labelings they are all enumerated and $p$ is exact (8 usable pixels per trace give 12\,870 labelings, so the smallest possible
+        $p$ is $2/12\,870=1.6\times10^{-4}$: the real labeling and its mirror image); otherwise 10\,000 random labelings are used and
+        the smallest reportable value is $10^{-4}$. Many strongly different tools therefore tie at this floor and can only be
+        ranked by $z$.
+  \item \textbf{Threshold.} A tool \emph{distinguishes} the traces if $p<\alpha/N_{\rm tools}$ with
+        $\alpha=0.01$ (Bonferroni). With 35 tools this is $2.9\times10^{-4}$. Tools with $p<0.05$ but above
+        the threshold are called \emph{marginal}.
+  \item \textbf{Controls.} The same test is run on trace A alone, split into even against odd pixels and into
+        first against second half (row~1 against row~2). If any tool passes the corrected threshold in a
+        control, the verdict is declared inconclusive.
+  \item \textbf{Vertical block.} The 18 vertical transfers are not interchangeable (a control showed their first
+        and second halves differ), so the vertical tools are printed for information and excluded from the
+        verdict.
+\end{itemize}
+Because the fitted time constants scatter very little between pixels (the template is the mean of 500 skips),
+$z$ becomes very large for them even for small differences. Rank tools by $p$; treat $z$ as a rough size only.
+
+\section{First results: ACM 101, channel 0 against channel 3}
+\label{sec:results}
+
+Both traces use identical operating parameters; they differ only in which amplifier was read. The verdict was
+that the traces \emph{are} distinguishable, and both controls passed. The fits, averaged over the 10 pixels:
+
+\begin{center}
+\begin{tabular}{l r r l}
+\toprule
+Fit & ch 0 & ch 3 & $p$ (verdict) \\
+\midrule
+Settling time after pulse ($\mu$s) & 0.622 & 0.578 & $3.0\times10^{-4}$ (marginal) \\
+Settling amplitude after pulse (ADU) & 43\,090 & 36\,420 & $<10^{-4}$ (distinguishes) \\
+Dip recovery time ($\mu$s) & 0.316 & 0.398 & $2.0\times10^{-4}$ (distinguishes) \\
+Dip recovery amplitude (ADU) & $-$12\,140 & $-$9\,549 & $<10^{-4}$ (distinguishes) \\
+Baseline droop time constant (skips) & 237 & 241 & $2.0\times10^{-4}$ (distinguishes) \\
+Baseline droop amplitude (ADU) & $-$19\,420 & $-$17\,970 & 0.35 (no) \\
+First-skip ringing frequency (cyc/skip) & 0.03 & 0.173 & $4.5\times10^{-3}$ (marginal) \\
+First-skip ringing decay (skips) & 1.25 & 1.77 & $7.0\times10^{-4}$ (marginal) \\
+First-skip ringing amplitude (ADU) & 5\,517 & 1\,464 & $1.8\times10^{-3}$ (marginal) \\
+White noise per skip (ADU) & 5.75 & 6.89 & $<10^{-4}$ (distinguishes) \\
+Correlated noise floor (ADU) & 0.163 & 0.222 & 0.76 (no) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Values are means over the 10 pixels. The ringing amplitude is pulled up by a few pixels where the
+fit is poorly constrained, so its mean is less representative than the other rows. All $p$-values are in the
+CSV written by the script (\code{plots/compare\_ch0\_vs\_ch3\_acm101.csv}).
+
+\paragraph{Observations.} The two amplitude fits (dip and settling) were among the most strongly separating tools
+overall, as expected if the amplitudes scale with the amplifier gain and coupling. The time constants differ much less in
+relative terms: about $2\%$ for the droop, $7\%$ for the settling and $26\%$ for the dip recovery. Smaller is not the same
+as absent: Section~\ref{sec:repeats} shows that the settling and dip-recovery times are so reproducible between repeat
+runs that even their few-percent differences between the two amplifiers are far outside the repeat noise. Whether the time
+constants respond to operating parameters, and by how much more than to the amplifier, is still to be tested with
+parameter-scan data.
+
+\section{Repeats of one amplifier against two different amplifiers}
+\label{sec:repeats}
+
+A session on 2026-10-08 provides five traces of channel~0 and five of channel~3 of module 101, all taken with identical
+operating parameters (four of the channel-0 traces within 12 seconds, the fifth 90 seconds later). This is the first real
+test of whether the tools say ``same'' for repeats.
+
+\paragraph{Data quality.} One channel-0 trace lost data during the acquisition: it has about 2\% fewer words than the others, 183 fewer
+inline records, pedestal windows of unequal length, and its first pixel has only 412 skips. The keyword framing is intact, so
+this looks like dropped network packets, not a decoding problem. \code{DecodedTrace.quality\_problems()} now detects it, and
+\code{compare\_trace.py} refuses damaged traces unless told otherwise. The figures below use the four healthy channel-0
+traces and the five channel-3 traces.
+
+\paragraph{The pixel-level test is overconfident for repeats.} Applying the test of Section~\ref{sec:stats} to pairs of
+channel-0 repeats flagged 0 to 8 of the 35 tools as different (per pair: 6, 8, 0, 6, 6, 8) even though nothing was changed, against 14 to 19 for
+pairs of different amplifiers (left panel of Figure~\ref{fig:verdicts}). The causes found in the data:
+\begin{itemize}
+  \item The first pixel of one run held a very large signal (CDS mean 18\,680~ADU against 20--30~ADU normally) and its pulse peak and dip were distorted.
+  \item The first pixel of each row (pixels 0 and 5) always differs: its baseline at skip 1 is about $-33\,000$~ADU against about $-19\,000$~ADU.
+  \item The CDS level changed between runs with identical parameters (about 25, 80, 290, 25~ADU in time order; most likely real charge, not
+        confirmed), which makes the CDS mean and the signal-window level useless as parameter tools.
+  \item All pixels in a run share a small run-wide shift (about 0.16\% of the pulse peak, 74~ADU), larger than the 9~ADU error derived from
+        the pixel scatter, because pixels within a run do not vary independently.
+\end{itemize}
+\code{usable\_pixels} in \code{compare\_trace.py} excludes the row-start pixels and charge outliers (median/MAD rule) and is available as
+\code{--clean-pixels}; the figures use it.
+
+\paragraph{The right noise floor is the run-to-run spread.} For every tool the spread of the per-run value over the channel-0 repeats was
+computed. The right panel of Figure~\ref{fig:z} shows the channel-0 to channel-3 difference in units of that spread. The largest are the
+dip-recovery time (358), the settling time (160), the pulse peak height (71), the dip-recovery amplitude (71), the dip height (63) and the
+noise power at 1--3~MHz (59). Seven tools are below the factor of 3 that I take as ``detectable'': the noise power at 0.1--1~MHz (0.6), the
+end-of-cycle tail level (1.0), the droop half-time (2.0), the skips 1--4 ringing (2.4), the baseline droop amplitude (2.4), the CDS autocorrelation at lag 2 (2.4) and
+the correlated noise floor (2.6). The first-skip ringing frequency has no run-to-run variation at all (the fit sits at zero frequency in every
+pixel) and is excluded from the ratio. Judging every pair against this spread (right panel of Figure~\ref{fig:verdicts}) flags 0 of the 35 tools for each
+of the six same-amplifier pairs and 22 to 28 for the cross-amplifier pairs. The same-amplifier count is optimistic because the spread is estimated
+from the same runs.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{../plots/compare_z_by_tool.png}
+  \caption{Left: $z$ of every tool for pairs of channel-0 repeats (grey) and for channel 0 against channel 3 (red); the cross-amplifier values are
+  larger for most tools. Right: the size of the channel-0 to channel-3 difference in units of the run-to-run spread of channel 0
+  (log scale); bars above 3 (dashed line) are detectable.}
+  \label{fig:z}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\textwidth]{../plots/compare_verdicts.png}
+  \caption{Number of tools flagged as different for each pair of traces. Left: the pixel-level test of \code{compare\_trace.py}. Right: the same
+  count judged against the run-to-run spread.}
+  \label{fig:verdicts}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{../plots/compare_waveforms.png}
+  \caption{A: mean cycle shape of every run (grey: channel 0, red: channel 3). B: zoom on the pulse. C: deviation of every run from the channel-0
+  mean shape at every time in the cycle (log scale); the channel-3 deviations exceed the channel-0 repeats by one to two orders of magnitude at the edges.}
+  \label{fig:waveforms}
+\end{figure}
+
+\paragraph{What this means for parameter scans.} A parameter change should be judged against the run-to-run spread, which needs several repeats of the
+reference in every scan. With the numbers above, a change of roughly three times that spread is detectable: about 0.5\% of the pulse peak
+height or the dip height. Channel-3 data show the amplifier difference is much larger than the repeat noise, so the tools are
+sensitive; whether parameter changes move them by more than 0.5\% is the open question.
+
+\section{Limitations}
+
+\begin{itemize}
+  \item \textbf{No parameter test yet.} All traces analysed so far have identical operating parameters.
+        Whether any fit responds to a parameter change is unknown.
+  \item \textbf{Windows tied to this timing.} The search ranges and the cut points (dip, pulse, windows) are
+        found from the data but assume the present sequencer structure. They would need review if the
+        sequencer changes.
+  \item \textbf{Few replicates.} Ten pixels per trace limit the smallest detectable difference and the
+        smallest reportable $p$.
+  \item \textbf{Fits are descriptive.} They are not validated against a circuit model; a good fit does not by
+        itself prove the physical interpretation given above.
+  \item \textbf{Repeats.} Only four healthy channel-0 repeats are available, so the run-to-run spread itself is poorly known.
+  \item \textbf{Back-to-back acquisitions.} The CDS level changed between consecutive runs; reference repeats should be spread through a scan.
+  \item \textbf{Units.} Everything is in uncalibrated ADU. Conversion to electrons needs the gain, which is one of
+        the quantities the project wants to predict.
+\end{itemize}
+
+\section{Where the code lives}
+
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Item & Location \\
+\midrule
+Exponential fit        & \code{fit\_exponential} in \code{src/compare\_trace.py} \\
+Damped ringing fit     & \code{fit\_damped\_ringing} in \code{src/compare\_trace.py} \\
+Noise-model fit        & \code{fit\_noise\_model} in \code{src/compare\_trace.py} \\
+Per-pixel measurement  & \code{skip\_tools} in \code{src/compare\_trace.py} \\
+Permutation test       & \code{permutation\_test}, \code{run\_tests} in \code{src/compare\_trace.py} \\
+Decoding and regions   & \code{src/decode\_trace.py}, \code{src/trace\_regions.py} \\
+Figures                & \code{src/plot\_tool\_figures.py} (annotated tools, repeat comparison) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Usage: \code{python compare\_trace.py TRACE\_A TRACE\_B [--perms N] [--alpha a] [--csv out.csv]}.
+Figures referred to above (\code{regions\_templates.png}, \code{skip\_evolution.png}) are in the
+\code{plots} folder.
+
+\appendix
+\section{Complete results: ACM 101, channel 0 against channel 3}
+
+All 39 tools, grouped by region and ordered by $p$. The threshold for ``distinguishes'' is
+$p<2.9\times10^{-4}$ (35 tools, $\alpha=0.01$); ``marginal'' means $p<0.05$ but above the threshold;
+vertical-block tools are information only. $z$ is the Welch statistic described in Section~\ref{sec:stats};
+for the fit time constants and other very stable quantities it is inflated, so rank by $p$.
+
+\begin{center}
+\small
+\begin{tabular}{llrrl}
+\toprule
+Region & Tool & $z$ & $p$ & Verdict \\
+\midrule
+skip & pulse peak height & 284.99 & $<10^{-4}$ & distinguishes \\
+skip & dip height & 231.32 & $<10^{-4}$ & distinguishes \\
+skip & noise power 3-7.5 MHz & 158.10 & $<10^{-4}$ & distinguishes \\
+skip & noise power 1-3 MHz & 113.72 & $<10^{-4}$ & distinguishes \\
+skip & mean shape & 82.52 & $<10^{-4}$ & distinguishes \\
+skip & CDS mean (skips $\ge$ 10) & 15.80 & $<10^{-4}$ & distinguishes \\
+skip & signal-window level & 15.56 & $<10^{-4}$ & distinguishes \\
+skip & noise power 0.1-1 MHz & 12.90 & $<10^{-4}$ & distinguishes \\
+skip & CDS rms (detrended) & 9.10 & $<10^{-4}$ & distinguishes \\
+skip & first-skip CDS excess & 5.92 & $<10^{-4}$ & distinguishes \\
+skip & noise of 10-skip average & 4.45 & $3.0\times10^{-4}$ & marginal \\
+skip & skips 1-4 CDS ringing & 2.06 & 0.053 & no \\
+skip & droop half-time (skips) & 1.72 & 0.12 & no \\
+skip & noise of 50-skip average & 1.45 & 0.16 & no \\
+skip & baseline droop curve & 1.24 & 0.27 & no \\
+skip & droop total & 1.20 & 0.3 & no \\
+skip & end-of-cycle tail level & 1.15 & 0.32 & no \\
+skip & baseline at skip 1 & 1.15 & 0.33 & no \\
+skip & CDS autocorrelation at lag 2 & 0.85 & 0.4 & no \\
+fit & dip recovery amplitude & 496.74 & $<10^{-4}$ & distinguishes \\
+fit & settling amplitude after pulse & 299.07 & $<10^{-4}$ & distinguishes \\
+fit & white noise per skip (ADU) & 8.53 & $<10^{-4}$ & distinguishes \\
+fit & dip recovery time (us) & 385.44 & $2.0\times10^{-4}$ & distinguishes \\
+fit & baseline droop time constant (skips) & 5.54 & $2.0\times10^{-4}$ & distinguishes \\
+fit & settling time after pulse (us) & 112.90 & $3.0\times10^{-4}$ & marginal \\
+fit & first-skip ringing decay (skips) & 4.33 & $7.0\times10^{-4}$ & marginal \\
+fit & first-skip ringing amplitude & 4.23 & $1.8\times10^{-3}$ & marginal \\
+fit & first-skip ringing frequency (cyc/skip) & 4.20 & $4.5\times10^{-3}$ & marginal \\
+fit & baseline droop amplitude & 1.12 & 0.35 & no \\
+fit & correlated noise floor (ADU) & 0.39 & 0.76 & no \\
+horizontal & maximum & 31.62 & $<10^{-4}$ & distinguishes \\
+horizontal & mean shape & 26.75 & $<10^{-4}$ & distinguishes \\
+horizontal & end level & 14.52 & $<10^{-4}$ & distinguishes \\
+horizontal & minimum & 13.38 & $<10^{-4}$ & distinguishes \\
+horizontal & scatter between transfers & 0.52 & 0.58 & no \\
+vertical & mean shape & 17.69 & $<10^{-4}$ & info only \\
+vertical & maximum & 10.23 & $<10^{-4}$ & info only \\
+vertical & minimum & 3.41 & $9.0\times10^{-4}$ & info only \\
+vertical & end level & 0.05 & 0.96 & info only \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Source: \code{plots/compare\_ch0\_vs\_ch3\_acm101.csv}, written by
+\code{python compare\_trace.py TRACE\_A TRACE\_B --csv ...}. Both split controls on trace A passed.
+
+\end{document}

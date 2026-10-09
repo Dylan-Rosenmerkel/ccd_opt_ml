@@ -1,0 +1,60 @@
+# ccd_opt_ml: ML-assisted optimization of skipper-CCD operating parameters
+
+The goal is to find operating parameters for a skipper CCD (bias voltages VSUB, VDD, VDRAIN, VR; clock
+rail levels; timing) that give calibrated images with **low read noise σe**, **low dark current λ** and
+a **known gain**.
+
+The approach is to take *packets*. Each packet holds short raw video **traces** and a calibrated
+**image** taken at the same settings. A model learns how the settings and the trace features relate
+to σe, λ and the gain (measured on the images with WADERs). An optimizer then uses the model to
+suggest better settings.
+
+**Status (October 2026):**
+* the data-taking and processing scripts are written and rehearsed on fake boards, but not yet run
+  on the DAQ;
+* the trace decoder, the trace-comparison tools and 85 trace features are tested on real traces;
+* no scan with varied parameters has been taken yet, and no model has been trained.
+
+## Layout
+
+| Folder | Contents |
+|---|---|
+| `src/` | All code (see below) |
+| `configs/` | DAQ setup, packet and scan examples, parameter limits (`limits.toml`, **not yet reviewed**), processing settings |
+| `notebooks/` | Step-by-step walkthroughs with saved outputs; see `notebooks/README.md` |
+| `docs/` | Notes: `trace_fit_tools.tex` (comparison tools), `trace_features.tex` (all trace features), `ml_training_plan.tex` (ML plan), `context/` (session records and handoff notes) |
+| `data/`, `rehearsal/`, `plots/` | Raw data, rehearsal output and figures: **not in the repository** (see `.gitignore`) |
+
+## Code (`src/`)
+
+| File | Role |
+|---|---|
+| `decode_trace.py` | Decode a raw trace (`.RJ45ADCDATA<ch>`): ADC samples, window flags, inline sums, quality check |
+| `trace_regions.py` | Cut a trace into skip cycles, horizontal and vertical transfers |
+| `compare_trace.py` | 39 comparison tools and a permutation test: can two traces be told apart? |
+| `trace_features.py` | `trace_features(trace)`: 85 features and 12 curves per trace, documented in a registry |
+| `take_packet.py` | Take one packet through the cdaq queue: flushes, reference traces, traces, synchronized image, manifest |
+| `daq_commands.py`, `daq_control.py` | The exact text sent to each board; the cdaq/fake controllers and step receipts |
+| `scan_packets.py` | Run a series of packets (scan design, dry run, resume) |
+| `ccd_limits.py` | Safety checks of every parameter set; voltage ramps |
+| `fake_daq.py` | Fake boards for rehearsals |
+| `process_packet.py` | Packet → decoded traces and features, decompressed FITS → WADERs labels → `dataset.csv` |
+| `plot_*.py`, `view_trace.py` | Plots and interactive trace viewers |
+
+## Quick start
+
+```bash
+python src/decode_trace.py TRACE.RJ45ADCDATA0                          # decode and check a trace
+python src/trace_features.py TRACE.RJ45ADCDATA0                        # all features of a trace
+python src/compare_trace.py TRACE_A TRACE_B --clean-pixels             # compare two traces
+python src/take_packet.py --params configs/packet_example.toml --show-commands   # what a packet would send
+python src/scan_packets.py --scan configs/scan_example.toml --dry-run  # plan a scan
+python src/process_packet.py MANIFEST.json                             # packet -> training data
+```
+
+The scripts need Python 3.11+ with numpy (and matplotlib for plots). Running on the DAQ needs the
+group's `ccd_cdaq`/`acmpy`. Processing images needs WADERs (`pysimdamicm`, `panaSKImg`).
+
+**Before using the real DAQ:** review `configs/limits.toml` and encode the bias/clock relationships
+in `ccd_limits.py`. Then follow the checklist in `notebooks/take_packet_walkthrough.ipynb` and
+`docs/context/data_taking_scripts_handoff.md`.

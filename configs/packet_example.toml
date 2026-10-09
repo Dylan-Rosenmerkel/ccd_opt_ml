@@ -1,0 +1,134 @@
+# packet_example.toml -- input of src/take_packet.py for ONE packet
+#
+# Sequence (counts in [options]):
+#   reference parameters -> 3 flushes -> reference traces x3 (flush between) ->
+#   new parameters -> flush -> traces x3 (flush between) -> image of the [image] size
+#
+# [image]               size and readout of the image (the content of an image_params TOML)
+# [trace]               trace parameters; missing keys take the values of scripts/take_trace.py
+# [theta]               operating parameters (voltages, timing) for EVERY board in theta_boards
+# [theta_board.<id>]    replacements for one board only
+# [theta_ref], [theta_ref_board.<id>]   the same for the reference parameters
+# The image/trace size must NOT appear in theta (the script refuses it): every acquisition
+# sends its complete geometry, so both boards always read the same size.
+#
+# Here: board 101 goes from VSUB 45 V to 48 V, board 102 from 45 V to 50 V; everything else
+# stays at the reference (values of the 2026-10-06 run, reference.bcf / reference_v5_pumping.seq).
+
+packet_id = "example_00001"
+scan_name = "example"
+
+[options]
+sequencer             = "reference_v5_pumping.seq"   # must be the file loaded on the boards (checked)
+n_initial_flushes     = 3       # flushes at the reference before the first reference trace set
+n_reference_traces    = 3       # trace sets at the reference
+n_traces              = 3       # trace sets at the new parameters
+flushes_between_traces = 1      # flushes between two trace sets
+flushes_after_change  = 1       # flushes after going to the new parameters
+erase_policy          = "never" # "never" | "on_voltage_change" | "always" | "first_only" (never e-purge)
+reference_traces      = "always"   # "always" | "when_different" | "never"
+retake_damaged_traces = 1       # repeat a trace set once if a decoded trace lost data
+
+[image]                         # like image_params/tc1/*.toml (take_image.py sends every key)
+subroutine = "AcquireImage"
+acq_level  = 2                  # 2 = averaged CDS pixels -> avg_img_*.fits.bz2
+EXPOSURE = 10
+NDCM = 500
+NROW = 100
+NCOL = 130
+NPBIN = 1
+NSBIN = 10
+NDCMPRE = 0
+NROWPRE = 0
+NROWPOST = 0
+NCOLPRE = 500
+NCOLPOST = 0
+BOOLCLR = 1
+
+[trace]                         # scripts/take_trace.py: EXPOSURE=0, NROW=2, NCOL=5, NSBIN=20,
+subroutine = "AcquireImage"     # NPBIN=20, NDCM=500, BOOLCLR=0; the cuts are set to 0 so that
+EXPOSURE = 0                    # nothing is inherited from the previous image
+NROW = 2
+NCOL = 5
+NSBIN = 20
+NPBIN = 20
+NDCM = 500
+BOOLCLR = 0
+NDCMPRE = 0
+NROWPRE = 0
+NROWPOST = 0
+NCOLPRE = 0
+NCOLPOST = 0
+
+[theta]                         # new parameters, shared by every board
+delay_Va = 6000
+delay_Vb = 6000
+delay_Ha = 1800
+delay_Hb = 1800
+delay_Hc = 1800
+V1_A_H = 9.9
+V1_A_L = 7.9
+V1_B_H = 9.9
+V1_B_L = 7.7
+V2_C_H = 9.9
+V2_C_L = 7.9
+V3_A_H = 9.9
+V3_A_L = 7.9
+V3_B_H = 9.9
+V3_B_L = 7.7
+TG_A_H = 7.4
+TG_A_L = 7.4
+TG_B_H = 7.4
+TG_B_L = 7.4
+H1_A_H = 9.5
+H1_A_L = 6.7
+H1_B_H = 9.5
+H1_B_L = 6.5
+H2_C_H = 9.0
+H2_C_L = 6.7
+H3_A_H = 9.5
+H3_A_L = 6.7
+H3_B_H = 9.5
+H3_B_L = 6.5
+VSUB = 48.0                     # <- the change (board 101)
+VDD = -19.0                     # take_image.py always sets VDD = -19 first; here it is part of theta
+VDRAIN = -23.0
+VR = -3.0
+
+[theta_board.102]               # board 102 gets a different VSUB
+VSUB = 50.0
+
+[theta_ref]                     # reference parameters, shared by every board
+delay_Va = 6000
+delay_Vb = 6000
+delay_Ha = 1800
+delay_Hb = 1800
+delay_Hc = 1800
+V1_A_H = 9.9
+V1_A_L = 7.9
+V1_B_H = 9.9
+V1_B_L = 7.7
+V2_C_H = 9.9
+V2_C_L = 7.9
+V3_A_H = 9.9
+V3_A_L = 7.9
+V3_B_H = 9.9
+V3_B_L = 7.7
+TG_A_H = 7.4
+TG_A_L = 7.4
+TG_B_H = 7.4
+TG_B_L = 7.4
+H1_A_H = 9.5
+H1_A_L = 6.7
+H1_B_H = 9.5
+H1_B_L = 6.5
+H2_C_H = 9.0
+H2_C_L = 6.7
+H3_A_H = 9.5
+H3_A_L = 6.7
+H3_B_H = 9.5
+H3_B_L = 6.5
+VSUB = 45.0
+VDD = -19.0
+VDRAIN = -23.0
+VR = -3.0

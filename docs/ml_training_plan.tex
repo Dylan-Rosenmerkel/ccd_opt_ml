@@ -1,0 +1,236 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\title{From Trace Comparison to Parameter Optimization:\\The Machine-Learning Plan}
+\author{ML-assisted optimization of CCD operating parameters --- working note}
+\date{October 2026}
+
+\newcommand{\code}[1]{\texttt{#1}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The trace-comparison tools (companion note \code{trace\_fit\_tools.tex}) tell whether two raw video traces differ.
+The project goal is larger: use features of a short trace to find operating parameters for which a calibrated
+image has low readout noise $\sigma_e$, low dark current $\lambda$ and a known gain $g$. This note describes how that
+would be trained and used, what data it needs, and what is still unproven. Nothing described here has been trained yet.
+The figures are schematic diagrams of the method, not results.
+\end{abstract}
+
+\section{Goal and status}
+
+\paragraph{Goal.} For a skipper CCD, find the settings (clock timing and levels, biases, number of skips, \ldots) that give the
+best calibrated image: small $\sigma_e$ and small $\lambda$, with a known gain $g$. The trace is a cheap measurement
+(about one second); the calibrated image is the expensive ground truth (minutes to hours).
+
+\paragraph{What exists.}
+\begin{itemize}
+  \item Scripts that take a packet (one trace per channel plus one image, at identical settings) and scan many settings
+        with safety limits (\code{take\_packet.py}, \code{scan\_packets.py}).
+  \item A decoder, region splitter and 39 comparison tools (\code{decode\_trace.py}, \code{trace\_regions.py}, \code{compare\_trace.py}).
+  \item A test on real data: the tools separate two amplifiers read with identical parameters, and repeats of one amplifier are
+        distinguished from a different amplifier only when judged against the run-to-run spread.
+\end{itemize}
+
+\paragraph{What does not exist yet.} A scan with different operating parameters, labels ($\sigma_e$, $g$, $\lambda$) from calibrated
+images for those settings, and any trained model. All traces analysed so far have identical operating parameters.
+
+\section{What is being optimized}
+
+The quantities to optimize are the \emph{operating parameters} themselves, in three groups:
+\begin{center}
+\begin{tabular}{p{0.2\textwidth}p{0.45\textwidth}p{0.25\textwidth}}
+\toprule
+Group & Parameters & In the scan code now \\
+\midrule
+Bias voltages & \code{VSUB}, \code{VDD}, \code{VDRAIN}, \code{VR} (per amplifier) & yes \\
+Rail voltages (clock levels) & high and low levels of the vertical clocks, horizontal clocks and transfer gates (\code{V*\_H/L}, \code{H*\_H/L}, \code{TG\_*\_H/L}) & yes; the summing-well, output-gate, reset-gate and dump-gate rails are not yet \\
+Timing & transfer hold times (\code{delay\_Va/Vb/Ha/Hb/Hc}); the integration, reset, summing-well and output-gate delays & transfer delays yes; the other delays are not yet \\
+\bottomrule
+\end{tabular}
+\end{center}
+The number of skips and the binning are held fixed for now (500 skips, one binning), so that images stay comparable.
+
+\paragraph{Consequences for the method.}
+\begin{itemize}
+  \item The settings are the \emph{inputs of the surrogate model} and the \emph{search space of the optimizer}: the model learns
+        settings (plus trace features) $\rightarrow$ $\sigma_e$, $g$, $\lambda$, and the optimizer chooses the next settings. Recovering which
+        settings changed from a trace is a secondary, diagnostic task (fault detection, annotating old data).
+  \item The space is high-dimensional (tens of parameters, because every clock pin has a high and a low level) while the number of
+        labeled packets is a few hundred. It has to be reduced: screening scans to drop unimportant parameters, and a
+        reparametrization such as one reference voltage plus offsets, using the group's empirical relations. Your proposal expects an effective
+        dimension of 8 to 12.
+  \item The parameters are not independent: the CCD works only if certain bias and clock relationships hold. They must be encoded as
+        constraints (\code{relational\_constraints} in \code{ccd\_limits.py} is still an empty placeholder) so that the optimizer never proposes a forbidden
+        combination.
+  \item Changes are made from the best configuration so far in bounded steps (voltages are ramped in steps no larger than \code{max\_step}),
+        so the optimizer works in a trust region around the incumbent, not in jumps.
+  \item Every packet must store the settings that were applied, the settings of the reference it is compared with, the change from that
+        reference, the previous settings and the time since the previous acquisition, and the values the board reports back. At present
+        only the commanded settings are stored in the manifest; the other fields are still to be added.
+\end{itemize}
+
+\section{Training data: the labeled packet}
+
+To learn ``trace features $\rightarrow$ $\sigma_e$, $g$, $\lambda$'' the model needs, for every operating point, \emph{both} a trace
+and a calibrated image taken at the same settings. The settings are known (we set them), the tool values come from the trace,
+and the physics values come from the image through the WADERs calibration (Figure~\ref{fig:example}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{../plots/ml_example.png}
+  \caption{One labeled training example. The input is the settings plus the tool values of the trace; the answer is the read noise,
+  gain and dark rate measured from the calibrated image taken at the same settings.}
+  \label{fig:example}
+\end{figure}
+
+Only parts of the problem need image labels:
+\begin{center}
+\begin{tabular}{p{0.45\textwidth}cp{0.3\textwidth}}
+\toprule
+Quantity to predict & Image label needed? & Why \\
+\midrule
+Diagnostic only: does a trace match the reference, which settings changed & no & the settings are known \\
+Read noise $\sigma_e$, gain $g$, dark current $\lambda$ & \textbf{yes} & measured only from calibrated images \\
+Unlabeled structure (anomaly detection, self-supervised features) & no & any trace can be used \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{What each label costs}
+\begin{itemize}
+  \item \textbf{$\sigma_e$} is cheap: about 1250 empty pixels (the overscan) give 2\%. The image must use the same number of skips as
+        the images the optimization is for.
+  \item \textbf{$g$} needs pixels of known charge. At low dark current the 1\,e$^-$ peak has few events, so a short image with a few
+        seconds of exposure may not give a gain. The gain depends on the voltages but not on the number of skips, so it can be measured
+        once per voltage set with a dedicated higher-charge image and reused.
+  \item \textbf{$\lambda$} is expensive: about $10^6$ pixels for a 10\% measurement at $10^{-4}\,e^-$/pixel. It should be budgeted for a
+        subset of the points (order 100 to 300), at two exposure times to separate exposure-dependent dark current from
+        exposure-independent spurious charge.
+\end{itemize}
+
+\subsection{Conditions on the pairing}
+\begin{itemize}
+  \item Same settings, same amplifier, taken close in time: the CCD state changed between consecutive runs in the data so far.
+  \item One image gives four labels (one per amplifier extension) and the scan takes one trace per channel; the channel-to-extension
+        mapping must be kept explicit.
+  \item The WADERs output does not store the fit $\chi^2$, quality flags or software version; the calibration wrapper must save
+        them with each packet, together with the configuration file.
+  \item The label noise floor must be measured: several repeats of the reference, each with an image. No model can predict better
+        than this scatter.
+\end{itemize}
+
+\section{Training}
+
+Figure~\ref{fig:training} shows the loop: the model starts with arbitrary settings of its adjustable parameters, predicts the physics values for each packet,
+and is corrected by the difference to the image-derived values.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{../plots/ml_training.png}
+  \caption{The training loop. The model predicts the physics values from the input, the error against the image-derived values is used
+  to adjust it, and the process is repeated. Held-out settings and amplifiers, never used to adjust the model, give the score.}
+  \label{fig:training}
+\end{figure}
+
+\paragraph{Models, from simple to ambitious.}
+\begin{center}
+\begin{tabular}{p{0.28\textwidth}p{0.42\textwidth}p{0.2\textwidth}}
+\toprule
+Model & Use & Data needed \\
+\midrule
+Reference-consistency test (robust Mahalanobis distance) & is a trace consistent with the reference repeats & available now \\
+Classifier two-sample test (logistic regression, trees; grouped cross-validation) & can a model tell trace sets apart on unseen runs & available now \\
+Ridge / partial least squares / gradient-boosted trees & settings and tool values $\rightarrow$ $\sigma_e$, $g$, $\lambda$; the directions in which parameters move the tools & scan with labels \\
+Gaussian process surrogate & settings $\rightarrow$ physics values with calibrated uncertainty, for optimization & scan with labels \\
+Neural network on folded cycles & learn features directly & thousands of packets, many amplifiers \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Validation rules.}
+\begin{itemize}
+  \item Split by run, never by pixel or skip: pixels of one run share run-wide shifts, and a model validated on them would look good
+        and mean nothing.
+  \item Hold out whole settings values and, as the hardest test, whole amplifiers; report the error against how many packets of the
+        new amplifier the model was allowed to see.
+  \item Work with each amplifier's change relative to its own reference where possible, so the fixed amplifier signature
+        does not have to be learned.
+  \item Keep row-start pixels and charge-contaminated pixels out of the inputs (\code{usable\_pixels}).
+  \item Cycle and block lengths are measured exactly and need no learning; the model works on length-independent features.
+\end{itemize}
+
+\section{Using the model to optimize}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{../plots/ml_optimize.png}
+  \caption{The optimization loop. A trace at candidate settings gives tool values; the trained model predicts $\sigma_e$, $g$ and $\lambda$ with
+  an uncertainty; an optimizer proposes better settings. When the model is unsure, a calibrated image is taken and becomes a new
+  training example.}
+  \label{fig:optimize}
+\end{figure}
+
+Figure~\ref{fig:optimize} shows how the trained model is used. This is multi-fidelity optimization: many cheap trace measurements, a few expensive images. The optimizer is Bayesian optimization on top of
+the surrogate model, with the safety limits (\code{limits.toml}) enforced outside the model and a human approval step early on.
+A stopping rule: the targets are met with calibrated confidence, or the expected improvement falls below the reproducibility floor.
+
+\subsection{The trade-off being searched}
+
+Figure~\ref{fig:tradeoff} sketches what the optimizer is balancing.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{../plots/ml_tradeoff.png}
+  \caption{Schematic: more skips lower the read noise but lengthen the readout and raise dark current and spurious charge, so the
+  best settings are a compromise. The optimization is multi-objective; the experiment picks a point on the resulting front according to its science goal.
+  The curves are illustrative, not measured.}
+  \label{fig:tradeoff}
+\end{figure}
+
+\section{What the first scan should provide}
+\begin{itemize}
+  \item The reference configuration at least five times, interleaved through the scan, each with an image, to measure run-to-run and
+        label scatter.
+  \item Several values of each parameter to be recovered, not a single step, plus some combinations of parameters changed together:
+        two parameters can move the same tool and one-at-a-time changes cannot separate them.
+  \item All four amplifiers, ideally more than one module.
+  \item Images for $\sigma_e$ at the target number of skips, a gain image per voltage set, and long exposures for $\lambda$ at a subset of points.
+  \item A pause or flush between acquisitions, and a record of the time since the last acquisition and the previous settings.
+\end{itemize}
+
+\section{Risks and open questions}
+\begin{itemize}
+  \item The tools react to the amplifier much more than to the run-to-run noise; whether parameter changes move them by more than about 0.5\%
+        of the edge heights (about three times the run-to-run spread) is unknown.
+  \item Few runs and few pixels limit every statistic; the smallest reportable $p$-value with 8 usable pixels is $1.6\times10^{-4}$.
+  \item The CDS level changed between back-to-back acquisitions; the cause (real charge in the pixels) is not confirmed.
+  \item The first-skip transient and the anti-correlated skip noise mean simple white-noise models do not describe the noise.
+  \item Generalizing to amplifiers never seen is the hardest goal; a one-reference-packet scheme or a few-shot adaptation is the realistic path.
+  \item The relationships between biases and clock levels required for proper CCD operation are not yet encoded in \code{ccd\_limits.py}.
+\end{itemize}
+
+\section{Where this lives in the code}
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Item & File \\
+\midrule
+Packet and scan acquisition      & \code{src/take\_packet.py}, \code{src/scan\_packets.py}, \code{src/ccd\_limits.py} \\
+Decoding, regions, tools         & \code{src/decode\_trace.py}, \code{src/trace\_regions.py}, \code{src/compare\_trace.py} \\
+Walkthrough notebook             & \code{notebooks/trace\_comparison\_walkthrough.ipynb} \\
+These diagrams                   & \code{src/plot\_ml\_diagrams.py} \\
+Packet processing (decode, WADERs, grouping) & designed, not yet written \\
+Models                           & not yet written \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}

@@ -1,0 +1,57 @@
+# daq_setup.toml -- how the packet scripts talk to the DAQ (read by src/take_packet.py)
+#
+# The packet scripts do NOT open the ACM boards themselves.  They work like the group's
+# scripts/take_image.py and scripts/take_trace.py: every action is a short piece of Python
+# that is put in the cdaq queue (ccd_cdaq.add2queue) and executed by the cdaq client of one
+# board ("acm101") or of all boards at once (the pool, "acmpool"); the client's `daq` object
+# is the acmpy.ACM of that board.  This is required for master/slave images: every board runs
+# its own client process, and all boards must start the same image at the same time.
+#
+# Everything a board is asked to do is listed in [commands] as plain text, so it can be
+# compared line by line with the acmpy installed on the DAQ machine (the .meta files say
+# softhash = e750760, a commit that is NOT in the local acmpy copy).
+
+[daq]
+queue  = "default"          # cdaq queue the commands are added to (take_image.py -q)
+pool   = "acmpool"          # cdaq pool containing every board below (take_image.py -t default)
+boards = [101, 102]         # ACM ids in the pool
+client = "acm{board}"       # cdaq client name of one board
+leader = 101                # master board for images (take_image.py -m 101 / daq.master(101))
+
+# Boards that receive operating parameters.  Each board gets its OWN theta: the packet's
+# [theta] table plus that board's [theta_board.<id>] replacements.
+theta_boards = [101, 102]
+# Boards whose four channels are traced (the group traces both: take_trace.py acm101; acm102).
+trace_boards = [101, 102]
+trace_channels = [0, 1, 2, 3]
+
+# Directory where the packet manifests and the step receipts are written.  It must be on
+# the DAQ machine and writable by the cdaq clients (they write the receipts).
+work_dir = "/home/damicm/run/ccd_opt_ml"
+
+# How long to wait for a board to report back, on top of the estimated duration of a step.
+# A queued command can wait behind other queued commands (e.g. a repeat flush).
+timeout_margin_s = 300
+poll_interval_s  = 1.0
+
+# Wait for the image builder to write avg_<image>.fits(.bz2) for every board (seconds).
+# 0 = do not wait (process_packet.py looks for the FITS file later).
+fits_wait_s = 180
+
+[commands]
+# Each entry is executed on the board(s) by the cdaq client; {leader} is replaced.
+# Synchronisation (acmpy README "Synchronization"; acmpy/fpgacommand.py):
+#   master(id):        leader: EXS + ESS (external start on, sends the start);
+#                      followers: EXS + DSS (wait for the start from the synchronisation board)
+#   standalone():      DXS + DSS (start generated inside the board); needed for flushes and traces
+#   use_external_clock(): CEX (clock from the synchronisation board)
+leader_mode     = "daq.master({leader})"            # as in take_image.py -m
+standalone_mode = "daq.standalone()"                # as in take_trace.py and take_image.py -f
+# The external clock is set once per session and never switched back.  The packet makes
+# sure of it in its standalone step: sent only if a board does not report the external clock.
+# "" = never touch the clock.
+external_clock  = "daq.use_external_clock()"
+flush           = "daq.flush_ccd()"                 # as in take_image.py -f
+# Erase procedure (NEVER the e-purge).  Only used if a packet's erase_policy asks for it;
+# the default packet uses flushes instead.
+erase           = "daq.erase_ccd(highP=9, wait_for_flush=True)"

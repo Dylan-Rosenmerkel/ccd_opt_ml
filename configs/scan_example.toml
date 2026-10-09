@@ -1,0 +1,121 @@
+# scan_example.toml -- example input for src/scan_packets.py
+#
+# A scan = reference parameters (per board) + a design that varies a few parameters around
+# them.  Every packet applies the COMPLETE parameter set of every board, takes its reference
+# traces at [reference] first, then its traces and the image at the design point:
+#   reference -> 3 flushes -> reference traces x3 (flush between) ->
+#   design point -> flush -> traces x3 (flush between) -> image of the [image] size
+# Boards, pool, leader and the work directory are in configs/daq_setup.toml.  The acmpy run
+# directory (where the data files go) is set as usual with scripts/setup_run.py first.
+
+[scan]
+name            = "first_scan"     # packet ids are <name>_00000, <name>_00001, ...
+seed            = 1                # fixes the randomised order
+reference_every = 5                # a full reference packet after every 5 design points
+sequencer       = "reference_v5_pumping.seq"   # must be the file loaded on the boards (checked)
+
+[options]                          # packet options (see configs/packet_example.toml)
+n_initial_flushes      = 3
+n_reference_traces     = 3
+n_traces               = 3
+flushes_between_traces = 1
+flushes_after_change   = 1
+erase_policy           = "never"   # flushes are used; the erase is available, never the e-purge
+reference_traces       = "always"
+retake_damaged_traces  = 1
+
+[image]                            # fixed for the whole scan (consistent images)
+subroutine = "AcquireImage"
+acq_level  = 2
+EXPOSURE = 10
+NDCM = 500
+NROW = 100
+NCOL = 130
+NPBIN = 1
+NSBIN = 10
+NDCMPRE = 0
+NROWPRE = 0
+NROWPOST = 0
+NCOLPRE = 500
+NCOLPOST = 0
+BOOLCLR = 1
+
+[trace]                            # scripts/take_trace.py values, cuts set to 0
+subroutine = "AcquireImage"
+EXPOSURE = 0
+NROW = 2
+NCOL = 5
+NSBIN = 20
+NPBIN = 20
+NDCM = 500
+BOOLCLR = 0
+NDCMPRE = 0
+NROWPRE = 0
+NROWPOST = 0
+NCOLPRE = 0
+NCOLPOST = 0
+
+# Reference operating parameters, shared by every board in theta_boards
+# (values of the 2026-10-06 run: reference.bcf / reference_v5_pumping.seq).
+[reference]
+delay_Va = 6000
+delay_Vb = 6000
+delay_Ha = 1800
+delay_Hb = 1800
+delay_Hc = 1800
+V1_A_H = 9.9
+V1_A_L = 7.9
+V1_B_H = 9.9
+V1_B_L = 7.7
+V2_C_H = 9.9
+V2_C_L = 7.9
+V3_A_H = 9.9
+V3_A_L = 7.9
+V3_B_H = 9.9
+V3_B_L = 7.7
+TG_A_H = 7.4
+TG_A_L = 7.4
+TG_B_H = 7.4
+TG_B_L = 7.4
+H1_A_H = 9.5
+H1_A_L = 6.7
+H1_B_H = 9.5
+H1_B_L = 6.5
+H2_C_H = 9.0
+H2_C_L = 6.7
+H3_A_H = 9.5
+H3_A_L = 6.7
+H3_B_H = 9.5
+H3_B_L = 6.5
+VSUB = 45.0
+VDD = -19.0
+VDRAIN = -23.0
+VR = -3.0
+
+# Reference values that differ for one board (none here: both boards start alike).
+# [reference_board.102]
+# VSUB = 45.0
+
+# ----------------------------------------------------------------- design ---
+# type = "oat"    one-at-a-time: each listed value of each parameter, others at reference
+# type = "random" uniform random points between min and max of each parameter
+# type = "list"   explicit points ([[design.points]], each a table of changes)
+# A name changes the parameter on every board; "acm102.VSUB" changes board 102 only.
+[design]
+type = "oat"
+
+[[design.parameters]]
+name = "delay_Ha"       # horizontal transfer hold time [10 ns cycles], both boards
+values = [1200, 2400]
+
+[[design.parameters]]
+name = "delay_Va"       # vertical transfer hold time [10 ns cycles], both boards
+values = [4500, 7500]
+
+[[design.parameters]]
+name = "acm101.VSUB"    # board 101 only
+values = [42.0, 48.0]
+
+[[design.parameters]]
+name = "acm102.VR"      # board 102 only
+values = [-3.5, -2.5]
