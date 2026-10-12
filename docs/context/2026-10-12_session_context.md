@@ -3,6 +3,22 @@
 Continuation of `2026-10-09_session_context.md` (which also covers the GitHub setup and the
 Overleaf export). Scripts: `data_taking_scripts_handoff.md`; trace features: `docs/trace_features.tex`.
 
+**Summary of the day:**
+* answered questions about the fake DAQ and the trace scripts;
+* made the trace analysis work for any geometry and timing;
+* looked at the first run with varied parameters (`2026-10-12-PA03_PQ04_Packet_Tests`);
+* recommended a 5-minute 1×1 dark-current image;
+* wrote an analysis notebook (now with clearer figures and an ML-feasibility section);
+* wrote an Overleaf summary of the results;
+* committed and pushed everything.
+
+Commits: `53f11e9`, `2092fe2`, `8b6dc40`, `6e25c17`, `79c7727` (all on
+`github.com/Dylan-Rosenmerkel/ccd_opt_ml`).
+
+**Naming:** sections 3–4 below call the five settings "groups" (first look); the notebook and the
+Overleaf summary call them "settings". Same numbering: 1 reference, 2 VDD, 3 V low rails & TG,
+4 all H low rails, 5 H3_A_L only.
+
 ## 1. Questions answered (no code changes)
 
 * **How the fake DAQ works.** `src/fake_daq.py` is our own stand-in, not the group's `ldaq/fakedaq.py`
@@ -189,13 +205,30 @@ Per-row time from `take_packet.formula_acquisition_seconds` (reference timing):
 * Alternatives: `NDCM` 300 → 25 rows (σ ≈ 0.18 e⁻, fewer pixels); `NDCM` 100 → 59 rows (more pixels,
   σ ≈ 0.3 e⁻).
 
-## 6. Comparative analysis notebook
+## 6. Comparative analysis notebook (commits `2092fe2`, `8b6dc40`)
 
-`notebooks/packet_tests_2026-10-12.ipynb` (figures in `docs/context/figures/oct12_*.png`).
+`notebooks/packet_tests_2026-10-12.ipynb`; figures in `docs/context/figures/oct12_*.png`. The first
+version (heatmaps of 85 features × 7 pairs × 4 channels, error-bar panels) was hard to read. It was
+rebuilt on request. The sections:
+
+1. the settings as a table and a picture (`oct12_settings`);
+2. the trace setup and quality;
+3. what a separation means, with an example where each dot is one trace set
+   (`oct12_separation_example`);
+4. the fingerprint of each parameter: bar charts with plain-language feature names and the size of
+   each change (`oct12_fingerprints`), and the count per kind of feature (`oct12_feature_regions`);
+5. waveforms of the clean comparisons with the difference shaded; for VDD, the difference itself
+   (`oct12_waveforms`);
+6. trace noise and image noise per channel (`oct12_noise_trace_and_image`);
+7. ML feasibility: a leave-one-out test and the principal-component picture (`oct12_feature_space`);
+8. appendix: all 85 features × 4 comparisons (`oct12_all_features`).
+
+**Results:**
 
 * **VDD returned to −19 V after setting 2.** Clean comparisons: 5→4 (four H low rails), 5→3 (V low
-  rails & TG, plus H3_A_L back up). VDD: a feature counts only if 5→2 and 1→2 agree.
-* **Fingerprints** (same direction on all 4 channels, separation ≥ 6):
+  rails & TG, plus H3_A_L back up). VDD: a feature counts only if 5→2 and 1→2 agree (and
+  horizontal-transfer features are excluded).
+* **Fingerprints** (same direction on all 4 channels, median separation ≥ 6):
   * H low rails: H-transfer lowest point −7,400 ADU (separation ≈ 430), peak-to-peak +5,750, baseline
     droop and level about −1,500 ADU. No amplifier-response feature changes.
   * V low rails & TG: V-transfer lowest point −5,800 ADU (≈ 340). The H-transfer changes come from
@@ -203,15 +236,41 @@ Per-row time from `take_packet.formula_acquisition_seconds` (reference timing):
   * VDD −1.5 V: amplifier response only. Settling time +0.009 µs, rise time +3 ns, reset pulse
     +440 ADU, pulse per volt RG +74 ADU/V. No horizontal-transfer change.
 * **Noise:** channel 2 rises in both the trace (25 → 37 ADU) and the image (1.6 → 6.3 ADU) in
-  setting 3. Channel 3 rises in the image only.
-* **ML feasibility:** a nearest-setting test (leave one trace set out, distance in units of the repeat
-  scatter) assigns 46 of 47 trace sets correctly, so the features carry the settings reliably. But
-  there are 5 parameter sets, the changes are confounded, and there are no WADERs labels, so no model
-  of σe/λ can be trained. Needed: about 100 packets (`take_packet.py`, 1×1 image, reference traces):
-  one-parameter-at-a-time scans, then a random design.
+  setting 3. Channel 3 rises in the image only (1.5 → 3.8 ADU).
+* **ML feasibility:**
+  * **The features carry the settings.** A nearest-setting test (leave one trace set out; each feature
+    in units of its pooled repeat scatter; median over the features) assigns 46 of 47 trace sets
+    correctly, and each setting forms its own cluster. With a sum over the features instead of the
+    median there are 3 mistakes: with only 3 repeats, the scatter of some features is underestimated
+    and those features dominate. A model needs feature selection or robust weighting, and more
+    repeats.
+  * **No model of σe/λ/gain can be trained on this run:**
+    * 5 parameter sets (rule of thumb: about 100 needed);
+    * confounded changes (rails in blocks; VDD with H3_A_L and with the trace setup);
+    * no WADERs labels (binned images);
+    * labels barely vary;
+    * no drift reference.
+  * **Needed:** about 100 packets (`take_packet.py`, 1×1 image, reference traces). First
+    one-parameter-at-a-time scans (about 5 parameters × 5 values), then a random design, with the
+    reference repeated every few packets. At about 10 min per packet, that is about 80–100 packets
+    overnight.
 
-## 7. Open
+## 7. Overleaf summary and repository (commits `6e25c17`, `79c7727`)
 
-* Process these images with a suitable WADERs configuration, or define the overscan-based σe label.
-* Take the recommended 1×1 image (section 5) and fit it with WADERs.
-* Decide whether the Overleaf export belongs in the repository.
+* `docs/overleaf_packet_tests_2026-10-12/` (`packet_tests_2026-10-12.tex` + 8 figures) and
+  `docs/overleaf_packet_tests_2026-10-12.zip` (upload to Overleaf: New Project → Upload Project).
+  Sections: data and settings, method, fingerprints, noise and images, ML feasibility (with the
+  recommended 1×1 image), summary, appendix. **Not compiled locally** (no LaTeX on this machine).
+* The 2026-10-09 trace-features Overleaf export (`docs/overleaf_trace_features/`, its zip and the
+  older copy `overleaf_trace_features 2.zip`) is now in the repository too.
+* `.gitignore` now also allows `docs/overleaf_*/figures/*.png`.
+* `notebooks/README.md` describes the new notebook.
+
+## 8. Open
+
+* Compile the Overleaf summary and fix any LaTeX errors.
+* Take the recommended 1×1 image (section 5) and fit it with WADERs (per-row dark current).
+* For the binned images of this run: define an overscan-based σe label, or skip them.
+* Before the next run, review `configs/limits.toml` / `ccd_limits.py` (high ≥ low on every rail, as
+  the TG_B case shows) and plan the first scan (parameters, ranges, number of packets).
+* Optionally: extend `compare_trace.py` to all 85 features (offered, not done).
