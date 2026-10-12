@@ -191,16 +191,24 @@ Per-row time from `take_packet.formula_acquisition_seconds` (reference timing):
 
 ## 6. Comparative analysis notebook
 
-`notebooks/packet_tests_2026-10-12.ipynb` (figures in `docs/context/figures/oct12_*.png`):
+`notebooks/packet_tests_2026-10-12.ipynb` (figures in `docs/context/figures/oct12_*.png`).
 
-* **VDD returned to −19 V after group 2.** Comparisons of group 2 with 3–5 contain the VDD change
-  back; 4 vs 5 is the cleanest single comparison (four H low rails).
-* Features with separation ≥ 6 per comparison: 11–29 per channel.
-* H low rails (4 vs 5): horizontal minimum +7,000–7,900 ADU (separation ≈ 430), H peak-to-peak
-  −4,800 to −6,000 ADU, baseline at skip 1 +1,400–1,600 ADU, the same on all 4 channels.
-* V lows / TG (2 vs 3): vertical minimum −5,200 to −5,500 ADU on all channels (separation ≈ 330).
-* VDD: settling time and dip-recovery time 0.008–0.012 µs longer at −20.5 V, on every channel.
-* Channel 2 noise in group 3: trace CDS 25 → 37 ADU, image overscan noise 1.6 → 6.3 ADU.
+* **VDD returned to −19 V after setting 2.** Clean comparisons: 5→4 (four H low rails), 5→3 (V low
+  rails & TG, plus H3_A_L back up). VDD: a feature counts only if 5→2 and 1→2 agree.
+* **Fingerprints** (same direction on all 4 channels, separation ≥ 6):
+  * H low rails: H-transfer lowest point −7,400 ADU (separation ≈ 430), peak-to-peak +5,750, baseline
+    droop and level about −1,500 ADU. No amplifier-response feature changes.
+  * V low rails & TG: V-transfer lowest point −5,800 ADU (≈ 340). The H-transfer changes come from
+    H3_A_L.
+  * VDD −1.5 V: amplifier response only. Settling time +0.009 µs, rise time +3 ns, reset pulse
+    +440 ADU, pulse per volt RG +74 ADU/V. No horizontal-transfer change.
+* **Noise:** channel 2 rises in both the trace (25 → 37 ADU) and the image (1.6 → 6.3 ADU) in
+  setting 3. Channel 3 rises in the image only.
+* **ML feasibility:** a nearest-setting test (leave one trace set out, distance in units of the repeat
+  scatter) assigns 46 of 47 trace sets correctly, so the features carry the settings reliably. But
+  there are 5 parameter sets, the changes are confounded, and there are no WADERs labels, so no model
+  of σe/λ can be trained. Needed: about 100 packets (`take_packet.py`, 1×1 image, reference traces):
+  one-parameter-at-a-time scans, then a random design.
 
 ## 7. Open
 

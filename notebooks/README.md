@@ -115,21 +115,21 @@ each one.
 
 The full list of features is in `../docs/trace_features.tex`.
 
-## `packet_tests_2026-10-12.ipynb`: how traces and images change with the parameters
+## `packet_tests_2026-10-12.ipynb`: what the parameter changes did
 
 Data: `../data/2026-10-12-PA03_PQ04_Packet_Tests/` (5 settings: reference, VDD −20.5, V low rails +
 TG, H low rails, H3_A_L only; 3 trace sets each on board 101, plus an image for the first 4).
 
-1. Settings found from the `.meta` files; what changed between groups.
-2. Trace setup and quality (traces after the first image inherited `NCOLPRE = 185`; one damaged trace).
-3. All 85 features of every trace.
-4. Separation heatmap: every feature × every pair of settings × every channel.
-5. The responding features per setting, and the signed changes.
-6. Mean horizontal, vertical and skip waveforms, and their differences.
-7. Noise per channel.
-8. Images: overscan level and noise, charge per bin.
-9. Trace noise against image noise.
-10. Summary table and caveats.
+1. The settings, as a table and a picture; which comparisons are clean (VDD went back to −19 V after
+   setting 2).
+2. Trace setup and quality (inherited `NCOLPRE = 185`; one damaged trace).
+3. What a "separation" means, with one example feature (each dot one trace set).
+4. Each parameter's fingerprint: the features that change on all channels, and a count per kind of
+   feature.
+5. Waveforms of the clean comparisons, with the difference shaded.
+6. Trace noise and image noise per channel and setting.
+7. Could an ML model be trained on this? Leave-one-out test, feature-space picture, and what is missing.
+8. Appendix: all 85 features × 4 comparisons.
 
 Saves its key figures to `../docs/context/figures/oct12_*.png`.
 
