@@ -108,3 +108,26 @@ and the bias/clock relationships; the acmpy attribute names listed in the handof
   (17 features separate all 6; 25 none).
 * `docs/trace_features.tex` (generated from the registry; not compiled, no LaTeX here): every feature,
   definitions, the separation and redundancy tables.
+
+---
+
+## 2026-10-12: trace analysis for any geometry and timing
+
+Request: make the trace analysis work for any clock timing, number of skips and binning.
+
+* **Audit**: the code assumed the one real geometry (2x5 pixels, 500 skips, 20x20, reference timing):
+  pixels grouped by the 4-bit pixel number (wraps after 16 pixels), fixed counts (skips 10-60 and
+  450-500, skip 250, 150-sample windows, 75-sample half windows, blocks of 50, the reset pulse at
+  ~sample 374), transfer periods assumed < 5000 / < 20000 samples, row starts from gap lengths,
+  vertical transfers from flag bit 5 (which does not mark them on module 102).
+* **Changes**: `decode_trace.py` groups pixels by the order of the window records; `trace_regions.py`
+  rewritten (pixels from window order, exact period, horizontal transfers = flag bit 6, vertical =
+  bit 7, flag glitches shorter than 10 samples ignored, row starts from NCOL or vertical edges,
+  `.meta` fallback and cross-check via new `trace_geometry.py`); `compare_trace.py` and
+  `trace_features.py`: every count scales with the trace (`skip_counts`, `trace_sizes`); features
+  that cannot exist are NaN; a failing group no longer stops the trace.
+* **Testing**: `simulate_trace.py` writes synthetic traces in the real format; `check_trace_analysis.py`
+  runs 25 geometries/timings (1-2000 skips, 1-21 pixels, binning 1x1-20x20, windows 30-450 samples,
+  fast/slow clocks, late reset, charged pixel): layout correct with and without the `.meta`, no group
+  failures, only legitimate NaN. On the real traces all features are unchanged except the vertical
+  tools (now aligned on bit 7; module 102 now has them) and "cycle variation after reset" (< 0.2 %).

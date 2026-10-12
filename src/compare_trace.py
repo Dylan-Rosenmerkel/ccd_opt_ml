@@ -41,9 +41,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import itertools
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -65,6 +67,11 @@ def _binned(curve: np.ndarray) -> np.ndarray:
     return curve[:n].reshape(-1, step).mean(axis=1)
 
 
+def detrend_degree(n: int) -> int:
+    """Polynomial degree for detrending n skips: 4 for 200 or more skips, lower for short pixels."""
+    return int(min(4, max(0, n // 50)))
+
+
 def _poly_detrended(values: np.ndarray, degree: int = 4) -> np.ndarray:
     """
     ``values`` minus a low-order polynomial in the index (removes the slow drift).
@@ -74,6 +81,9 @@ def _poly_detrended(values: np.ndarray, degree: int = 4) -> np.ndarray:
     look far too small.  A degree-4 polynomial only removes variations slower than about a
     quarter of the data, so averages over up to ~50 skips keep their noise.
     """
+    if len(values) < 2:
+        return values - values.mean()
+    degree = min(degree, detrend_degree(len(values)))
     x = (np.arange(len(values)) - len(values) / 2) / (len(values) / 2)
     return values - np.polyval(np.polyfit(x, values, degree), x)
 
@@ -148,47 +158,94 @@ def fit_noise_model(block_sizes: list[int], noise: list[float]) -> tuple[float, 
     return float(np.sqrt(coef[0])), float(np.sqrt(coef[1]))
 
 
+def skip_counts(n_skips: int) -> dict[str, int]:
+    """
+    How many skips the skip tools leave out or use, for a pixel with ``n_skips`` skips.
+
+    For the usual 500 skips: template from skip 5, noise from skip 10, ringing fit on the first 20
+    skips, blocks of 10 and 50 skips.  For shorter pixels everything scales down, and tools that
+    need more skips than there are return NaN.
+    """
+    return {"template_from": min(5, n_skips // 10), "noise_from": min(10, n_skips // 10),
+            "ringing": min(20, n_skips // 2)}
+
+
 def skip_tools(r: TraceRegions, pixel: int) -> dict[str, np.ndarray | float]:
-    """All skip-region tools for one pixel."""
+    """All skip-region tools for one pixel (any number of skips, window length and cycle length)."""
+    nan = float("nan")
     cycles = r.skip[pixel]
-    base = cycles[:, :r.n_ped].mean(axis=1)                        # baseline of every skip
+    n_skip = len(cycles)
+    counts = skip_counts(n_skip)
+    t0, n0 = counts["template_from"], counts["noise_from"]
+    n_ped, sig, P = r.n_ped, r.sig_start, r.period
+    sig_end = min(sig + n_ped, P)
+    base = cycles[:, :n_ped].mean(axis=1)                          # baseline of every skip
     shape = cycles - base[:, None]                                  # baseline removed
-    template = shape[5:].mean(axis=0)                               # mean shape, skips 0-4 excluded
+    template = shape[t0:].mean(axis=0)                              # mean shape, first skips excluded
     cds = r.cds[pixel]
-    later = cds[10:]
-    resid = _poly_detrended(later)
+    later = cds[n0:]
+    resid = _poly_detrended(later) if len(later) > 1 else later - later.mean()
 
-    droop_total = base[-1] - base[1]
-    reached = np.flatnonzero((base[1:] - base[1]) * np.sign(droop_total) >= 0.5 * abs(droop_total))
-    half_skip = float(reached[0]) if len(reached) else float("nan")
+    if n_skip > 1:
+        droop_total = base[-1] - base[min(1, n_skip - 1)]
+        reached = np.flatnonzero((base[1:] - base[1]) * np.sign(droop_total) >= 0.5 * abs(droop_total))
+        half_skip = float(reached[0]) if len(reached) and droop_total != 0 else nan
+    else:
+        droop_total, half_skip = nan, nan
 
-    sig = slice(r.sig_start + 10, r.sig_start + r.n_ped - 10)
-    window = shape[5:, :r.n_ped] - template[:r.n_ped]               # noise left in the pedestal window
+    margin = min(10, n_ped // 8)
+    sig_slice = slice(sig + margin, sig_end - margin)
+    window = shape[t0:, :n_ped] - template[:n_ped]                  # noise left in the pedestal window
     window = window - window.mean(axis=1, keepdims=True)
-    power = (np.abs(np.fft.rfft(window, axis=1)) ** 2).mean(axis=0) / r.n_ped
-    freq = np.fft.rfftfreq(r.n_ped, 1 / SAMPLE_RATE_HZ)
+    power = (np.abs(np.fft.rfft(window, axis=1)) ** 2).mean(axis=0) / n_ped
+    freq = np.fft.rfftfreq(n_ped, 1 / SAMPLE_RATE_HZ)
 
     def band(lo, hi):
-        return float(np.log10(power[(freq >= lo) & (freq < hi)].sum()))
-
-    centred = resid - resid.mean()
-    acf2 = float(np.dot(centred[:-2], centred[2:]) / np.dot(centred, centred))   # skip-to-skip correlation, lag 2
+        selected = power[(freq >= lo) & (freq < hi)]
+        return float(np.log10(selected.sum())) if len(selected) and selected.sum() > 0 else nan
 
     def block_noise(n):                                             # noise of an n-skip average
         m = len(resid) // n * n
+        if m // n < 3:                                              # fewer than 3 blocks: undefined
+            return nan
         return float(resid[:m].reshape(-1, n).mean(axis=1).std(ddof=1))
+
+    if len(resid) > 2:
+        centred = resid - resid.mean()
+        acf2 = float(np.dot(centred[:-2], centred[2:]) / np.dot(centred, centred))   # lag 2
+    else:
+        acf2 = nan
 
     # parametric fits ---------------------------------------------------------------------
     us = 1 / 15.0
-    i_peak = r.sig_start + r.n_ped + int(np.argmax(template[r.sig_start + r.n_ped:]))
-    tail_tau, tail_amp, _ = fit_exponential((np.arange(len(template) - i_peak)) * us, template[i_peak:], 0.05, 20)
-    i_dip = r.n_ped + int(np.argmin(template[r.n_ped:r.sig_start]))
-    dip_tau, dip_amp, _ = fit_exponential((np.arange(r.sig_start - i_dip)) * us, template[i_dip:r.sig_start], 0.02, 10)
-    droop_tau, droop_amp, _ = fit_exponential(np.arange(1, len(base), dtype=float), base[1:], 5, 5000)
-    ring_freq, ring_tau, ring_amp = fit_damped_ringing(cds[:20] - np.median(later))
-    sizes = [1, 2, 5, 10, 25, 50]
-    noise_white, noise_floor = fit_noise_model(sizes, [block_noise(n) for n in sizes])
+    after = template[sig_end:]
+    if len(after) >= 5:
+        i_peak = sig_end + int(np.argmax(after))
+        tail_tau, tail_amp, _ = fit_exponential((np.arange(len(template) - i_peak)) * us, template[i_peak:], 0.05, 20)
+    else:
+        tail_tau = tail_amp = nan
+    if sig > n_ped + 5:
+        i_dip = n_ped + int(np.argmin(template[n_ped:sig]))
+        dip_tau, dip_amp, _ = fit_exponential((np.arange(sig - i_dip)) * us, template[i_dip:sig], 0.02, 10)
+    else:
+        dip_tau = dip_amp = nan
+    if n_skip > 6:
+        droop_tau, droop_amp, _ = fit_exponential(np.arange(1, len(base), dtype=float), base[1:],
+                                                  min(5, max(1, n_skip // 100)), max(5000, 10 * n_skip))
+    else:
+        droop_tau = droop_amp = nan
+    n_ring = counts["ringing"]
+    if n_ring >= 5 and len(later):
+        ring_freq, ring_tau, ring_amp = fit_damped_ringing(cds[:n_ring] - np.median(later))
+    else:
+        ring_freq = ring_tau = ring_amp = nan
+    sizes = [n for n in (1, 2, 5, 10, 25, 50) if len(resid) // n >= 3]
+    if len(sizes) >= 2:
+        noise_white, noise_floor = fit_noise_model(sizes, [block_noise(n) for n in sizes])
+    else:
+        noise_white = noise_floor = nan
 
+    tail_n = min(30, max(1, (P - sig_end) // 4))
     return {
         "fit: settling time after pulse (us)": tail_tau,
         "fit: settling amplitude after pulse": tail_amp,
@@ -202,18 +259,18 @@ def skip_tools(r: TraceRegions, pixel: int) -> dict[str, np.ndarray | float]:
         "fit: white noise per skip (ADU)": noise_white,
         "fit: correlated noise floor (ADU)": noise_floor,
         "skip: mean shape": _binned(template),
-        "skip: baseline droop curve": _binned(base[1:] - base[1]),
-        "skip: dip height": float(template[r.n_ped:r.sig_start].min()),
-        "skip: signal-window level": float(template[sig].mean()),
-        "skip: pulse peak height": float(template[r.sig_start + r.n_ped:].max()),
-        "skip: end-of-cycle tail level": float(template[-30:].mean()),
-        "skip: baseline at skip 1": float(base[1]),
+        "skip: baseline droop curve": _binned(base[1:] - base[1]) if n_skip > 1 else np.full(1, nan),
+        "skip: dip height": float(template[n_ped:sig].min()) if sig > n_ped else nan,
+        "skip: signal-window level": float(template[sig_slice].mean()) if sig_slice.stop > sig_slice.start else nan,
+        "skip: pulse peak height": float(after.max()) if len(after) else nan,
+        "skip: end-of-cycle tail level": float(template[-tail_n:].mean()),
+        "skip: baseline at skip 1": float(base[min(1, n_skip - 1)]),
         "skip: droop total": float(droop_total),
         "skip: droop half-time (skips)": half_skip,
-        "skip: CDS mean (skips>=10)": float(later.mean()),
-        "skip: CDS rms (detrended)": float(resid.std(ddof=1)),
-        "skip: first-skip CDS excess": float(cds[0] - np.median(later)),
-        "skip: skips 1-4 CDS ringing": float(np.sqrt(np.mean((cds[1:5] - np.median(later)) ** 2))),
+        "skip: CDS mean (skips>=10)": float(later.mean()) if len(later) else nan,
+        "skip: CDS rms (detrended)": float(resid.std(ddof=1)) if len(resid) > 1 else nan,
+        "skip: first-skip CDS excess": float(cds[0] - np.median(later)) if len(later) else nan,
+        "skip: skips 1-4 CDS ringing": float(np.sqrt(np.mean((cds[1:5] - np.median(later)) ** 2))) if len(cds) > 1 and len(later) else nan,
         "skip: CDS autocorrelation at lag 2": acf2,
         "skip: noise of 10-skip average": block_noise(10),
         "skip: noise of 50-skip average": block_noise(50),
@@ -231,13 +288,15 @@ def transfer_tools(label: str, transfers: np.ndarray) -> dict[str, np.ndarray | 
     replicate).  For the vertical block it holds ONE transfer (a transfer is the replicate),
     so the scatter between transfers is not available there.
     """
-    shape = transfers - transfers[:, :30].mean(axis=1, keepdims=True)
+    length = transfers.shape[1]
+    base_n, end_n = min(30, max(1, length // 10)), min(50, max(1, length // 10))
+    shape = transfers - transfers[:, :base_n].mean(axis=1, keepdims=True)
     template = shape.mean(axis=0)
     tools = {
         f"{label}: mean shape": _binned(template),
         f"{label}: minimum": float(template.min()),
         f"{label}: maximum": float(template.max()),
-        f"{label}: end level": float(template[-50:].mean()),
+        f"{label}: end level": float(template[-end_n:].mean()),
     }
     if len(transfers) > 1:
         tools[f"{label}: scatter between transfers"] = float(np.median(shape.std(axis=0, ddof=1)))
@@ -252,26 +311,25 @@ class Replicates:
 
 
 def row_start_pixels(r: TraceRegions) -> list[int]:
-    """Pixels read first in a row (pixel 0 and every pixel after a vertical transfer)."""
-    starts = [0]
-    for k in range(1, r.n_pixels):
-        gap = r.skip_bounds[k][0] - r.skip_bounds[k - 1][1]
-        if r.h_block and gap > 1.5 * r.h_block:
-            starts.append(k)
-    return starts
+    """Pixels read first in a row (pixel 0 and every pixel after vertical transfers); see trace_regions."""
+    return list(r.row_starts)
 
 
 def usable_pixels(r: TraceRegions) -> list[int]:
     """
-    Pixels suitable for comparing waveform shapes.
+    Pixels suitable for comparing waveform shapes (if every pixel starts a row, as with one
+    column, the row-start pixels are kept rather than leaving none).
 
     Excludes the row-start pixels (the electronics are still settling after the vertical
     transfers: their baseline differs strongly) and pixels holding a large charge (CDS mean
     far from the median, judged with the median absolute deviation, which the outliers
     themselves cannot distort).
     """
-    candidates = [p for p in range(r.n_pixels) if p not in row_start_pixels(r)]
-    cds_mean = np.array([np.mean(r.cds[p][10:]) for p in candidates])
+    candidates = [p for p in range(r.n_pixels) if p not in row_start_pixels(r) and len(r.cds[p])]
+    if not candidates:                                  # e.g. one column: every pixel starts a row
+        candidates = [p for p in range(r.n_pixels) if len(r.cds[p])]
+    n0 = skip_counts(r.n_skips)["noise_from"]
+    cds_mean = np.array([np.mean(r.cds[p][n0:]) for p in candidates])
     median = np.median(cds_mean)
     mad = 1.4826 * np.median(np.abs(cds_mean - median))
     return [p for p, x in zip(candidates, cds_mean) if abs(x - median) < 8 * max(mad, 5.0)]
@@ -287,7 +345,8 @@ def measure(r: TraceRegions, pixels: list[int] | None = None) -> Replicates:
 
     for pixel in (range(r.n_pixels) if pixels is None else pixels):
         add(skip_tools(r, pixel))
-        add(transfer_tools("horizontal", r.h[pixel]))
+        if r.h[pixel].size and len(r.h[pixel]):                # pixels without a horizontal transfer: no tools
+            add(transfer_tools("horizontal", r.h[pixel]))
     if r.v is not None:                                 # vertical: one replicate per transfer
         for transfer in range(len(r.v)):
             add(transfer_tools("vertical", r.v[transfer:transfer + 1]))
@@ -495,7 +554,9 @@ def main() -> None:
         if problems and not args.allow_damaged:
             raise SystemExit(f"{path} looks damaged: {'; '.join(problems)}\n"
                              "(use --allow-damaged to compare anyway)")
-        regions.append(split_regions(decoded))
+        meta_path = Path(path).with_suffix(".meta")
+        meta = json.loads(meta_path.read_text()) if meta_path.exists() else None
+        regions.append(split_regions(decoded, meta))          # .meta: row starts and timing cross-check
     ra, rb = regions
     pick = (lambda r: usable_pixels(r)) if args.clean_pixels else (lambda r: None)
     meas_a, meas_b = measure(ra, pick(ra)), measure(rb, pick(rb))

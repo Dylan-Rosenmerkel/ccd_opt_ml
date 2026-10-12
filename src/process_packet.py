@@ -231,7 +231,7 @@ def process_trace(entry: dict, out_dir: Path, cfg: ProcessingConfig) -> dict:
                       l1_is_signal=trace.l1_is_signal, l1_n=trace.l1_n, l1_sum=trace.l1_sum)
 
     if not problems:
-        regions = split_regions(trace)
+        regions = split_regions(trace, meta)
         features = trace_features(trace, meta=meta, regions=regions)
         summary.update(pixels_used=features.info["pixels_used"],
                        row_start_pixels=features.info["row_start_pixels"],

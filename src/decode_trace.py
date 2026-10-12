@@ -17,7 +17,9 @@ File layout (big-endian 32-bit words)
                                    other flag bits: sequencer states, not decoded here
     L1 "skip" words top nibble 5: header word, bits 19..0 = number of samples n (150),
                                    flag bit 7 (0x80) = signal window (else pedestal),
-                                   flag low nibble = pixel number in the trace.
+                                   flag low nibble = pixel number in the trace (4 bits
+                                   only, so it repeats after 16 pixels and is NOT used
+                                   to group the records; see ``pixel_segments``).
                                    The NEXT word is the sum of the n samples
                                    (31-bit signed; value / n = the window mean).
     other words      everything else (end-of-pixel records starting 0x70k..., a few
@@ -74,6 +76,19 @@ class DecodedTrace:
         return np.arange(len(self.values)) / (SAMPLE_RATE_HZ / 1e6)
 
     # -- L1 stream -------------------------------------------------------------
+    def pixel_segments(self) -> list[tuple[int, int]]:
+        """
+        ``(first, end)`` index ranges of the inline L1 records of every pixel, in order.
+
+        Found from the ORDER of the records, which works for any number of pixels and skips:
+        a pixel is N (pedestal, signal) pairs followed by ONE extra pedestal (``ReadoutPedestal``),
+        and the next pixel starts again with a pedestal.  So a pixel ends at a pedestal record
+        that is followed by another pedestal record (or by the end of the data).
+        """
+        sig = self.l1_is_signal
+        ends = [i + 1 for i in range(len(sig)) if not sig[i] and (i + 1 == len(sig) or not sig[i + 1])]
+        return list(zip([0] + ends[:-1], ends))
+
     def skips(self) -> dict[str, np.ndarray]:
         """
         Per-skip pedestal / signal means and CDS, from the inline L1 records.
@@ -81,26 +96,26 @@ class DecodedTrace:
         Every pixel is read as ``N`` pedestal/signal pairs followed by ONE extra pedestal
         window (``ReadoutPedestal`` in the sequencer).  Pairs are therefore formed pixel by
         pixel.  Returns arrays with one entry per skip, in acquisition order:
-        ``pixel``, ``skip`` (index within the pixel), ``pedestal`` and ``signal`` (window
-        means in ADU) and ``cds = pedestal - signal`` (the sign convention of ``commant``);
-        plus ``final_pedestal``, the extra pedestal of each pixel, indexed by ``pixel_ids``.
+        ``pixel`` (the pixel's position in the readout: 0, 1, 2, ...), ``skip`` (index within the
+        pixel), ``pedestal`` and ``signal`` (window means in ADU) and ``cds = pedestal - signal``
+        (the sign convention of ``commant``); plus ``final_pedestal``, the extra pedestal of each
+        pixel, indexed by ``pixel_ids``.
         """
         mean = self.l1_sum / np.maximum(self.l1_n, 1)
         out = {k: [] for k in ("pixel", "skip", "pedestal", "signal")}
         final, pixel_ids = [], []
-        for pix in dict.fromkeys(self.l1_pixel.tolist()):          # order of first appearance
-            of_pixel = self.l1_pixel == pix
-            peds = mean[of_pixel & ~self.l1_is_signal]
-            sigs = mean[of_pixel & self.l1_is_signal]
+        for index, (a, b) in enumerate(self.pixel_segments()):     # pixel = position in the readout
+            is_sig = self.l1_is_signal[a:b]
+            peds, sigs = mean[a:b][~is_sig], mean[a:b][is_sig]
             n = len(sigs)
-            out["pixel"].append(np.full(n, pix))
+            out["pixel"].append(np.full(n, index))
             out["skip"].append(np.arange(n))
             out["pedestal"].append(peds[:n])
             out["signal"].append(sigs)
             if len(peds) > n:
                 final.append(peds[n])
-                pixel_ids.append(pix)
-        result = {k: np.concatenate(v) for k, v in out.items()}
+                pixel_ids.append(index)
+        result = {k: np.concatenate(v) if v else np.empty(0) for k, v in out.items()}
         result["cds"] = result["pedestal"] - result["signal"]
         result["final_pedestal"] = np.array(final)
         result["pixel_ids"] = np.array(pixel_ids)
@@ -168,9 +183,11 @@ class DecodedTrace:
         mismatch = self.check_l1()
         if mismatch:
             problems.append(f"inline sums differ from the raw samples by up to {mismatch}")
-        counts = np.array([np.sum(self.l1_pixel == p) for p in np.unique(self.l1_pixel)])
-        if counts.min() != counts.max():
+        counts = np.array([b - a for a, b in self.pixel_segments()])
+        if len(counts) and counts.min() != counts.max():
             problems.append(f"pixels have different numbers of inline records ({counts.min()} to {counts.max()})")
+        if len(starts) != int(np.sum(~self.l1_is_signal)):
+            problems.append(f"{len(starts)} pedestal windows in the samples but {int(np.sum(~self.l1_is_signal))} inline pedestal records")
         return problems
 
     def to_csv(self, path: str | Path) -> None:
@@ -220,6 +237,7 @@ def decode_trace(path: str | Path) -> DecodedTrace:
     taken = np.zeros(len(words), dtype=bool)
     taken[header_pos] = True
     taken[sum_pos] = True
+    raw &= ~taken                                     # a sum word is never a sample, whatever its top nibble
     other = ~(keyword | raw | taken)
 
     return DecodedTrace(

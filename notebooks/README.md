@@ -8,7 +8,7 @@ it can be read without running it. Nothing here touches the DAQ hardware.
 | `trace_comparison_walkthrough_v2.ipynb` | Comparing two traces (39 tools, permutation test) | current version |
 | `trace_comparison_walkthrough.ipynb` | Same, older copy edited by hand | kept for reference |
 | `take_packet_walkthrough.ipynb` | Taking a data packet (`take_packet.py`, `scan_packets.py`) | current |
-| `process_packet_walkthrough.ipynb` | Processing a packet (`process_packet.py`, WADERs) | current; its text still says "39 tools" (see below) |
+| `process_packet_walkthrough.ipynb` | Processing a packet (`process_packet.py`, WADERs) | current |
 | `advanced_trace_features.ipynb` | Development of the advanced trace features | kept for reference; superseded by the next one |
 | `trace_features_walkthrough.ipynb` | All trace features in one function (`trace_features.py`) | current |
 
@@ -26,6 +26,8 @@ Uses `decode_trace.py`, `trace_regions.py` and `compare_trace.py` on module 101 
 4. Treat pixels as replicates and compare trace A with trace B (z-scores and p-values per tool).
 5. Explain the permutation test, then run the controls (even vs odd pixels, first vs second half).
 6. Print the full report, then compare real repeats of channel 0 against channel 0 vs channel 3.
+
+The region splitter it uses works for any trace geometry and timing (re-run on 2026-10-12).
 
 **Result:** different amplifiers are clearly separated. Repeats of one amplifier also look
 "different" in the pixel-level test; judged against the run-to-run spread, they are not.
@@ -72,8 +74,8 @@ Uses `process_packet.py`, `configs/processing.toml` and WADERs (`panaSKImg`, run
 **Needs:** the rehearsal packet from `take_packet_walkthrough.ipynb` (it is created if missing).
 **Writes:** `../rehearsal/processed/`.
 
-`process_packet.py` now computes all 85 features from `trace_features.py`, but parts of this
-notebook's text still describe the earlier 39-tool version.
+Step 2 uses the general region splitter (any geometry, `.meta` cross-check) and `trace_features`:
+85 numbers and 12 curves per trace.
 
 ## `advanced_trace_features.ipynb`: brainstormed features, one by one (reference)
 
@@ -90,6 +92,8 @@ with a plot and the reason a model might use it:
 * **F.** Channel 0 vs channel 3 separation.
 
 These features now live in `src/trace_features.py`, so this notebook is kept as the development record.
+Its inline code assumes the usual trace geometry (500 skips, 150-sample windows); the general version
+is `trace_features.py`.
 
 ## `trace_features_walkthrough.ipynb`: all features in one function
 
@@ -104,6 +108,9 @@ each one.
 5. Redundancy: feature pairs correlated with |r| > 0.98 across 19 traces.
 6. Separation of all 6 channel pairs vs repeat scatter.
 7. How the features enter `dataset.csv` through `process_packet.py`.
+8. Any trace geometry and timing: synthetic traces (`simulate_trace.py`) with 1–500 skips, up to
+   21 pixels, 1×1 to 20×20 binning and different clock delays, all decoded correctly. The full test
+   is `python src/check_trace_analysis.py`.
 
 The full list of features is in `../docs/trace_features.tex`.
 

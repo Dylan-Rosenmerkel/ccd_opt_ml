@@ -30,7 +30,8 @@ suggest better settings.
 | File | Role |
 |---|---|
 | `decode_trace.py` | Decode a raw trace (`.RJ45ADCDATA<ch>`): ADC samples, window flags, inline sums, quality check |
-| `trace_regions.py` | Cut a trace into skip cycles, horizontal and vertical transfers |
+| `trace_regions.py` | Cut a trace into skip cycles, horizontal and vertical transfers; works for any geometry and timing |
+| `trace_geometry.py` | Expected trace layout and durations from the `.meta` (cross-check and fallback) |
 | `compare_trace.py` | 39 comparison tools and a permutation test: can two traces be told apart? |
 | `trace_features.py` | `trace_features(trace)`: 85 features and 12 curves per trace, documented in a registry |
 | `take_packet.py` | Take one packet through the cdaq queue: flushes, reference traces, traces, synchronized image, manifest |
@@ -38,6 +39,8 @@ suggest better settings.
 | `scan_packets.py` | Run a series of packets (scan design, dry run, resume) |
 | `ccd_limits.py` | Safety checks of every parameter set; voltage ramps |
 | `fake_daq.py` | Fake boards for rehearsals |
+| `simulate_trace.py` | Synthetic traces in the real file format, for any geometry and timing (for testing) |
+| `check_trace_analysis.py` | Runs the trace analysis on 25 synthetic geometries/timings and on the real traces, checks the layout found |
 | `process_packet.py` | Packet → decoded traces and features, decompressed FITS → WADERs labels → `dataset.csv` |
 | `plot_*.py`, `view_trace.py` | Plots and interactive trace viewers |
 
@@ -45,7 +48,8 @@ suggest better settings.
 
 ```bash
 python src/decode_trace.py TRACE.RJ45ADCDATA0                          # decode and check a trace
-python src/trace_features.py TRACE.RJ45ADCDATA0                        # all features of a trace
+python src/trace_features.py TRACE.RJ45ADCDATA0                        # all features of a trace (any geometry)
+python src/check_trace_analysis.py                                     # test the analysis on many geometries
 python src/compare_trace.py TRACE_A TRACE_B --clean-pixels             # compare two traces
 python src/take_packet.py --params configs/packet_example.toml --show-commands   # what a packet would send
 python src/scan_packets.py --scan configs/scan_example.toml --dry-run  # plan a scan
