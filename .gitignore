@@ -12,6 +12,7 @@ docs/*.pdf
 plots/
 *.png
 !docs/context/figures/*.png
+!docs/overleaf_*/figures/*.png
 
 # Stray local output
 /test
