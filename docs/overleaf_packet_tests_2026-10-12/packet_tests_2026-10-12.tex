@@ -235,42 +235,136 @@ Charge per bin (ADU), setting 1 & 27.2 & 29.5 & 42.9 & 37.4 \\
 \section{Could an ML model be trained on this?}
 \label{sec:ml}
 
-\subsection{Do the features carry the operating parameters?}
+\subsection{Two different questions}
 
-Each trace set of settings 2--5 was left out in turn and assigned to the setting whose average features were closest. Every
-feature was measured in units of its pooled repeat scatter, and the distance was the median over the features of the
-squared difference. The result was \textbf{46 of 47 trace sets correct} (channel 0: 11/12; channels 1, 2: 12/12;
-channel 3: 11/11). In the space of the first two principal components (Figure~\ref{fig:space}), every setting forms its own
-cluster.
+``Training a model'' can mean two different things here, and this run answers them differently.
 
-With the \emph{sum} instead of the median, there were 3 mistakes. With only 3 repeats, the scatter of some features is
-underestimated, and those features then dominate a sum over 85 features. A model will need feature selection or robust
-weighting, and more repeats.
+\begin{enumerate}
+\item \textbf{Are the trace features informative?} If a parameter is changed, do the features change in a reproducible
+  way, so that a model could learn from them? This is a property of the \emph{inputs}, and it can be tested with this run
+  (Sections~\ref{sec:ml-test}--\ref{sec:ml-pca}).
+\item \textbf{Can we train the model we actually want?} That model takes the operating parameters $\theta$ (the $\sim$40
+  voltages and delays) and the trace features, and predicts the image quality: the read noise $\sigma_e$, the dark current
+  $\lambda$ and the gain, measured on the images with WADERs. An optimizer would then use it to propose better $\theta$.
+  This needs many examples of ($\theta$, trace features, image labels), which this run does not have
+  (Section~\ref{sec:ml-target}).
+\end{enumerate}
+
+\subsection{Test 1: can the features tell the settings apart?}
+\label{sec:ml-test}
+
+\paragraph{Idea.} If the features record the operating parameters, then a trace set whose setting is hidden can be assigned
+to the right setting just by comparing its features with those of the other trace sets. This is the simplest possible
+``model'' (a nearest-centroid classifier). If even this fails, a more complex model will not do better with so few examples.
+
+\paragraph{Data.} Settings 2--5 only, because setting 1 used a different trace setup (\code{NCOLPRE}) and would be
+recognised for that reason alone. Per channel there are 4 settings $\times$ 3 trace sets $= 12$ trace sets (11 on channel 3,
+where one trace was damaged), 47 in total over the 4 channels. Each trace set is a list of 83 numbers: the 85 features, minus
+2 that are undefined (NaN) for these traces. Each channel is tested separately.
+
+\paragraph{Procedure (leave-one-out).} For each trace set in turn:
+\begin{enumerate}
+\item \textbf{Hide it.} The remaining 11 trace sets are the ``training data''.
+\item \textbf{Average per setting.} For each setting, average the features of its remaining trace sets (3, or 2 for the
+  setting of the hidden one). This gives one ``centre'' per setting: a list of 83 typical values.
+\item \textbf{Put all features on the same scale.} The features have different units (ADU, \textmu s, ratios), so each is
+  divided by its \emph{repeat scatter}: the standard deviation of the trace sets around their own setting's centre,
+  pooled over the 4 settings. A difference of 1 in these units means ``as large as the difference between two repeats''.
+\item \textbf{Measure the distance} from the hidden trace set to each centre. For feature $k$ and setting $g$:
+  \begin{equation}
+  z_{k,g} = \frac{x_k - c_{k,g}}{s_k}, \qquad d_g = \operatorname{median}_k\, z_{k,g}^2 ,
+  \end{equation}
+  with $x_k$ the hidden trace set's feature, $c_{k,g}$ the centre of setting $g$ and $s_k$ the repeat scatter.
+\item \textbf{Assign} the hidden trace set to the setting with the smallest distance, and check whether that is its true
+  setting.
+\end{enumerate}
+
+\paragraph{Example.} Hide one trace set of setting 4 (channel 0). For the lowest point of the horizontal-transfer waveform,
+the repeat scatter is about 11\,ADU. The hidden value lies within a few ADU of the setting-4 centre ($z \approx 0$–1), but
+about 7,900\,ADU from the setting-5 centre ($z \approx 700$). Most of the other features give the same verdict, so the
+median distance is smallest for setting 4.
+
+\paragraph{Result.} \textbf{46 of 47 trace sets are assigned to the right setting} (channel 0: 11/12; channels 1 and 2: 12/12;
+channel 3: 11/11). Guessing would give about 1 in 4. The one mistake is a setting-5 trace set on channel 0, assigned to setting
+3. Setting 5 is also the loosest cluster on channel 0 in Figure~\ref{fig:space}.
+
+\paragraph{Why the median and not the sum.} With the \emph{sum} of $z^2$ over the features there are 3 mistakes (channels 1
+and 3). The reason is the small number of repeats. After hiding one trace set, a setting may have only 2 repeats left. For
+some feature, the repeats can then agree much better than usual \emph{by chance}, so its scatter $s_k$ is underestimated.
+That feature's $z^2$ becomes huge for every trace set that is not exactly on its centre, and in a sum over 83 features this
+one feature decides the result. The median ignores such outliers: it asks what the \emph{typical} feature says. In practice,
+the model will need either robust weighting or a selection of reliable features, and more repeats per setting to estimate
+the scatter well. The planned packets have 3 reference and 3 $\theta$ trace sets.
+
+\paragraph{What this result does and does not show.} It shows that the features change reproducibly with the operating
+parameters: the information is there. It does \emph{not} show that the features predict $\sigma_e$ or $\lambda$. Telling
+apart 4 settings that differ by 0.5--1.5\,V is an easy task. It is a necessary condition for the real model, not a
+sufficient one.
+
+\subsection{Test 2: a picture of the feature space}
+\label{sec:ml-pca}
+
+Each trace set is a point in an 83-dimensional space (one axis per feature), which cannot be drawn. A
+\emph{principal-component analysis} (PCA) finds the two directions along which the trace sets differ most, and
+Figure~\ref{fig:space} shows the trace sets projected onto them:
+\begin{itemize}
+\item Each feature is first standardized (its mean over the 12 trace sets subtracted, divided by its standard deviation), so
+  that no feature dominates because of its units.
+\item PC1 is the combination of features with the largest spread between the trace sets; PC2 the next largest, independent
+  of PC1. The percentages on the axes say how much of the total spread each direction holds (34\,\% and 20\,\% on channel 0).
+\item The axes have no units. Only distances matter: \textbf{points close together have similar features}.
+\end{itemize}
+
+\paragraph{Reading the figure.} The 3 trace sets of each setting lie close together, and the settings are far apart: the
+repeats are much more alike than the settings. PC1 roughly orders the settings by how much the horizontal low rails were
+lowered: setting 4 (five rails) on the right, setting 5 (one rail) in between. PC2 separates setting 2 (VDD, top) from
+setting 3 (V rails and TG, bottom). Setting 5 is the loosest cluster on channel 0, consistent with the one mistake of Test 1 being a
+setting-5 trace set. Channel 2, the noisiest amplifier, looks the same. Its higher noise does not hide the setting differences.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{oct12_feature_space.png}
-\caption{Every trace set in the plane of the first two principal components of the 85 standardized features. Left
-channel 0, right channel 2.}
+\caption{Every trace set (one dot each) projected onto the first two principal components of its standardized features.
+Left: channel 0, right: channel 2. Each colour is one setting.}
 \label{fig:space}
 \end{figure}
 
 \subsection{Is this enough to train the target model?}
+\label{sec:ml-target}
 
-No. The target model maps the parameters $\theta$ and trace features to $\sigma_e$, $\lambda$ and the gain. This run was a
-test, not a training set:
+No. This run was a test of the procedure, not a training set. What a training set needs, and why:
 
 \begin{table}[H]
 \centering
-\begin{tabularx}{\textwidth}{XX}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.2cm}X>{\raggedright\arraybackslash}p{3.8cm}}
 \toprule
-Needed & This run \\
+Needed & Why & This run \\
 \midrule
-Many distinct parameter sets (rule of thumb $\ge 10$ per varied parameter, i.e.\ $\sim$100) & 5 \\
-A design in which the effects can be separated & rails changed in blocks; VDD confounded with H3\_A\_L and with the trace setup \\
-Image labels ($\sigma_e$, $\lambda$, gain) for every packet & none: binned images cannot be fitted by WADERs \\
-Labels that vary & image noise changed only in setting 3 (with an inverted rail) \\
-Repeated references to measure drift & none; settings up to 85\,min apart \\
+Many distinct parameter sets ($\sim$100) &
+A model learns a function of $\theta$ from examples. With $d$ varied parameters, a common rule of thumb is at least
+$10\,d$ examples (5--10 parameters $\to$ 50--100 packets) to fit even smooth trends, and more to see interactions. &
+5 \\
+\addlinespace
+A design in which the effects can be separated &
+If two parameters always change together, no model can tell which one caused a change. Example: from 5 to 2, both VDD and
+H3\_A\_L change, so a change in the horizontal transfer could be due to either. Here only the physics argument
+(VDD should not move the clocks) separates them. &
+rails changed in blocks; VDD confounded with H3\_A\_L and with the trace setup \\
+\addlinespace
+Image labels for every packet &
+The model predicts $\sigma_e$, $\lambda$ and the gain, so every example needs them. WADERs measures them by fitting the 0, 1,
+2\,e$^-$ peaks, which needs unbinned (or low-charge) pixels. &
+none: the 20$\times$20 bins hold 20--35\,e$^-$ \\
+\addlinespace
+Labels that vary &
+If $\sigma_e$ is the same in every example, there is nothing to learn about what changes it. The parameter ranges must be wide
+enough to move $\sigma_e$ and $\lambda$ measurably. &
+image noise changed only in setting 3 (with an inverted rail) \\
+\addlinespace
+Repeated references &
+The CCD and electronics drift over hours. Without the same reference setting measured again, a drift looks like an effect of
+$\theta$. &
+none; settings up to 85\,min apart \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -288,16 +382,22 @@ Repeated references to measure drift & none; settings up to 85\,min apart \\
 
 \subsection{Next data}
 
-Packets taken with \code{take\_packet.py}: 3 flushes, 3 reference trace sets, the new $\theta$, 3 trace sets, and a 1$\times$1
-image that WADERs can fit (Table~\ref{tab:image}). At about 10 minutes per packet, an overnight run gives 80--100 packets.
-Suggested order:
+Each packet is taken with \code{take\_packet.py}: 3 flushes, 3 reference trace sets (at the reference $\theta$), the new
+$\theta$, a flush, 3 trace sets, and a 1$\times$1 image that WADERs can fit (Table~\ref{tab:image}). The reference traces in
+every packet measure the drift directly, and \code{take\_packet.py} sets all trace cuts, so the \code{NCOLPRE} problem cannot
+recur. At about 10 minutes per packet, an overnight run gives 80--100 packets. Suggested order:
 \begin{enumerate}
-\item one parameter at a time: about 5 parameters $\times$ 5 values (25 packets), with ranges wide enough to change $\sigma_e$;
-\item a random design over the same parameters (50--100 packets);
-\item the reference setting repeated every few packets, to measure the drift.
+\item \textbf{One parameter at a time:} about 5 parameters $\times$ 5 values (25 packets), with ranges wide enough to change
+  $\sigma_e$. Each effect is then unambiguous (no confounding), and the scan shows whether it is linear, has an optimum, or
+  has a threshold.
+\item \textbf{A random design} over the same parameters (50--100 packets): every packet draws all parameters at random within
+  their ranges. Because the parameters vary independently, a model can separate their effects and learn how they interact
+  (e.g.\ whether the best VDD depends on the reset rails).
+\item \textbf{The reference setting repeated every few packets}, to measure the drift over the night.
 \end{enumerate}
-That is the size at which a Gaussian-process or small tree-ensemble model of $\sigma_e(\theta,\text{trace features})$ becomes
-meaningful.
+With about 100 such packets, a Gaussian-process or small tree-ensemble model of $\sigma_e(\theta, \text{trace features})$
+becomes meaningful. A Gaussian process also gives an uncertainty for every prediction, which an optimizer can use to choose
+the next packet.
 
 \begin{table}[H]
 \centering
