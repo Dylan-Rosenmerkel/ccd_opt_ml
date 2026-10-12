@@ -11,6 +11,7 @@ it can be read without running it. Nothing here touches the DAQ hardware.
 | `process_packet_walkthrough.ipynb` | Processing a packet (`process_packet.py`, WADERs) | current |
 | `advanced_trace_features.ipynb` | Development of the advanced trace features | kept for reference; superseded by the next one |
 | `trace_features_walkthrough.ipynb` | All trace features in one function (`trace_features.py`) | current |
+| `packet_tests_2026-10-12.ipynb` | First run with varied parameters: traces and images compared across 5 settings | analysis |
 
 A suggested reading order: comparison → take packet → process packet → trace features.
 
@@ -114,6 +115,24 @@ each one.
 
 The full list of features is in `../docs/trace_features.tex`.
 
+## `packet_tests_2026-10-12.ipynb`: how traces and images change with the parameters
+
+Data: `../data/2026-10-12-PA03_PQ04_Packet_Tests/` (5 settings: reference, VDD −20.5, V low rails +
+TG, H low rails, H3_A_L only; 3 trace sets each on board 101, plus an image for the first 4).
+
+1. Settings found from the `.meta` files; what changed between groups.
+2. Trace setup and quality (traces after the first image inherited `NCOLPRE = 185`; one damaged trace).
+3. All 85 features of every trace.
+4. Separation heatmap: every feature × every pair of settings × every channel.
+5. The responding features per setting, and the signed changes.
+6. Mean horizontal, vertical and skip waveforms, and their differences.
+7. Noise per channel.
+8. Images: overscan level and noise, charge per bin.
+9. Trace noise against image noise.
+10. Summary table and caveats.
+
+Saves its key figures to `../docs/context/figures/oct12_*.png`.
+
 ---
 
 ## Running the notebooks
@@ -122,8 +141,9 @@ The full list of features is in `../docs/trace_features.tex`.
   `process_packet_walkthrough.ipynb` also needs astropy for one image plot (optional) and runs
   WADERs through the conda environment `damic`.
 * **Working directory:** this folder. Each notebook adds `../src` to the Python path itself.
-* **Data:** `../data/2026-10-08-PA03_PQ04_traces/` and
-  `../data/2026-10-06-PA03_PQ04_Installation_Check130K_1/`. Only module 101 is used for the trace
+* **Data:** `../data/2026-10-08-PA03_PQ04_traces/`,
+  `../data/2026-10-06-PA03_PQ04_Installation_Check130K_1/` and (for the packet-test analysis)
+  `../data/2026-10-12-PA03_PQ04_Packet_Tests/`. Only module 101 is used for the trace
   comparisons; module 102 files appear only as fake-board copies.
 * **Generated files:** `../rehearsal/` (about 1.5 GB: copied raw traces and images, plus the processed `.npz` files). It is safe to
   delete; running `take_packet_walkthrough.ipynb` and then `process_packet_walkthrough.ipynb`
