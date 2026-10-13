@@ -248,13 +248,41 @@ def process_trace(entry: dict, out_dir: Path, cfg: ProcessingConfig) -> dict:
     return summary
 
 
+#: With at least this many usable repeats, values far from the others are rejected per feature.
+MIN_REPEATS_FOR_REJECTION = 5
+#: A value is rejected if it is more than this many robust standard deviations from the median.
+REJECT_ROBUST_SIGMA = 5.0
+
+
+def _robust_keep(v: np.ndarray) -> np.ndarray:
+    """
+    Which repeats of one feature to keep (boolean mask).
+
+    A damaged trace is already refused by the quality check (lost data).  A trace can still be
+    unusual without lost data (a cosmic ray, a glitch, a pixel with charge), so with
+    >= MIN_REPEATS_FOR_REJECTION finite values a value is dropped if
+    |v - median| > REJECT_ROBUST_SIGMA * 1.4826 * MAD.  With fewer repeats nothing is dropped:
+    the median and MAD of 3 values are too uncertain.
+    """
+    finite = np.isfinite(v)
+    if finite.sum() < MIN_REPEATS_FOR_REJECTION:
+        return finite
+    med = np.median(v[finite])
+    robust_sd = 1.4826 * np.median(np.abs(v[finite] - med))
+    if robust_sd == 0:
+        return finite
+    return finite & (np.abs(v - med) <= REJECT_ROBUST_SIGMA * robust_sd)
+
+
 def combine_repeats(traces: list[dict]) -> list[dict]:
     """
     Combine the repeated trace sets of every (kind, board, channel).
 
     For each tool: ``mean`` = average of the per-trace values over the usable repeats, and
     ``sd`` = their standard deviation (ddof = 1): the scatter between trace sets taken a minute
-    apart at the same settings, i.e. the run-to-run noise of that tool.
+    apart at the same settings, i.e. the run-to-run noise of that tool.  With 5 or more repeats
+    (the recommended packet has 10), values more than 5 robust standard deviations from the
+    median are left out first (``_robust_keep``); ``n_rejected`` counts them per tool.
     """
     groups: dict[tuple, list[dict]] = {}
     for t in traces:
@@ -269,10 +297,13 @@ def combine_repeats(traces: list[dict]) -> list[dict]:
             names = [k for k in usable[0]["tools"] if all(k in t["tools"] for t in usable)]
             values = {k: np.array([t["tools"][k] for t in usable], dtype=float) for k in names}
             # NaN where a feature does not exist in a trace (e.g. charge loss without a charged pixel)
-            entry["mean"] = {k: float(np.nanmean(v)) if np.isfinite(v).any() else float("nan")
+            keep = {k: _robust_keep(v) for k, v in values.items()}
+            entry["mean"] = {k: float(np.mean(v[keep[k]])) if keep[k].any() else float("nan")
                              for k, v in values.items()}
-            entry["sd"] = {k: float(np.nanstd(v, ddof=1)) if np.isfinite(v).sum() > 1 else float("nan")
+            entry["sd"] = {k: float(np.std(v[keep[k]], ddof=1)) if keep[k].sum() > 1 else float("nan")
                            for k, v in values.items()}
+            entry["n_rejected"] = {k: int(np.isfinite(v).sum() - keep[k].sum()) for k, v in values.items()
+                                   if np.isfinite(v).sum() > keep[k].sum()}
         combined.append(entry)
     return combined
 
@@ -585,6 +616,8 @@ def dataset_rows(result: dict, manifest: dict) -> list[dict[str, Any]]:
             for kind, prefix in (("theta", "trace"), ("ref", "ref")):
                 c = combined.get((kind, board, ch), {})
                 row[f"{prefix}.n_usable"] = c.get("n_usable", 0)
+                # repeat values left out as outliers (summed over the features; 0 = none)
+                row[f"{prefix}.n_rejected_values"] = sum(c.get("n_rejected", {}).values())
                 for tool, value in c.get("mean", {}).items():
                     row[f"{prefix}.{tool}"] = value
                 for tool, value in c.get("sd", {}).items():

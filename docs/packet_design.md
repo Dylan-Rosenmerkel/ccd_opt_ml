@@ -252,7 +252,18 @@ Example: the settling time has $R \approx 7$, so $\sigma_\text{acq}^2 = 48\,\tex
 * more row-level features (vertical transfers, row starts) per trace. More small traces give these too, or
   use 4 × 3 pixels instead of 2 × 5.
 
-**Suggestion:**
+**Decision (2026-10-13): 10 reference + 10 θ trace sets per packet**
+(`configs/packet_recommended.toml`, `configs/scan_recommended.toml`):
+* errors on the amplifier features drop by $\sqrt{10/3} \approx 1.8$;
+* spares: a damaged trace is still retaken, and a trace that passes the quality check but is unusual
+  is left out per feature when the repeats are combined. With ≥ 5 repeats, a value more than
+  5 × 1.4826 × MAD from the median is dropped (`process_packet.combine_repeats`); `dataset.csv`
+  counts these (`trace.n_rejected_values`, `ref.n_rejected_values`);
+* cost, with a flush between sets: 67 steps, **~23 min per packet** (~2.6 per hour, ~60 overnight);
+  160 traces, 1.8 GB. Without flushes between sets (`flushes_between_traces = 0`): **~13.5 min**;
+* the 3 + 3 layout below is kept in the example files.
+
+**Earlier suggestion:**
 * keep 2 × 5-pixel matched traces;
 * if the time budget allows, use **5 reference + 5 θ sets** instead of 3 + 3. That is about +2.7 min per
   packet (each set is ~8 trace calls plus a flush) and gives ~30 % smaller errors on the amplifier

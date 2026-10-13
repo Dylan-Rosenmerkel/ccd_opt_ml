@@ -176,13 +176,30 @@ Suggested: keep 2×5 matched traces and, if time allows, 5 + 5 sets per packet (
 errors on the amplifier features). On the DAQ, test whether the flush between sets is needed (without it
 a set costs ~14 s instead of ~41 s). Re-check the ratios on the first matched 1×1 traces.
 
-## 7. Environment note
+## 7. Ten trace sets per setting
+
+On request, the recommended packet now takes **10 reference + 10 θ trace sets**
+(`configs/packet_recommended.toml`; new `configs/scan_recommended.toml`, which is `scan_example` with the
+recommended image, matched traces and 10 + 10):
+* errors are $\sqrt{10/3} \approx 1.8\times$ smaller, and there are spares for bad data;
+* **outlier rejection** in `process_packet.combine_repeats`: with ≥ 5 usable repeats, a feature value
+  more than 5 robust σ (1.4826 × MAD) from the median is left out before the mean and sd.
+  `n_rejected` per tool; `dataset.csv` gets `trace.n_rejected_values` / `ref.n_rejected_values`.
+  Damaged traces are still refused by the quality check and retaken once;
+* **cost:** with a flush between sets, 67 steps, ~23 min per packet (~2.6 per hour), 160 traces,
+  1.8 GB. With `flushes_between_traces = 0`, ~13.5 min. That is the main open decision (and the test
+  in section 6);
+* **tested:** scan dry run (10 packets, 3.8 h, valid); fake packet ok; processing gives 160/160
+  usable traces and 10 repeats per channel; a unit test rejected one wild value among 10 and nothing
+  with 3 repeats.
+
+## 8. Environment note
 
 The scratch Python environment used for executing notebooks lost files in a temp-directory
 cleanup and was rebuilt (numpy, matplotlib, astropy, nbformat, nbclient, ipykernel). Nothing in the
 project depended on it.
 
-## 8. Open
+## 9. Open
 
 * On the DAQ machine:
   * `--status-only`;
@@ -191,6 +208,6 @@ project depended on it.
   * check that `queue_backups/` was written.
 * Ask the group whether the repeat flush is meant to stay off during data taking, and whether a
   flush in leader mode really hangs (assumed, as for traces).
-* Test trace sets with and without a flush between them, and compare the trace-to-trace scatter.
+* Decide `flushes_between_traces` for the 10 + 10 packets (23 vs 13.5 min); test trace sets with and without a flush between them, and compare the trace-to-trace scatter.
 * First real packet with `packet_recommended.toml`: check σ at 500 skips (≈ 0.26 e⁻?), λ per row, and the matched traces (docs/packet_design.md section 8).
 * Everything open from 2026-10-12 (1×1 image and WADERs fit, limits review, first scan design).
