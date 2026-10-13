@@ -252,15 +252,20 @@ Example: the settling time has $R \approx 7$, so $\sigma_\text{acq}^2 = 48\,\tex
 * more row-level features (vertical transfers, row starts) per trace. More small traces give these too, or
   use 4 × 3 pixels instead of 2 × 5.
 
-**Decision (2026-10-13): 10 reference + 10 θ trace sets per packet**
+**Decision (2026-10-13): 5 reference + 10 θ trace sets per packet** (first 10 + 10, then the
+reference reduced to 5 on request)
 (`configs/packet_recommended.toml`, `configs/scan_recommended.toml`):
-* errors on the amplifier features drop by $\sqrt{10/3} \approx 1.8$;
+* errors on the θ means of the amplifier features drop by $\sqrt{10/3} \approx 1.8$ and on the
+  reference means by $\sqrt{5/3} \approx 1.3$. The difference θ − reference has variance
+  $\sigma^2(1/10 + 1/5)$, about 1.5× smaller than with 3 + 3;
 * spares: a damaged trace is still retaken, and a trace that passes the quality check but is unusual
   is left out per feature when the repeats are combined. With ≥ 5 repeats, a value more than
   5 × 1.4826 × MAD from the median is dropped (`process_packet.combine_repeats`); `dataset.csv`
   counts these (`trace.n_rejected_values`, `ref.n_rejected_values`);
-* cost, with a flush between sets: 67 steps, **~23 min per packet** (~2.6 per hour, ~60 overnight);
-  160 traces, 1.8 GB. Without flushes between sets (`flushes_between_traces = 0`): **~13.5 min**;
+* cost, with a flush between sets: 52 steps, **~18.9 min per packet** (~3.2 per hour); 120 traces,
+  1.4 GB. Without flushes between sets (`flushes_between_traces = 0`): **~12.1 min**;
+* a scan of 10 parameters × 20 values (241 packets incl. reference packets every 5 points):
+  **76 h (3.2 days)**, or 49 h (2.0 days) without flushes between sets; 0.33 TB of traces;
 * the 3 + 3 layout below is kept in the example files.
 
 **Earlier suggestion:**

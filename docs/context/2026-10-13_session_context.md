@@ -193,6 +193,13 @@ recommended image, matched traces and 10 + 10):
   usable traces and 10 repeats per channel; a unit test rejected one wild value among 10 and nothing
   with 3 repeats.
 
+**Then reduced to 5 reference sets** (on request): **5 reference + 10 θ trace sets**.
+* Cost: 52 steps, ~18.9 min per packet (12.1 min without flushes between sets), 120 traces, 1.4 GB.
+* Outlier rejection still applies (≥ 5 repeats).
+* A scan of 10 parameters × 20 values (one at a time, a reference packet every 5 points, 241 packets)
+  takes **~76 h (3.2 days)**, or ~49 h without flushes between sets. Excluded: FITS waits, ramps
+  and stops (add 5–10 %).
+
 ## 8. Environment note
 
 The scratch Python environment used for executing notebooks lost files in a temp-directory

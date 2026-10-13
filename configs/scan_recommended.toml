@@ -1,6 +1,6 @@
 # scan_recommended.toml -- scan_example.toml with the recommended packet layout (2026-10-13)
-#   10 reference + 10 trace sets per packet, traces matched to a 1x1 16x1000x500 image;
-#   reasons in docs/packet_design.md.  ~23 min per packet (13.5 min with flushes_between_traces = 0).
+#   5 reference + 10 trace sets per packet, traces matched to a 1x1 16x1000x500 image;
+#   reasons in docs/packet_design.md.  ~18.9 min per packet (12.1 min with flushes_between_traces = 0).
 #
 # (original header of scan_example.toml:)
 #
@@ -20,9 +20,9 @@ sequencer       = "reference_v5_pumping.seq"   # must be the file loaded on the 
 
 [options]                          # packet options (see configs/packet_recommended.toml)
 n_initial_flushes      = 3
-n_reference_traces     = 10        # 10 sets: spares for bad data, ~1/sqrt(10) errors (docs/packet_design.md s. 9)
+n_reference_traces     = 5        # reference trace sets (5: enough for the reference mean and scatter)
 n_traces               = 10
-flushes_between_traces = 1         # 0 shortens a packet from ~23 to ~13.5 min
+flushes_between_traces = 1         # 0 shortens a packet from ~18.9 to ~12.1 min
 flushes_after_change   = 1
 n_final_flushes        = 1
 erase_policy           = "never"   # flushes are used; the erase is available, never the e-purge

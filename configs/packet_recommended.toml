@@ -6,7 +6,7 @@
 #          about 4.8 min, sigma ~0.26 e- (ch0/1/3), ~1000 one-electron pixels per channel
 #   trace: match_image = true: the traces read their pixels exactly like the image (500 skips,
 #          no binning), 2 x 5 pixels after a 100-pixel prescan burst, ~11 MB per channel;
-#          10 reference + 10 trace sets (flush between sets): ~23 min per packet, 1.8 GB of traces
+#          5 reference + 10 trace sets (flush between sets): ~18.9 min per packet, 1.4 GB of traces
 # WADERs: img_9.json with ccd_rows = 16, ccd_cols = 852 (configs/processing.toml).
 
 packet_id = "recommended_00001"
@@ -15,9 +15,9 @@ scan_name = "example"
 [options]
 sequencer             = "reference_v5_pumping.seq"   # must be the file loaded on the boards (checked)
 n_initial_flushes     = 3       # flushes at the reference before the first reference trace set
-n_reference_traces    = 10      # trace sets at the reference (10: spares for bad data, smaller errors)
+n_reference_traces    = 5       # reference trace sets (5: enough for the reference mean and scatter)
 n_traces              = 10      # trace sets at the new parameters
-flushes_between_traces = 1      # flushes between two trace sets (0: packet 13.5 instead of 23 min)
+flushes_between_traces = 1      # flushes between two trace sets (0: packet 12.1 instead of 18.9 min)
 flushes_after_change  = 1       # flushes after going to the new parameters
 n_final_flushes       = 1       # flushes after the image, back in standalone mode (take_image.py -f)
 erase_policy          = "never" # "never" | "on_voltage_change" | "always" | "first_only" (never e-purge)
