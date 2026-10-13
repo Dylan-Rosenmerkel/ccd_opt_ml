@@ -3,6 +3,7 @@
 # Sequence (counts in [options]):
 #   reference parameters -> 3 flushes -> reference traces x3 (flush between) ->
 #   new parameters -> flush -> traces x3 (flush between) -> image of the [image] size
+#   (one queue entry: leader mode, image, back to standalone, final flush, like take_image.py -m 101 -f)
 #
 # [image]               size and readout of the image (the content of an image_params TOML)
 # [trace]               trace parameters; missing keys take the values of scripts/take_trace.py
@@ -25,6 +26,7 @@ n_reference_traces    = 3       # trace sets at the reference
 n_traces              = 3       # trace sets at the new parameters
 flushes_between_traces = 1      # flushes between two trace sets
 flushes_after_change  = 1       # flushes after going to the new parameters
+n_final_flushes       = 1       # flushes after the image, back in standalone mode (take_image.py -f)
 erase_policy          = "never" # "never" | "on_voltage_change" | "always" | "first_only" (never e-purge)
 reference_traces      = "always"   # "always" | "when_different" | "never"
 retake_damaged_traces = 1       # repeat a trace set once if a decoded trace lost data

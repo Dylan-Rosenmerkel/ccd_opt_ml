@@ -44,15 +44,16 @@ from pathlib import Path
 from typing import Any
 
 from ccd_limits import Limits, LimitsError
-from daq_control import StepError
+from daq_control import StepError, repeat_queue_suspended
 from take_packet import (CONFIG_DIR, DEFAULT_SEQUENCER_FILE, DaqSetup, PacketError, PacketRequest,
-                         board_thetas, estimate_packet_seconds, make_controller, plan_packet, take_packet)
+                         board_thetas, estimate_packet_seconds, make_controller, plan_packet,
+                         repeat_queue_backup_file, take_packet)
 
 log = logging.getLogger("scan_packets")
 
 #: Packet options that may appear in [options] of the scan file (see take_packet.PacketRequest).
 _COUNT_OPTIONS = ("n_initial_flushes", "n_reference_traces", "n_traces", "flushes_between_traces",
-                  "flushes_after_change", "retake_damaged_traces")
+                  "flushes_after_change", "n_final_flushes", "retake_damaged_traces")
 
 
 # --------------------------------------------------------------------------- #
@@ -185,7 +186,14 @@ def validate_plan(plan, limits: Limits, config: dict[str, Any], setup: DaqSetup)
 
 def run_scan(controller, plan, limits: Limits, config: dict[str, Any], setup: DaqSetup,
              allow_unreviewed: bool) -> None:
-    """Take all packets of ``plan`` that are not yet ``ok``; stop at the first failure."""
+    """
+    Take all packets of ``plan`` that are not yet ``ok``; stop at the first failure.
+
+    The cdaq repeat queue (the group's idle ``daq.flush_ccd()``) is saved and cleared ONCE for
+    the whole scan and put back at the end (``[daq] repeat_queue = "suspend"``), so no flush
+    the packets did not ask for runs between their steps.  After a failure it is not put back;
+    the backup file in ``<work_dir>/queue_backups/`` lists the commands to restore it by hand.
+    """
     work = Path(setup.work_dir)
     done = load_existing_manifests(work)
     previous = [m for m in done.values() if m.get("theta")]
@@ -195,12 +203,16 @@ def run_scan(controller, plan, limits: Limits, config: dict[str, Any], setup: Da
     (work / f"{config['scan']['name']}_plan.json").write_text(
         json.dumps([{"packet_id": pid, "theta": theta} for pid, theta in plan], indent=2))
 
-    for packet_id, theta in plan:
-        if done.get(packet_id, {}).get("status") == "ok":
-            log.info("skipping %s (already ok)", packet_id)
-            continue
-        prev_manifest = take_packet(controller, make_request(packet_id, theta, config, setup), setup,
-                                    limits, prev_manifest, allow_unreviewed_limits=allow_unreviewed)
+    suspend = setup.repeat_queue == "suspend"
+    with repeat_queue_suspended(controller, repeat_queue_backup_file(setup, config["scan"]["name"]),
+                                enabled=suspend) as saved:
+        for packet_id, theta in plan:
+            if done.get(packet_id, {}).get("status") == "ok":
+                log.info("skipping %s (already ok)", packet_id)
+                continue
+            prev_manifest = take_packet(controller, make_request(packet_id, theta, config, setup), setup,
+                                        limits, prev_manifest, allow_unreviewed_limits=allow_unreviewed,
+                                        repeat_queue_suspended=saved if suspend else None)
 
 
 def main() -> None:
@@ -211,6 +223,8 @@ def main() -> None:
     parser.add_argument("--backend", choices=["cdaq", "fake"], default="fake")
     parser.add_argument("--work-dir", help="override [daq] work_dir")
     parser.add_argument("--fake-data", help="data/ directory whose real files the fake boards copy")
+    parser.add_argument("--fake-time-scale", type=float, default=0.0,
+                        help="fake boards sleep this fraction of the real durations (watch with fake_cdaq_monitor.py)")
     parser.add_argument("--dry-run", action="store_true", help="plan every packet and exit")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -231,7 +245,7 @@ def main() -> None:
     if not limits.reviewed and not allow_unreviewed:
         sys.exit(f"{limits.source} has reviewed = false; refusing to drive real hardware")
 
-    controller = make_controller(args.backend, setup, args.fake_data)
+    controller = make_controller(args.backend, setup, args.fake_data, args.fake_time_scale, echo=True)
     try:
         run_scan(controller, plan, limits, config, setup, allow_unreviewed)
     except (LimitsError, StepError, PacketError) as err:

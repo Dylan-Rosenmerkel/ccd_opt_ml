@@ -12,7 +12,8 @@ A packet is everything the ML pipeline needs for one operating point.  Each boar
       the 3 repeats give the run-to-run scatter;
     * a change to theta, a flush, then 3 sets of traces at theta, a flush between sets;
     * one IMAGE at theta of a specified size ([image] table, like an image_params TOML file),
-      read synchronously by all boards in master/slave mode;
+      read synchronously by all boards in master/slave mode, then back to standalone mode and
+      a flush (like ``take_image.py -m <id> -f``);
     * a MANIFEST (``<work_dir>/packets/<packet_id>.json``) that ties the files together with
       theta, theta_ref, the change, the previous packet, timestamps and every step's receipt.
 
@@ -45,9 +46,23 @@ Order of the steps (default counts; the reasons are in the walkthrough notebook)
         [erase]        (theta boards)   only if the erase policy asks
      9. flush          (pool)
     10. traces 1, flush, traces 2, flush, traces 3
-    11. leader         (pool)           daq.master(leader)
-    12. image          (pool)           every board takes the image together
-    13. FITS wait, manifest
+    11. image          (pool)           ONE queue entry: daq.master(leader), every board takes the
+                                        image together, daq.standalone(), flush x n_final_flushes
+    12. FITS wait, manifest
+
+The cdaq repeat queue
+---------------------
+The group keeps ``daq.flush_ccd()`` in the cdaq REPEAT queue: the queue runner runs it whenever
+the simple queue is empty, i.e. between any two steps of a packet (this script queues a step
+only after the previous one has finished).  Two consequences, both handled:
+
+* extra flushes between the steps.  ``main()`` (and ``scan_packets.py``, once per scan) saves
+  and clears the repeat queue before the first step and puts it back afterwards
+  (``[daq] repeat_queue = "suspend"``, the default; ``daq_control.repeat_queue_suspended``).
+  After an error it is NOT put back automatically: the board state must be checked first.
+* a repeat flush while the boards are in leader/follower mode would hang.  The image step is
+  therefore one queue entry from ``daq.master`` back to ``daq.standalone``, so even with the
+  repeat queue kept (``repeat_queue = "keep"``) nothing can run in between.
 
 Usage
 -----
@@ -56,6 +71,12 @@ Usage
 
     # rehearsal on fake boards (writes files under --work-dir)
     python take_packet.py --params ../configs/packet_example.toml --backend fake --work-dir /tmp/rehearsal
+
+    # the same, slowed down to 5 % of real time, watched in a second terminal like the real
+    # tmux session (queue, board log, client status, published queue commands)
+    python fake_cdaq_monitor.py --state /tmp/rehearsal/fake_cdaq_state.json
+    python take_packet.py --params ../configs/packet_example.toml --backend fake \
+           --work-dir /tmp/rehearsal --fake-time-scale 0.05
 
     # first contact with the real DAQ: only the read-only status step
     python take_packet.py --params packet.toml --backend cdaq --status-only
@@ -96,7 +117,7 @@ from typing import Any, Mapping
 
 from ccd_limits import SEQUENCER_KEYS, Limits, LimitsError, split_theta
 import daq_commands as cmd
-from daq_control import StepError, wait_for_receipts
+from daq_control import StepError, repeat_queue_suspended, wait_for_receipts
 
 log = logging.getLogger("take_packet")
 
@@ -140,6 +161,7 @@ class DaqSetup:
     poll_interval_s: float
     fits_wait_s: float
     commands: dict[str, str]
+    repeat_queue: str = "suspend"          # "suspend" (save, clear, restore) or "keep"
 
     @classmethod
     def load(cls, path: str | Path) -> "DaqSetup":
@@ -156,7 +178,10 @@ class DaqSetup:
                     timeout_margin_s=float(daq.get("timeout_margin_s", 300)),
                     poll_interval_s=float(daq.get("poll_interval_s", 1.0)),
                     fits_wait_s=float(daq.get("fits_wait_s", 180)),
-                    commands=dict(data["commands"]))
+                    commands=dict(data["commands"]),
+                    repeat_queue=daq.get("repeat_queue", "suspend"))
+        if setup.repeat_queue not in ("suspend", "keep"):
+            raise ValueError(f"{path}: repeat_queue must be 'suspend' or 'keep', not {setup.repeat_queue!r}")
         unknown = set(setup.theta_boards + setup.trace_boards + [setup.leader]) - set(setup.boards)
         if unknown:
             raise ValueError(f"{path}: boards {sorted(unknown)} are not in [daq] boards")
@@ -180,6 +205,8 @@ class PacketRequest:
     n_reference_traces, n_traces : trace sets at theta_ref and at theta.
     flushes_between_traces : flushes between two trace sets.
     flushes_after_change : flushes after going to theta, before the first trace set at theta.
+    n_final_flushes : flushes after the image, in the same queue entry, once the boards are back
+        in standalone mode (``take_image.py -f`` does one).
     erase_policy : "never" (default) | "on_voltage_change" | "always" | "first_only".
     reference_traces : "always" | "when_different" (skip when theta == theta_ref) | "never".
     retake_damaged_traces : how many times a trace step is repeated when a decoded trace shows
@@ -196,6 +223,7 @@ class PacketRequest:
     n_traces: int = 3
     flushes_between_traces: int = 1
     flushes_after_change: int = 1
+    n_final_flushes: int = 1
     erase_policy: str = "never"
     reference_traces: str = "always"
     retake_damaged_traces: int = 1
@@ -206,7 +234,7 @@ class PacketRequest:
 @dataclass
 class PlannedStep:
     """One queued action: what text, for which target, expected from which boards."""
-    kind: str                    # status, standalone, apply, erase, flush, ref_traces, traces, leader, image
+    kind: str                    # status, standalone, apply, erase, flush, ref_traces, traces, image
     name: str                    # readable name, e.g. "ref_traces_2"
     target: str                  # cdaq client ("acm101") or pool ("acmpool")
     boards: list[int]            # boards expected to write a receipt
@@ -495,11 +523,17 @@ def plan_packet(request: PacketRequest, setup: DaqSetup, limits: Limits,
         flush(request.n_initial_flushes, request.theta, "initial flushes at theta")
     trace_sets("traces", request.n_traces, request.theta)
 
-    pool("leader", "leader", cmd.leader_lines(c["leader_mode"].format(leader=setup.leader)), 1, 1,
-         f"master/slave mode (leader acm{setup.leader}) for the image")
+    # leader mode, image, standalone, final flush(es): ONE queue entry, so a repeat command of
+    # the cdaq queue can never run while the boards are in leader/follower mode
     image_s = per_board_seconds(image, image["subroutine"], request.theta)
-    pool("image", "image", cmd.image_lines(f"{request.packet_id}_img", image),
-         image_s + 2, 2 * image_s + 60, "synchronised image on all boards")
+    final_s = request.n_final_flushes * flush_seconds(request.theta)
+    pool("image", "image",
+         cmd.synchronized_image_lines(f"{request.packet_id}_img", image,
+                                      c["leader_mode"].format(leader=setup.leader), c["standalone_mode"],
+                                      c["flush"], request.n_final_flushes),
+         image_s + 2 + final_s, 2 * (image_s + final_s) + 60,
+         f"master/slave mode (leader acm{setup.leader}), synchronised image on all boards, back to "
+         f"standalone, {request.n_final_flushes} flush(es)")
     return steps
 
 
@@ -550,13 +584,18 @@ def _int_keys(table: Mapping | None) -> dict[int, Any] | None:
 
 
 def take_packet(controller, request: PacketRequest, setup: DaqSetup, limits: Limits,
-                prev_manifest: dict | None = None, allow_unreviewed_limits: bool = False) -> dict:
+                prev_manifest: dict | None = None, allow_unreviewed_limits: bool = False,
+                repeat_queue_suspended: list | None = None) -> dict:
     """
     Run all steps of one packet and return (and write) its manifest.
 
     ``controller`` is a ``CdaqController`` (real DAQ) or ``FakeController`` (rehearsal).
     ``prev_manifest`` is the manifest of the previous packet (``None`` = first packet): its
-    theta is where each board's voltages are ramped from.
+    theta is where each board's voltages are ramped from.  ``repeat_queue_suspended`` is what
+    the caller removed from the cdaq repeat queue for this packet (recorded in the manifest;
+    ``None`` = the repeat queue was not touched, so its commands ran between the steps).
+    This function does not touch the repeat queue itself: ``main()`` and ``scan_packets.py``
+    do (``daq_control.repeat_queue_suspended``).
     """
     if not limits.reviewed and not allow_unreviewed_limits:
         raise LimitsError(f"{limits.source} has reviewed = false; review the limits first")
@@ -599,7 +638,9 @@ def take_packet(controller, request: PacketRequest, setup: DaqSetup, limits: Lim
                 "trace_channels": setup.trace_channels, "queue": setup.queue},
         "sequence": {k: getattr(request, k) for k in (
             "n_initial_flushes", "n_reference_traces", "n_traces", "flushes_between_traces",
-            "flushes_after_change", "erase_policy", "reference_traces", "retake_damaged_traces")},
+            "flushes_after_change", "n_final_flushes", "erase_policy", "reference_traces",
+            "retake_damaged_traces")},
+        "repeat_queue_suspended": repeat_queue_suspended,
         "sequencer": request.sequencer,
         "erase_done": sorted({s.name for s in steps if s.kind == "erase"}),
         "estimated_seconds": round(estimate_packet_seconds(steps)),
@@ -629,7 +670,7 @@ def take_packet(controller, request: PacketRequest, setup: DaqSetup, limits: Lim
         manifest["steps"].append(entry)
         save()
         receipts = wait_for_receipts(receipt_dir, step_id, step.boards, step.timeout_s,
-                                     setup.poll_interval_s)
+                                     getattr(controller, "poll_interval_s", setup.poll_interval_s))
         entry.update(seconds=round(time.monotonic() - started, 1), receipts=receipts)
         save()
         return receipts
@@ -675,7 +716,12 @@ def take_packet(controller, request: PacketRequest, setup: DaqSetup, limits: Lim
             elif step.kind == "image":
                 for board, receipt in receipts.items():
                     manifest["images"].append({"board": board, "stem": receipt["files"][0], "fits": []})
+                    if not receipt.get("standalone_after_image"):
+                        manifest["warnings"].append(f"acm{board} did not confirm standalone mode after the image")
                 save()
+                idle = getattr(controller, "idle", None)
+                if idle:
+                    idle()                  # fake queue: the repeat queue runs while we wait for the FITS
                 for image in manifest["images"]:
                     stem = Path(image["stem"])
                     image["fits"] = wait_for_fits(stem.parent, stem.name, setup.fits_wait_s)
@@ -732,7 +778,7 @@ def request_from_params(params: dict, setup: DaqSetup) -> PacketRequest:
                  if "theta_ref" in params else None)
     counts = {k: int(options[k]) for k in ("n_initial_flushes", "n_reference_traces", "n_traces",
                                            "flushes_between_traces", "flushes_after_change",
-                                           "retake_damaged_traces") if k in options}
+                                           "n_final_flushes", "retake_damaged_traces") if k in options}
     return PacketRequest(
         packet_id=params["packet_id"], theta=theta, theta_ref=theta_ref,
         image=dict(params["image"]), trace=dict(params.get("trace", {})),
@@ -742,18 +788,38 @@ def request_from_params(params: dict, setup: DaqSetup) -> PacketRequest:
         scan_name=params.get("scan_name", ""), **counts)
 
 
-def make_controller(backend: str, setup: DaqSetup, fake_data: str | None = None):
-    """``cdaq`` -> real queue; ``fake`` -> FakeDAQ boards (copies of real files if ``fake_data``)."""
+def make_controller(backend: str, setup: DaqSetup, fake_data: str | None = None,
+                    time_scale: float = 0.0, fake_repeat_flush: bool = True, echo: bool = False):
+    """
+    ``cdaq`` -> real queue; ``fake`` -> FakeDAQ boards (copies of real files if ``fake_data``).
+
+    The fake queue starts like the group's session: ``daq.flush_ccd()`` for the pool in the
+    repeat queue (``fake_repeat_flush``).  It writes its state to
+    ``<work_dir>/fake_cdaq_state.json`` for ``fake_cdaq_monitor.py``.  ``time_scale``: fraction
+    of the real durations the fake boards sleep (0 = instant).  ``echo``: print the
+    "Publishing: ..." line of every queue command, as ``ccd_cdaq`` does on the DAQ machine.
+    """
     if backend == "cdaq":
         from daq_control import CdaqController
         return CdaqController(setup.queue)
     from daq_control import FakeController
     from fake_daq import FakeDAQ, example_sources
     run_dir = Path(setup.work_dir) / "fake_run"
-    fakes = {b: FakeDAQ(b, run_dir, examples=example_sources(fake_data, b) if fake_data else None)
+    fakes = {b: FakeDAQ(b, run_dir, examples=example_sources(fake_data, b) if fake_data else None,
+                        time_scale=time_scale)
              for b in setup.boards}
     targets = {setup.pool: list(setup.boards), **{setup.client_name(b): [b] for b in setup.boards}}
-    return FakeController(fakes, targets)
+    repeat = [{"to": setup.pool, "cmd": setup.commands["flush"]}] if fake_repeat_flush else []
+    return FakeController(fakes, targets, queue=setup.queue, repeat=repeat,
+                          state_file=Path(setup.work_dir) / "fake_cdaq_state.json",
+                          pools={setup.pool: [setup.client_name(b) for b in setup.boards]},
+                          echo_publishing=echo)
+
+
+def repeat_queue_backup_file(setup: DaqSetup, name: str) -> Path:
+    """Where the saved repeat queue goes: ``<work_dir>/queue_backups/<name>_<UTC>.json``."""
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return Path(setup.work_dir) / "queue_backups" / f"{name}_{stamp}.json"
 
 
 def print_plan(steps: list[PlannedStep], request: PacketRequest, setup: DaqSetup, full: bool) -> None:
@@ -773,6 +839,9 @@ def main() -> None:
     parser.add_argument("--backend", choices=["cdaq", "fake"], default="fake")
     parser.add_argument("--work-dir", help="override [daq] work_dir (e.g. for a rehearsal)")
     parser.add_argument("--fake-data", help="data/ directory whose real files the fake boards copy")
+    parser.add_argument("--fake-time-scale", type=float, default=0.0,
+                        help="fake boards sleep this fraction of the real durations (e.g. 0.05), "
+                             "to watch the rehearsal with fake_cdaq_monitor.py")
     parser.add_argument("--prev-manifest", help="manifest of the previous packet")
     parser.add_argument("--show-commands", action="store_true",
                         help="print every step and the text each board would run, then stop")
@@ -802,14 +871,17 @@ def main() -> None:
             print(f"NOTE: {limits.source} has reviewed = false; the cdaq backend refuses to run")
         return
 
-    controller = make_controller(args.backend, setup, args.fake_data)
+    controller = make_controller(args.backend, setup, args.fake_data, args.fake_time_scale, echo=True)
     if args.status_only:
         receipts = run_status_only(controller, steps[0], setup, request.packet_id)
         print(json.dumps(receipts, indent=2, default=str))
         return
     try:
-        manifest = take_packet(controller, request, setup, limits, prev,
-                               allow_unreviewed_limits=(args.backend == "fake"))
+        with repeat_queue_suspended(controller, repeat_queue_backup_file(setup, request.packet_id),
+                                    enabled=setup.repeat_queue == "suspend") as saved:
+            manifest = take_packet(controller, request, setup, limits, prev,
+                                   allow_unreviewed_limits=(args.backend == "fake"),
+                                   repeat_queue_suspended=saved if setup.repeat_queue == "suspend" else None)
     except (StepError, PacketError, LimitsError) as err:
         raise SystemExit(f"packet {request.packet_id} FAILED: {err}")
     print(json.dumps({k: manifest[k] for k in ("packet_id", "status", "external_clock_set_by_packet",

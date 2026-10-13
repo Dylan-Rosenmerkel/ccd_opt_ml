@@ -38,7 +38,8 @@ suggest better settings.
 | `daq_commands.py`, `daq_control.py` | The exact text sent to each board; the cdaq/fake controllers and step receipts |
 | `scan_packets.py` | Run a series of packets (scan design, dry run, resume) |
 | `ccd_limits.py` | Safety checks of every parameter set; voltage ramps |
-| `fake_daq.py` | Fake boards for rehearsals |
+| `fake_daq.py` | Fake boards for rehearsals (the fake cdaq queue is in `daq_control.py`) |
+| `fake_cdaq_monitor.py` | Watch a fake rehearsal in the layout of the real tmux session (queues, logs, clients) |
 | `simulate_trace.py` | Synthetic traces in the real file format, for any geometry and timing (for testing) |
 | `check_trace_analysis.py` | Runs the trace analysis on 25 synthetic geometries/timings and on the real traces, checks the layout found |
 | `process_packet.py` | Packet → decoded traces and features, decompressed FITS → WADERs labels → `dataset.csv` |
@@ -53,6 +54,8 @@ python src/check_trace_analysis.py                                     # test th
 python src/compare_trace.py TRACE_A TRACE_B --clean-pixels             # compare two traces
 python src/take_packet.py --params configs/packet_example.toml --show-commands   # what a packet would send
 python src/scan_packets.py --scan configs/scan_example.toml --dry-run  # plan a scan
+python src/fake_cdaq_monitor.py --state /tmp/reh/fake_cdaq_state.json   # watch a rehearsal (2nd terminal)
+python src/take_packet.py --params configs/packet_example.toml --backend fake --work-dir /tmp/reh --fake-time-scale 0.05
 python src/process_packet.py MANIFEST.json                             # packet -> training data
 ```
 

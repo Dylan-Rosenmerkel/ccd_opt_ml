@@ -44,16 +44,23 @@ Uses `take_packet.py`, `daq_commands.py`, `daq_control.py`, `ccd_limits.py`, `fa
 `scan_example.toml`.
 
 1. How commands reach a board through the cdaq queue, and how this follows the group's
-   `take_image.py` / `take_trace.py`.
+   `take_image.py` / `take_trace.py`. 1b: the cdaq **repeat queue** (the group's idle flush) and how
+   the packet handles it.
 2. The DAQ setup: boards, pool, leader, the acmpy command texts, standalone vs master/slave.
 3. The packet file: θ per board, `[image]` size, `[trace]` parameters.
 4. Safety checks and voltage ramps.
-5. The 26 planned steps and the exact text each board runs:
-   3 flushes → 3 reference trace sets → θ → flush → 3 trace sets → image.
+5. The 25 planned steps and the exact text each board runs:
+   3 flushes → 3 reference trace sets → θ → flush → 3 trace sets → image (one queue entry:
+   leader mode, image, back to standalone, flush).
 6. The receipt frame around every step.
-7. A rehearsal of two packets on **fake boards**: the clock is set once, a damaged trace is retaken.
-8. The manifest, then four deliberate mistakes the fake boards catch.
-9. A scan dry run, and the checklist before running on the DAQ machine.
+7. A rehearsal of two packets on **fake boards**, with the repeat queue suspended and restored:
+   the clock is set once, a damaged trace is retaken.
+8. The manifest.
+9. Five deliberate mistakes the fake catches; the fifth is the old leader/image split hanging on
+   the repeat flush.
+10. Watching a rehearsal like the real tmux session (`fake_cdaq_monitor.py`), with snapshots.
+11. A scan dry run.
+12. The checklist before running on the DAQ machine.
 
 **Writes:** `../rehearsal/work/` (manifests, receipts, fake data files). The fake boards copy real
 files from `../data/`; every file they write is marked `"FAKE": true`.

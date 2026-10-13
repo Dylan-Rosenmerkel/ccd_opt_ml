@@ -18,6 +18,8 @@ The texts follow the group's scripts (2026-10-09 versions shown by the user):
                     daq.take_image(fname="img", <all keys of the image_params TOML>)
                     and with -f: daq.standalone(); daq.flush_ccd()
     session start   cdaq qadd "daq.use_external_clock()" acmpool   (set once, never undone)
+    idle            cdaq qadd "daq.flush_ccd()" acmpool -t repeat  (the REPEAT queue: run again
+                    and again whenever the simple queue is empty; see take_packet.py)
 
 Every step is wrapped the same way (:func:`wrap_step`)::
 
@@ -229,3 +231,31 @@ def image_lines(prefix: str, params: Mapping[str, object]) -> list[str]:
     """
     return [f"daq.take_image(fname={prefix!r}, {_kwargs(params)})",
             "_r['files'].append(str(daq.acquire._filepath))"]
+
+
+def synchronized_image_lines(prefix: str, params: Mapping[str, object], leader_command: str,
+                             standalone_command: str, flush_command: str,
+                             n_final_flushes: int) -> list[str]:
+    """
+    The whole synchronized image as ONE queue entry: leader mode, the image, back to standalone
+    mode, then ``n_final_flushes`` flushes (``take_image.py -m <id> -f`` does the same).
+
+    Why one entry: the cdaq queue runs its REPEAT queue (the group keeps ``daq.flush_ccd()``
+    there) whenever the simple queue is empty.  The packet script queues one step, waits for
+    its receipt, then queues the next, so the simple queue is empty between two steps.  With
+    the leader mode, the image and the return to standalone as separate entries, a repeat flush
+    could start while the boards are in leader/follower mode, where a flush waits for an
+    external start that never comes.  In one entry nothing can run in between.
+
+    The return to standalone is in a ``finally``: it also runs when ``take_image`` raises (an
+    image that hangs on the hardware never returns, so that case cannot be helped here).  The
+    flushes run only after a successful image.
+    """
+    lines = leader_lines(leader_command)
+    lines.append("try:")
+    lines += ["    " + line for line in image_lines(prefix, params)]
+    lines += ["finally:",
+              f"    {standalone_command}",
+              "    _time.sleep(0.1)",
+              "    _r['standalone_after_image'] = True"]
+    return lines + flush_lines(flush_command, n_final_flushes)

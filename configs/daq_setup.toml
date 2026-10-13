@@ -29,8 +29,23 @@ trace_channels = [0, 1, 2, 3]
 # the DAQ machine and writable by the cdaq clients (they write the receipts).
 work_dir = "/home/damicm/run/ccd_opt_ml"
 
+# The cdaq REPEAT queue.  The group keeps `daq.flush_ccd()` there (cdaq qadd "daq.flush_ccd()"
+# acmpool -t repeat): the queue runner runs it whenever the simple queue is empty -- i.e. between
+# every two steps of a packet, because the packet script queues a step only after the previous
+# one has finished.
+#   "suspend": save the repeat queue (to <work_dir>/queue_backups/), clear it before the first
+#              step of a packet (take_packet.py) or scan (scan_packets.py), and add it back at the
+#              end.  After an error it is NOT added back (check the boards first); the backup file
+#              lists the `cdaq qadd ... -t repeat` lines to restore it by hand.
+#   "keep":    leave it alone; its commands then run between the steps (extra ~27 s flushes).
+# Either way the image step is one queue entry from leader mode back to standalone, so a repeat
+# flush can never run while the boards are in leader/follower mode.
+# The backup is written by the cdaq main process (ccd_cdaq.queue2file): work_dir must be
+# writable by it.
+repeat_queue = "suspend"
+
 # How long to wait for a board to report back, on top of the estimated duration of a step.
-# A queued command can wait behind other queued commands (e.g. a repeat flush).
+# A queued command can wait behind other queued commands (e.g. a repeat flush still running).
 timeout_margin_s = 300
 poll_interval_s  = 1.0
 

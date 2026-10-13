@@ -2,7 +2,10 @@
 
 First written 2026-10-08. Rewritten 2026-10-09 (version 2: cdaq queue, master/slave), then
 **revised again the same day (version 3)** after the user shared the group's `take_image.py`,
-`take_trace.py` and command-line routine. Companion documents: `2026-10-08_session_context.md`,
+`take_trace.py` and command-line routine. **Updated 2026-10-13 (version 4):** the cdaq repeat
+queue is handled, the image step is one queue entry from leader mode back to standalone, the fake
+queue models the real runner, and `fake_cdaq_monitor.py` shows a rehearsal like the tmux session
+(section 9). Companion documents: `2026-10-08_session_context.md`,
 `2026-10-09_session_context.md`. Step-by-step walkthroughs:
 `notebooks/take_packet_walkthrough.ipynb`, `notebooks/process_packet_walkthrough.ipynb`.
 
@@ -18,7 +21,8 @@ script, including WADERs, ran for real on those copies.
 |---|---|
 | `src/take_packet.py` | Plans one packet (all checks, no hardware), runs it step by step through a controller, writes the manifest. CLI: `--show-commands`, `--status-only`, `--backend fake/cdaq` |
 | `src/daq_commands.py` | Builds the exact Python text each board runs (following the group's scripts); `wrap_step` adds the receipt frame; `DEFAULT_TRACE` = take_trace.py values |
-| `src/daq_control.py` | `CdaqController` (`ccd_cdaq.add2queue`), `FakeController`, `wait_for_receipts`, `StepError` |
+| `src/daq_control.py` | `CdaqController` (`ccd_cdaq.add2queue`, repeat-queue save/clear/restore), `FakeController` (model of the cdaq queue), `repeat_queue_suspended`, `wait_for_receipts`, `StepError` |
+| `src/fake_cdaq_monitor.py` | Terminal display of a fake rehearsal in the layout of the real tmux session (queues, logs, clients, published commands); `--tmux`, `--once` |
 | `src/scan_packets.py` | Scan plan (per-board reference + design, reference repeated), `--dry-run` plans every packet, resumable, stops at the first failure |
 | `src/fake_daq.py` | Strict fake boards (misuse that would hang raises); start on the internal clock; traces cycle through the real repeats |
 | `src/ccd_limits.py` | Limits, hardware ranges, relationships (placeholder), ramps (unchanged) |
@@ -46,7 +50,8 @@ Correspondence with the group's routine:
 | `cdaq qadd "daq.use_external_clock()" acmpool` (once per session) | step `standalone` sends it only if a board does not report the external clock; never switched back |
 | `take_trace.py`: `daq.standalone()`, `time.sleep(.1)`, 4 × `daq.take_trace(fname="trace", subroutine="AcquireImage", EXPOSURE=0, NROW=2, NCOL=5, NSBIN=20, NPBIN=20, NDCM=500, BOOLCLR=0, ch=i)` | step `standalone`; steps `ref_traces_n`/`traces_n` (same call, 4 channels in one queue entry, the 5 cuts also set to 0) |
 | `take_image.py -f`: `daq.standalone()`, `daq.flush_ccd()` | steps `flush_xN` |
-| `take_image.py -m 101`: `daq.master(101)`, then `daq.take_image(fname="img", <image_params>)` to `acmpool` | steps `leader`, `image` (the `[image]` table) |
+| `take_image.py -m 101 -f`: `daq.master(101)`, `daq.take_image(fname="img", <image_params>)` to `acmpool`, `daq.standalone()`, `daq.flush_ccd()` | step `image`: all of it as ONE queue entry (the `[image]` table) |
+| `cdaq qadd "daq.flush_ccd()" acmpool -t repeat` (idle flushing) | saved and cleared during a packet/scan, restored afterwards (`repeat_queue = "suspend"`) |
 | `set_vdd.py` / `daq["VDD"] = -19` | part of θ |
 
 ## 3. Steps of one packet (default counts)
@@ -62,21 +67,22 @@ Correspondence with the group's routine:
 | 6 | apply | each θ board | θ_ref → that board's θ |
 | 7 | flush_x1 | pool | after the change |
 | 8 | traces_1..3 | each traced board | a flush between sets |
-| 9 | leader | pool | `daq.master(leader)` |
-| 10 | image | pool | `take_image` with the complete `[image]` table, **`acq_level` always given**; waits for `avg_<image>.fits*` per board |
+| 9 | image | pool | ONE queue entry: `daq.master(leader)`; `take_image` with the complete `[image]` table, **`acq_level` always given**; `daq.standalone()` (in a `finally`); `n_final_flushes` × flush (default 1). Then waits for `avg_<image>.fits*` per board |
 
 The erase (`daq.erase_ccd(highP=9, wait_for_flush=True)`) is still available
 (`erase_policy`), default `never`. The e-purge is never used.
 
-There are 26 steps, about 12.7 min per packet (7 flushes 3.4 min, image 6.3 min, 24 trace
-acquisitions). Timeouts: traces 3×, flushes 2×, image 2× + 60 s, each plus a 300 s margin.
+There are 25 steps, about 13.1 min per packet (8 flushes 3.9 min, image 6.3 min, 24 trace
+acquisitions). Timeouts: traces 3×, flushes 2×, image (with its flush) 2× + 60 s, each plus a
+300 s margin.
 
 ## 4. Manifest (version 3)
 
 Per board: `theta`, `theta_ref`, `theta_id`, `reference_id`, `delta_theta`, `prev_theta`.
 Also: `packet_id, scan_name, status, date_start/end, image, trace, prev_packet_id,
 seconds_since_previous, daq{...}, sequence{counts, erase_policy, ...}, sequencer, erase_done,
-estimated_seconds, limits_file, limits_reviewed, steps[{step, kind, target, boards, seconds,
+estimated_seconds, limits_file, limits_reviewed, repeat_queue_suspended (the commands removed
+from the repeat queue, or null if it was not touched), steps[{step, kind, target, boards, seconds,
 receipts}], run_directories, external_clock_set_by_packet, reference_traces[{board, channel, repeat,
 stem}], traces[...], images[{board, stem, fits[]}], trace_quality{stem: problems | "not checked"},
 warnings, error`.
@@ -111,8 +117,9 @@ The group's scripts confirm `standalone()`, `set_standalone()`, `flush_ccd()`, `
 `use_external_clock()`, `take_trace(...)`, `take_image(...)`. Still unconfirmed:
 `daq.acquire._filepath`, `.directory`, `daq.sequencer.seqfile`, `daq.command.get_system_status()`
 (the clock check falls back to sending the command), and the image builder's `avg_*.fits.bz2`. On
-the cdaq side: the pool `acmpool` with both clients attached to the queue; any repeat flush in the
-queue (it would run between steps); `work_dir` writable by the clients.
+the cdaq side: the pool `acmpool` with both clients attached to the queue; `work_dir` writable
+by the clients (receipts) and by the cdaq main process (`queue_backups/`, written by
+`ccd_cdaq.queue2file`); after the first packet, `cdaq print queues` shows the repeat flush back.
 
 ## 7. Decisions still open
 
@@ -132,3 +139,56 @@ queue (it would run between steps); `work_dir` writable by the clients.
 3. Review limits (`reviewed = true`); one packet with θ = θ_ref, watching the client logs.
 4. `python src/process_packet.py <manifest>`: its 6 trace sets are repeats at identical settings.
 5. A short scan (`scan_packets.py --dry-run` first).
+
+## 9. The cdaq repeat queue and the fake queue (added 2026-10-13)
+
+**What the real queue does** (`Soft_JHU/cdaq/src/ccd_cdaq/_cdaqqueue.py`, `_main.py`):
+* a queue has a simple part (each command runs once) and a repeat part (rotated, run again and again);
+* the runner takes the next simple command if any, otherwise the next repeat command;
+* it runs one command at a time and waits until the target client is back in standby.
+
+The group keeps `daq.flush_ccd()` → `acmpool` in the repeat queue (seen in the tmux session of
+2026-10-13).
+
+**Why it matters:** the packet script queues one step, waits for its receipt, then queues the
+next. So between two steps the simple queue is empty, and the runner starts a repeat flush:
+* every gap gets an extra ~27 s flush that the packet did not ask for (a kept repeat queue gave
+  36 flushes per board in the fake instead of 9);
+* a gap while the boards are in leader/follower mode would start a flush that waits for an
+  external start forever. This was the old `leader` → `image` boundary, and the end of the packet.
+
+**What was changed:**
+* **One image entry** (`daq_commands.synchronized_image_lines`): `daq.master(leader)`, the
+  image, `daq.standalone()` in a `finally`, then `n_final_flushes` flushes (default 1, as
+  `take_image.py -f`). The receipt confirms `standalone_after_image`.
+* **Repeat queue suspended** (`[daq] repeat_queue = "suspend"`, the default;
+  `daq_control.repeat_queue_suspended`):
+  * how: `ccd_cdaq.queue2file` dumps the queue to `<work_dir>/queue_backups/<name>_<UTC>.json`;
+    `clearqueue(queue, "repeat")` empties the repeat part; on normal exit each saved command is
+    added back with `add2queue(..., queue_type="repeat")`;
+  * when: `take_packet.py` (CLI) does this per packet, `scan_packets.py` once per scan;
+  * after an error: the queue is not restored, and the warning and the backup file give the
+    `cdaq qadd "<cmd>" <to> -q default -t repeat` lines;
+  * `"keep"` leaves the queue alone.
+* **The fake queue** (`FakeController`) models the runner:
+  * it starts with the group's repeat flush;
+  * before each submitted step it runs the next repeat command;
+  * `idle()` runs one after the image;
+  * pool commands run on all boards in parallel threads;
+  * a repeat command that fails (flush outside standalone) leaves the board **hung**, and the next
+    step stops with a `StepError` at once (the real DAQ would time out instead).
+
+  The walkthrough's mistake (e) shows the old leader/image split hanging this way.
+* **Display:**
+  * the fake writes its state (queue, clients, pool, log, "Publishing" lines) to
+    `<work_dir>/fake_cdaq_state.json`;
+  * `src/fake_cdaq_monitor.py` draws it in the layout and formats of `cdaq print queues / logs /
+    clients` (`ccd_cdaq/monitoring.py`): `--tmux` for a tmux session like the real one, `--once`
+    for a snapshot;
+  * `--fake-time-scale 0.05` slows the fake boards to 5 % of real time so it can be watched;
+  * the fake boards' log lines imitate the real ones; only the FlushCCD line was seen in a real
+    session.
+
+**Still untested:** `CdaqController`'s repeat-queue calls (`queue2file`, `clearqueue`,
+`add2queue(..., "repeat")`) have never run against the real cdaq; MQTT is not involved in any
+rehearsal.

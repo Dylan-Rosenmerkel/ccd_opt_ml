@@ -20,6 +20,7 @@ n_reference_traces     = 3
 n_traces               = 3
 flushes_between_traces = 1
 flushes_after_change   = 1
+n_final_flushes        = 1
 erase_policy           = "never"   # flushes are used; the erase is available, never the e-purge
 reference_traces       = "always"
 retake_damaged_traces  = 1

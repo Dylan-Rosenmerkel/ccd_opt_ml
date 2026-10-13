@@ -28,6 +28,15 @@ fake says ``"FAKE": true`` and names the source file.
 
 The fake boards start on the INTERNAL clock, so a rehearsal shows the packet switching to the
 external clock once (and not again in the next packet).
+
+Time and log
+------------
+By default every call returns at once.  ``time_scale`` > 0 makes the board sleep for that
+fraction of the real duration (flush ~27 s, trace and image from the sequencer formulas of
+``take_packet.py``), so a rehearsal can be watched with ``fake_cdaq_monitor.py``.  Each call
+also sends a log line to ``log_callback`` (set by ``FakeController``), in the style of the
+real board logs (``acm.101.sequencer - INFO - Setting subroutine to FlushCCD (26 sec)``).  The
+wording of these lines is an imitation; only the flush line was seen in a real session.
 """
 
 from __future__ import annotations
@@ -35,6 +44,7 @@ from __future__ import annotations
 import json
 import shutil
 import struct
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -78,7 +88,8 @@ class FakeDAQ:
     """Minimal fake of one ``acmpy.ACM`` board; every call is recorded in ``self.calls``."""
 
     def __init__(self, board_number: int = 101, directory: str | Path = "fake_run",
-                 seqfile: str = "reference_v5_pumping.seq", examples: dict | None = None) -> None:
+                 seqfile: str = "reference_v5_pumping.seq", examples: dict | None = None,
+                 time_scale: float = 0.0) -> None:
         self.id = int(board_number)
         self.state: dict[str, object] = {}
         self.acquire = _FakeAcquire()
@@ -93,6 +104,26 @@ class FakeDAQ:
         self.require_sync = True              # images must be taken in leader/follower mode
         self.calls: list[tuple] = []
         self._counter = 0
+        self.time_scale = float(time_scale)   # fraction of the real durations to sleep (0 = none)
+        self.log_callback = None              # set by FakeController: (who, level, message)
+
+    # -- log and time ------------------------------------------------------------
+    def _log(self, part: str, message: str, level: str = "INFO") -> None:
+        if self.log_callback:
+            self.log_callback(f"acm.{self.id}.{part}", level, message)
+
+    def _routine(self, name: str, seconds: float) -> None:
+        """Announce a sequencer routine and wait for (a fraction of) its duration."""
+        self._log("sequencer", f"Setting subroutine to {name} ({seconds:.0f} sec)")
+        if self.time_scale > 0:
+            time.sleep(seconds * self.time_scale)
+
+    def _acquisition_seconds(self) -> float:
+        try:
+            from take_packet import formula_acquisition_seconds   # same formula as the planning
+            return formula_acquisition_seconds({k: v for k, v in self.state.items() if isinstance(v, (int, float))})
+        except Exception:                      # noqa: BLE001 - incomplete parameters: a nominal time
+            return 1.0
 
     # -- parameters ----------------------------------------------------------
     def __setitem__(self, key, value):
@@ -108,24 +139,29 @@ class FakeDAQ:
     def master(self, masterid: int):
         self.mode = "leader" if int(masterid) == self.id else "follower"
         self.calls.append(("master", masterid))
+        self._log("command", f"Synchronisation: {self.mode} (master = acm{masterid})")
 
     set_leader = master
 
     def set_standalone(self):
         self.mode = "standalone"
         self.calls.append(("set_standalone",))
+        self._log("command", "Synchronisation: standalone")
 
     def standalone(self):                     # the name used by take_trace.py / take_image.py -f
         self.mode = "standalone"
         self.calls.append(("standalone",))
+        self._log("command", "Synchronisation: standalone")
 
     def use_external_clock(self):
         self.clock = "external"
         self.calls.append(("use_external_clock",))
+        self._log("command", "Clock: external (CEX)")
 
     def use_internal_clock(self):
         self.clock = "internal"
         self.calls.append(("use_internal_clock",))
+        self._log("command", "Clock: internal")
 
     # -- CCD operations ----------------------------------------------------------
     def flush_ccd(self):
@@ -133,12 +169,14 @@ class FakeDAQ:
             raise FakeHangError(f"acm{self.id}: flush in {self.mode} mode -- the FlushCCD routine "
                                 "would wait for an external start")
         self.calls.append(("flush_ccd",))
+        self._routine("FlushCCD", 26)
 
     def erase_ccd(self, **kwargs):
         if self.mode != "standalone":
             raise FakeHangError(f"acm{self.id}: erase in {self.mode} mode -- the EraseCCD flush "
                                 "would wait for an external start")
         self.calls.append(("erase_ccd", kwargs))
+        self._routine("EraseCCD", 30)
 
     def epurge_ccd(self, **kwargs):
         self.calls.append(("epurge_ccd", kwargs))
@@ -193,6 +231,8 @@ class FakeDAQ:
         self.acquire._filepath = stem
         self._counter += 1
         self.calls.append(("take_trace", ch))
+        self._routine("AcquireImage", self._acquisition_seconds() + 1)
+        self._log("acquire", f"Trace ch{ch} written: {stem.name}")
 
     def take_image(self, fname="img", **other_params):
         for key, value in other_params.items():
@@ -219,6 +259,8 @@ class FakeDAQ:
         self.acquire._filepath = stem
         self._counter += 1
         self.calls.append(("take_image", level))
+        self._routine("AcquireImage", self._acquisition_seconds())
+        self._log("acquire", f"Image written: {stem.name}")
 
 
 def example_sources(data_dir: str | Path, board: int) -> dict:
