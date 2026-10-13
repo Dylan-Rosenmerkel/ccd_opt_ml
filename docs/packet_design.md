@@ -197,3 +197,69 @@ per hour.
 5. Also note: the 2026-10-12 binned overscan noise (0.42–0.66 ADU at 500 skips) was above the white-noise
    prediction (0.35 ADU). The cause may be charge in the 20-pixel serial bins or extra low-frequency
    noise; item 1 will tell.
+
+## 9. One big trace or several small ones?
+
+**Answer: several small traces, separate acquisitions.** If more trace data is wanted per packet, add more
+small traces rather than making each trace bigger.
+
+**The measurement** (2026-10-12, board 101, settings 2–5, 3 trace sets each, 47 traces). Most features are
+the median over the ~8 usable pixels of a trace. That gives two ways to estimate a feature's noise:
+
+* **within one trace**, from the pixel-to-pixel spread $s_\text{pix}$ (robust, `TraceFeatures.spread`):
+  $\text{SE}_\text{pix} = 1.2533\, s_\text{pix}/\sqrt{n_p}$, with $n_p = 8$ (1.2533 converts to the standard
+  error of a median);
+* **between traces**, from the scatter of the trace-level value over the repeated trace sets of each
+  setting, pooled over the four settings: $s_\text{trace}$.
+
+If each acquisition added nothing of its own, $s_\text{trace} \approx \text{SE}_\text{pix}$. Write the
+between-trace variance as an acquisition part plus a pixel part:
+
+$$s_\text{trace}^2 = \sigma_\text{acq}^2 + \frac{\sigma_\text{pix}^2}{n_p}, \qquad
+R = \frac{s_\text{trace}}{\text{SE}_\text{pix}} .$$
+
+For the 52 per-pixel features (median over the 4 channels):
+
+| ratio $R$ | features | meaning |
+|---|---|---|
+| ≈ 1 (median 1.1, quartiles 0.9–1.4) | about two thirds: CDS noise, spectra, levels | no acquisition term: **only the total number of pixels counts**, in one trace or many |
+| 4–170 | the amplifier-response features: dip recovery amplitude (167) and time (31), settling amplitude (8.7) and time (7.4), SW and RG feedthrough per volt (7.6, 4.1), dip height (6.8), pulse height (4.1) | **each acquisition has its own value**: $\sigma_\text{acq}$ dominates |
+
+The second group holds exactly the features that respond to VDD (section 4 of the packet-test analysis).
+For them the uncertainty of a packet's mean over $N_t$ traces is
+
+$$\operatorname{Var}(\bar f) = \frac{1}{N_t}\left(\sigma_\text{acq}^2 + \frac{\sigma_\text{pix}^2}{n_p}\right).$$
+
+Example: the settling time has $R \approx 7$, so $\sigma_\text{acq}^2 = 48\,\text{SE}_\text{pix}^2$.
+* **10× more pixels per trace** ($n_p = 80$): the variance goes from 49 to 48.1, so the noise drops by **1 %**.
+* **4× more traces**: the noise halves.
+
+**Other reasons for several small traces:**
+1. **Honest noise estimates.** The model needs the trace-to-trace scatter as each feature's noise
+   (`trace_sd.*` in `dataset.csv`). This scatter can only be measured with separate acquisitions. Pixels
+   inside one trace give the pixel part only, and underestimate the noise of the features that matter most
+   (the earlier pixel-level comparison test made the same mistake: it flagged repeats as "different").
+2. **Lost data.** The chance that a trace loses UDP packets grows with its length (2 of ~80 traces so far,
+   at 12–68 MB). A damaged trace is refused and retaken, which costs 0.2 s for a small trace and the whole
+   acquisition for a big one.
+3. **Same cost per pixel.** Disk use is 60 MB per second of readout either way. The overhead is ~1.5 s per
+   `take_trace` call, small next to the 27 s flushes.
+
+**What a big trace would add:**
+* lower frequencies in the noise features: a trace of length $T$ reaches down to $\sim 1/T$. The 0.19 s
+  matched trace covers ≥ 5 Hz. One image pixel (500 skips) takes 16.5 ms, i.e. 60 Hz, so the noise that
+  matters for $\sigma_e$ is covered;
+* more row-level features (vertical transfers, row starts) per trace. More small traces give these too, or
+  use 4 × 3 pixels instead of 2 × 5.
+
+**Suggestion:**
+* keep 2 × 5-pixel matched traces;
+* if the time budget allows, use **5 reference + 5 θ sets** instead of 3 + 3. That is about +2.7 min per
+  packet (each set is ~8 trace calls plus a flush) and gives ~30 % smaller errors on the amplifier
+  features;
+* worth testing once on the DAQ: whether the flush **between** trace sets is needed. Without it, a set
+  costs ~14 s instead of ~41 s, so many more repeats fit. Compare $s_\text{trace}$ of sets taken with and
+  without flushes.
+
+These ratios were measured on the 20×20 traces of 2026-10-12. Repeat the check on the first matched 1×1
+traces.

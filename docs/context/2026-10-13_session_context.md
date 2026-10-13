@@ -155,13 +155,34 @@ traces now have no layout warning; 2 have truly missing transfer edges.
   6152, NROW ≤ 1700, NROWPRE ≤ 1536). They were placeholders; the size of a readout cannot harm the
   CCD.
 
-## 6. Environment note
+## 6. One big trace or several small ones? (`docs/packet_design.md` section 9)
+
+**Measured on the 47 traces of 2026-10-12 (settings 2–5).** For each per-pixel feature, compare:
+* the scatter between repeated trace sets, $s_\text{trace}$ (pooled over the settings);
+* the standard error from the pixel spread inside one trace, $\text{SE}_\text{pix} = 1.2533\,s_\text{pix}/\sqrt8$.
+
+The ratio $R = s_\text{trace}/\text{SE}_\text{pix}$:
+* **about 1 for two thirds of the features** (median 1.1): only the total number of pixels matters;
+* **4–170 for the amplifier-response features** (dip recovery 167 and 31, settling 8.7 and 7.4,
+  feedthrough per volt, dip and pulse height): each acquisition has its own value. With
+  $s_\text{trace}^2 = \sigma_\text{acq}^2 + \sigma_\text{pix}^2/n_p$, 10× more pixels per trace lowers their
+  noise by ~1 %, while 4× more traces halves it.
+
+**Conclusion: several small, separate traces.**
+* Only separate traces measure the trace-to-trace scatter the model needs as noise.
+* Their data loss is cheaper to retake, and the cost per pixel is the same.
+
+Suggested: keep 2×5 matched traces and, if time allows, 5 + 5 sets per packet (+2.7 min, ~30 % smaller
+errors on the amplifier features). On the DAQ, test whether the flush between sets is needed (without it
+a set costs ~14 s instead of ~41 s). Re-check the ratios on the first matched 1×1 traces.
+
+## 7. Environment note
 
 The scratch Python environment used for executing notebooks lost files in a temp-directory
 cleanup and was rebuilt (numpy, matplotlib, astropy, nbformat, nbclient, ipykernel). Nothing in the
 project depended on it.
 
-## 7. Open
+## 8. Open
 
 * On the DAQ machine:
   * `--status-only`;
@@ -170,5 +191,6 @@ project depended on it.
   * check that `queue_backups/` was written.
 * Ask the group whether the repeat flush is meant to stay off during data taking, and whether a
   flush in leader mode really hangs (assumed, as for traces).
+* Test trace sets with and without a flush between them, and compare the trace-to-trace scatter.
 * First real packet with `packet_recommended.toml`: check σ at 500 skips (≈ 0.26 e⁻?), λ per row, and the matched traces (docs/packet_design.md section 8).
 * Everything open from 2026-10-12 (1×1 image and WADERs fit, limits review, first scan design).
