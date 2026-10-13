@@ -85,7 +85,7 @@ On request, `packet_tests_2026-10-12.tex` was extended:
 * **Test 1:**
   * the leave-one-out procedure as equations (centres, the scatter pooled over $G$ settings with
     7 degrees of freedom, the median/sum distances);
-  * the binomial chance of 46/47 by guessing ($7\times10^{-27}$);
+  * the binomial chance of 46/47 by guessing ($7\times10^{-27}$; after the ringing fix: 44/47, $2\times10^{-23}$);
   * why the sum fails: $7s^2/\sigma^2 \sim \chi^2_7$; the smallest of 83 scatter estimates is
     typically 0.17 of the truth, so that feature's $z^2$ is inflated about 6-fold.
 * **Test 2 (PCA), rewritten in five steps:**
@@ -123,6 +123,14 @@ braces and `$`.
   `docs/trace_fit_tools.tex`. Their old numerical tables are marked as computed with the old fit;
 * re-run: trace_features_walkthrough, trace_comparison_walkthrough_v2, process_packet_walkthrough,
   packet_tests_2026-10-12, take_packet_walkthrough.
+
+**Effect on the packet-test analysis:** the corrected ringing frequency is a real (varying) feature, so
+the 2026-10-12 numbers shifted slightly:
+* leave-one-out: median 44/47 (was 46), sum 46/47 (was 44). All mistakes are setting-5 trace sets;
+* PCA: $p_\text{eff}$ 81/80, PC1+PC2 = 53 %/62 %, $r = -0.90$; the fingerprints are unchanged.
+
+The summary .tex and the notebook text were updated: the "median vs sum" paragraph now says the choice is
+not stable. The summary's image table now gives the 16×1000×500 recommendation and the matched traces.
 
 **Prescan in traces:** `trace_geometry` now reads `NCOLPRE`/`NCOLPOST` (and the dump-gate time).
 `trace_regions` accepts row-start pixels with `NSBIN·(NCOLPRE+1)` transfers, and the transfer period

@@ -31,7 +31,7 @@ measured in units of the scatter between the repeated trace sets.
 Each parameter leaves its own fingerprint. The horizontal rails change the horizontal-transfer waveform (separation
 $\approx$\,430). The vertical rails and TG change the vertical-transfer waveform ($\approx$\,340). VDD changes only the
 amplifier response (settling time, pulse height and rise time). In the setting with the vertical rails and TG lowered, the
-noise of amplifier A rises in both the trace and the image. A simple leave-one-out test assigns 46 of 47 trace sets to the
+noise of amplifier A rises in both the trace and the image. A simple leave-one-out test assigns 44--46 of 47 trace sets to the
 correct setting, so the features carry the operating parameters reliably.
 
 The run is not enough to train a model of $\sigma_e$, $\lambda$ and the gain. It has 5 parameter sets with confounded
@@ -348,26 +348,34 @@ the repeat scatter is about 11\,ADU. The hidden value lies within a few ADU of t
 about 7,900\,ADU from the setting-5 centre ($z \approx 700$). Most of the other features give the same verdict, so the
 median distance is smallest for setting 4.
 
-\paragraph{Result.} \textbf{46 of 47 trace sets are assigned to the right setting} (channel 0: 11/12; channels 1 and 2: 12/12;
-channel 3: 11/11). Guessing would give 1 in 4. The probability of 46 or more correct out of 47 by guessing is the
-binomial tail
+\paragraph{Result.} \textbf{44 of 47 trace sets are assigned to the right setting with the median distance} (channel 0:
+11/12; channel 1: 10/12; channel 2: 12/12; channel 3: 11/11), \textbf{and 46 of 47 with the sum} (only channel 1: 11/12).
+Guessing would give 1 in 4. The probability of 44 or more correct out of 47 by guessing is the binomial tail
 \begin{equation}
-P(N \ge 46) = \sum_{m=46}^{47}\binom{47}{m}\Bigl(\tfrac14\Bigr)^m\Bigl(\tfrac34\Bigr)^{47-m} \approx 7\times10^{-27}.
-\end{equation} The one mistake is a setting-5 trace set on channel 0, assigned to setting
-3. Setting 5 is also the loosest cluster on channel 0 in Figure~\ref{fig:space}.
+P(N \ge 44) = \sum_{m=44}^{47}\binom{47}{m}\Bigl(\tfrac14\Bigr)^m\Bigl(\tfrac34\Bigr)^{47-m} \approx 2\times10^{-23}.
+\end{equation} All four mistakes are setting-5 trace sets (assigned to setting 3 or 2). Setting 5
+changed only H3\_A\_L, the smallest change of the run, and lies between the other settings; it is also the loosest
+cluster on channel 0 in Figure~\ref{fig:space}.
 
-\paragraph{Why the median and not the sum.} With the \emph{sum} $D_g$ there are 3 mistakes (channels 1 and 3). The
-reason is the small number of repeats. Each $s_k^2$ in Eq.~\ref{eq:pooled} has only 7 degrees of freedom. For Gaussian
-repeats with true variance $\sigma_k^2$,
+\paragraph{Median or sum?} With 83 features and only 3 repeats per setting, the choice of distance decides a few close
+calls, and \emph{not} in a stable way:
+\begin{itemize}
+\item with the original first-skip ringing fit (which returned the same value for every trace), the median made 1 mistake and
+  the sum 3;
+\item after that fit was corrected (2026-10-13), the median makes 3 and the sum 1.
+\end{itemize}
+Changing a single feature out of 83 was enough to swap them. The reason is the uncertain repeat scatter. Each
+$s_k^2$ in Eq.~\ref{eq:pooled} has only 7 degrees of freedom; for Gaussian repeats with true variance $\sigma_k^2$,
 \begin{equation}
 \frac{7\,s_k^2}{\sigma_k^2} \sim \chi^2_7 ,
 \end{equation}
 so the estimate scatters widely around the truth. For the smallest of 83 such estimates, the typical ratio
-$s_k^2/\sigma_k^2$ is about 0.17 (simulated). That feature's $z^2$ is then inflated about 6-fold, and about 2 of the 83
-features are underestimated by a factor 4 or more. In the sum over 83 features, these few inflated terms can decide the
-result. The median ignores such outliers: it asks what the \emph{typical} feature says. In practice,
-the model will need either robust weighting or a selection of reliable features, and more repeats per setting to estimate
-the scatter well. The planned packets have 3 reference and 3 $\theta$ trace sets.
+$s_k^2/\sigma_k^2$ is about 0.17 (simulated): that feature's $z^2$ is inflated about 6-fold, and about 2 of the 83 features
+are underestimated by a factor 4 or more. In a sum these few terms can decide the result; the median protects against that,
+but then a trace set that lies between two settings (setting 5) can fall either way. The robust conclusion is that
+\emph{both} distances classify 44--46 of 47 trace sets correctly. In practice the model will need robust weighting or a
+selection of reliable features, and more repeats per setting to estimate the scatter well. The planned packets have 3
+reference and 3 $\theta$ trace sets.
 
 \paragraph{What this result does and does not show.} It shows that the features change reproducibly with the operating
 parameters: the information is there. It does \emph{not} show that the features predict $\sigma_e$ or $\lambda$. Telling
@@ -404,9 +412,10 @@ Three points about this choice:
 \item The divisor is $n$, not $n-1$. This only rescales all axes by the same factor $\sqrt{n/(n-1)}$ and changes none of
   the fractions below.
 \item A feature that is identical in all 12 trace sets ($\sigma_k = 0$) cannot be scaled; it is set to $z = 0$ and takes no
-  part. Here these are 3 features on channel 0 and 4 on channel 2: discrete counts that are 0 everywhere (e.g.\ spectrum
-  lines), and the first-skip ringing frequency. That fit returns exactly 0.01 cycles/skip for every trace, so it sits at
-  a fixed value and carries no information. That is worth fixing in \code{trace\_features.py}.
+  part. Here these are 2 features on channel 0 and 3 on channel 2: discrete counts that are 0 everywhere (e.g.\ spectrum
+  lines). Until 2026-10-13 the first-skip ringing frequency was another one: its fit returned exactly 0.01 cycles/skip
+  for every trace. The fit was corrected (an offset term, skip 0 left out) and now gives $\approx 0.23$ cycles/skip,
+  varying from trace to trace.
 \end{itemize}
 
 \paragraph{Step 2: the correlation matrix.} The standardized data form an $n\times p$ matrix $Z$. Its $p\times p$
@@ -415,7 +424,7 @@ correlation matrix is
 R = \frac1n Z^\top Z, \qquad R_{kl} = \frac1n\sum_i z_{ik} z_{il} = \operatorname{corr}(x_{\cdot k}, x_{\cdot l}).
 \end{equation}
 $R_{kk} = 1$ for every feature that varies, so the trace (total variance) is $\operatorname{tr}R = p_\text{eff}$, the number of
-non-constant features: 80 on channel 0, 79 on channel 2.
+non-constant features: 81 on channel 0, 80 on channel 2.
 
 \paragraph{Step 3: principal components.} The principal components are the eigenvectors of $R$:
 \begin{equation}
@@ -450,8 +459,8 @@ These are the percentages on the axes of Figure~\ref{fig:space}.
 \toprule
  & $\lambda_1$ & $\lambda_2$ & $\lambda_3$ & fraction PC1 & fraction PC2 & PC1+PC2 \\
 \midrule
-ch0 (D), $p_\text{eff} = 80$ & 27.0 & 16.3 & 9.2 & 0.338 & 0.203 & 0.541 \\
-ch2 (A), $p_\text{eff} = 79$ & 30.5 & 19.4 & 7.2 & 0.386 & 0.246 & 0.631 \\
+ch0 (D), $p_\text{eff} = 81$ & 26.7 & 16.0 & 9.4 & 0.330 & 0.198 & 0.528 \\
+ch2 (A), $p_\text{eff} = 80$ & 29.6 & 19.8 & 7.2 & 0.370 & 0.248 & 0.618 \\
 \bottomrule
 \end{tabular}
 \caption{The largest eigenvalues and the fraction of the total spread per component.}
@@ -477,12 +486,12 @@ is one setting.}
 
 \paragraph{What the components are made of} (Figure~\ref{fig:pca}).
 \begin{itemize}
-\item \textbf{The loadings are spread over many features.} The largest are 0.18--0.21, against 0.11 for ``all equal''. So
+\item \textbf{The loadings are spread over many features.} The largest are 0.18--0.22, against 0.11 for ``all equal''. So
   each component is a broad combination of many correlated features: many features respond together to the same
   parameter change.
 \item \textbf{PC1} is made of horizontal-transfer and baseline features: H-transfer lowest and highest point,
   peak-to-peak, baseline droop and level. It is the \emph{H low rails} direction. On channel 0, the PC1 score correlates
-  with the H-transfer lowest point at $r = -0.92$.
+  with the H-transfer lowest point at $r = -0.90$.
 \item \textbf{PC2} mixes vertical-transfer features (V-transfer lowest and highest point, on channel 0) with
   amplifier-response and window-settling features (dip height, reset pulse height and rise time, settling inside the
   signal window). It separates the V rails \& TG setting from the VDD setting.
@@ -497,10 +506,10 @@ is one setting.}
 \toprule
 Setting & ch0: centre (scatter) & ch2: centre (scatter) \\
 \midrule
-2 VDD $-20.5$\,V & $(-6.6,\ +4.4)$\quad$(0.4,\ 1.9)$ & $(-4.8,\ +6.2)$\quad$(0.5,\ 0.6)$ \\
-3 V low rails \& TG & $(-2.3,\ -5.8)$\quad$(0.5,\ 0.2)$ & $(-4.9,\ -6.1)$\quad$(1.3,\ 0.2)$ \\
-4 all H low rails & $(+7.6,\ +2.3)$\quad$(0.6,\ 0.6)$ & $(+8.3,\ -0.3)$\quad$(1.0,\ 0.7)$ \\
-5 H3\_A\_L only & $(+1.3,\ -0.9)$\quad$(0.5,\ 2.0)$ & $(+1.4,\ +0.2)$\quad$(1.6,\ 1.0)$ \\
+2 VDD $-20.5$\,V & $(-6.8,\ +4.1)$\quad$(0.4,\ 1.8)$ & $(-4.8,\ +6.3)$\quad$(0.6,\ 0.8)$ \\
+3 V low rails \& TG & $(-2.0,\ -6.0)$\quad$(0.6,\ 0.3)$ & $(-4.9,\ -6.2)$\quad$(1.2,\ 0.5)$ \\
+4 all H low rails & $(+7.3,\ +2.4)$\quad$(0.6,\ 0.4)$ & $(+8.1,\ -0.4)$\quad$(1.0,\ 0.7)$ \\
+5 H3\_A\_L only & $(+1.5,\ -0.6)$\quad$(0.4,\ 2.1)$ & $(+1.5,\ +0.3)$\quad$(1.6,\ 0.9)$ \\
 \bottomrule
 \end{tabular}
 \caption{Setting centres $(\bar t_1, \bar t_2)$ and the standard deviation of the 3 repeats along each axis.}
@@ -508,14 +517,14 @@ Setting & ch0: centre (scatter) & ch2: centre (scatter) \\
 \end{table}
 
 \begin{itemize}
-\item The centres are 5--14 units apart; the repeats scatter by 0.2--2 units around them. The repeats are much more alike
+\item The centres are 5--14 units apart; the repeats scatter by 0.3--2.1 units around them. The repeats are much more alike
   than the settings, even though the PCA was not told which trace set is which.
-\item PC1 orders the settings by how much the horizontal low rails were lowered: setting 4 (five rails) at $+7.6$, setting 5
-  (one rail) at $+1.3$, settings 2 and 3 (none) on the negative side. Setting 5 sits roughly between: lowering one of the
+\item PC1 orders the settings by how much the horizontal low rails were lowered: setting 4 (five rails) at $+7.3$, setting 5
+  (one rail) at $+1.5$, settings 2 and 3 (none) on the negative side. Setting 5 sits roughly between: lowering one of the
   five rails moves the trace part of the way.
 \item PC2 separates setting 2 (VDD, top) from setting 3 (V rails \& TG, bottom).
-\item Setting 5 is the loosest cluster on channel 0 (scatter 2.0 along PC2), consistent with the one mistake of Test 1 being a
-  setting-5 trace set.
+\item Setting 5 is the loosest cluster on channel 0 (scatter 2.1 along PC2), consistent with all mistakes of Test 1 being
+  setting-5 trace sets.
 \item Channel 2, the noisiest amplifier, gives the same picture. Its higher noise does not hide the setting differences.
 \end{itemize}
 
@@ -578,7 +587,7 @@ none; settings up to 85\,min apart \\
 \subsection{Next data}
 
 Each packet is taken with \code{take\_packet.py}: 3 flushes, 3 reference trace sets (at the reference $\theta$), the new
-$\theta$, a flush, 3 trace sets, and a 1$\times$1 image that WADERs can fit (Table~\ref{tab:image}). The reference traces in
+$\theta$, a flush, 3 trace sets, and a 1$\times$1 image that WADERs can fit (Table~\ref{tab:image}). The traces read their pixels exactly like the image (same skips and binning), so that the features describe the same readout as the labels. The reference traces in
 every packet measure the drift directly, and \code{take\_packet.py} sets all trace cuts, so the \code{NCOLPRE} problem cannot
 recur. At about 10 minutes per packet, an overnight run gives 80--100 packets. Suggested order:
 \begin{enumerate}
@@ -600,19 +609,21 @@ the next packet.
 \toprule
 Parameter & Value \\
 \midrule
-\code{NROW} $\times$ \code{NCOL} $\times$ \code{NDCM} & 35 $\times$ 1000 $\times$ 200 \\
+\code{NROW} $\times$ \code{NCOL} $\times$ \code{NDCM} & 16 $\times$ 1000 $\times$ 500 \\
 \code{NPBIN}, \code{NSBIN} & 1, 1 \\
-\code{NCOLPRE} & 5300 (854 active + 146 overscan columns, as the 2026-10-06 1$\times$1 image) \\
+\code{NCOLPRE} & 5300 (852 active + 148 overscan columns, as the 2026-10-06 1$\times$1 image) \\
 \code{NROWPRE}, \code{NCOLPOST}, \code{NROWPOST}, \code{NDCMPRE} & 0 \\
-\code{BOOLCLR}, \code{EXPOSURE} & 1, 10\,s \\
-Readout & 8.11\,s per row $\to$ about 4.9\,min \\
-Expected & $\sim$30,000 active pixels per channel; 0.05--0.1\,e$^-$/pix; $\sim$2,000--3,000 one-electron pixels \\
-Noise & $\sigma \approx 0.23$\,e$^-$ on channel 0 (channel 2 $\approx 0.9$\,e$^-$) \\
-WADERs & \code{img\_9.json} with \code{ccd\_rows} 35, \code{ccd\_cols} 854; dark current fitted per row \\
+\code{BOOLCLR}, \code{EXPOSURE} & 1, 0\,s \\
+Readout & 17.9\,s per row $\to$ about 4.8\,min \\
+Expected & 13,600 active pixels per channel; $\bar\lambda \approx 0.08$\,e$^-$/pix; $\sim$1,000 one-electron pixels \\
+Noise & $\sigma_{500} \approx 0.26$\,e$^-$ on channels 0, 1, 3 ($\sigma_1 \approx 5.8$\,e$^-$ per skip); channel 2 too noisy \\
+WADERs & \code{img\_9.json} with \code{ccd\_rows} 16, \code{ccd\_cols} 852; dark current fitted per row \\
+Traces & \code{match\_image = true}: 2 $\times$ 5 pixels, 500 skips, 1$\times$1, prescan 100: 0.19\,s, 11\,MB per channel \\
 \bottomrule
 \end{tabular}
-\caption{Recommended 5-minute 1$\times$1 dark-current image (from the dark rate measured on 2026-10-12,
-$4.4$--$6.7\times10^{-4}$\,e$^-$/pix/s).}
+\caption{Recommended 5-minute 1$\times$1 dark-current image and matched traces (\code{configs/packet\_recommended.toml};
+derivation in \code{docs/packet\_design.md}). An earlier version of this note recommended 35$\times$1000$\times$200; with
+200 skips $\sigma \approx 0.41$\,e$^-$, too noisy to count electrons (11\,\% of empty pixels would read above 0.5\,e$^-$).}
 \label{tab:image}
 \end{table}
 
@@ -624,7 +635,7 @@ $4.4$--$6.7\times10^{-4}$\,e$^-$/pix/s).}
 \item The features moved are specific to the parameter: H rails $\to$ horizontal transfer, V rails/TG $\to$ vertical
   transfer, VDD $\to$ amplifier response.
 \item The noise of amplifier A rose in both the trace and the image when the V rails and TG were lowered.
-\item The features identify the setting of a trace set in 46 of 47 cases.
+\item The features identify the setting of a trace set in 44--46 of 47 cases (depending on the distance used).
 \item A model of $\sigma_e$, $\lambda$ and the gain needs about 100 packets with a proper design, reference traces and 1$\times$1
   images.
 \end{itemize}

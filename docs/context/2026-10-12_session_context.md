@@ -184,6 +184,10 @@ roughly 20–35 e⁻ with the gain of about 1.3 ADU/e⁻ from the 2026-10-06 1×
 
 ## 5. Recommended dark-current image (about 5 minutes, 1×1)
 
+> **Superseded on 2026-10-13** (`docs/packet_design.md`): with $\sigma_1 \approx 5.8$ e⁻ per skip (from the
+> 10-06 3000-skip image), 200 skips gives σ ≈ 0.41 e⁻, too noisy to count electrons. The recommendation is
+> now 16×1000×**500**, 1×1, prescan 5300, no exposure (4.8 min, σ ≈ 0.26 e⁻), with matched traces.
+
 Per-row time from `take_packet.formula_acquisition_seconds` (reference timing):
 
 | Parameter | Value |
@@ -239,7 +243,7 @@ rebuilt on request. The sections:
   setting 3. Channel 3 rises in the image only (1.5 → 3.8 ADU).
 * **ML feasibility:**
   * **The features carry the settings.** A nearest-setting test (leave one trace set out; each feature
-    in units of its pooled repeat scatter; median over the features) assigns 46 of 47 trace sets
+    in units of its pooled repeat scatter; median over the features) assigns 46 of 47 trace sets (44–46 after the 2026-10-13 ringing-fit correction, depending on the distance)
     correctly, and each setting forms its own cluster. With a sum over the features instead of the
     median there are 3 mistakes: with only 3 repeats, the scatter of some features is underestimated
     and those features dominate. A model needs feature selection or robust weighting, and more
