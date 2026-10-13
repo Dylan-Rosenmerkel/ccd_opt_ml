@@ -69,13 +69,53 @@ snapshots) and `process_packet_walkthrough` (unchanged text).
 
 The monitor is a display of the fake only.
 
-## 4. Environment note
+## 4. More detail and equations in the packet-test summary
+
+On request, `packet_tests_2026-10-12.tex` was extended:
+
+* **Method:**
+  * sample mean and variance of the repeats;
+  * the separation with the pooled variance;
+  * its relation to the two-sample $t$ statistic: $t = S\sqrt{1.5}$ for 3 vs 3, 4 degrees of
+    freedom. $|S| \ge 6$ means $p \approx 0.0018$, about 0.16 chance passes per 85 features;
+  * the caveats (uncertain scatter, drift);
+  * the four-channel criterion as an equation.
+* **Images:** the overscan level, the robust noise ($1.4826\times$MAD, and why 1.4826) and the
+  charge per bin as equations.
+* **Test 1:**
+  * the leave-one-out procedure as equations (centres, the scatter pooled over $G$ settings with
+    7 degrees of freedom, the median/sum distances);
+  * the binomial chance of 46/47 by guessing ($7\times10^{-27}$);
+  * why the sum fails: $7s^2/\sigma^2 \sim \chi^2_7$; the smallest of 83 scatter estimates is
+    typically 0.17 of the truth, so that feature's $z^2$ is inflated about 6-fold.
+* **Test 2 (PCA), rewritten in five steps:**
+  * standardization (with the total spread, not the repeat scatter; divisor $n$; constant
+    features);
+  * the correlation matrix, with trace $p_\text{eff}$ = 80 (ch0) and 79 (ch2);
+  * the eigenvectors, via the SVD; at most $n-1 = 11$ non-zero eigenvalues;
+  * scores and loadings ($1/\sqrt{p}$ reference; the sign is arbitrary);
+  * the variance fractions.
+
+  It also has an eigenvalue table, a new figure (`oct12_pca_details.png`: scree plot and the
+  largest loadings), a table of the setting centres and repeat scatter in the PC plane, what PC1
+  and PC2 are made of (PC1 = H rails, $r = -0.92$ with the H-transfer lowest point on ch0;
+  PC2 = V rails/TG vs VDD), and the limits of the picture.
+* **Notebook:** `packet_tests_2026-10-12.ipynb` has a new "PCA in detail" part (equations, the
+  numbers, the figure) and was re-run.
+* **Found on the way:** `fit: first-skip ringing frequency` returns exactly 0.01 cycles/skip for
+  every trace of this run. The fit sits at a fixed value; it should be checked in
+  `trace_features.py`.
+
+Still not compiled locally (no LaTeX here); the source was checked for balanced environments,
+braces and `$`.
+
+## 5. Environment note
 
 The scratch Python environment used for executing notebooks lost files in a temp-directory
 cleanup and was rebuilt (numpy, matplotlib, astropy, nbformat, nbclient, ipykernel). Nothing in the
 project depended on it.
 
-## 5. Open
+## 6. Open
 
 * On the DAQ machine:
   * `--status-only`;
@@ -84,4 +124,5 @@ project depended on it.
   * check that `queue_backups/` was written.
 * Ask the group whether the repeat flush is meant to stay off during data taking, and whether a
   flush in leader mode really hangs (assumed, as for traces).
+* Check the first-skip ringing-frequency fit (constant 0.01 cycles/skip).
 * Everything open from 2026-10-12 (1×1 image and WADERs fit, limits review, first scan design).

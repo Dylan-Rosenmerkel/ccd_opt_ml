@@ -103,15 +103,42 @@ waveforms, the skip cycle (reset pulse, summing-well dip, baseline droop), the a
 pulse shape), the noise (CDS noise, spectra, Allan deviation, settling) and the levels. The analysis works for any trace
 geometry, so the longer traces of settings 2--5 are handled correctly.
 
-For a feature $f$ on one channel, with repeats $f_{a,i}$ in setting $a$ and $f_{b,j}$ in setting $b$, the
-\emph{separation} is
+\paragraph{Repeats, mean and scatter.} Take one feature $f$ on one channel. Setting $a$ has $n_a$ repeated trace sets
+(here $n_a = 3$) with values $f_{a,1},\dots,f_{a,n_a}$. Their mean and sample variance are
+\begin{equation}
+\bar f_a = \frac{1}{n_a}\sum_{i=1}^{n_a} f_{a,i}, \qquad
+s_a^2 = \frac{1}{n_a-1}\sum_{i=1}^{n_a} \bigl(f_{a,i}-\bar f_a\bigr)^2 .
+\end{equation}
+$s_a$ is the \emph{repeat scatter}: how much the feature changes when nothing is changed. It contains the noise of the
+measurement and any drift within the $\sim$1--2 minutes over which the three sets are taken.
+
+\paragraph{Separation.} For two settings $a$ and $b$, the \emph{separation} is the change of the mean in units of the
+repeat scatter,
 \begin{equation}
 \sep_{a\to b} = \frac{\bar f_b - \bar f_a}{s_\text{pooled}}, \qquad
-s_\text{pooled}^2 = \frac{(n_a-1)s_a^2 + (n_b-1)s_b^2}{n_a+n_b-2},
+s_\text{pooled}^2 = \frac{(n_a-1)s_a^2 + (n_b-1)s_b^2}{n_a+n_b-2}.
+\label{eq:sep}
 \end{equation}
-i.e.\ how many times larger the change is than the scatter between repeated trace sets. With 3 against 3 repeats,
-$|\sep| \ge 6$ corresponds to $p \approx 0.002$ for one feature, so about 0.2 of the 85 features would pass by chance.
-Figure~\ref{fig:example} shows what this looks like.
+The pooled variance averages the two sample variances, weighted by their degrees of freedom ($n-1$ each, 4 in total). The
+sign says in which direction the feature moved.
+
+\paragraph{How large is ``significant''?} $\sep$ is closely related to the two-sample $t$ statistic, which also divides by
+the uncertainty of the means:
+\begin{equation}
+t = \frac{\bar f_b - \bar f_a}{s_\text{pooled}\sqrt{1/n_a + 1/n_b}} = \sep \sqrt{\frac{n_a n_b}{n_a+n_b}}
+= \sep\,\sqrt{1.5} \quad (n_a = n_b = 3).
+\end{equation}
+If nothing changed and the repeats were Gaussian, $t$ would follow a Student $t$ distribution with $\nu = n_a+n_b-2 = 4$
+degrees of freedom. The threshold $|\sep| \ge 6$ means $|t| \ge 7.35$. The chance of that without a real change is
+\begin{equation}
+p = 2\,P\bigl(T_4 \ge 7.35\bigr) \approx 0.0018 .
+\end{equation}
+With 85 features tested per comparison, about $85 \times 0.0018 \approx 0.16$ features would pass by chance.
+
+Two caveats. With only 3 repeats, $s_\text{pooled}$ is itself uncertain (4 degrees of freedom). And the settings were taken up
+to 85 minutes apart, so drift on longer time scales is not in $s_\text{pooled}$ but can be in $\bar f_b - \bar f_a$. The
+separation therefore measures ``changed by more than the short-term noise'', not ``changed by the parameter''.
+Figure~\ref{fig:example} shows what the numbers look like.
 
 \begin{figure}[H]
 \centering
@@ -123,8 +150,15 @@ but the repeats agree to about 0.001\,\textmu s.}
 \label{fig:example}
 \end{figure}
 
-A feature counts as \emph{changed} by a parameter if it moves in the same direction on all four channels and the median
-separation over the channels is at least 6. The features are grouped into five kinds: horizontal transfer, vertical transfer,
+\paragraph{Combining the four channels.} With $\sep_c$ the separation on channel $c = 0,\dots,3$, a feature counts as
+\emph{changed} by a parameter if
+\begin{equation}
+\operatorname{sign}\sep_0 = \operatorname{sign}\sep_1 = \operatorname{sign}\sep_2 = \operatorname{sign}\sep_3
+\quad\text{and}\quad \operatorname*{median}_c |\sep_c| \ge 6 .
+\end{equation}
+Requiring the same direction on four independent amplifiers removes most chance passes. The median ignores one
+unusual channel. For VDD, both comparisons (5$\to$2 and 1$\to$2) must pass, and the smaller of their two $|\sep|$ values
+is used. The features are grouped into five kinds: horizontal transfer, vertical transfer,
 amplifier response, levels \& baseline, and noise \& fine structure.
 
 %======================================================================
@@ -197,10 +231,25 @@ band).}
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{oct12_noise_trace_and_image.png}
-\caption{Left: trace CDS noise per skip. Right: image overscan noise (robust scatter of the last 6 columns, 500-skip
-average). Only settings 1--4 have images. Log scales.}
+\caption{Left: trace CDS noise per skip (\code{skip: CDS rms (detrended)}). Right: image overscan noise
+(Eq.~\ref{eq:mad}, last 6 columns, 500-skip average). Only settings 1--4 have images. Log scales.}
 \label{fig:noise}
 \end{figure}
+
+\paragraph{Image quantities.} Each image has 50 rows $\times$ 130 columns of 20$\times$20 bins. The last 7 columns are
+overscan (read without charge), and the first 2 rows are left out (start-up). With $q_{rc}$ the value of row $r$, column
+$c$ (ADU, average of 500 skips) and $O$ the set of overscan pixels (last 6 columns):
+\begin{equation}
+\ell = \operatorname*{median}_{(r,c)\in O} q_{rc}, \qquad
+\sigma_O = 1.4826\,\operatorname*{median}_{(r,c)\in O} \bigl|q_{rc} - \ell\bigr| ,
+\qquad Q = \operatorname*{median}_{(r,c)\in A} \bigl(q_{rc} - \ell\bigr).
+\label{eq:mad}
+\end{equation}
+$\ell$ is the overscan level (the zero of the image) and $Q$ the typical charge per bin over the active region $A$.
+$\sigma_O$ is the \emph{robust} noise: the median absolute deviation (MAD), scaled so that it equals the standard
+deviation for Gaussian noise. For a Gaussian, $P(|X-\mu| < 0.6745\,\sigma) = 0.5$, so
+$\text{MAD} = 0.6745\,\sigma$ and $1/0.6745 = 1.4826$. Unlike the standard deviation, a few outliers (a track, a hot
+pixel) barely change it.
 
 \begin{table}[H]
 \centering
@@ -262,22 +311,37 @@ recognised for that reason alone. Per channel there are 4 settings $\times$ 3 tr
 where one trace was damaged), 47 in total over the 4 channels. Each trace set is a list of 83 numbers: the 85 features, minus
 2 that are undefined (NaN) for these traces. Each channel is tested separately.
 
-\paragraph{Procedure (leave-one-out).} For each trace set in turn:
+\paragraph{Notation.} For one channel, $x_{ik}$ is feature $k$ ($k = 1,\dots,p$, $p = 83$) of trace set $i$
+($i = 1,\dots,n$, $n = 12$), and $g(i) \in \{2,3,4,5\}$ is its setting.
+
+\paragraph{Procedure (leave-one-out).} For each trace set $i_0$ in turn:
 \begin{enumerate}
-\item \textbf{Hide it.} The remaining 11 trace sets are the ``training data''.
-\item \textbf{Average per setting.} For each setting, average the features of its remaining trace sets (3, or 2 for the
-  setting of the hidden one). This gives one ``centre'' per setting: a list of 83 typical values.
-\item \textbf{Put all features on the same scale.} The features have different units (ADU, \textmu s, ratios), so each is
-  divided by its \emph{repeat scatter}: the standard deviation of the trace sets around their own setting's centre,
-  pooled over the 4 settings. A difference of 1 in these units means ``as large as the difference between two repeats''.
-\item \textbf{Measure the distance} from the hidden trace set to each centre. For feature $k$ and setting $g$:
+\item \textbf{Hide it.} The other $n-1 = 11$ trace sets form the training set $\mathcal T$. $\mathcal T_g$ are those of
+  setting $g$: 3 of them, or 2 for the setting of $i_0$.
+\item \textbf{Average per setting} (the setting's ``centre'', a list of 83 numbers):
   \begin{equation}
-  z_{k,g} = \frac{x_k - c_{k,g}}{s_k}, \qquad d_g = \operatorname{median}_k\, z_{k,g}^2 ,
+  c_{gk} = \frac{1}{|\mathcal T_g|}\sum_{i\in\mathcal T_g} x_{ik}.
   \end{equation}
-  with $x_k$ the hidden trace set's feature, $c_{k,g}$ the centre of setting $g$ and $s_k$ the repeat scatter.
-\item \textbf{Assign} the hidden trace set to the setting with the smallest distance, and check whether that is its true
-  setting.
+\item \textbf{Put all features on the same scale.} The features have different units (ADU, \textmu s, ratios). Each is
+  divided by its repeat scatter, pooled over the $G = 4$ settings:
+  \begin{equation}
+  s_k^2 = \frac{1}{|\mathcal T| - G}\sum_{g}\sum_{i\in\mathcal T_g} \bigl(x_{ik} - c_{gk}\bigr)^2 ,
+  \qquad |\mathcal T| - G = 11 - 4 = 7 \text{ degrees of freedom}.
+  \label{eq:pooled}
+  \end{equation}
+  This is Eq.~\ref{eq:sep}'s pooled variance generalised to $G$ groups. A difference of 1 in these units means ``as large as
+  the typical difference between repeats''.
+\item \textbf{Measure the distance} from the hidden trace set to each centre:
+  \begin{equation}
+  z_{gk} = \frac{x_{i_0 k} - c_{gk}}{s_k}, \qquad d_g = \operatorname*{median}_{k}\, z_{gk}^2
+  \quad\Bigl(\text{or } D_g = \sum_k z_{gk}^2\Bigr).
+  \end{equation}
+  For the true setting, $z_{gk}$ is roughly a standard normal variable, so $z^2$ is typically below 1. The median of a
+  $\chi^2_1$ variable is 0.45. For a wrong setting, the features that the parameter moves give $z^2$ in the hundreds or
+  thousands.
+\item \textbf{Assign} $\hat g(i_0) = \arg\min_g d_g$ and check whether $\hat g(i_0) = g(i_0)$.
 \end{enumerate}
+The accuracy is the fraction of the $n$ hidden trace sets that are assigned correctly.
 
 \paragraph{Example.} Hide one trace set of setting 4 (channel 0). For the lowest point of the horizontal-transfer waveform,
 the repeat scatter is about 11\,ADU. The hidden value lies within a few ADU of the setting-4 centre ($z \approx 0$–1), but
@@ -285,14 +349,23 @@ about 7,900\,ADU from the setting-5 centre ($z \approx 700$). Most of the other 
 median distance is smallest for setting 4.
 
 \paragraph{Result.} \textbf{46 of 47 trace sets are assigned to the right setting} (channel 0: 11/12; channels 1 and 2: 12/12;
-channel 3: 11/11). Guessing would give about 1 in 4. The one mistake is a setting-5 trace set on channel 0, assigned to setting
+channel 3: 11/11). Guessing would give 1 in 4. The probability of 46 or more correct out of 47 by guessing is the
+binomial tail
+\begin{equation}
+P(N \ge 46) = \sum_{m=46}^{47}\binom{47}{m}\Bigl(\tfrac14\Bigr)^m\Bigl(\tfrac34\Bigr)^{47-m} \approx 7\times10^{-27}.
+\end{equation} The one mistake is a setting-5 trace set on channel 0, assigned to setting
 3. Setting 5 is also the loosest cluster on channel 0 in Figure~\ref{fig:space}.
 
-\paragraph{Why the median and not the sum.} With the \emph{sum} of $z^2$ over the features there are 3 mistakes (channels 1
-and 3). The reason is the small number of repeats. After hiding one trace set, a setting may have only 2 repeats left. For
-some feature, the repeats can then agree much better than usual \emph{by chance}, so its scatter $s_k$ is underestimated.
-That feature's $z^2$ becomes huge for every trace set that is not exactly on its centre, and in a sum over 83 features this
-one feature decides the result. The median ignores such outliers: it asks what the \emph{typical} feature says. In practice,
+\paragraph{Why the median and not the sum.} With the \emph{sum} $D_g$ there are 3 mistakes (channels 1 and 3). The
+reason is the small number of repeats. Each $s_k^2$ in Eq.~\ref{eq:pooled} has only 7 degrees of freedom. For Gaussian
+repeats with true variance $\sigma_k^2$,
+\begin{equation}
+\frac{7\,s_k^2}{\sigma_k^2} \sim \chi^2_7 ,
+\end{equation}
+so the estimate scatters widely around the truth. For the smallest of 83 such estimates, the typical ratio
+$s_k^2/\sigma_k^2$ is about 0.17 (simulated). That feature's $z^2$ is then inflated about 6-fold, and about 2 of the 83
+features are underestimated by a factor 4 or more. In the sum over 83 features, these few inflated terms can decide the
+result. The median ignores such outliers: it asks what the \emph{typical} feature says. In practice,
 the model will need either robust weighting or a selection of reliable features, and more repeats per setting to estimate
 the scatter well. The planned packets have 3 reference and 3 $\theta$ trace sets.
 
@@ -301,33 +374,155 @@ parameters: the information is there. It does \emph{not} show that the features 
 apart 4 settings that differ by 0.5--1.5\,V is an easy task. It is a necessary condition for the real model, not a
 sufficient one.
 
-\subsection{Test 2: a picture of the feature space}
+\subsection{Test 2: a picture of the feature space (PCA)}
 \label{sec:ml-pca}
 
 Each trace set is a point in an 83-dimensional space (one axis per feature), which cannot be drawn. A
-\emph{principal-component analysis} (PCA) finds the two directions along which the trace sets differ most, and
-Figure~\ref{fig:space} shows the trace sets projected onto them:
+\emph{principal-component analysis} (PCA) finds the directions along which the trace sets differ most, so that the
+picture in two of them keeps as much of the structure as possible. The PCA does not know which setting a trace set belongs
+to (it is \emph{unsupervised}): if the settings come out as separate clusters, that is a result, not an input. The
+calculation is done separately for each channel, on the same $n = 12$ trace sets (settings 2--5) and $p = 83$ features as
+Test 1.
+
+\paragraph{Step 1: standardization.} The features have very different units and sizes: ADU levels of $10^4$--$10^5$, time
+constants of 0.3\,\textmu s, ratios near 1. A PCA of the raw numbers would only see the largest ones. Each feature (column
+$k$) is therefore centred and scaled by its mean and standard deviation over the 12 trace sets:
+\begin{equation}
+z_{ik} = \frac{x_{ik} - \bar x_k}{\sigma_k}, \qquad
+\bar x_k = \frac1n\sum_{i=1}^{n} x_{ik}, \qquad
+\sigma_k^2 = \frac1n\sum_{i=1}^{n}\bigl(x_{ik} - \bar x_k\bigr)^2 .
+\label{eq:standardize}
+\end{equation}
+Every standardized feature has mean 0 and variance 1. A difference of 1 in $z$ means ``one standard deviation of that
+feature over this data set'', so all features have the same weight to start with.
+
+Three points about this choice:
 \begin{itemize}
-\item Each feature is first standardized (its mean over the 12 trace sets subtracted, divided by its standard deviation), so
-  that no feature dominates because of its units.
-\item PC1 is the combination of features with the largest spread between the trace sets; PC2 the next largest, independent
-  of PC1. The percentages on the axes say how much of the total spread each direction holds (34\,\% and 20\,\% on channel 0).
-\item The axes have no units. Only distances matter: \textbf{points close together have similar features}.
+\item $\sigma_k$ is the \emph{total} spread over all 12 trace sets. It is dominated by the differences \emph{between}
+  settings. This is different from Test 1, which divides by the repeat scatter $s_k$ (Eq.~\ref{eq:pooled}). A feature
+  that the settings move strongly has $\sigma_k \gg s_k$, so its repeats are close together in $z$.
+\item The divisor is $n$, not $n-1$. This only rescales all axes by the same factor $\sqrt{n/(n-1)}$ and changes none of
+  the fractions below.
+\item A feature that is identical in all 12 trace sets ($\sigma_k = 0$) cannot be scaled; it is set to $z = 0$ and takes no
+  part. Here these are 3 features on channel 0 and 4 on channel 2: discrete counts that are 0 everywhere (e.g.\ spectrum
+  lines), and the first-skip ringing frequency. That fit returns exactly 0.01 cycles/skip for every trace, so it sits at
+  a fixed value and carries no information. That is worth fixing in \code{trace\_features.py}.
 \end{itemize}
 
-\paragraph{Reading the figure.} The 3 trace sets of each setting lie close together, and the settings are far apart: the
-repeats are much more alike than the settings. PC1 roughly orders the settings by how much the horizontal low rails were
-lowered: setting 4 (five rails) on the right, setting 5 (one rail) in between. PC2 separates setting 2 (VDD, top) from
-setting 3 (V rails and TG, bottom). Setting 5 is the loosest cluster on channel 0, consistent with the one mistake of Test 1 being a
-setting-5 trace set. Channel 2, the noisiest amplifier, looks the same. Its higher noise does not hide the setting differences.
+\paragraph{Step 2: the correlation matrix.} The standardized data form an $n\times p$ matrix $Z$. Its $p\times p$
+correlation matrix is
+\begin{equation}
+R = \frac1n Z^\top Z, \qquad R_{kl} = \frac1n\sum_i z_{ik} z_{il} = \operatorname{corr}(x_{\cdot k}, x_{\cdot l}).
+\end{equation}
+$R_{kk} = 1$ for every feature that varies, so the trace (total variance) is $\operatorname{tr}R = p_\text{eff}$, the number of
+non-constant features: 80 on channel 0, 79 on channel 2.
+
+\paragraph{Step 3: principal components.} The principal components are the eigenvectors of $R$:
+\begin{equation}
+R\,v_j = \lambda_j v_j, \qquad v_j^\top v_l = \delta_{jl}, \qquad \lambda_1 \ge \lambda_2 \ge \dots \ge 0 .
+\end{equation}
+$v_1$ is the unit vector along which the projected data have the largest variance: it maximises $v^\top R v$ subject to
+$|v| = 1$, and the maximum is $\lambda_1$. $v_2$ does the same among the vectors orthogonal to $v_1$, and so on. In practice
+they are computed from the singular-value decomposition $Z = U S V^\top$: $v_j$ is column $j$ of $V$ and
+$\lambda_j = s_j^2/n$. Because the 12 rows of $Z$ are centred, they span at most $n-1 = 11$ dimensions. Only 11 eigenvalues
+are non-zero, however many features there are.
+
+\paragraph{Step 4: scores and loadings.} Trace set $i$ is drawn at its \emph{scores}
+\begin{equation}
+t_{ij} = z_i\cdot v_j = \sum_{k} z_{ik}\,v_{jk}, \qquad j = 1,2 .
+\end{equation}
+The weights $v_{jk}$ are the \emph{loadings}: how much feature $k$ contributes to component $j$. Since $\sum_k v_{jk}^2 = 1$,
+a component made equally of all $p_\text{eff}$ features would have $|v_{jk}| = 1/\sqrt{p_\text{eff}} \approx 0.11$. A
+loading's sign is meaningful only relative to the others: $v_j$ and $-v_j$ describe the same component (the whole plot
+can be mirrored).
+
+\paragraph{Step 5: how much each component holds.} The variance of the scores along $v_j$ is $\lambda_j$. The fraction of
+the total spread is
+\begin{equation}
+\frac{\lambda_j}{\sum_l \lambda_l} = \frac{\lambda_j}{p_\text{eff}} .
+\end{equation}
+These are the percentages on the axes of Figure~\ref{fig:space}.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+ & $\lambda_1$ & $\lambda_2$ & $\lambda_3$ & fraction PC1 & fraction PC2 & PC1+PC2 \\
+\midrule
+ch0 (D), $p_\text{eff} = 80$ & 27.0 & 16.3 & 9.2 & 0.338 & 0.203 & 0.541 \\
+ch2 (A), $p_\text{eff} = 79$ & 30.5 & 19.4 & 7.2 & 0.386 & 0.246 & 0.631 \\
+\bottomrule
+\end{tabular}
+\caption{The largest eigenvalues and the fraction of the total spread per component.}
+\label{tab:pca}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{oct12_pca_details.png}
+\caption{Top: fraction of the total spread per component (bars) and cumulative (line); 11 components, as expected for 12
+trace sets. Bottom: the 10 largest loadings of PC1 and PC2, coloured by kind of feature. The dotted lines mark
+$\pm1/\sqrt{p_\text{eff}}$, the size if all features counted equally.}
+\label{fig:pca}
+\end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{oct12_feature_space.png}
-\caption{Every trace set (one dot each) projected onto the first two principal components of its standardized features.
-Left: channel 0, right: channel 2. Each colour is one setting.}
+\caption{Every trace set (one dot each) at its scores $(t_{i1}, t_{i2})$. Left: channel 0, right: channel 2. Each colour
+is one setting.}
 \label{fig:space}
 \end{figure}
+
+\paragraph{What the components are made of} (Figure~\ref{fig:pca}).
+\begin{itemize}
+\item \textbf{The loadings are spread over many features.} The largest are 0.18--0.21, against 0.11 for ``all equal''. So
+  each component is a broad combination of many correlated features: many features respond together to the same
+  parameter change.
+\item \textbf{PC1} is made of horizontal-transfer and baseline features: H-transfer lowest and highest point,
+  peak-to-peak, baseline droop and level. It is the \emph{H low rails} direction. On channel 0, the PC1 score correlates
+  with the H-transfer lowest point at $r = -0.92$.
+\item \textbf{PC2} mixes vertical-transfer features (V-transfer lowest and highest point, on channel 0) with
+  amplifier-response and window-settling features (dip height, reset pulse height and rise time, settling inside the
+  signal window). It separates the V rails \& TG setting from the VDD setting.
+\end{itemize}
+
+\paragraph{Where the settings lie.} The centre and repeat scatter of each setting in the $(t_1, t_2)$ plane are:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+Setting & ch0: centre (scatter) & ch2: centre (scatter) \\
+\midrule
+2 VDD $-20.5$\,V & $(-6.6,\ +4.4)$\quad$(0.4,\ 1.9)$ & $(-4.8,\ +6.2)$\quad$(0.5,\ 0.6)$ \\
+3 V low rails \& TG & $(-2.3,\ -5.8)$\quad$(0.5,\ 0.2)$ & $(-4.9,\ -6.1)$\quad$(1.3,\ 0.2)$ \\
+4 all H low rails & $(+7.6,\ +2.3)$\quad$(0.6,\ 0.6)$ & $(+8.3,\ -0.3)$\quad$(1.0,\ 0.7)$ \\
+5 H3\_A\_L only & $(+1.3,\ -0.9)$\quad$(0.5,\ 2.0)$ & $(+1.4,\ +0.2)$\quad$(1.6,\ 1.0)$ \\
+\bottomrule
+\end{tabular}
+\caption{Setting centres $(\bar t_1, \bar t_2)$ and the standard deviation of the 3 repeats along each axis.}
+\label{tab:pcacentres}
+\end{table}
+
+\begin{itemize}
+\item The centres are 5--14 units apart; the repeats scatter by 0.2--2 units around them. The repeats are much more alike
+  than the settings, even though the PCA was not told which trace set is which.
+\item PC1 orders the settings by how much the horizontal low rails were lowered: setting 4 (five rails) at $+7.6$, setting 5
+  (one rail) at $+1.3$, settings 2 and 3 (none) on the negative side. Setting 5 sits roughly between: lowering one of the
+  five rails moves the trace part of the way.
+\item PC2 separates setting 2 (VDD, top) from setting 3 (V rails \& TG, bottom).
+\item Setting 5 is the loosest cluster on channel 0 (scatter 2.0 along PC2), consistent with the one mistake of Test 1 being a
+  setting-5 trace set.
+\item Channel 2, the noisiest amplifier, gives the same picture. Its higher noise does not hide the setting differences.
+\end{itemize}
+
+\paragraph{Limits of the picture.} With $n = 12 \ll p = 83$, the PCA can only show the directions in which these 12 trace
+sets differ. It cannot show which feature combinations matter for $\sigma_e$ or $\lambda$. The axes are tied to this data
+set: a new set of settings would give different components. Separate clusters therefore show that the features are
+reproducible and informative, as in Test 1. They are not a model.
 
 \subsection{Is this enough to train the target model?}
 \label{sec:ml-target}

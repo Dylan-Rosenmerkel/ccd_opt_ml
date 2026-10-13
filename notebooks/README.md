@@ -135,7 +135,8 @@ TG, H low rails, H3_A_L only; 3 trace sets each on board 101, plus an image for 
    feature.
 5. Waveforms of the clean comparisons, with the difference shaded.
 6. Trace noise and image noise per channel and setting.
-7. Could an ML model be trained on this? Leave-one-out test, feature-space picture, and what is missing.
+7. Could an ML model be trained on this? Leave-one-out test, the PCA picture and the PCA in detail
+   (standardization, eigenvalues, loadings), and what is missing.
 8. Appendix: all 85 features × 4 comparisons.
 
 Saves its key figures to `../docs/context/figures/oct12_*.png`.
