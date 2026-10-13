@@ -1,0 +1,19 @@
+# image_params_recommended.toml -- the recommended 1x1 dark-current image (docs/packet_design.md)
+# in the format of the group's image_params/*.toml, so it can be checked with
+#     python scripts/image_time.py <this file>
+# and taken with take_image.py.  Same values as [image] in configs/packet_recommended.toml.
+# Expected (sequencer formulas of reference_v5_pumping.seq): 16 rows x 17.9 s = 286 s (4.8 min).
+subroutine = "AcquireImage"
+acq_level  = 2
+EXPOSURE = 0
+NDCM = 500
+NROW = 16
+NCOL = 1000
+NPBIN = 1
+NSBIN = 1
+NDCMPRE = 0
+NROWPRE = 0
+NROWPOST = 0
+NCOLPRE = 5300
+NCOLPOST = 0
+BOOLCLR = 1
