@@ -65,11 +65,54 @@ DEFAULT_TRACE = {"subroutine": "AcquireImage", "EXPOSURE": 0, "NROW": 2, "NCOL":
                  "NDCMPRE": 0, "NROWPRE": 0, "NROWPOST": 0, "NCOLPRE": 0, "NCOLPOST": 0}
 
 
-def trace_parameters(table: Mapping[str, object] | None) -> dict[str, object]:
-    """The trace parameters: :data:`DEFAULT_TRACE` with the packet's ``[trace]`` values on top."""
-    params = {**DEFAULT_TRACE, **dict(table or {})}
+#: The image keys a MATCHED trace copies: they decide how one pixel is read (number of skips,
+#: binning, routine), and so what the amplifier and clocks do for each pixel.  The timing
+#: constants and voltages need no copying: they are part of theta and apply to both.
+MATCHED_KEYS = ("subroutine", "NDCM", "NDCMPRE", "NSBIN", "NPBIN")
+
+#: The matched trace's own size and cuts.  Small, because a trace records every ADC sample
+#: (15 MHz x 4 bytes = 60 MB per second of readout):
+#:   NROW x NCOL  2 x 5 pixels (the number of pixels of the group's take_trace.py);
+#:   NCOLPRE 100  a burst of 100 skipped pixels before each row, so the read pixels follow a
+#:                stretch of horizontal clocking as in the image (whose rows start after its
+#:                own prescan, e.g. 5300 pixels; all of that would be 40 MB per row);
+#:   BOOLCLR 0    the register clear (616 x 10 transfers, 0.8 s = 47 MB per row) is left out;
+#:   EXPOSURE 0   take_trace does not expose anyway.
+MATCHED_TRACE_SIZE = {"EXPOSURE": 0, "NROW": 2, "NCOL": 5, "NCOLPRE": 100, "BOOLCLR": 0,
+                      "NROWPRE": 0, "NROWPOST": 0, "NCOLPOST": 0}
+
+
+def trace_parameters(table: Mapping[str, object] | None,
+                     image: Mapping[str, object] | None = None) -> dict[str, object]:
+    """
+    The trace parameters.
+
+    * Default: :data:`DEFAULT_TRACE` (the group's take_trace.py) with the packet's ``[trace]``
+      values on top.
+    * ``match_image = true`` in ``[trace]``: the trace reads its pixels exactly like the image
+      (:data:`MATCHED_KEYS` copied from ``image``), with the small size of
+      :data:`MATCHED_TRACE_SIZE`.  The ``[trace]`` table may change the size and cuts, but not
+      a matched key (that would break the match: ValueError).
+    """
+    table = dict(table or {})
+    match = bool(table.pop("match_image", False))
+    if match:
+        if image is None:
+            raise ValueError("[trace] match_image = true needs the [image] table")
+        clash = sorted(set(table) & set(MATCHED_KEYS))
+        if clash:
+            raise ValueError(f"[trace] sets {clash} although match_image = true; these come from [image]")
+        params = {**DEFAULT_TRACE, **MATCHED_TRACE_SIZE,
+                  **{k: image[k] for k in MATCHED_KEYS if k in image}, **table}
+    else:
+        params = {**DEFAULT_TRACE, **table}
     params.pop("acq_level", None)                  # take_trace sets the level itself (channel = 0)
     return params
+
+
+def trace_image_differences(trace: Mapping[str, object], image: Mapping[str, object]) -> dict[str, tuple]:
+    """The pixel-reading keys in which the trace differs from the image: ``{key: (trace, image)}``."""
+    return {k: (trace.get(k), image.get(k)) for k in MATCHED_KEYS if trace.get(k) != image.get(k)}
 
 
 def image_parameters(table: Mapping[str, object]) -> dict[str, object]:

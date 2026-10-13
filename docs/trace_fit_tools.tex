@@ -125,11 +125,18 @@ $\tau\in[5,\,5000]$ skips. Reported: $\tau$ (skips) and $A$ (ADU, negative for a
 trace skip~0 is about 320~ADU above the later values, followed by swings of changing sign
 (\code{plots/skip\_evolution.png}, panel C). This tool describes that transient with a damped oscillation.
 
-\textbf{Model.} For $y_k = c_k - \mathrm{median}(c_{\ge 10})$, $k=0,\dots,19$:
+\textbf{Model (corrected 2026-10-13).} For $y_k = c_k - \mathrm{median}(c_{\ge 10})$, $k=1,\dots,19$:
 \begin{equation}
-  y_k = e^{-k/\tau}\bigl(a\cos 2\pi f k + b\sin 2\pi f k\bigr).
+  y_k = C + e^{-k/\tau}\bigl(a\cos 2\pi f k + b\sin 2\pi f k\bigr).
 \end{equation}
-The frequency $f$ (51 values from 0 to 0.5 cycles per skip; $f=0$ is a pure decay) and the decay length
+Skip~0 is left out (its larger transient is the separate tool ``first-skip CDS excess'') and the constant $C$ absorbs the
+level that has not settled within 20 skips. $f$ is searched in $0.02$--$0.5$ cycles/skip and $\tau$ in $0.5$--$30$ skips,
+then refined; $C$, $a$, $b$ are solved by least squares. On the 2026-10-08 and 2026-10-12 traces this gives
+$f \approx 0.23$ cycles/skip (a period of about 4.3 skips), $\tau \approx 1.5$--$3$ skips, in every pixel.
+
+\textbf{The original model} (used for the numbers in this note) had no $C$ and included skip~0,
+$y_k = e^{-k/\tau}\bigl(a\cos 2\pi f k + b\sin 2\pi f k\bigr)$ for $k = 0,\dots,19$. Its lowest non-zero frequency
+imitated a decay with an offset, so it returned $f = 0.01$ for almost every pixel. The frequency $f$ (51 values from 0 to 0.5 cycles per skip; $f=0$ is a pure decay) and the decay length
 $\tau$ (25 log-spaced values from 1 to 30 skips) are searched on a grid; $a$ and $b$ are linear and solved by
 least squares for each pair. The pair with the smallest squared residual is kept.
 
@@ -334,8 +341,8 @@ computed. The right panel of Figure~\ref{fig:z} shows the channel-0 to channel-3
 dip-recovery time (358), the settling time (160), the pulse peak height (71), the dip-recovery amplitude (71), the dip height (63) and the
 noise power at 1--3~MHz (59). Seven tools are below the factor of 3 that I take as ``detectable'': the noise power at 0.1--1~MHz (0.6), the
 end-of-cycle tail level (1.0), the droop half-time (2.0), the skips 1--4 ringing (2.4), the baseline droop amplitude (2.4), the CDS autocorrelation at lag 2 (2.4) and
-the correlated noise floor (2.6). The first-skip ringing frequency has no run-to-run variation at all (the fit sits at zero frequency in every
-pixel) and is excluded from the ratio. Judging every pair against this spread (right panel of Figure~\ref{fig:verdicts}) flags 0 of the 35 tools for each
+the correlated noise floor (2.6). The first-skip ringing frequency has no run-to-run variation at all (with the original model the fit sits at
+its lowest frequency in every pixel; corrected on 2026-10-13, see the model above) and is excluded from the ratio. Judging every pair against this spread (right panel of Figure~\ref{fig:verdicts}) flags 0 of the 35 tools for each
 of the six same-amplifier pairs and 22 to 28 for the cross-amplifier pairs. The same-amplifier count is optimistic because the spread is estimated
 from the same runs.
 

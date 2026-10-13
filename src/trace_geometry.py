@@ -41,6 +41,8 @@ class TraceGeometry:
     ndcm: int | None = None
     npbin: int | None = None
     nsbin: int | None = None
+    ncolpre: int = 0                  # skipped (prescan) pixels before the first read pixel of a row
+    ncolpost: int = 0                 # skipped pixels after the last read pixel of a row
     timing_known: bool = False        # the sequencer formulas apply
     cycle: float | None = None        # samples per skip cycle (not an integer)
     n_window: float | None = None     # samples per pedestal/signal window
@@ -48,6 +50,7 @@ class TraceGeometry:
     pulse_offset: float | None = None # reset edge after the end of the signal window
     h_transfer: float | None = None   # samples per horizontal transfer
     v_transfer: float | None = None   # samples per vertical transfer
+    dump: float | None = None         # samples of the dump-gate pulse after a pixel (DGL + DGH)
 
     @property
     def n_pixels(self) -> int | None:
@@ -63,7 +66,8 @@ class TraceGeometry:
             return int(meta[key]) if key in meta and meta[key] is not None else None
 
         g = cls(nrow=integer("NROW"), ncol=integer("NCOL"), ndcm=integer("NDCM"),
-                npbin=integer("NPBIN"), nsbin=integer("NSBIN"))
+                npbin=integer("NPBIN"), nsbin=integer("NSBIN"),
+                ncolpre=integer("NCOLPRE") or 0, ncolpost=integer("NCOLPOST") or 0)
         delays = ("delayOGH", "delayOGL", "delayRGL", "delayRGH", "delayInt", "delaySWH", "delaySWL",
                   "delay_Ha", "delay_Hb", "delay_Hc", "delay_Va", "delay_Vb")
         if str(meta.get("SEQNAME", "")) in KNOWN_SEQUENCERS and all(k in meta for k in delays):
@@ -76,4 +80,6 @@ class TraceGeometry:
             g.pulse_offset = d["delayOGH"] + d["delayOGL"] + d["delayRGL"]
             g.h_transfer = d["delayRGL"] + 3 * d["delay_Ha"] + 3 * d["delay_Hb"] + d["delay_Hc"]
             g.v_transfer = d["delayRGL"] + 3 * d["delay_Va"] + 3 * d["delay_Vb"]
+            if "delayDGL" in meta and "delayDGH" in meta:
+                g.dump = (float(meta["delayDGL"]) + float(meta["delayDGH"])) * SAMPLES_PER_TICK
         return g

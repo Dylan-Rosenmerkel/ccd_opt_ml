@@ -20,9 +20,9 @@ suggest better settings.
 | Folder | Contents |
 |---|---|
 | `src/` | All code (see below) |
-| `configs/` | DAQ setup, packet and scan examples, parameter limits (`limits.toml`, **not yet reviewed**), processing settings |
+| `configs/` | DAQ setup, packet and scan examples, the recommended packet (`packet_recommended.toml`), parameter limits (`limits.toml`, **not yet reviewed**), processing settings |
 | `notebooks/` | Step-by-step walkthroughs with saved outputs; see `notebooks/README.md` |
-| `docs/` | Notes: `trace_fit_tools.tex` (comparison tools), `trace_features.tex` (all trace features), `ml_training_plan.tex` (ML plan), `context/` (session records and handoff notes) |
+| `docs/` | Notes: `trace_fit_tools.tex` (comparison tools), `trace_features.tex` (all trace features), `ml_training_plan.tex` (ML plan), `packet_design.md` (image size, skips, binning, matched traces), `context/` (session records and handoff notes) |
 | `data/`, `rehearsal/`, `plots/` | Raw data, rehearsal output and figures: **not in the repository** (see `.gitignore`) |
 
 ## Code (`src/`)

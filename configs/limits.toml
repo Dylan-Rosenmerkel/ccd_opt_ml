@@ -25,13 +25,16 @@ reviewed = false
 min = 1
 max = 1000
 
+# Image-size windows: widened on 2026-10-13 to the CCD (PHYSROW 1536, PHYSCOL 6144 + PRESCAN 8,
+# from the .meta/FITS headers) plus overscan, for the recommended 1x1 image (16 x 1000 after a
+# 5300-column prescan; docs/packet_design.md).  The size of a readout cannot harm the CCD.
 [limits.NROW]
 min = 1
-max = 200
+max = 1700
 
 [limits.NCOL]
 min = 1
-max = 700
+max = 6400
 
 [limits.NPBIN]           # parallel (row) binning
 min = 1
@@ -51,7 +54,7 @@ max = 10
 
 [limits.NROWPRE]         # rows skipped before / after the image
 min = 0
-max = 200
+max = 1536
 
 [limits.NROWPOST]
 min = 0
@@ -59,7 +62,7 @@ max = 200
 
 [limits.NCOLPRE]         # columns skipped before / after the image
 min = 0
-max = 1000
+max = 6152
 
 [limits.NCOLPOST]
 min = 0

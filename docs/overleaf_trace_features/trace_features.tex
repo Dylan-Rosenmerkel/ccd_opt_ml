@@ -134,9 +134,9 @@ Exponentials are fitted by variable projection: the amplitude and offset are sol
 \texttt{fit: dip recovery amplitude} & ADU & Amplitude of that exponential. & SW feedthrough size \\
 \texttt{fit: baseline droop time constant (skips)} & skips & Time constant of an exponential fitted to the per-skip baseline (pedestal-window mean) along the 500 skips of a pixel. & reset leakage, output-stage operating point \\
 \texttt{fit: baseline droop amplitude} & ADU & Amplitude of that exponential. & reset leakage \\
-\texttt{fit: first-skip ringing frequency (cyc/skip)} & cycles/skip & Frequency of a damped oscillation fitted to the CDS of the first 20 skips (median of later skips removed). & transient after the horizontal transfers \\
+\texttt{fit: first-skip ringing frequency (cyc/skip)} & cycles/skip & Frequency of a damped oscillation plus a constant offset, fitted to the CDS of skips 1--19 (skip 0 left out: own feature; median of later skips removed). Searched in 0.02--0.5 cycles/skip, refined by a parabola. (Before 2026-10-13 the model had no offset and returned 0.01 for every trace.) & transient after the horizontal transfers \\
 \texttt{fit: first-skip ringing decay (skips)} & skips & Decay constant of that oscillation. & transient after the horizontal transfers \\
-\texttt{fit: first-skip ringing amplitude} & ADU & Amplitude of that oscillation. & transient after the horizontal transfers \\
+\texttt{fit: first-skip ringing amplitude} & ADU & Amplitude of that oscillation (envelope extrapolated to skip 0). & transient after the horizontal transfers \\
 \texttt{fit: white noise per skip (ADU)} & ADU & White term $\sigma$\_w of the model $\sigma$(N)$^{2}$ = $\sigma$\_w$^{2}$/N + $\sigma$\_f$^{2}$ fitted to the noise of N-skip averages (N = 1, 2, 5, 10, 25, 50) of the detrended CDS. & read noise per skip \\
 \texttt{fit: correlated noise floor (ADU)} & ADU & Floor term $\sigma$\_f of that model (often 0: the CDS noise averages down faster than white). & noise that does not average down \\
 \end{longtable}
@@ -575,6 +575,7 @@ and to the image labels.
 \texttt{discrete: largest baseline step (t)} & 3 & 2.1 \\
 \texttt{fit: first-skip ringing frequency (cyc/skip)} & 2 & 2.0 \\
 \texttt{fit: first-skip ringing amplitude} & 2 & 1.8 \\
+\multicolumn{3}{l}{\footnotesize (the three first-skip ringing rows were computed with the old fit, before 2026-10-13)} \\
 \texttt{fit: dip recovery amplitude} & 2 & 1.7 \\
 \texttt{discrete: largest CDS step (t)} & 0 & 1.7 \\
 \texttt{skip: first-skip CDS excess} & 2 & 1.6 \\

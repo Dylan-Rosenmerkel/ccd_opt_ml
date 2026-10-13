@@ -123,25 +123,63 @@ def fit_exponential(x: np.ndarray, y: np.ndarray, tau_min: float, tau_max: float
     return float(best), float(coef[0]), float(coef[1])
 
 
+def _ringing_sse(k: np.ndarray, y: np.ndarray, freqs: np.ndarray, taus: np.ndarray):
+    """
+    Least-squares fit of ``c + exp(-k/tau) (a cos 2 pi f k + b sin 2 pi f k)`` for every (f, tau) pair.
+
+    ``c``, ``a``, ``b`` are linear, so for each pair they are solved exactly (normal equations,
+    all pairs at once).  Returns the residual sums of squares, shape (len(freqs), len(taus)),
+    and the amplitudes ``hypot(a, b)``.
+    """
+    F, T = np.meshgrid(freqs, taus, indexing="ij")
+    env = np.exp(-k[None, None, :] / T[..., None])
+    phase = 2 * np.pi * F[..., None] * k[None, None, :]
+    basis = np.stack([np.ones_like(env), env * np.cos(phase), env * np.sin(phase)], axis=-1)   # (nf, nt, n, 3)
+    ata = np.einsum("ftni,ftnj->ftij", basis, basis) + 1e-9 * np.eye(3)
+    aty = np.einsum("ftni,n->fti", basis, y)
+    coef = np.linalg.solve(ata, aty[..., None])[..., 0]
+    sse = ((np.einsum("ftni,fti->ftn", basis, coef) - y) ** 2).sum(axis=-1)
+    return sse, np.hypot(coef[..., 1], coef[..., 2])
+
+
 def fit_damped_ringing(y: np.ndarray) -> tuple[float, float, float]:
     """
-    Fit ``y_k = exp(-k / tau) * (a cos(2 pi f k) + b sin(2 pi f k))`` to the first skips.
+    Fit the ringing of the first skips' CDS (``y``: CDS minus the median of later skips).
 
-    ``f`` (cycles per skip, 0 = no oscillation) and ``tau`` (skips) are searched on a grid; ``a`` and ``b`` are
-    solved by least squares.  Returns ``(frequency, tau, amplitude)``.
+    Model, for skips k = 1 .. len(y)-1::
+
+        y_k = c + exp(-k / tau) * (a cos(2 pi f k) + b sin(2 pi f k))
+
+    * Skip 0 is left out: it has its own, much larger transient after the horizontal transfers
+      (the feature "skip: first-skip CDS excess").
+    * ``c`` absorbs the level that has not yet settled to the later median within these skips
+      (the slow CDS rise along the skips).  Without it, the lowest frequency on the grid imitated a
+      decay plus offset, and the fit returned f = 0.01 for every trace.
+    * ``f`` is searched in 0.02 .. 0.5 cycles/skip (0.5 = the highest frequency skips can show)
+      and ``tau`` in 0.5 .. 30 skips; both are then refined on a finer grid and ``f`` by a
+      parabola through the three best points.  A frequency below 0.02 cycles/skip (period > 50
+      skips) cannot be told from the offset in 20 skips.
+
+    Returns ``(frequency [cycles/skip], tau [skips], amplitude [ADU])``; NaNs if fewer than 7
+    skips are available.
     """
-    k = np.arange(len(y), dtype=float)
-    best = (np.inf, float("nan"), float("nan"), float("nan"))
-    for freq in np.linspace(0.0, 0.5, 51):          # f = 0 is a plain decay
-        for tau in np.geomspace(1.0, 30.0, 25):
-            envelope = np.exp(-k / tau)
-            basis = np.column_stack([envelope * np.cos(2 * np.pi * freq * k),
-                                     envelope * np.sin(2 * np.pi * freq * k)])
-            coef, *_ = np.linalg.lstsq(basis, y, rcond=None)
-            sse = float(((basis @ coef - y) ** 2).sum())
-            if sse < best[0]:
-                best = (sse, freq, tau, float(np.hypot(*coef)))
-    return best[1], best[2], best[3]
+    y = np.asarray(y, dtype=float)[1:]
+    if len(y) < 7 or not np.isfinite(y).all():
+        return float("nan"), float("nan"), float("nan")
+    k = np.arange(1, len(y) + 1, dtype=float)
+    freqs, taus = np.linspace(0.02, 0.5, 97), np.geomspace(0.5, 30.0, 31)
+    sse, _ = _ringing_sse(k, y, freqs, taus)
+    i, j = np.unravel_index(int(np.argmin(sse)), sse.shape)
+    fine_f = np.clip(np.linspace(freqs[i] - 0.006, freqs[i] + 0.006, 25), 0.02, 0.5)
+    fine_t = np.geomspace(taus[j] / 1.2, taus[j] * 1.2, 25)
+    sse, amp = _ringing_sse(k, y, fine_f, fine_t)
+    i, j = np.unravel_index(int(np.argmin(sse)), sse.shape)
+    best_f = float(fine_f[i])
+    if 0 < i < len(fine_f) - 1:                      # parabola in f: removes the grid quantization
+        a2, b2, _ = np.polyfit(fine_f[i - 1:i + 2], sse[i - 1:i + 2, j], 2)
+        if a2 > 0:
+            best_f = float(np.clip(-b2 / (2 * a2), fine_f[i - 1], fine_f[i + 1]))
+    return best_f, float(fine_t[j]), float(amp[i, j])
 
 
 def fit_noise_model(block_sizes: list[int], noise: list[float]) -> tuple[float, float]:

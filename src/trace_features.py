@@ -85,9 +85,9 @@ FEATURES: dict[str, Feature] = {
     "fit: dip recovery amplitude": _f("fit", "ADU", "Amplitude of that exponential.", "SW feedthrough size", origin=_C),
     "fit: baseline droop time constant (skips)": _f("fit", "skips", "Time constant of an exponential fitted to the per-skip baseline (pedestal-window mean) along the 500 skips of a pixel.", "reset leakage, output-stage operating point", origin=_C),
     "fit: baseline droop amplitude": _f("fit", "ADU", "Amplitude of that exponential.", "reset leakage", origin=_C),
-    "fit: first-skip ringing frequency (cyc/skip)": _f("fit", "cycles/skip", "Frequency of a damped oscillation fitted to the CDS of the first 20 skips (median of later skips removed).", "transient after the horizontal transfers", origin=_C),
+    "fit: first-skip ringing frequency (cyc/skip)": _f("fit", "cycles/skip", "Frequency of a damped oscillation plus a constant offset, fitted to the CDS of skips 1-19 (skip 0 left out: own feature; median of later skips removed). Searched in 0.02-0.5 cycles/skip, refined by a parabola. (Before 2026-10-13 the model had no offset and returned 0.01 for every trace.)", "transient after the horizontal transfers", origin=_C),
     "fit: first-skip ringing decay (skips)": _f("fit", "skips", "Decay constant of that oscillation.", "transient after the horizontal transfers", origin=_C),
-    "fit: first-skip ringing amplitude": _f("fit", "ADU", "Amplitude of that oscillation.", "transient after the horizontal transfers", origin=_C),
+    "fit: first-skip ringing amplitude": _f("fit", "ADU", "Amplitude of that oscillation (envelope extrapolated to skip 0).", "transient after the horizontal transfers", origin=_C),
     "fit: white noise per skip (ADU)": _f("fit", "ADU", "White term σ_w of the model σ(N)² = σ_w²/N + σ_f² fitted to the noise of N-skip averages (N = 1, 2, 5, 10, 25, 50) of the detrended CDS.", "read noise per skip", origin=_C),
     "fit: correlated noise floor (ADU)": _f("fit", "ADU", "Floor term σ_f of that model (often 0: the CDS noise averages down faster than white).", "noise that does not average down", origin=_C),
     # ---------------------------------------------------------------- comparison tools: skip

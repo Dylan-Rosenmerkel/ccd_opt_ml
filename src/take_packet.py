@@ -200,7 +200,9 @@ class PacketRequest:
         constants, NOT the image/trace geometry): ``{101: {...}, 102: {...}}``.  theta_ref =
         None means "no reference traces" (not recommended for training data).
     image : the image parameters (geometry, acq_level, subroutine), like an image_params TOML.
-    trace : the trace parameters; missing keys come from ``daq_commands.DEFAULT_TRACE``.
+    trace : the trace parameters; missing keys come from ``daq_commands.DEFAULT_TRACE``.  With
+        ``match_image = true`` the trace reads its pixels like the image (same skips, binning
+        and routine; ``daq_commands.MATCHED_KEYS``), with a small size of its own.
     n_initial_flushes : flushes at theta_ref before the first reference trace set.
     n_reference_traces, n_traces : trace sets at theta_ref and at theta.
     flushes_between_traces : flushes between two trace sets.
@@ -432,7 +434,11 @@ def plan_packet(request: PacketRequest, setup: DaqSetup, limits: Limits,
         for board, theta in request.theta_ref.items():
             _check_theta(board, theta, limits, "theta_ref")
     image = cmd.image_parameters(request.image)
-    trace = cmd.trace_parameters(request.trace)
+    trace = cmd.trace_parameters(request.trace, image)
+    mismatch = cmd.trace_image_differences(trace, image)
+    if mismatch:
+        log.warning("the traces read their pixels differently from the image: %s (trace, image); "
+                    "set [trace] match_image = true to read them the same way", mismatch)
     limits.check(cmd.sequencer_part(image))          # image size within the allowed windows
     limits.check(cmd.sequencer_part(trace))
 
@@ -627,7 +633,10 @@ def take_packet(controller, request: PacketRequest, setup: DaqSetup, limits: Lim
         "reference_id": {b: config_id(t) for b, t in ref.items()} if ref else None,
         "delta_theta": {b: theta_difference(request.theta[b], ref[b]) for b in request.theta} if ref else None,
         "image": cmd.image_parameters(request.image),
-        "trace": cmd.trace_parameters(request.trace),
+        "trace": cmd.trace_parameters(request.trace, cmd.image_parameters(request.image)),
+        "trace_matches_image": not cmd.trace_image_differences(
+            cmd.trace_parameters(request.trace, cmd.image_parameters(request.image)),
+            cmd.image_parameters(request.image)),
         # history
         "prev_packet_id": prev_manifest.get("packet_id") if prev_manifest else None,
         "prev_theta": prev_theta,

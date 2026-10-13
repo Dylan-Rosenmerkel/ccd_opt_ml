@@ -42,6 +42,8 @@ CONFIGS = {
     "100 skips": dict(NDCM=100),
     "2000 skips, 1x2": dict(NDCM=2000, NROW=1, NCOL=2),
     "no binning (1x1)": dict(NSBIN=1, NPBIN=1),
+    "matched to a 1x1 image (prescan 100)": dict(NSBIN=1, NPBIN=1, NCOLPRE=100, NROW=2, NCOL=5),
+    "20x20 with prescan 185 (as 2026-10-12)": dict(NCOLPRE=185, NDCM=100),
     "1x10 binning": dict(NPBIN=1, NSBIN=10),
     "2x2 binning": dict(NPBIN=2, NSBIN=2),
     "1 row": dict(NROW=1, NCOL=5),
@@ -68,6 +70,7 @@ def truth(params: dict) -> dict:
     g = TraceGeometry.from_meta({**p, "SEQNAME": "reference_v5_pumping.seq"})
     return {"pixels": p["NROW"] * p["NCOL"], "skips": p["NDCM"], "n_ped": round(g.n_window),
             "sig": g.sig_offset, "cycle": g.cycle, "nsbin": p["NSBIN"], "npbin": p["NPBIN"],
+            "ncolpre": p.get("NCOLPRE", 0),
             "rows": [i * p["NCOL"] for i in range(p["NROW"])]}
 
 
@@ -87,7 +90,9 @@ def check_layout(r, t: dict, use_meta: bool) -> list[str]:
     if r.row_starts != t["rows"]:
         bad.append(f"row starts {r.row_starts} != {t['rows']}")
     n_h = sorted({len(h) for h in r.h})
-    expected_h = {t["nsbin"], t["nsbin"] - 1} if (t["nsbin"] > 1 or use_meta) else {0}
+    expected_h = {t["nsbin"], t["nsbin"] - 1} if (t["nsbin"] > 1 or use_meta) else {0, 1}
+    if t["ncolpre"]:                                   # row-start pixels also carry the prescan transfers
+        expected_h |= {t["nsbin"] * (t["ncolpre"] + 1), t["nsbin"] * (t["ncolpre"] + 1) - 1}
     if not set(n_h) <= expected_h:
         bad.append(f"horizontal transfers per pixel {n_h}, expected {sorted(expected_h)}")
     if r.v is None and (t["npbin"] > 1 or use_meta):

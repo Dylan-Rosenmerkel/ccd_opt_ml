@@ -192,3 +192,18 @@ next. So between two steps the simple queue is empty, and the runner starts a re
 **Still untested:** `CdaqController`'s repeat-queue calls (`queue2file`, `clearqueue`,
 `add2queue(..., "repeat")`) have never run against the real cdaq; MQTT is not involved in any
 rehearsal.
+
+## 10. Recommended packet geometry and matched traces (added 2026-10-13)
+
+See `docs/packet_design.md`.
+
+* **Image:** 16×1000×500, 1×1, prescan 5300, clear on, no exposure: 4.8 min, σ ≈ 0.26 e⁻,
+  ~1000 one-electron pixels, with λ fitted per row (DC = slope, CIC = intercept). 200 skips gives
+  σ ≈ 0.41 e⁻, too noisy to count electrons.
+* **Traces:** `[trace] match_image = true` copies `NDCM`, `NDCMPRE`, `NSBIN`, `NPBIN` and `subroutine`
+  from `[image]` (`daq_commands.MATCHED_KEYS`). The size is 2×5 pixels after a 100-pixel prescan, no
+  clear: 0.19 s, 11 MB per channel. The manifest records `trace_matches_image`, and `plan_packet`
+  warns when the trace and image differ.
+* **Config:** `configs/packet_recommended.toml`, 25 steps, ~11.5 min.
+* `configs/limits.toml`: the image-size windows were widened to the CCD size, so that NCOL 1000 and
+  NCOLPRE 5300 are allowed.

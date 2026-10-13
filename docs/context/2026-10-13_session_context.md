@@ -109,13 +109,51 @@ On request, `packet_tests_2026-10-12.tex` was extended:
 Still not compiled locally (no LaTeX here); the source was checked for balanced environments,
 braces and `$`.
 
-## 5. Environment note
+## 5. First-skip ringing fit fixed; packet geometry; matched traces
+
+**Ringing fit** (`compare_trace.fit_damped_ringing`, used by `trace_features.py`):
+* the old model, $e^{-k/\tau}(a\cos 2\pi fk + b\sin 2\pi fk)$ for skips 0–19 with no offset, used its lowest
+  frequency (0.01) to imitate a decay plus offset, so it gave 0.01 for every trace;
+* the new model adds a constant $C$ and leaves skip 0 out (it has its own feature). $f$ is searched in
+  0.02–0.5 cycles/skip and τ in 0.5–30, refined by a finer grid and a parabola, solved for all grid
+  points at once;
+* result: f ≈ 0.23 cycles/skip (a period of ~4.3 skips), τ ≈ 1.5–3 skips, consistent across pixels on
+  the 2026-10-08 and 2026-10-12 traces. Synthetic oscillations at 0.07, 0.25 and 0.4 are recovered;
+* descriptions updated in the registry, `docs/trace_features.tex` (and its Overleaf copy) and
+  `docs/trace_fit_tools.tex`. Their old numerical tables are marked as computed with the old fit;
+* re-run: trace_features_walkthrough, trace_comparison_walkthrough_v2, process_packet_walkthrough,
+  packet_tests_2026-10-12, take_packet_walkthrough.
+
+**Prescan in traces:** `trace_geometry` now reads `NCOLPRE`/`NCOLPOST` (and the dump-gate time).
+`trace_regions` accepts row-start pixels with `NSBIN·(NCOLPRE+1)` transfers, and the transfer period
+H + DG for unbinned bursts. `simulate_trace` can simulate a prescan. `check_trace_analysis.py` has two new
+cases (1×1 matched with prescan 100; 20×20 with prescan 185): 27/27 OK. 57 of the 59 usable 2026-10-12
+traces now have no layout warning; 2 have truly missing transfer edges.
+
+**Packet design** (`docs/packet_design.md`, with equations):
+* $\sigma_1 \approx 5.8$ e⁻ per skip (from the 10-06 3000-skip image), so 500 skips give σ ≈ 0.26 e⁻.
+  **The 200-skip image recommended on 10-12 was too noisy** (0.41 e⁻; 11 % of empty pixels misread);
+* image 16×1000×500, 1×1, prescan 5300, clear on, no exposure, 4.8 min; ~1000 one-electron pixels
+  (λ to 3 %, gain 0.8 %); per-row λ separates DC (slope) from CIC (intercept);
+* the options are compared (full width, 2×2, 800 skips).
+
+**Matched traces:**
+* `[trace] match_image = true` copies the keys that decide how a pixel is read (NDCM, NDCMPRE, NSBIN,
+  NPBIN, routine) from `[image]`. Setting them by hand is refused;
+* the trace size is 2×5 pixels, prescan 100, no clear, no exposure: 0.19 s, 11 MB per channel;
+* the manifest records `trace_matches_image`, and `plan_packet` warns on a mismatch;
+* new `configs/packet_recommended.toml`: 25 steps, ~11.5 min, rehearsed on the fake boards;
+* `configs/limits.toml`: the image-size windows were widened to the CCD size (NCOL ≤ 6400, NCOLPRE ≤
+  6152, NROW ≤ 1700, NROWPRE ≤ 1536). They were placeholders; the size of a readout cannot harm the
+  CCD.
+
+## 6. Environment note
 
 The scratch Python environment used for executing notebooks lost files in a temp-directory
 cleanup and was rebuilt (numpy, matplotlib, astropy, nbformat, nbclient, ipykernel). Nothing in the
 project depended on it.
 
-## 6. Open
+## 7. Open
 
 * On the DAQ machine:
   * `--status-only`;
@@ -124,5 +162,5 @@ project depended on it.
   * check that `queue_backups/` was written.
 * Ask the group whether the repeat flush is meant to stay off during data taking, and whether a
   flush in leader mode really hangs (assumed, as for traces).
-* Check the first-skip ringing-frequency fit (constant 0.01 cycles/skip).
+* First real packet with `packet_recommended.toml`: check σ at 500 skips (≈ 0.26 e⁻?), λ per row, and the matched traces (docs/packet_design.md section 8).
 * Everything open from 2026-10-12 (1×1 image and WADERs fit, limits review, first scan design).

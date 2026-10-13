@@ -214,13 +214,24 @@ def _cross_check(r: TraceRegions, h_edges: list, v_edges: list) -> None:
         w.append(f"skips per pixel {sorted({len(c) for c in r.skip})}, .meta says NDCM = {g.ndcm}")
     if g.nsbin is not None:
         counts = sorted({len(e) for e in h_edges})
-        if counts != [g.nsbin]:
-            w.append(f"horizontal-transfer edges per pixel {counts}, .meta says NSBIN = {g.nsbin}")
+        # every pixel: NSBIN transfers; the first pixel of a row also gets the NSBIN transfers of each
+        # skipped prescan pixel (NCOLPRE), and from the second row on those of the previous row's
+        # skipped post-scan pixels (NCOLPOST)
+        allowed = {g.nsbin, g.nsbin * (g.ncolpre + 1), g.nsbin * (g.ncolpre + g.ncolpost + 1)}
+        if not set(counts) <= allowed:
+            w.append(f"horizontal-transfer edges per pixel {counts}, .meta says NSBIN = {g.nsbin}"
+                     + (f", NCOLPRE = {g.ncolpre}" if g.ncolpre else "")
+                     + (f", NCOLPOST = {g.ncolpost}" if g.ncolpost else ""))
     if g.timing_known:
         checks = (("skip cycle", r.period_exact, g.cycle, 1.0), ("window length", r.n_ped, g.n_window, 2.0),
                   ("signal-window offset", r.sig_start, g.sig_offset, 2.0),
                   ("horizontal transfer", r.h_period, g.h_transfer, 2.0),
                   ("vertical transfer", r.v_period, g.v_transfer, 2.0))
+        if g.nsbin == 1 and g.dump and r.h_period is not None and np.isfinite(r.h_period):
+            # without binning, consecutive transfers (prescan pixels) are separated by the dump pulse
+            options = (g.h_transfer, g.h_transfer + g.dump)
+            checks = tuple((n, f, min(options, key=lambda o: abs(o - f)) if n == "horizontal transfer" else e, t)
+                           for n, f, e, t in checks)
         for name, found, expected, tolerance in checks:
             if found is not None and np.isfinite(found) and abs(found - expected) > tolerance:
                 w.append(f"{name}: {found:.1f} samples found, {expected:.1f} expected from the .meta")

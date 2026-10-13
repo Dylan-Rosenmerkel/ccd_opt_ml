@@ -50,7 +50,7 @@ LINE = 0x4C494E45
 BASE_FLAGS = 0x34                    # bits 2, 4, 5 (the idle state of real traces)
 
 #: Defaults: the trace geometry and the reference timing of reference_v5_pumping.seq.
-DEFAULTS = dict(NROW=2, NCOL=5, NDCM=500, NPBIN=20, NSBIN=20, EXPOSURE=0,
+DEFAULTS = dict(NROW=2, NCOL=5, NDCM=500, NPBIN=20, NSBIN=20, EXPOSURE=0, NCOLPRE=0,
                 delayOGH=3, delayOGL=48, delayRGL=27, delayRGH=800, delayInt=1000,
                 delaySWH=30, delaySWL=350, delayDGL=27, delayDGH=47,
                 delay_Ha=1800, delay_Hb=1800, delay_Hc=1800, delay_Va=6000, delay_Vb=6000,
@@ -80,6 +80,10 @@ def _events(p: dict) -> list[tuple]:
     for row in range(p["NROW"]):
         for _ in range(p["NPBIN"]):
             add("vtransfer", t_v, first_part=3 * p["delay_Va"])
+        for _ in range(p["NCOLPRE"]):                    # skipped prescan pixels: transfers, then dump
+            for _ in range(p["NSBIN"]):
+                add("htransfer", t_h, first_part=3 * p["delay_Ha"])
+            add("drain", p["delayDGL"] + p["delayDGH"], pixel=pixel)
         for col in range(p["NCOL"]):
             for _ in range(p["NSBIN"]):
                 add("htransfer", t_h, first_part=3 * p["delay_Ha"])
