@@ -110,10 +110,14 @@ class StructuredPrep:
     """
 
     def __init__(self, allan_ns: np.ndarray | None = None, n_skips: int = 500, min_rows: int = 20,
-                 allan_max_n: float | None = None):
+                 allan_max_n: float | None = None, own_features: tuple[str, ...] = ()):
         from . import synthetic
         self.allan_ns = synthetic.ALLAN_N if allan_ns is None else np.asarray(allan_ns)
         self.n_skips, self.min_rows, self.allan_max_n = n_skips, min_rows, allan_max_n   # real data: allan_max_n = n_skips / 5
+        # own_features: also give each row its OWN trace features ("trace", "ref"): the amplifier is then recognized
+        # from its signature instead of an identity (no amplifier ID needed; it also works for an unseen amplifier
+        # if the signature-to-behaviour relation carries over)
+        self.own_features = tuple(own_features)
 
     def fit(self, df: pd.DataFrame):
         self.ref_cols = data.columns(df, "ref")
@@ -148,7 +152,7 @@ class StructuredPrep:
 
     def transform(self, df: pd.DataFrame, curves: dict) -> dict:
         theta = df[self.theta_cols].to_numpy(float)
-        x = np.hstack([theta, self.state_vector(df)])
+        x = np.hstack([theta, self.state_vector(df)] + [df[data.columns(df, g)].to_numpy(float) for g in self.own_features])
         # real traces: the curve that keeps slow pixel-to-pixel noise (trace_features, 2026-10-14); the detrended
         # one loses the floor.  (The synthetic world's "noise: Allan deviation" already contains its floor.)
         name = REAL_ALLAN if REAL_ALLAN in curves else "noise: Allan deviation"
@@ -483,7 +487,13 @@ def _plain_gp(**kw):
 
 
 def make_gp(kind: str, **kw):
-    return HierGP(**kw) if kind == "hier" else _plain_gp(**kw)
+    """'hier': amplifier/module levels (B); 'plain': ordinary GP + amplifier one-hot; 'none': no amplifier
+    information at all (x only: an amplifier-agnostic model)."""
+    if kind == "hier":
+        return HierGP(**kw)
+    if kind == "none":
+        return HierGP(levels=(), **kw)
+    return _plain_gp(**kw)
 
 
 class DirectGP:
