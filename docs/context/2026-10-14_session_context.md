@@ -769,3 +769,23 @@ against the truth, world v2 unless noted):
   amplifier-specific noise changes (the own trace shows them). The weak point, with or without labels, is the
   trace→image noise at many skips; the remedy is longer traces / more pixels, or a learned correction from a
   real scan.
+
+**benchmark_amp results** (3 scans; `docs/ml_results/amp_information*.json`; abs / shape error, within-amplifier rank):
+* **Known amplifiers:**
+  * A + own trace features, NO ID: σe 1.8 % / 1.8 % / 0.99, λ 1.8 %, gain 0.2 %;
+  * A+B with the ID: 1.7 % / 1.7 % / 0.99, λ 1.6 %, gain 0.2 %;
+  * CNN on curves, no ID: 1.7 %;
+  * A without any amplifier information: 31 % / 2.6 % / 0.98, gain 31 %;
+  * GP on settings only: 60 %.
+* **New module, k = 0:** every model ~30 % absolute (the gain), but the physics models have shape 2.0–2.7 %
+  and rank 0.97–0.98; the CNN 9 % / 2.8 %.
+* **New module, k = 2:** A + own features, no ID: σe 2.2 %, gain 1.1 % (A+B with ID: 2.0 %, 0.5 %).
+* The first-round GP gives the same 12 % with or without the ID.
+* **User feedback:** a 500-skip trace and a 3000-skip image cannot be compared directly. The real
+  "−25 to +45 %" is an EXTRAPOLATION check (the fit at n ≤ 100–160 evaluated at N = 3000, where the
+  unmeasured floor dominates); the matched 1×1 500-skip packets are the real test. The gain (image alone)
+  and response (traces alone) results are unaffected.
+* **User: "go ahead with all three"** —
+  1. correct the 3000-skip wording;
+  2. add a section "Do the models need amplifier labels?" (tex + notebook);
+  3. make "A + own features, no ID" the default model.
