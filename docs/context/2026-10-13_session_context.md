@@ -200,6 +200,24 @@ recommended image, matched traces and 10 + 10):
   takes **~76 h (3.2 days)**, or ~49 h without flushes between sets. Excluded: FITS waits, ramps
   and stops (add 5–10 %).
 
+## 7b. Image time check and noise from the 16-row image (late on 2026-10-13)
+
+* **Image time.** The group's `scripts/image_time.py` gave 626 s readout for `image_params/tc1/img.toml`.
+  That file was 35×1000×**500** (the row count of the old 200-skip suggestion with the new 500 skips).
+  The formula in `take_packet.formula_acquisition_seconds` gives the same 626.1 s. It matches all 24 real
+  images in `data/` within 0.5 % (including the 9944 s 100×1000×3000 1×1 image). 16×1000×500 takes
+  286 s. Added `configs/image_params_recommended.toml` (image_params format) for `image_time.py` /
+  `take_image.py`. Note: `image_time.py` defaults to `reference_v5.seq`, while the boards run
+  `reference_v5_pumping.seq` (use `-s`).
+* **Noise from the 16-row image.**
+  * Overscan: 148 columns × 16 rows = 2368 pixels, so σ to ≈ 1.5 %
+    ($\delta\sigma/\sigma \approx 1/\sqrt{2N}$).
+  * 0 e⁻ peak: ≈ 12,600 pixels, so ≈ 0.6 %. The gain comes from the 1 e⁻ peak (≈ 0.8 %).
+  * Channel 2: σ in ADU only.
+  * The group's column/CTI script needs `overscan_start = 852`, `prescan = 0` for this layout.
+  * σ versus the number of skips comes from the traces (N-skip noise features, white + floor fit), not
+    from the image.
+
 ## 8. Environment note
 
 The scratch Python environment used for executing notebooks lost files in a temp-directory
