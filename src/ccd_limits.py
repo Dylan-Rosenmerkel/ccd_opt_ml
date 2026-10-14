@@ -15,9 +15,14 @@ What is checked
    knobs are never touched.  The optional ``max_step`` is not a rejection rule: voltage
    changes larger than ``max_step`` are applied as a ramp of smaller steps
    (:meth:`Limits.ramp_plan`).
-3. **Relationships**   - rules that tie several parameters together, e.g. a clock
-   high level must not be below its low level.  The physics relationships between
-   biases (to be provided by the group) go into :func:`relational_constraints`.
+3. **Relationships**   - rules that tie several parameters together (:func:`relational_constraints`),
+   from the group's safe-operation rules (``docs/voltage_rules.txt``, 2026-10-14): clock HIGH >= LOW,
+   VDD > VDRAIN, SW_H > OG_H, DG_H > VR, DG_L < VR, OG_L < VR, OG_L >= SW_L, DG_L >= SW_L, V clock lows
+   above TG, H clock lows below TG, H3 lows above SW_H, VDRAIN < DG_L, VDD below VR.  Rules that involve
+   pins a parameter set does not contain are checked with the NOMINAL values of those pins (``[nominal]``
+   in limits.toml, the module's .bcf), so a partial change cannot break a rule unnoticed.  (The rules file
+   writes "DGL<=SWL"; that was a typo, confirmed by the group on 2026-10-14: the rule is DG_L >= SW_L, as
+   the nominal configuration (-5 >= -6) and the ACM manual's example (-8 >= -10) have it.)
 
 The module only uses the Python standard library so that it runs on the DAQ
 computer without extra installs.
@@ -51,7 +56,7 @@ SEQUENCER_KEYS = frozenset(
         "delay_Va", "delay_Vb", "delay_Ha", "delay_Hb", "delay_Hc",
         "delayInt", "delayRGL", "delayRGH", "delaySWH", "delaySWL",
         "delayOGL", "delayOGH", "delayDGL", "delayDGH",
-        "PP_SHIFT", "PP_NCYCLES",
+        "PP_SHIFT", "PP_NCYCLES", "NVWAIT", "NPSD",
     }
 )
 
@@ -78,9 +83,14 @@ _POT_RAB = 20e3          # digital potentiometer end-to-end resistance
 _POT_CODES = 1024        # 10-bit potentiometer
 BIAS_GROUPS = {"VDD": ("VDD1", "VDD2"), "VDRAIN": ("VDRAIN1", "VDRAIN2"), "VR": ("VR1", "VR2")}
 
-#: Clock rail offsets are assumed to stay at the reference value (-10 V).  With this
-#: offset a DAC pin can reach [-10, +10] V, vertical pins (gain 2) [-20, +20] V.
-_RAIL_HW_RANGE = {"normal": (-10.0, 10.0), "vertical": (-20.0, 20.0)}
+#: Clock rail offsets are assumed to stay at the reference value (-10 V).  The ACM manual (docs/Sequencer
+#: Notes.pdf, A.3.4) gives the rails as offset .. offset + 20 V, i.e. [-10, +10] V for every rail; acmpy's
+#: DAC code suggested gain 2 for the vertical pins ([-20, +20] V).  The narrower (manual) range is used.
+_RAIL_HW_RANGE = {"normal": (-10.0, 10.0), "vertical": (-10.0, 10.0)}
+
+#: Bias ranges of the ACM manual (Table A.1).  The potentiometer formula below gives nearly the same ends;
+#: the intersection of both is used.
+_MANUAL_BIAS_RANGE = {"VR": (-13.8, -2.0), "VDD": (-27.9, -6.0), "VDRAIN": (-27.9, -6.0), "VSUB": (6.7, 88.3)}
 
 
 def bias_hw_range(name: str) -> tuple[float, float]:
@@ -92,7 +102,11 @@ def bias_hw_range(name: str) -> tuple[float, float]:
         return v_ref * (r1 / (r_wb + rb) + 1.0) + v_off
 
     ends = (volts(0), volts(_POT_CODES - 1))
-    return min(ends), max(ends)
+    low, high = min(ends), max(ends)
+    manual = _MANUAL_BIAS_RANGE.get(name.rstrip("12"))
+    if manual is not None:
+        low, high = max(low, manual[0]), min(high, manual[1])
+    return low, high
 
 
 def rail_hw_range(pin: str) -> tuple[float, float]:
@@ -155,33 +169,75 @@ def split_theta(theta: Mapping[str, float]) -> tuple[dict[str, int], dict[str, f
 # 2. Relationships between parameters                                          #
 # --------------------------------------------------------------------------- #
 
-def relational_constraints(pins: Mapping[str, float], sequencer: Mapping[str, int]) -> list[str]:
+def relational_constraints(pins: Mapping[str, float], sequencer: Mapping[str, int],
+                           nominal: Mapping[str, float] | None = None) -> list[str]:
     """
-    Check relationships *between* parameters; return a list of violation messages.
+    Check the relationships *between* parameters; return a list of violation messages.
 
-    Built-in rules
-    --------------
-    * every clock rail pair must satisfy ``HIGH >= LOW``.
+    The rules are the group's safe-operation rules (``docs/voltage_rules.txt``).  ``pins`` are the
+    voltages of the parameter set; pins it does not contain take their ``nominal`` value (the module's
+    .bcf), so every rule is checked on the complete configuration that will be on the board.
 
-    PLACEHOLDER -- to be extended
-    -----------------------------
-    The CCD only works if certain biases and clock levels keep fixed relationships
-    (e.g. between VSUB, the output-stage biases and the clock levels).  Those rules
-    are *not* encoded yet: add them here once they have been written down from the
-    manuals, one ``violations.append(...)`` per rule, so every acquisition is
-    checked against them automatically.
+    Readout stage i (SW_i, OG_i, RG_i, DG_i) is paired with the biases VRi, VDDi, VDRAINi (i = 1, 2).
     """
+    v = {**(nominal or {}), **pins}
     violations: list[str] = []
 
-    for pin, value in pins.items():
+    def need(*names):
+        return all(n in v for n in names)
+
+    # every clock: HIGH >= LOW ("above"; equality allowed: the TGs run with HIGH = LOW nominally)
+    for pin, value in v.items():
         if pin.endswith("_H"):
             low_pin = pin[:-2] + "_L"
-            if low_pin in pins and value < pins[low_pin]:
-                violations.append(f"{pin}={value} is below {low_pin}={pins[low_pin]}")
-
-    # TODO(bias/clock relationships): add rules here when provided.
-
+            if low_pin in v and value < v[low_pin]:
+                violations.append(f"{pin}={value} is below {low_pin}={v[low_pin]}")
+    for i in ("1", "2"):
+        sw_h, sw_l, og_h, og_l = f"SW_{i}_H", f"SW_{i}_L", f"OG_{i}_H", f"OG_{i}_L"
+        dg_h, dg_l, vr, vdd, vdrain = f"DG_{i}_H", f"DG_{i}_L", f"VR{i}", f"VDD{i}", f"VDRAIN{i}"
+        if need(vdd, vdrain) and not v[vdd] > v[vdrain]:
+            violations.append(f"{vdd}={v[vdd]} must be above {vdrain}={v[vdrain]}")
+        if need(sw_h, og_h) and not v[sw_h] > v[og_h]:
+            violations.append(f"{sw_h}={v[sw_h]} must be above {og_h}={v[og_h]}")
+        if need(dg_h, vr) and not v[dg_h] > v[vr]:
+            violations.append(f"{dg_h}={v[dg_h]} must be above {vr}={v[vr]}")
+        if need(dg_l, vr) and not v[dg_l] < v[vr]:
+            violations.append(f"{dg_l}={v[dg_l]} must be below {vr}={v[vr]}")
+        if need(og_l, vr) and not v[og_l] < v[vr]:
+            violations.append(f"{og_l}={v[og_l]} must be below {vr}={v[vr]}")
+        if need(og_l, sw_l) and not v[og_l] >= v[sw_l]:
+            violations.append(f"{og_l}={v[og_l]} must be at or above {sw_l}={v[sw_l]}")
+        if need(dg_l, sw_l) and not v[dg_l] >= v[sw_l]:
+            violations.append(f"{dg_l}={v[dg_l]} must be at or above {sw_l}={v[sw_l]}")
+        if need(vdrain, dg_l) and not v[vdrain] < v[dg_l]:
+            violations.append(f"{vdrain}={v[vdrain]} must be below {dg_l}={v[dg_l]}")
+        if need(vdd, vr) and not v[vdd] < v[vr]:
+            violations.append(f"{vdd}={v[vdd]} must be below {vr}={v[vr]} (VDD is generally much lower than VR)")
+    tg = [p for p in v if p.startswith("TG_")]
+    v_lows = [p for p in v if p[0] == "V" and p[1] in "123" and p.endswith("_L")]
+    h_lows = [p for p in v if p[0] == "H" and p[1] in "123" and p.endswith("_L")]
+    if tg:
+        tg_max, tg_min = max(tg, key=v.get), min(tg, key=v.get)
+        for p in v_lows:
+            if not v[p] > v[tg_max]:
+                violations.append(f"{p}={v[p]} must be above every TG level ({tg_max}={v[tg_max]})")
+        for p in h_lows:
+            if not v[p] < v[tg_min]:
+                violations.append(f"{p}={v[p]} must be below every TG level ({tg_min}={v[tg_min]})")
+    sw_highs = [p for p in ("SW_1_H", "SW_2_H") if p in v]
+    for p in ("H3_A_L", "H3_B_L"):
+        for q in sw_highs:
+            if p in v and not v[p] > v[q]:
+                violations.append(f"{p}={v[p]} must be above {q}={v[q]}")
     return violations
+
+
+def relational_warnings(pins: Mapping[str, float], nominal: Mapping[str, float] | None = None) -> list[str]:
+    """
+    Written rules that are reported but not enforced.  None at present: the one candidate (the rules file's
+    "DGL<=SWL") was a typo for DG_L >= SW_L, which is now enforced in :func:`relational_constraints`.
+    """
+    return []
 
 
 # --------------------------------------------------------------------------- #
@@ -204,10 +260,12 @@ class LimitsError(ValueError):
 class Limits:
     """Allowed windows loaded from a TOML file, plus the hardware/relationship checks."""
 
-    def __init__(self, windows: list[Window], reviewed: bool, source: str = "<memory>"):
+    def __init__(self, windows: list[Window], reviewed: bool, source: str = "<memory>",
+                 nominal: Mapping[str, float] | None = None):
         self.windows = windows
         self.reviewed = reviewed
         self.source = source
+        self.nominal = dict(nominal or {})          # pin -> nominal voltage, for the relationship rules
 
     # -- construction -------------------------------------------------------
     @classmethod
@@ -220,7 +278,8 @@ class Limits:
             Window(pattern, entry.get("min"), entry.get("max"), entry.get("max_step"))
             for pattern, entry in data.get("limits", {}).items()
         ]
-        return cls(windows, bool(data.get("meta", {}).get("reviewed", False)), str(path))
+        nominal = {k: float(v) for k, v in data.get("nominal", {}).items()}
+        return cls(windows, bool(data.get("meta", {}).get("reviewed", False)), str(path), nominal)
 
     def window_for(self, name: str) -> Window | None:
         """Return the first window whose glob pattern matches ``name``."""
@@ -261,9 +320,17 @@ class Limits:
             if window.maximum is not None and value > window.maximum:
                 problems.append(f"{name}={value} above allowed maximum {window.maximum}")
 
-        # (d) relationships between parameters
-        problems += relational_constraints(pins, sequencer)
+        # (d) relationships between parameters (pins not in theta: their nominal values)
+        problems += relational_constraints(pins, sequencer, self.nominal)
         return problems
+
+    def warnings(self, theta: Mapping[str, float]) -> list[str]:
+        """Written rules that are not enforced (see :func:`relational_warnings`); empty when all is fine."""
+        try:
+            _, pins = split_theta(theta)
+        except KeyError:
+            return []
+        return relational_warnings(pins, self.nominal)
 
     def check(self, theta: Mapping[str, float]) -> None:
         """Raise :class:`LimitsError` if ``theta`` is not acceptable."""

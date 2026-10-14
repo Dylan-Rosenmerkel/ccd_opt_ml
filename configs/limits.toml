@@ -8,14 +8,20 @@
 #   * max_step (voltages only) is the largest change applied in one go; a bigger change
 #     between two consecutive packets is ramped in steps of at most max_step, with every
 #     intermediate state checked again.
-#   * Hardware ranges (DAC / bias potentiometer) are enforced in addition, in code.
+#   * Hardware ranges (DAC / bias potentiometer, and the ACM manual's Table A.1: VR -13.8..-2,
+#     VDD and VDRAIN -27.9..-6, VSUB 6.7..88.3 V; clock rails -10..+10 V with the offsets at -10 V)
+#     are enforced in addition, in code (ccd_limits.py).
+#   * The relationships between parameters (docs/voltage_rules.txt, 2026-10-14) are enforced in code
+#     (ccd_limits.relational_constraints) on the COMPLETE configuration: pins a parameter set does not
+#     contain take their [nominal] value below (the module's .bcf, module_PA03.bcf).
+#   * Timing constants (10 ns clock cycles) have wide windows: their relations to each other are not
+#     essential (the group, 2026-10-14); they affect data quality, not the CCD's safety.
 #
 # !! PROVISIONAL !!
-#   The windows below are narrow placeholders centred on the reference configuration
-#   (reference.bcf / reference_v5_pumping.seq).  They have NOT been reviewed against the
-#   device manuals.  Review them (and add the bias/clock relationships to
-#   ccd_limits.relational_constraints), then set reviewed = true.  The acquisition
-#   scripts refuse to drive real hardware while reviewed = false.
+#   The voltage windows below are narrow placeholders centred on the reference configuration
+#   (reference.bcf / reference_v5_pumping.seq).  The relationships are now encoded; the windows
+#   still have to be replaced by the group's voltage limits.  Then set reviewed = true.  The
+#   acquisition scripts refuse to drive real hardware while reviewed = false.
 
 [meta]
 reviewed = false
@@ -72,13 +78,41 @@ max = 1000
 min = 0
 max = 1
 
-[limits."delay_V?"]      # vertical transfer hold times [10 ns cycles]
-min = 3000
-max = 9000
+[limits."delay_V?"]      # vertical transfer hold times [10 ns cycles] (reference 6000)
+min = 1000
+max = 20000
 
-[limits."delay_H?"]      # horizontal transfer hold times [10 ns cycles]
-min = 900
-max = 3000
+[limits."delay_H?"]      # horizontal transfer hold times, delay_Ha/Hb/Hc [10 ns cycles] (reference 1800)
+min = 200
+max = 6000
+
+[limits.delayInt]        # CDS integration window, pedestal and signal [10 ns cycles] (reference 1000)
+min = 50
+max = 20000
+
+[limits."delayRG?"]      # reset gate low / high holds (reference 27 / 800)
+min = 1
+max = 10000
+
+[limits."delaySW?"]      # summing well holds (reference 30 / 350)
+min = 1
+max = 10000
+
+[limits."delayOG?"]      # output gate holds (reference 48 / 3)
+min = 1
+max = 10000
+
+[limits."delayDG?"]      # dump gate holds (reference 27 / 47)
+min = 1
+max = 10000
+
+[limits.NVWAIT]          # extra wait for the serial-register exposure [ms]
+min = 0
+max = 1000
+
+[limits.NPSD]            # PSD repetitions [ms]
+min = 1
+max = 1000
 
 # ------------------------------------------------------------------ biases ---
 [limits.VSUB]
@@ -102,9 +136,9 @@ max = -2.0
 max_step = 0.5
 
 # ------------------------------------------------------------ clock levels ---
-[limits."V?_?_H"]        # vertical clocks, high level
+[limits."V?_?_H"]        # vertical clocks, high level (rails reach at most +10 V: ACM manual A.3.4)
 min = 8.4
-max = 11.4
+max = 10.0
 max_step = 0.5
 
 [limits."V?_?_L"]        # vertical clocks, low level
@@ -126,3 +160,98 @@ max_step = 0.5
 min = 5.9
 max = 8.9
 max_step = 0.5
+
+# ----------------------------------------------------------- readout stages ---
+# SW, OG, RG, DG of readout stages 1 and 2: placeholders +-2 V around the reference, to be reviewed.
+[limits."SW_?_H"]
+min = -1.0
+max = 3.0
+max_step = 0.5
+
+[limits."SW_?_L"]
+min = -8.0
+max = -4.0
+max_step = 0.5
+
+[limits."OG_?_H"]
+min = -2.0
+max = 2.0
+max_step = 0.5
+
+[limits."OG_?_L"]
+min = -8.0
+max = -4.0
+max_step = 0.5
+
+[limits."RG_?_H"]
+min = 7.0
+max = 10.0
+max_step = 0.5
+
+[limits."RG_?_L"]
+min = 1.0
+max = 5.0
+max_step = 0.5
+
+[limits."DG_?_H"]
+min = -2.0
+max = 2.0
+max_step = 0.5
+
+[limits."DG_?_L"]
+min = -7.0
+max = -3.0
+max_step = 0.5
+
+# ------------------------------------------------------------------ nominal ---
+# The module's nominal configuration (module_PA03.bcf, as loaded on 2026-10-06; the same values as
+# daq_scripts/manual_packet.sh).  Used ONLY to complete partial parameter sets when the relationships
+# are checked: a change of, say, VR is checked against the DG and OG levels that stay on the board.
+[nominal]
+VDD1 = -19.0
+VDD2 = -19.0
+VR1 = -3.0
+VR2 = -3.0
+VDRAIN1 = -23.0
+VDRAIN2 = -23.0
+VSUB = 45.0
+V1_A_H = 9.9
+V1_A_L = 7.9
+V1_B_H = 9.9
+V1_B_L = 7.7
+V2_C_H = 9.9
+V2_C_L = 7.9
+V3_A_H = 9.9
+V3_A_L = 7.9
+V3_B_H = 9.9
+V3_B_L = 7.7
+TG_A_H = 7.4
+TG_A_L = 7.4
+TG_B_H = 7.4
+TG_B_L = 7.4
+H1_A_H = 9.5
+H1_A_L = 6.7
+H1_B_H = 9.5
+H1_B_L = 6.5
+H2_C_H = 9.0
+H2_C_L = 6.7
+H3_A_H = 9.5
+H3_A_L = 6.7
+H3_B_H = 9.5
+H3_B_L = 6.5
+SW_1_H = 1.0
+SW_1_L = -6.0
+OG_1_H = 0.0
+OG_1_L = -6.0
+RG_1_H = 9.0
+RG_1_L = 3.0
+DG_1_H = 0.0
+DG_1_L = -5.0
+SW_2_H = 1.0
+SW_2_L = -6.0
+OG_2_H = 0.0
+OG_2_L = -6.0
+RG_2_H = 9.0
+RG_2_L = 3.0
+DG_2_H = 0.0
+DG_2_L = -5.0

@@ -1,5 +1,7 @@
 # scan_mixed_example.toml -- scan_recommended.toml with a MIXED design (2026-10-14): one-at-a-time sweeps of
 #   8 parameters (8 values each) plus 64 Latin-hypercube points in which all 8 change together.
+#   The ranges respect the relationships of docs/voltage_rules.txt at nominal values of the other pins;
+#   joint random points that break one are redrawn (scan_packets.build_plan).
 #   Why: on the synthetic world (docs/overleaf_ml_models/ml_models.tex, "Scan design") a one-at-a-time scan
 #   left the dark charge 5-10x worse predicted than a half-random scan of the same length; the sweeps stay
 #   for reading the effects directly.  THE RANGES ARE PLACEHOLDERS inside configs/limits.toml (reviewed = false):
@@ -147,13 +149,13 @@ max = -2.2
 n_values = 8
 
 [[design.parameters]]
-name = "H1_A_L"            # one horizontal low rail (reference 6.7 V)
+name = "H1_A_L"            # one horizontal low rail (reference 6.7 V); must stay below every TG level
 min = 6.0
-max = 7.4
+max = 7.3
 n_values = 8
 
 [[design.parameters]]
-name = "TG_A_H"            # transfer gate A high (reference 7.4 V; must stay >= TG_A_L)
-min = 7.4
-max = 8.4
+name = "TG_L"              # both transfer-gate low levels (reference 7.4 V).  The rules (docs/voltage_rules.txt)
+min = 6.8                  # keep every TG level below the V clock lows (7.7 V) and above the H clock lows,
+max = 7.4                  # so the TG can only go DOWN from nominal, and its low level only (HIGH >= LOW)
 n_values = 8

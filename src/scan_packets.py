@@ -54,7 +54,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from ccd_limits import Limits, LimitsError
+from ccd_limits import SEQUENCER_KEYS, Limits, LimitsError, expand_key
 from daq_control import StepError, repeat_queue_suspended
 from take_packet import (CONFIG_DIR, DEFAULT_SEQUENCER_FILE, DaqSetup, PacketError, PacketRequest,
                          board_thetas, estimate_packet_seconds, make_controller, plan_packet,
@@ -142,6 +142,8 @@ def apply_change(reference: dict[int, dict], change: dict[str, float], setup: Da
     The reference with a design point's changes on top.
 
     "VSUB" changes every board in theta_boards; "acm102.VSUB" changes board 102 only.
+    A group name that is not itself in the reference (e.g. "TG_L") sets the reference's own pins
+    of that group (TG_A_L, TG_B_L), so every packet keeps one value per pin.
     """
     theta = copy.deepcopy(reference)
     by_client = {setup.client_name(b): b for b in setup.theta_boards}
@@ -150,11 +152,27 @@ def apply_change(reference: dict[int, dict], change: dict[str, float], setup: Da
             client, key = name.split(".", 1)
             if client not in by_client:
                 raise ValueError(f"design parameter {name!r}: {client} is not in theta_boards")
-            theta[by_client[client]][key] = value
+            _set(theta[by_client[client]], key, value)
         else:
             for board in theta:
-                theta[board][name] = value
+                _set(theta[board], name, value)
     return theta
+
+
+def _set(board_theta: dict, name: str, value) -> None:
+    """Set one design parameter on one board's theta (groups expanded onto the pins the reference holds)."""
+    if name in board_theta or name in SEQUENCER_KEYS:
+        board_theta[name] = value
+        return
+    try:
+        pins = [p for p in expand_key(name) if p in board_theta]
+    except KeyError:
+        pins = []
+    if pins:
+        for pin in pins:
+            board_theta[pin] = value
+    else:
+        board_theta[name] = value
 
 
 def build_plan(config: dict[str, Any], setup: DaqSetup, limits: Limits | None = None) -> list[tuple[str, dict[int, dict]]]:
@@ -231,7 +249,7 @@ def validate_plan(plan, limits: Limits, config: dict[str, Any], setup: DaqSetup)
         seconds = estimate_packet_seconds(steps)
         total_s += seconds
         reference = board_thetas(config["reference"], config.get("reference_board", {}), setup.theta_boards)
-        change = {f"acm{b}": {k: round(v - reference[b][k], 6) for k, v in t.items() if v != reference[b][k]}
+        change = {f"acm{b}": {k: round(v - reference[b].get(k, 0.0), 6) for k, v in t.items() if v != reference[b].get(k)}
                   for b, t in theta.items()}
         print(f"OK  {packet_id}  ~{seconds / 60:5.1f} min  {len(steps)} steps  change {change}")
         prev = theta

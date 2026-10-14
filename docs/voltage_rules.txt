@@ -1,0 +1,15 @@
+First, for any clock which has a high and low voltage, the hight voltage should always be above the low voltage. 
+
+Next 
+VDD>VDrain
+VSUB = No restriction
+SWH>OGH
+DGH>VR 
+DGL<VR
+OGL<VR 
+OGL>=SWL  
+VCLs must be above TG 
+HCLs must be below TG 
+HGL3>SWH
+VDrain<DGL
+Generally, VDD much lower than VR 
