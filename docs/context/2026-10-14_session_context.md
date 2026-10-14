@@ -112,13 +112,14 @@ full trace or features, and can a model find its own features.
 * BO beats random search;
 * no model generalizes to a never-seen module from one training module (hence the k-shot test).
 
-The full benchmark was running in the background (log in the scratchpad `mlfull.log`; results
-go to `docs/ml_results/`, figures to `docs/overleaf_ml_models/figures/`).
+The full benchmark is finished (results in `docs/ml_results/*.json`, figures in
+`docs/overleaf_ml_models/figures/`). See 2d.
 
 **Document:** `docs/overleaf_ml_models/ml_models.tex`, drafted. It has basic/advanced boxes,
 summary, two roles (predictor P, surrogate S + BO), inputs table, five model families with
 equations, full trace vs features (representation ladder), own-feature discovery, data needs,
-validation and BO. The results section is still a RESULTS-PLACEHOLDER.
+validation and BO. The results section is filled (see 2d), and a new section covers the next
+models (2e). It compiles to 19 pages with no overflow; `docs/overleaf_ml_models.zip` was rebuilt.
 
 ## 2c. Trace-features technote (in progress)
 
@@ -187,21 +188,70 @@ floor). For λ: GP + features 3.5 % from ~120 packets; CNN 3.3 % at 960.
 **New module:** with 0 of its packets, σe/gain are off by 35–70 % for every model; with 5 packets, gain is
 2.5 % (GP); with 20 packets, σe is 5–15 %. Start each new module with ~20 packets.
 
-**Representation** (features vs curves vs both, each with θ and reference traces; n = 60…480 so far,
-960 and BO still running):
+**Representation** (features vs curves vs both, each with θ and reference traces; n = 60…960):
 * without θ, λ stays ~16 % for every representation: λ depends on rails the traces do not show, so
   θ must be an input;
 * σe: at ≤120 packets all ~11–15 %; at 240, curves only 5.6 % and both 7.3 %, against features only
   12 %; at 480, curves only 2.2 %, both 2.1 %, features only 11.5 %;
-* with θ + amp: λ 3.6–4.3 % for all representations at 240+.
+* σe at 960: curves only 1.7 %, both 1.8 %, features only 10.8 %;
+* with θ + amp: λ 3.1–3.6 % for all representations at 480–960;
+* **answer to "features + trace, or trace alone?":**
+  * with enough packets (≥ ~480), the curves alone are as good as curves + features;
+  * below ~240 packets the features help a little, because they are pre-digested;
+  * adding them never hurts, so the recommended input is θ + amp + curves (+ features).
+
+**Bayesian optimization** (GP surrogate + EI, 5 seeds, 10 random start packets, 60 packets each):
+* objective J = log σe + ½ log λ; nominal −2.49, reference optimum −2.81;
+* BO comes within 0.04 of the optimum by 30 packets in every seed and ends at −2.77 to −2.82;
+* random search ends at −2.61 to −2.72;
+* σe√λ ends about 27 % below nominal.
 
 **Process note:** watcher loops of the form `until ! pgrep -f "<pattern>"` never end, because they match
 their own command line. Four were killed. Use `pgrep -f "[m]l.benchmark"` or wait on the PID instead.
 
-**Still to do:**
-* fill REPRESENTATION/BO-PLACEHOLDER in `ml_models.tex`, compile, zip;
-* write a notebook walkthrough (`notebooks/ml_models_walkthrough.ipynb`);
-* add a "next-generation models" section (user question: more complex models with better error).
+**Notebook:** `notebooks/ml_models_walkthrough.ipynb`, run with the `.venv` kernel (~70 s), saved with its
+outputs. It covers:
+* the synthetic world, the inputs and targets, and the five model types;
+* the coverage of the error bars and the GP relevance;
+* the learning and representation curves (read from `docs/ml_results/`);
+* the new-module test, a short BO run, and how to plug in real processed packets.
+`README.md` and `notebooks/README.md` point to it.
+
+## 2e. User question: are there more complex models that would do better?
+
+**What the first round taught us:**
+* the σe error left over comes from information the hand features lack (pickup); the curves have it;
+* the drifting state is read from the reference traces;
+* a new module is the hardest case;
+* σe, λ and gain are physically linked;
+* the GBT error bars are too narrow;
+* labeled packets are few, while unlabeled traces are many.
+
+**Next models** (section 12 of `ml_models.tex`):
+* **A. Physics-structured outputs:** predict the noise terms (white, 1/f, pickup), gain and dark terms,
+  and combine them with the known formulas.
+* **B. Hierarchical / multi-task GP:** shared kernel plus per-module/amplifier offsets; a new module
+  needs only ~5 packets.
+* **C. Deep kernel learning:** CNN encoder on the curves feeding a GP (CNN accuracy plus GP error bars,
+  for BO).
+* **D. Self-supervised pre-training** on unlabeled traces, then fine-tuning with few labels.
+* **E. Fusion / set models** over the 10 repeats and 5 references (DeepSets/attention).
+* **F. Better optimization:** multi-fidelity (traces vs images), trust-region (TuRBO), constrained and
+  multi-objective BO.
+* **G. Few-shot / meta-learning** for new modules.
+* **H. Conformal calibration** of the error bars.
+
+**Priorities:**
+1. A + B;
+2. H;
+3. D + C, once real unlabeled traces exist;
+4. F, when the first real scan runs.
+
+Nothing has been prototyped yet.
+
+## 2f. What is running
+
+Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers are left.
 
 ## 3. Not yet known or checked
 

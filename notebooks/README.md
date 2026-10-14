@@ -12,6 +12,7 @@ it can be read without running it. Nothing here touches the DAQ hardware.
 | `advanced_trace_features.ipynb` | Development of the advanced trace features | kept for reference; superseded by the next one |
 | `trace_features_walkthrough.ipynb` | All trace features in one function (`trace_features.py`) | current |
 | `packet_tests_2026-10-12.ipynb` | First run with varied parameters: traces and images compared across 5 settings | analysis |
+| `ml_models_walkthrough.ipynb` | The first models on the synthetic world: inputs, five model types, error bars, relevance, benchmark results, Bayesian optimization, real-data loading | current (needs `.venv`) |
 
 A suggested reading order: comparison → take packet → process packet → trace features.
 
@@ -140,6 +141,23 @@ TG, H low rails, H3_A_L only; 3 trace sets each on board 101, plus an image for 
 8. Appendix: all 85 features × 4 comparisons.
 
 Saves its key figures to `../docs/context/figures/oct12_*.png`.
+
+---
+
+## `ml_models_walkthrough.ipynb`: the first models
+
+Uses `src/ml/` and the benchmark results in `../docs/ml_results/`; run with the project environment `.venv`
+(`requirements-ml.txt`).
+
+1. The synthetic CCD world: 10 settings, 4 amplifiers, labels, features and curves, a drifting hidden state and intermittent pickup
+   (visible only in the curves).
+2. Inputs (`theta`, `amp`, `trace`, `ref`, `diff`, curves) and targets (log σe, log λ, log gain).
+3. Bayesian ridge, boosted trees, Gaussian process, NN ensemble and 1D CNN, trained on one synthetic scan and tested on another.
+4. Error bars: coverage of ±1σ.
+5. What the Gaussian process uses (relevances).
+6. The benchmark: learning curves, features vs curves vs both, a new module.
+7. Bayesian optimization against random search.
+8. Loading real processed packets (`dataset.csv`, curves).
 
 ---
 

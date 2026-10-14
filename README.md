@@ -23,7 +23,7 @@ suggest better settings.
 | `daq_scripts/` | `manual_packet.sh`: one packet by hand with plain `cdaq qadd` commands (nominal → reference traces → change → traces → master → image → nominal), with sanity checks and a dry run; `manual_packet_commands.txt`: its command list |
 | `configs/` | DAQ setup, packet and scan examples, the recommended packet and scan (`packet_recommended.toml`, `scan_recommended.toml`: 10 + 10 matched trace sets, 1×1 image), parameter limits (`limits.toml`, **not yet reviewed**), processing settings |
 | `notebooks/` | Step-by-step walkthroughs with saved outputs; see `notebooks/README.md` |
-| `docs/` | Notes: `trace_fit_tools.tex` (comparison tools), `trace_features.tex` (all trace features), `ml_training_plan.tex` (ML plan), `packet_design.md` (image size, skips, binning, matched traces), `context/` (session records and handoff notes) |
+| `docs/` | Notes: `overleaf_ml_models/` (the models: what they do, inputs, data needs, results, next models), `overleaf_trace_features_technical/` (the math of every trace feature), `trace_fit_tools.tex` (comparison tools), `trace_features.tex` (all trace features), `ml_training_plan.tex` (ML plan), `packet_design.md` (image size, skips, binning, matched traces), `context/` (session records and handoff notes) |
 | `data/`, `rehearsal/`, `plots/` | Raw data, rehearsal output and figures: **not in the repository** (see `.gitignore`) |
 
 ## Code (`src/`)
@@ -45,6 +45,8 @@ suggest better settings.
 | `check_trace_analysis.py` | Runs the trace analysis on 25 synthetic geometries/timings and on the real traces, checks the layout found |
 | `process_packet.py` | Packet → decoded traces and features, decompressed FITS → WADERs labels → `dataset.csv` |
 | `plot_*.py`, `view_trace.py` | Plots and interactive trace viewers |
+| `ml/` | The models: synthetic CCD world, data loading, ridge / boosted trees / Gaussian process / NN ensemble / 1D CNN on curves, grouped evaluation, Bayesian optimization, benchmark (`python -m ml.benchmark`); see `docs/overleaf_ml_models/ml_models.tex` |
+| `plot_feature_figures.py`, `make_trace_features_note.py` | Figures and generator of the trace-features note |
 
 ## Quick start
 
@@ -60,7 +62,7 @@ python src/take_packet.py --params configs/packet_example.toml --backend fake --
 python src/process_packet.py MANIFEST.json                             # packet -> training data
 ```
 
-The scripts need Python 3.11+ with numpy (and matplotlib for plots). Running on the DAQ needs the
+The scripts need Python 3.11+ with numpy (and matplotlib for plots). The models need the packages of `requirements-ml.txt` (`python3 -m venv .venv && .venv/bin/pip install -r requirements-ml.txt`). Running on the DAQ needs the
 group's `ccd_cdaq`/`acmpy`. Processing images needs WADERs (`pysimdamicm`, `panaSKImg`).
 
 **Before using the real DAQ:** review `configs/limits.toml` and encode the bias/clock relationships

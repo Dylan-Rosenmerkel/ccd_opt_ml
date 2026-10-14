@@ -20,7 +20,7 @@
 \title{Machine-Learning Models for Optimizing Skipper-CCD Operating Parameters:\\
 What They Do, What They Need, and Whether They Should See the Full Trace}
 \author{ML-assisted optimization of CCD operating parameters --- working note (draft)}
-\date{14 October 2026}
+\date{14 October 2026 (first round of models)}
 
 \begin{document}
 \maketitle
@@ -534,7 +534,47 @@ the reference baseline (the hidden state) and the V low rails for $\lambda$, the
 \subsection{Features, curves, or both?}
 \label{sec:representation}
 
-REPRESENTATION-PLACEHOLDER
+This is the question of Section~\ref{sec:fulltrace}, tested directly. Every candidate sees the traces at $\theta$ \emph{and} the reference
+traces (as 30 numbers, as 14 curves, or both), so only the representation differs. Each is tested with and without $\theta$ + amplifier.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{ml_representation.png}
+\caption{Error on new packets against the number of training packets for the three representations; dotted: without $\theta$ + amplifier.}
+\label{fig:representation}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{$\sigma_e$} & \multicolumn{3}{c}{$\lambda$} \\
+Inputs (all with the reference) & 120 & 480 & 960 & 120 & 480 & 960 \\
+\midrule
+$\theta$ + amp + features (NN ensemble) & 12.3 & 11.5 & 11.0 & 7.0 & 3.6 & 3.2 \\
+$\theta$ + amp + curves (CNN) & 12.5 & 2.3 & 1.9 & 5.9 & 3.6 & 3.2 \\
+$\theta$ + amp + features + curves (CNN) & 11.4 & 2.6 & 1.7 & 5.2 & 3.4 & 3.1 \\
+features only, no $\theta$ & 11.4 & 11.5 & 10.8 & 18.3 & 16.1 & 14.8 \\
+curves only, no $\theta$ & 11.6 & 2.2 & 1.7 & 16.9 & 15.5 & 15.4 \\
+\bottomrule
+\end{tabular}
+\caption{Relative errors (\%) at 120, 480 and 960 training packets.}
+\end{table}
+
+\begin{itemize}
+\item \textbf{$\theta$ must be an input.} Without it, $\lambda$ stays at $\sim$15\,\% for every representation: the dark charge depends on rails
+  (substrate, V and H low levels) whose effect on $\lambda$ does not show in the traces.
+\item \textbf{With little data} ($\le$120--240 packets) all representations are similar. The features are slightly better for $\lambda$ at
+  60 packets, and the combination is the best or equal-best for $\lambda$ at every size.
+\item \textbf{With enough data} (480+), the curves win for $\sigma_e$ (1.7--2.6\,\% against $\sim$11\,\%), because only they show the pickup
+  floor. Adding the hand-made features to the curves neither helped nor hurt $\sigma_e$ much (within the run-to-run scatter), and helped
+  $\lambda$ slightly.
+\item \textbf{Answer:} give the model \textbf{$\theta$ + reference + both representations}. The features carry what we know matters and the
+  absolute levels (which the curves remove), and make the model work with little data. The curves let it find what we did not think of
+  once there are a few hundred packets. The trace alone (without $\theta$) is not enough, and the hand-made features alone cap the accuracy.
+\end{itemize}
+
 
 \subsection{A module never seen in training}
 
@@ -562,8 +602,145 @@ amplifier with $\sim$20 packets around its reference}, and train on several modu
 
 \subsection{Bayesian optimization}
 
-BO-PLACEHOLDER
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{ml_bo.png}
+\caption{Best true objective found against the number of packets, for Bayesian optimization (after 10 random packets) and random search,
+5 repeats each. Dotted: the nominal settings; dashed: the best of 50{,}000 random allowed settings.}
+\label{fig:bo}
+\end{figure}
 
+With the GP surrogate and expected improvement, the optimizer came within 0.04 of the reference optimum ($J = -2.81$, against $-2.49$ at the
+nominal settings; since $J=\log\sigma_e+\tfrac12\log\lambda$, $\sigma_e\sqrt\lambda$ is about 27\,\% lower) by 30 packets in all 5 repeats,
+and ended at $-2.77$ to $-2.82$ after 60. Random search stalled at
+$-2.61$ to $-2.72$ after 60 packets. In 10 dimensions a model-guided search needs a fraction of the packets of a random or grid scan.
+On the real CCD the same loop runs with the limits and relations encoded, small steps, and a human approving each proposal at first.
+
+
+
+%======================================================================
+\section{What the first round taught us, and models to try next}
+\label{sec:next}
+
+The first models were chosen from the plan, before any were run. Running them exposed six specific weaknesses. Each points to a more
+capable model.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.3cm}>{\raggedright\arraybackslash}p{4.4cm}X}
+\toprule
+Observed & Why & Model that addresses it \\
+\midrule
+1. Feature models plateau ($\sigma_e$ $\sim$12\,\%) & the hand-made features miss an effect & learned features (CNN); with little data: a \emph{deep-kernel GP} and \emph{pre-training} (C, D) \\
+2. The CNN needs 300--500 labeled packets & it learns its features from the labels alone & self-supervised pre-training on the $\sim$30{,}000 unlabeled traces per scan (D) \\
+3. A new module fails & nothing is shared across amplifiers and modules & hierarchical / multi-task GP; meta-learning (B, G) \\
+4. Many inputs hurt the GP; tree error bars too narrow & one length scale per input over-fits; quantile trees are noisy & physics-structured outputs (A), deep kernels (C), conformal calibration (H) \\
+5. Combining features and curves naively did not help the CNN & the network must learn to weigh 30 numbers against 7 curves & a fusion architecture with separate branches and per-feature noise (E) \\
+6. One label per amplifier per packet & labels are expensive & more label information per image (per-row $\lambda$; A) and multi-fidelity use of trace-only packets (F) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection*{A. Physics-structured outputs}
+\begin{basic}
+Instead of asking the model for $\sigma_e$ directly, ask for the pieces that physics combines: the single-skip noise, the noise floor, the
+dark current and the clock-induced charge. The known formulas then give the labels. The model learns simpler things, and the result also
+holds for a different number of skips or exposure time, which a black-box model cannot know.
+\end{basic}
+\begin{advanced}
+Latent outputs $z(\theta, x) = (\log\sigma_1, \log\sigma_f, \log\text{DC}, \log\text{CIC}, \log g)$, with the observation model
+\begin{equation}
+\sigma_e^2 = \frac{\sigma_1^2}{N_\text{skip}} + \sigma_f^2,\qquad \lambda(r) = \text{CIC} + \text{DC}\,\bigl(E + r\,t_\text{row}\bigr),
+\end{equation}
+fitted by maximum likelihood to all available labels. The per-row $\lambda(r)$ of the 16-row image gives 16 constraints per amplifier
+instead of 1, and the traces' block noise $\sigma(n)$ constrains $\sigma_1$ and $\sigma_f$ directly. Any regressor (GP, network) can sit
+underneath.
+\end{advanced}
+
+\subsection*{B. Hierarchical and multi-task Gaussian processes}
+\begin{basic}
+Amplifiers and modules are different but related. A hierarchical model learns what they share and how much each one differs, so a new
+module needs a few packets to learn its own offsets rather than a whole scan. It can also learn that $\sigma_e$, $\lambda$ and the gain
+move together.
+\end{basic}
+\begin{advanced}
+An intrinsic coregionalization kernel $k((\theta,a,t),(\theta',a',t')) = k_\theta(\theta,\theta')\,B^{\text{amp}}_{aa'}\,B^{\text{task}}_{tt'}$, or
+additive amplifier random effects $f_a(\theta) = f(\theta) + \delta_a(\theta)$ with
+$\delta_a \sim \mathcal{GP}(0, \sigma_\delta^2 k_\delta)$. A new module's offsets are then inferred from its first packets with calibrated
+uncertainty. This is the principled fix for the held-out-module failure.
+\end{advanced}
+
+\subsection*{C. Deep kernel learning (a CNN inside a Gaussian process)}
+\begin{basic}
+The CNN finds new features but needs much data and gives less reliable error bars; the GP has honest error bars and needs little data
+but only uses the inputs it is given. A deep kernel puts the CNN in front of the GP: the CNN turns the curves into a few learned numbers,
+and the GP works on those. This combines both strengths, and it can serve as the optimizer's surrogate once traces are taken.
+\end{basic}
+\begin{advanced}
+$k(x, x') = k_\text{Mat\'ern}\bigl(g_\phi(x), g_\phi(x')\bigr)$, with $g_\phi$ the convolutional encoder. The parameters $\phi$ and the GP
+hyperparameters maximize the exact GP marginal likelihood jointly. With $n \lesssim 10^3$ exact inference is cheap. Over-fitting of
+$\phi$ is controlled by pre-training (D), a small embedding (4--8 dimensions) and weight decay.
+\end{advanced}
+
+\subsection*{D. Self-supervised pre-training on unlabeled traces}
+\begin{basic}
+Every packet gives one image but 120 traces. A network can first learn ``what traces look like'' from all of them without labels, for
+example by filling in hidden parts of the curves, or by recognizing that two repeats of the same packet belong together. It then needs
+only a few labeled packets to learn what matters for the image.
+\end{basic}
+\begin{advanced}
+Objectives:
+\begin{itemize}
+\item masked reconstruction of curves or folded cycles;
+\item contrastive learning (InfoNCE) with positives = repeats of one packet and negatives = other packets;
+\item prediction of $\theta$, which is known for every trace;
+\item prediction of the reference from $\theta$ (state-invariant features).
+\end{itemize}
+The encoder then feeds (C) or a small supervised head. This is also the route to using the CDS matrix and the folded raw trace
+(transformers over cycles, temporal convolution over skips).
+\end{advanced}
+
+\subsection*{E. Fusion and set models}
+\begin{basic}
+Today the repeats are averaged into one number per feature before the model sees them. A set model looks at all 10 repeats (and all
+pixels) at once. It learns how much to trust each, ignores outliers by itself, and sees how much a feature scatters.
+\end{basic}
+\begin{advanced}
+Separate branches for $\theta$, features (with their \code{trace\_sd} as inputs or as heteroscedastic noise) and curves, joined by a
+gated or attention fusion layer. Permutation-invariant pooling (DeepSets, $\rho(\sum_i \psi(x_i))$, or attention pooling) over repeats
+and pixels.
+\end{advanced}
+
+\subsection*{F. Multi-fidelity and better optimization}
+\begin{advanced}
+\begin{itemize}
+\item \textbf{Multi-fidelity GP} (autoregressive co-kriging, $f_\text{image}(\theta) = \rho\,f_\text{trace}(\theta) + \delta(\theta)$) with a
+  cost-aware acquisition. It decides between a $\sim$1-minute trace-only packet and a full 16-minute packet.
+\item \textbf{Trust-region BO} (TuRBO) for 10--40 parameters.
+\item \textbf{Constrained BO} with a learned feasibility model, where the limits are not known in closed form.
+\item \textbf{Multi-objective acquisition} (expected hypervolume improvement) for the $\sigma_e$--$\lambda$ front.
+\end{itemize}
+The BoTorch/GPyTorch libraries implement these.
+\end{advanced}
+
+\subsection*{G, H. Few-shot transfer and calibrated error bars}
+\begin{advanced}
+\textbf{G}: neural processes or meta-learned GP priors, trained across modules, adapt to a new module from a handful of packets.
+\textbf{H}: split-conformal calibration rescales any model's intervals on held-out packets so that their coverage is guaranteed
+(distribution-free). It is cheap and fixes the trees' narrow intervals.
+\end{advanced}
+
+\subsection*{Priorities}
+\begin{enumerate}
+\item \textbf{A + B} (physics-structured outputs on a hierarchical GP). This needs the least data, transfers to new modules, and its
+  predictions extrapolate in $N_\text{skip}$ and exposure. It is the best candidate for the first real scan.
+\item \textbf{H} (conformal calibration) for every model: a few lines, and immediately useful.
+\item \textbf{D + C} (pre-trained encoder with a GP head) once the first scan's 29{,}000 traces exist. This is the way to get the CNN's
+  feature discovery at the GP's data needs.
+\item \textbf{F} (multi-fidelity BO) once the predictor $P$ is shown to work on real data.
+\end{enumerate}
+Each will be tested the same way: synthetic world first, then the real scan, against the first-round models.
 
 %======================================================================
 \section{Plan}
@@ -580,6 +757,8 @@ BO-PLACEHOLDER
   \item test the held-out amplifier.
   \end{itemize}
 \item \textbf{CNN on curves:} train it on the same scan; pre-train an encoder on all unlabeled traces; compare; look at what it uses.
+\item \textbf{Next models:} physics-structured hierarchical GP, conformal calibration, deep kernel with pre-training
+  (Section~\ref{sec:next}).
 \item \textbf{Optimization:} Bayesian optimization in the screened parameters, with the limits and relations encoded, small steps and
   human approval of each proposal at first.
 \end{enumerate}
