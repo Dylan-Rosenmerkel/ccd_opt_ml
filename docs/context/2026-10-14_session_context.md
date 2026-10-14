@@ -713,3 +713,14 @@ against the truth, world v2 unless noted):
 
     * **Correction:** λ at k = 0 is 19 ± 15 % (one scan had shown 2–4 %); from k = 1 it is 1.2–1.7 %.
     * The conclusion (1–2 imaged packets per new module) holds.
+
+## 2k. User question: why give the amplifier identity? Test with and without it
+
+* **Plan:** `src/ml/benchmark_amp.py`. Variants:
+  * explicit ID (one-hot / hierarchical levels);
+  * implicit ID (own trace/ref features, no ID);
+  * no amplifier information.
+* **Tests:** on known amplifiers and on a never-seen module (k = 0, 2).
+* **Metrics:** absolute error, "shape" error (each amplifier's mean offset removed), and the within-amplifier
+  rank correlation (what an optimizer needs).
+* 3 training scans.
