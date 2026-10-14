@@ -78,10 +78,27 @@ SW_2_H 1.0  SW_2_L -6.0  OG_2_H 0.0  OG_2_L -6.0  RG_2_H 9.0  RG_2_L 3.0  DG_2_H
 # 1. every changed name is a known parameter (catches typos: an unknown key would be sent as is)
 # 2. every value is a number
 # 3. after the change every rail keeps HIGH >= LOW (on 2026-10-12 TG_B_H < TG_B_L slipped through)
-# Basic sanity checks only; the real limits and relations are still to be written.
+# 4. the group's safe-operation rules (docs/voltage_rules.txt; the same as src/ccd_limits.py), on the
+#    COMPLETE configuration (nominal + changes), for readout stage / bias set i = 1, 2:
+#      VDDi > VDRAINi,  SW_i_H > OG_i_H,  DG_i_H > VRi,  DG_i_L < VRi,  OG_i_L < VRi,  OG_i_L >= SW_i_L,
+#      DG_i_L >= SW_i_L,  VDRAINi < DG_i_L,  VDDi < VRi;  every V clock low above every TG level;
+#      every H clock low below every TG level;  H3 lows above SW_1_H and SW_2_H.
+#    (The rules file's "DGL<=SWL" was a typo for DG_L >= SW_L: confirmed 2026-10-14.)
+# 5. hardware ranges of the ACM manual: clock rails -10..+10 V; VR -13.8..-2, VDD and VDRAIN -27.9..-6,
+#    VSUB 6.7..88.3 V.
+# The allowed WINDOWS of configs/limits.toml are not checked here (scan_packets.py / take_packet.py do).
 # Prints the table of changes; exits non-zero on any problem.  (awk: works with any bash.)
 check_and_show() {
   printf '%s\n' "${CHANGES[@]}" | awk -v nominal="$(echo $NOMINAL)" -v pool="$POOL" '
+    function rule(a, op, b) {          # a op b on the complete configuration; prints and flags a violation
+      if (!(a in new) || !(b in new)) return
+      x = new[a] + 0; y = new[b] + 0
+      ok = (op == ">") ? (x > y) : (op == ">=") ? (x >= y) : (op == "<") ? (x < y) : (x <= y)
+      if (!ok) { print "ERROR: " a " = " new[a] " must be " op " " b " = " new[b]; bad = 1 }
+    }
+    function range(k, lo, hi) {
+      if ((k in new) && (new[k] + 0 < lo || new[k] + 0 > hi)) { print "ERROR: " k " = " new[k] " outside the hardware range [" lo ", " hi "] V"; bad = 1 }
+    }
     BEGIN { n = split(nominal, w, / +/); for (i = 1; i < n; i += 2) if (w[i] != "") nom[w[i]] = w[i+1]
             for (k in nom) new[k] = nom[k] }
     NF == 0 { next }
@@ -94,6 +111,21 @@ check_and_show() {
       line[++m] = sprintf("  %-10s %8s -> %-8s (%s)", name, nom[name], value, target) }
     END { for (h in new) if (h ~ /_H$/) { l = substr(h, 1, length(h) - 1) "L"
             if ((l in new) && new[h] + 0 < new[l] + 0) { print "ERROR: " h " = " new[h] " is below " l " = " new[l]; bad = 1 } }
+          for (i = 1; i <= 2; i++) {
+            rule("VDD" i, ">", "VDRAIN" i);      rule("SW_" i "_H", ">", "OG_" i "_H")
+            rule("DG_" i "_H", ">", "VR" i);     rule("DG_" i "_L", "<", "VR" i)
+            rule("OG_" i "_L", "<", "VR" i);     rule("OG_" i "_L", ">=", "SW_" i "_L")
+            rule("DG_" i "_L", ">=", "SW_" i "_L"); rule("VDRAIN" i, "<", "DG_" i "_L")
+            rule("VDD" i, "<", "VR" i)
+            range("VR" i, -13.8, -2); range("VDD" i, -27.9, -6); range("VDRAIN" i, -27.9, -6)
+          }
+          range("VSUB", 6.7, 88.3)
+          for (k in new) {
+            if (k ~ /^(V[123]|H[123]|TG|SW|OG|RG|DG)_[A-C12]_[HL]$/) range(k, -10, 10)
+            if (k ~ /^V[123]_[A-C]_L$/) for (t in new) if (t ~ /^TG_/) rule(k, ">", t)
+            if (k ~ /^H[123]_[A-C]_L$/) for (t in new) if (t ~ /^TG_/) rule(k, "<", t)
+          }
+          rule("H3_A_L", ">", "SW_1_H"); rule("H3_A_L", ">", "SW_2_H"); rule("H3_B_L", ">", "SW_1_H"); rule("H3_B_L", ">", "SW_2_H")
           if (bad) exit 1
           print "Parameter changes (nominal -> new):"; for (i = 1; i <= m; i++) print line[i] }'
 }
