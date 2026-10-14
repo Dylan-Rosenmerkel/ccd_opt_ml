@@ -1,0 +1,159 @@
+# scan_mixed_example.toml -- scan_recommended.toml with a MIXED design (2026-10-14): one-at-a-time sweeps of
+#   8 parameters (8 values each) plus 64 Latin-hypercube points in which all 8 change together.
+#   Why: on the synthetic world (docs/overleaf_ml_models/ml_models.tex, "Scan design") a one-at-a-time scan
+#   left the dark charge 5-10x worse predicted than a half-random scan of the same length; the sweeps stay
+#   for reading the effects directly.  THE RANGES ARE PLACEHOLDERS inside configs/limits.toml (reviewed = false):
+#   replace them with the voltage/timing limits being compiled.  Random points that the limits or relations
+#   refuse are redrawn when the plan is built (scan_packets.py --dry-run shows the plan).
+#
+# (original header of scan_recommended.toml:)
+# scan_recommended.toml -- scan_example.toml with the recommended packet layout (2026-10-13)
+#   5 reference + 10 trace sets per packet, traces matched to a 1x1 16x1000x500 image;
+#   reasons in docs/packet_design.md.  ~18.9 min per packet (12.1 min with flushes_between_traces = 0).
+#
+# (original header of scan_example.toml:)
+#
+# A scan = reference parameters (per board) + a design that varies a few parameters around
+# them.  Every packet applies the COMPLETE parameter set of every board, takes its reference
+# traces at [reference] first, then its traces and the image at the design point:
+#   reference -> 3 flushes -> reference traces x10 (flush between) ->
+#   design point -> flush -> traces x10 (flush between) -> image of the [image] size
+# Boards, pool, leader and the work directory are in configs/daq_setup.toml.  The acmpy run
+# directory (where the data files go) is set as usual with scripts/setup_run.py first.
+
+[scan]
+name            = "mixed_scan"     # packet ids are <name>_00000, <name>_00001, ...
+seed            = 1                # fixes the randomised order
+reference_every = 5                # a full reference packet after every 5 design points
+sequencer       = "reference_v5_pumping.seq"   # must be the file loaded on the boards (checked)
+
+[options]                          # packet options (see configs/packet_recommended.toml)
+n_initial_flushes      = 3
+n_reference_traces     = 5        # reference trace sets (5: enough for the reference mean and scatter)
+n_traces               = 10
+flushes_between_traces = 1         # 0 shortens a packet from ~18.9 to ~12.1 min
+flushes_after_change   = 1
+n_final_flushes        = 1
+erase_policy           = "never"   # flushes are used; the erase is available, never the e-purge
+reference_traces       = "always"
+retake_damaged_traces  = 1
+
+[image]                            # 1x1 dark-current image that WADERs can fit (docs/packet_design.md)
+subroutine = "AcquireImage"
+acq_level  = 2
+EXPOSURE = 0
+NDCM = 500
+NROW = 16
+NCOL = 1000
+NPBIN = 1
+NSBIN = 1
+NDCMPRE = 0
+NROWPRE = 0
+NROWPOST = 0
+NCOLPRE = 5300
+NCOLPOST = 0
+BOOLCLR = 1
+
+[trace]                            # read the pixels exactly like the image; 2 x 5 pixels, prescan 100
+match_image = true
+
+# Reference operating parameters, shared by every board in theta_boards
+# (values of the 2026-10-06 run: reference.bcf / reference_v5_pumping.seq).
+[reference]
+delay_Va = 6000
+delay_Vb = 6000
+delay_Ha = 1800
+delay_Hb = 1800
+delay_Hc = 1800
+V1_A_H = 9.9
+V1_A_L = 7.9
+V1_B_H = 9.9
+V1_B_L = 7.7
+V2_C_H = 9.9
+V2_C_L = 7.9
+V3_A_H = 9.9
+V3_A_L = 7.9
+V3_B_H = 9.9
+V3_B_L = 7.7
+TG_A_H = 7.4
+TG_A_L = 7.4
+TG_B_H = 7.4
+TG_B_L = 7.4
+H1_A_H = 9.5
+H1_A_L = 6.7
+H1_B_H = 9.5
+H1_B_L = 6.5
+H2_C_H = 9.0
+H2_C_L = 6.7
+H3_A_H = 9.5
+H3_A_L = 6.7
+H3_B_H = 9.5
+H3_B_L = 6.5
+VSUB = 45.0
+VDD = -19.0
+VDRAIN = -23.0
+VR = -3.0
+
+# Reference values that differ for one board (none here: both boards start alike).
+# [reference_board.102]
+# VSUB = 45.0
+
+# ----------------------------------------------------------------- design ---
+# type = "oat"    one-at-a-time: each listed value of each parameter, others at reference
+# type = "random" uniform random points between min and max of each parameter
+# type = "list"   explicit points ([[design.points]], each a table of changes)
+# A name changes the parameter on every board; "acm102.VSUB" changes board 102 only.
+[design]
+type = "mixed"
+n_random = 64              # joint points (Latin hypercube over the 8 ranges)
+sampling = "lhs"
+
+[[design.parameters]]
+name = "delay_Ha"          # horizontal transfer hold time [10 ns cycles], both boards
+min = 1200
+max = 2600
+n_values = 8
+integer = true
+
+[[design.parameters]]
+name = "delay_Va"          # vertical transfer hold time [10 ns cycles]
+min = 4500
+max = 7500
+n_values = 8
+integer = true
+
+[[design.parameters]]
+name = "VSUB"
+min = 40.0
+max = 55.0
+n_values = 8
+
+[[design.parameters]]
+name = "VDD"
+min = -20.5
+max = -17.5
+n_values = 8
+
+[[design.parameters]]
+name = "VDRAIN"
+min = -24.5
+max = -21.5
+n_values = 8
+
+[[design.parameters]]
+name = "VR"
+min = -3.8
+max = -2.2
+n_values = 8
+
+[[design.parameters]]
+name = "H1_A_L"            # one horizontal low rail (reference 6.7 V)
+min = 6.0
+max = 7.4
+n_values = 8
+
+[[design.parameters]]
+name = "TG_A_H"            # transfer gate A high (reference 7.4 V; must stay >= TG_A_L)
+min = 7.4
+max = 8.4
+n_values = 8

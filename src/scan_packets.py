@@ -18,8 +18,19 @@ at the scan's reference first (``theta_ref``), so each packet carries its own re
 
 Design types (``[design] type = ...``)
     ``oat``     one-at-a-time: every listed value of every parameter, others at reference
-    ``random``  ``n_points`` uniform random points between ``min`` and ``max`` per parameter
+    ``random``  ``n_points`` random points between ``min`` and ``max`` per parameter
+                (``sampling = "uniform"``, or ``"lhs"``: a Latin hypercube, every parameter's range
+                cut into n_points strata with one point in each)
+    ``mixed``   one-at-a-time sweeps (``values``, or ``n_values`` evenly spaced between ``min`` and
+                ``max``) PLUS ``n_random`` Latin-hypercube points in which all parameters change
+                together.  Recommended for the models (docs/overleaf_ml_models/ml_models.tex, "Scan
+                design"): with the same number of packets, a one-at-a-time scan left the dark charge
+                5-10x worse predicted than a half-random one, because it never changes two
+                parameters at once; the sweeps stay for reading the effects directly.
     ``list``    explicit ``[[design.points]]`` tables, each a dict of changes to the reference
+
+Random points that break the limits or the relations between parameters (ccd_limits.py) are
+redrawn when the plan is built, so a random design never plans a packet the checks would refuse.
 
 A design parameter name changes that parameter on EVERY board in ``theta_boards`` ("VSUB"),
 or on one board only when prefixed with the client name ("acm102.VSUB").
@@ -60,23 +71,67 @@ _COUNT_OPTIONS = ("n_initial_flushes", "n_reference_traces", "n_traces", "flushe
 # Building the list of operating points                                        #
 # --------------------------------------------------------------------------- #
 
-def design_changes(design: dict[str, Any], seed: int) -> list[dict[str, float]]:
-    """Return the design as a list of "changes to the reference" dictionaries."""
+def _value(p: dict[str, Any], u: float) -> float:
+    """The parameter value at fraction u (0..1) of its [min, max] range (rounded; integers for sequencer constants)."""
+    x = p["min"] + u * (p["max"] - p["min"])
+    return int(round(x)) if p.get("integer", False) else round(x, 3)
+
+
+def _oat_values(p: dict[str, Any]) -> list[float]:
+    if "values" in p:
+        return list(p["values"])
+    n = int(p["n_values"])
+    return [_value(p, k / (n - 1)) for k in range(n)] if n > 1 else [_value(p, 0.5)]
+
+
+def _random_points(parameters: list[dict], n: int, rng: random.Random, sampling: str,
+                   accept=None, max_tries: int = 200) -> list[dict[str, float]]:
+    """
+    n random points.  ``sampling``: "uniform", or "lhs" (Latin hypercube: each parameter's range cut into n
+    strata, one point per stratum, strata paired at random).  A point that ``accept`` refuses is redrawn
+    uniformly (up to ``max_tries`` times; then it is dropped with a warning).
+    """
+    if sampling == "lhs":
+        columns = []
+        for _ in parameters:
+            strata = list(range(n))
+            rng.shuffle(strata)
+            columns.append([(k + rng.random()) / n for k in strata])
+        fractions = [[col[i] for col in columns] for i in range(n)]
+    elif sampling == "uniform":
+        fractions = [[rng.random() for _ in parameters] for _ in range(n)]
+    else:
+        raise ValueError(f"unknown sampling {sampling!r} (uniform or lhs)")
+    points = []
+    for u in fractions:
+        point = {p["name"]: _value(p, x) for p, x in zip(parameters, u)}
+        tries = 0
+        while accept is not None and not accept(point) and tries < max_tries:
+            point = {p["name"]: _value(p, rng.random()) for p in parameters}
+            tries += 1
+        if accept is not None and not accept(point):
+            log.warning("design: dropped a random point that the limits refuse after %d tries", max_tries)
+            continue
+        points.append(point)
+    return points
+
+
+def design_changes(design: dict[str, Any], seed: int, accept=None) -> list[dict[str, float]]:
+    """
+    Return the design as a list of "changes to the reference" dictionaries.  ``accept(change) -> bool``
+    (from ``build_plan``: the limits and relations) is used to redraw refused random points.
+    """
     kind = design["type"]
     if kind == "oat":
-        return [{p["name"]: value} for p in design["parameters"] for value in p["values"]]
+        return [{p["name"]: value} for p in design["parameters"] for value in _oat_values(p)]
     if kind == "random":
-        rng = random.Random(seed)
-        points = []
-        for _ in range(int(design["n_points"])):
-            point = {}
-            for p in design["parameters"]:
-                if p.get("integer", False):
-                    point[p["name"]] = rng.randint(int(p["min"]), int(p["max"]))
-                else:
-                    point[p["name"]] = round(rng.uniform(p["min"], p["max"]), 3)
-            points.append(point)
-        return points
+        return _random_points(design["parameters"], int(design["n_points"]), random.Random(seed),
+                              design.get("sampling", "uniform"), accept)
+    if kind == "mixed":
+        sweeps = [{p["name"]: value} for p in design["parameters"] for value in _oat_values(p)]
+        joint = _random_points(design["parameters"], int(design["n_random"]), random.Random(seed),
+                               design.get("sampling", "lhs"), accept)
+        return sweeps + joint
     if kind == "list":
         return [dict(point) for point in design["points"]]
     raise ValueError(f"unknown design type {kind!r}")
@@ -102,17 +157,22 @@ def apply_change(reference: dict[int, dict], change: dict[str, float], setup: Da
     return theta
 
 
-def build_plan(config: dict[str, Any], setup: DaqSetup) -> list[tuple[str, dict[int, dict]]]:
+def build_plan(config: dict[str, Any], setup: DaqSetup, limits: Limits | None = None) -> list[tuple[str, dict[int, dict]]]:
     """
     Turn the scan definition into an ordered list of ``(packet_id, theta per board)``.
 
     Order: reference, then the (shuffled) design points with the reference re-inserted
-    after every ``reference_every`` of them.
+    after every ``reference_every`` of them.  With ``limits``, random design points that any board's
+    limits or relations refuse are redrawn.
     """
     scan = config["scan"]
     reference = board_thetas(config["reference"], config.get("reference_board", {}), setup.theta_boards)
     seed = int(scan.get("seed", 0))
-    changes = design_changes(config["design"], seed)
+    accept = None
+    if limits is not None:
+        def accept(change):
+            return all(not limits.violations(t) for t in apply_change(reference, change, setup).values())
+    changes = design_changes(config["design"], seed, accept)
     random.Random(seed).shuffle(changes)
 
     every = int(scan.get("reference_every", 0))
@@ -235,7 +295,7 @@ def main() -> None:
     if args.work_dir:
         setup.work_dir = args.work_dir
     limits = Limits.load(args.limits)
-    plan = build_plan(config, setup)
+    plan = build_plan(config, setup, limits)
 
     plan_ok = validate_plan(plan, limits, config, setup)
     if args.dry_run or not plan_ok:

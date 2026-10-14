@@ -633,3 +633,19 @@ against the truth, world v2 unless noted):
     u_{p,k}, the n > N'/5 bias, and the two curves in the table; zip rebuilt, 0 overfull;
   * a known, pre-existing issue in the trace-features note: an overfull vbox of 159 pt on the
     slow_principal_components page (present before today's changes).
+* **Item 2, done in `src/scan_packets.py`:**
+  * new design type `mixed` (one-at-a-time sweeps from `values` or `n_values` + `n_random` Latin-hypercube
+    joint points);
+  * `random` gets `sampling = "uniform" | "lhs"`;
+  * `build_plan(config, setup, limits)` redraws random points that any board's limits/relations refuse
+    (`main` passes the limits);
+  * the notebook call without limits still works.
+* **New `configs/scan_mixed_example.toml`:**
+  * 8 parameters (delay_Ha, delay_Va, VSUB, VDD, VDRAIN, VR, H1_A_L, TG_A_H) × 8 values + 64 LHS points + a
+    reference every 5 = 154 packets, ~48.7 h;
+  * dry run valid;
+  * **the ranges are placeholders** until the user's limits are in limits.toml;
+  * the relational rules in ccd_limits are still a placeholder (only HIGH ≥ LOW), so e.g.
+    VDRAIN − VDD is not yet enforced.
+* **Possible extension:** design parameters that move a GROUP of pins together (e.g. all H low rails by
+  an offset), as in the synthetic world.
