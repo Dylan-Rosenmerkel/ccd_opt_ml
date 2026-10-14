@@ -38,4 +38,4 @@ commands in this order:
 * **A flush before every trace**, between the channels of a set too (`FLUSH_BETWEEN="trace"`;
   `"set"` or `"none"` are the alternatives). That is 63 flushes and 60 traces, about 44 min with
   img.toml (about 21 min with `"set"`).
-* `manual_packet_commands.txt` was regenerated (167 commands).
+* `manual_packet_commands.txt` was regenerated (137 commands).
