@@ -688,3 +688,9 @@ against the truth, world v2 unless noted):
   * **joint > split everywhere; joint > direct only with ≥ ~240 packets** (two 27-input GPs need more data);
   * 3-scan check running: `benchmark_seeds --only lambda --seeds 1 2 3 --summary seeds_summary_lambda.json`
     (PID in the scratchpad `seeds_lambda.pid`).
+* **Notebook done:** `notebooks/ml_remaining_models.ipynb` (generator `notebooks/make_remaining_models_notebook.py`, in
+  the repo). Sections: log-f spectra, D, C, E, G, F, joint λ, real-data noise check, robustness. Executed,
+  0 errors, ~2 min. notebooks/README updated. The live mini pre-training does not learn the floor (probe
+  R² −0.37); the full benchmark does (0.71); the text says so.
+* **To do when the runs finish:** joint λ and robustness (seeds) into ml_models.tex; rerun the notebook's
+  last cell (seeds_summary).
