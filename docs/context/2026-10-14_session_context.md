@@ -626,3 +626,10 @@ against the truth, world v2 unless noted):
   * Setting 1 (NCOLPRE 0, 0.8-s traces) shows no floor (ratio 2.4): the trace's time span limits which slow
     noise it sees, which is relevant for the matched-trace design (NCOLPRE 100).
   * ch1/ch3 are still 3–8× (extra image noise: binned overscan / serial register?); ch2 1.4–4.
+* **Item 1, docs:**
+  * the trace-features note was regenerated (14 curves; `plot_feature_figures.py` now draws the curves in two
+    grids of 7);
+  * the technical note has the math of the overlapping Allan deviation, of the common-pattern-removed CDS
+    u_{p,k}, the n > N'/5 bias, and the two curves in the table; zip rebuilt, 0 overfull;
+  * a known, pre-existing issue in the trace-features note: an overfull vbox of 159 pt on the
+    slow_principal_components page (present before today's changes).

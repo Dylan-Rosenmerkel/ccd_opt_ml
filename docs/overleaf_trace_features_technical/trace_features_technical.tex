@@ -40,7 +40,7 @@
 \maketitle
 
 \begin{abstract}
-The first note on the trace features (\code{docs/trace\_features.tex}) lists the 85 scalar features and 12 curves with a one-line
+The first note on the trace features (\code{docs/trace\_features.tex}) lists the 85 scalar features and 14 curves with a one-line
 description each. This note gives the mathematics. It covers:
 \begin{itemize}
 \item how a raw trace is turned into skip cycles, CDS values and transfers;
@@ -169,6 +169,23 @@ $\rho(\ell) = \sum_{k} \tilde x_k \tilde x_{k+\ell} \big/ \sum_k \tilde x_k^2$.
 \sigma_A(n) = \sqrt{\tfrac12\,\mean_j\bigl(\bar x^{(n)}_{j+1} - \bar x^{(n)}_j\bigr)^2},\qquad n \in \{1,2,3,5,7,10,15,20,30,50,75,100,160\}.
 \end{equation}
 White noise gives $\sigma_A \propto n^{-1/2}$; anticorrelated noise falls faster; $1/f$ noise flattens.
+Applied to the detrended $r_p$, points with $n > N'/5$ are biased low: the degree-4 polynomial absorbs most of the difference between
+3 or 4 block means (at $n = 160$, $N' = 490$: about 0.4 of the white-noise value on the 2026-10-12 traces). Fits use $n \le N'/5$.
+
+\paragraph{Overlapping Allan deviation.} With the running means $\tilde x^{(n)}_i = \tfrac1n\sum_{l=0}^{n-1} x_{i+l}$ over \emph{every} start
+$i = 0 \dots N'-n$,
+\begin{equation}
+\sigma^\text{ov}_A(n) = \sqrt{\tfrac12\,\mean_{i=0}^{N'-2n}\bigl(\tilde x^{(n)}_{i+n} - \tilde x^{(n)}_i\bigr)^2}
+\end{equation}
+(same $n$, undefined when $\lfloor N'/n\rfloor \le 2$): the same expectation as $\sigma_A$, with much less scatter for long blocks.
+
+\paragraph{CDS with the common pattern removed.} With $\G$ the usable pixels ($P = |\G|$) and $\bar c_k = \mean_{q \in \G} c_{q,k}$,
+\begin{equation}
+u_{p,k} = \sqrt{\tfrac{P}{P-1}}\;\Bigl[(c_{p,k} - \bar c_k) - \mean_{k' \ge \ko}(c_{p,k'} - \bar c_{k'})\Bigr],\qquad k \ge \ko .
+\end{equation}
+The pattern along the skips that every pixel shares (droop, charge collection) is not noise for an image: it shifts every pixel alike.
+No polynomial is removed, so slow noise that differs from pixel to pixel (a floor that does not average down) stays in $u_p$, as it
+does in an image. The factor $\sqrt{P/(P-1)}$ restores the white-noise level ($c_{p} - \bar c$ has variance $(1 - 1/P)\sigma^2$).
 
 \paragraph{Spectral density} of $M$ equal-length sequences $x^{(m)}$ of length $n$, sampled at rate $f_r$, with a Hann window $h$:
 \begin{equation}
@@ -532,6 +549,9 @@ Curve & Definition \\
 \code{noise: CDS autocorrelation} & $\mean_p \rho_p(\ell)$, $\ell = 1 \dots 50$ \\
 \code{noise: Allan deviation} & $\mean_p \sigma_A(n)$ at the 13 values of $n$ \\
 \code{noise: CDS spectrum} & $S(f)$ of the $r_p$, $0 \le f \le f_N$ \\
+\code{noise: Allan deviation, common pattern removed} & $\mean_p \sigma^\text{ov}_A(n)$ of the $u_p$, at the 13 values of $n$ \\
+\code{noise: CDS spectrum, log frequency} & $S(f)$ of the $u_p$, averaged in 40 bins with edges $e_j = f_1 (f_N/f_1)^{j/40}$ (empty bins
+  interpolated in $\log f$) \\
 \code{noise: within-cycle spectrum} & $S_\text{in}(f)$, $0 \le f \le 7.5$\,MHz \\
 \code{noise: noise vs window length} & $\mean_p \sigma(L, 0)$, $L \in \mathcal L$ \\
 \code{edge: equivalent-time pulse} & $E(\phi)$, $-15 \le \phi < 60$ in 0.1-sample bins \\
@@ -542,12 +562,12 @@ Curve & Definition \\
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth,height=0.8\textheight,keepaspectratio]{all_curves_a.png}
-\caption{Curves 1--6 of the example trace.}
+\caption{Curves 1--7 of the example trace.}
 \end{figure}
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth,height=0.8\textheight,keepaspectratio]{all_curves_b.png}
-\caption{Curves 7--12 of the example trace.}
+\caption{Curves 8--14 of the example trace (the dotted lines are white noise).}
 \end{figure}
 
 %======================================================================
