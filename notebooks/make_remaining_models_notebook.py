@@ -290,10 +290,49 @@ print("\n".join(line for line in out.stdout.splitlines()[:22]))
 
 md(r"""
 * With the new curve the traces show a **floor**: white up to ~50 skips, then 1.15–1.5 times the white value.
-* **On ch0 it predicts the image's noise** (ratio 0.9–1.3 for the 1.7-s traces of settings 2–4, against 1.2–2.3 with the detrended
-  curve). The 0.8-s traces of setting 1 see no floor: a trace must last long enough to see slow noise.
-* ch1 and ch3 remain 3–8 times noisier in the binned image (possibly charge in the serial register; the 1×1 packets will tell).
+* Against the **binned** 500-skip overscan, ch0's ratio is 0.9–1.3 for the 1.7-s traces (1.2–2.3 with the detrended curve); the 0.8-s
+  traces of setting 1 see no floor: a trace must last long enough to see slow noise. ch1 and ch3 remain 3–8 times noisier there.
+* The cleaner test is the **1×1, 3000-skip image of 2026-10-06** (section 8b): there the traces predict ch1 within 5 %, but ch0 25 %
+  too low and ch3 45–50 % too high. At 3000 skips the floor dominates, and 500-skip traces of 10 pixels measure it poorly.
+""")
 
+md(r"""
+## 8b. Do the models need to be told which amplifier they predict?
+
+Most models were given the amplifier identity, because the toy amplifiers differ a lot. That ties a model to the amplifiers it was
+trained on. `src/ml/benchmark_amp.py` compares explicit identity, *implicit* identity (the amplifier's own trace and reference
+features, no ID) and no amplifier information at all, on known amplifiers and on a never-seen module, with three scores: the usual
+error, the **shape** error (each amplifier's own offset removed: is the dependence on the settings right?) and the **rank**
+correlation within each amplifier (does it order the settings correctly, which is what an optimizer needs).
+""")
+
+code(r"""
+A = load("amp_information_summary.json")
+if A:
+    for key, by_label in A.items():
+        print(f"--- {key}: error abs / shape (%) and within-amplifier rank")
+        display(pd.DataFrame({t: {lab: f"{100 * e[t]['abs']:.1f} / {100 * e[t]['shape']:.1f} / {e[t]['rank']:.2f}" for lab, e in by_label.items()}
+                              for t in TARGETS}))
+""")
+
+md(r"""
+**On the real amplifiers** (module 101, `src/real_amplifier_check.py`): the gains measured from the electron peaks of the
+2026-10-06 1×1 image differ by only 2 % between ch0, ch1 and ch3 (ch2's peaks are not resolved), so using the other channels' mean
+gain instead of a label costs 1.5–4.4 %. The image noise predicted from each channel's own traces is off by −25 to +45 % at 3000
+skips **with or without** the label: the limit is the trace-to-image noise relation, not the amplifier identity. The changes of the 85
+features with the settings agree in sign 86–99 % between channels (correlation 0.85–0.96), but the noise of ch2 changes alone,
+which a model sees in ch2's own trace without any label.
+""")
+
+code(r"""
+R2 = load("real_amplifier_check.json")
+if R2:
+    display(pd.DataFrame(R2["image"]).T.round(3))
+    display(pd.DataFrame(R2["traces"]).T[["white", "detrended", "common removed", "n_traces"]].round(3))
+    print("sign agreement of the setting responses between channels:", {k: round(v, 2) for k, v in R2["responses"]["sign agreement"].items()})
+""")
+
+md(r"""
 ## 9. Robustness over training scans, and what to use
 
 Most benchmarks used one training scan. `benchmark_seeds.py` repeats the key comparisons over 5 scans:
