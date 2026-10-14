@@ -89,6 +89,10 @@ def amplifier_key(df: pd.DataFrame) -> np.ndarray:
     return (df["board"].astype(str) + "_ch" + df["channel"].astype(str)).to_numpy()
 
 
+#: The Allan curve of real traces that model A uses when present (see StructuredPrep.transform).
+REAL_ALLAN = "noise: Allan deviation, common pattern removed"
+
+
 class StructuredPrep:
     """
     Builds the inputs of ``HierGP`` / ``PhysicsStructured`` from a dataset (synthetic or dataset.csv):
@@ -145,7 +149,10 @@ class StructuredPrep:
     def transform(self, df: pd.DataFrame, curves: dict) -> dict:
         theta = df[self.theta_cols].to_numpy(float)
         x = np.hstack([theta, self.state_vector(df)])
-        a, b = allan_fit(curves["noise: Allan deviation"], self.allan_ns, max_n=self.allan_max_n)
+        # real traces: the curve that keeps slow pixel-to-pixel noise (trace_features, 2026-10-14); the detrended
+        # one loses the floor.  (The synthetic world's "noise: Allan deviation" already contains its floor.)
+        name = REAL_ALLAN if REAL_ALLAN in curves else "noise: Allan deviation"
+        a, b = allan_fit(curves[name], self.allan_ns, max_n=self.allan_max_n if name != REAL_ALLAN else None)
         keys = amplifier_key(df)
         amp = self.ids(self.amp_ids, keys)
         onehot = np.zeros((len(df), len(self.amp_ids)))
