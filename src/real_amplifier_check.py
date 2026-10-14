@@ -7,10 +7,15 @@ Three questions, each answered with data we already have (module 101 only, as fo
    does it differ?  From the 2026-10-06 1x1 image (3000 skips) the 0, 1, 2, ... electron peaks of every channel
    give its gain (peak spacing) and its noise (peak width), without WADERs.
 
-2. READ NOISE FROM THE TRACE, NO LABEL.  Predict each channel's image noise (ADU, 3000 skips) from its own traces
-   (2026-10-06 and 2026-10-08, nominal settings): white noise only, and sqrt(a^2/N + b^2) from the Allan curves.
-   Then convert to electrons with (a) the channel's own gain (needs a label) and (b) the mean gain of the OTHER
-   channels (no label for this one: what an amplifier-agnostic model would do).
+2. READ NOISE FROM THE TRACE, NO LABEL -- AN EXTRAPOLATION CHECK ONLY.  Predict each channel's image noise (ADU,
+   3000 skips) from its own 500-skip traces (2026-10-06 and 2026-10-08, nominal settings): white noise only, and
+   sqrt(a^2/N + b^2) from the Allan curves.  Then convert to electrons with (a) the channel's own gain (needs a
+   label) and (b) the mean gain of the OTHER channels (no label: what an amplifier-agnostic model would do).
+   CAVEAT: a 500-skip trace and a 3000-skip image are not directly comparable.  The fit uses blocks of at most
+   100-160 skips and is evaluated at N = 3000, where the noise floor dominates; noise slower than the trace's
+   reach, and pixel-to-pixel baseline differences of the image, are not constrained by the trace, and the image
+   and traces were taken at different times.  So this tests the extrapolation, not the trace physics.  The real
+   test needs the planned packets: a 1x1 500-skip image with matched traces taken minutes apart.
 
 3. DO THE AMPLIFIERS RESPOND ALIKE TO THE SAME CHANGE?  An amplifier-agnostic model learns ONE dependence on the
    settings for all amplifiers.  From the 2026-10-12 packet tests (settings 2-5, 3 trace sets each), compare
@@ -188,7 +193,7 @@ def main():
     g = np.array([img[ch]["gain"] for ch in good])
     print(f"  gain spread over channels {good}: {100 * g.std() / g.mean():.1f} % (sd/mean), range {g.min():.3f}-{g.max():.3f}")
 
-    print("\n== 2. image noise predicted from each channel's own traces (ADU, 3000 skips)")
+    print("\n== 2. EXTRAPOLATION CHECK: 3000-skip image noise from each channel's own 500-skip traces (ADU)")
     tr = trace_predictions()
     print(f"  {'ch':3s} {'traces':>6s} {'image':>7s} {'white':>7s} {'detrended a,b':>14s} {'common removed a,b':>19s}")
     for ch in range(4):

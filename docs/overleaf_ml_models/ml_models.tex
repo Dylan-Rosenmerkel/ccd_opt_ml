@@ -10,12 +10,13 @@
 \usepackage{float}
 \usepackage{xcolor}
 \usepackage{tcolorbox}
+\tcbuselibrary{breakable}
 \usepackage{hyperref}
 \graphicspath{{figures/}}
 
 \newcommand{\code}[1]{\texttt{#1}}
-\newtcolorbox{basic}[1][]{colback=green!4,colframe=green!40!black,title={In plain words},fonttitle=\bfseries,#1}
-\newtcolorbox{advanced}[1][]{colback=blue!3,colframe=blue!40!black,title={The precise version},fonttitle=\bfseries,#1}
+\newtcolorbox{basic}[1][]{breakable,colback=green!4,colframe=green!40!black,title={In plain words},fonttitle=\bfseries,#1}
+\newtcolorbox{advanced}[1][]{breakable,colback=blue!3,colframe=blue!40!black,title={The precise version},fonttitle=\bfseries,#1}
 
 \title{Machine-Learning Models for Optimizing Skipper-CCD Operating Parameters:\\
 What They Do, What They Need, and Whether They Should See the Full Trace}
@@ -72,8 +73,11 @@ comparison will be repeated on the first scan.
   6 times better ($\sigma_e$ 1.8\,\% at 240 packets); pre-training (D) helps with few labels; the deep kernel (C) needs a frozen encoder or
   calibration; a trust region (F) found the best settings. Set models (E), several modules (G), multi-fidelity and ParEGO gave no gain
   in the toy world.
-\item \textbf{Existing real data} (2026-10-12): the image's overscan noise is 1.2--9 times what the traces predict, which supports
-  learning a correction on top of the trace physics.
+\item \textbf{Amplifier labels} (Section~\ref{sec:amplabels}): not needed. A model given each amplifier's own traces instead of its identity
+  was as good (synthetic: $\sigma_e$ 1.8 vs 1.7\,\%), and is now the default. A never-seen amplifier's gain still needs one image; on
+  module 101 the gains differ by only 2\,\%.
+\item \textbf{Existing real data}: no skip-matched trace and image exist yet, so how well a trace predicts the image's noise is still
+  open (the 3000-skip comparison is an extrapolation). The planned packets will test it.
 \item \textbf{Real data} (Sections~\ref{sec:realtest}--\ref{sec:format}): a staged test plan; the packets need no extra time, but per-row
   $\lambda$ from WADERs, a scan design with joint changes, trace-only packets, recorded conditions and 2--5 packets per new module would help;
   and a set of linked tables (per trace set, curves, labels with errors, image rows) instead of one flat \code{dataset.csv}.
@@ -1203,6 +1207,99 @@ random & $-2.556$ & $-2.665$ & 0 & 0.091 \\
 \caption{F: best true objective against cost (left) and the points tried in one repeat (right).}
 \label{fig:advbo}
 \end{figure}
+
+%======================================================================
+\section{Do the models need amplifier labels?}
+\label{sec:amplabels}
+
+\begin{basic}
+Until now most models were told which amplifier they predict (a label), because the amplifiers differ a lot. That ties a model to the
+amplifiers it was trained on. The question is whether a model can work for \emph{any} amplifier, without labels.
+
+\textbf{Answer so far: yes, if it sees the amplifier's own traces.}
+\begin{itemize}
+\item An amplifier is recognized by its traces (its own trace and reference features), not by a label.
+\item On the synthetic world this was as good as the labeled model (Table~\ref{tab:amplabels}).
+\item What no trace can give is a \emph{never-seen} amplifier's gain, so its absolute $\sigma_e$ in electrons. On module 101 the
+  measured gains differ by only 2\,\%, and a model without labels still orders the settings correctly, which is what the optimizer needs.
+\end{itemize}
+Since 2026-10-14 this is the default model: \code{PhysicsStructured()} with \code{StructuredPrep()}.
+\end{basic}
+
+\subsection{Synthetic test (\code{src/ml/benchmark\_amp.py})}
+Three kinds of input:
+\begin{itemize}
+\item \textbf{explicit} amplifier identity (one-hot, or the hierarchical GP's amplifier level);
+\item \textbf{implicit} identity: no label, but each amplifier's own trace and reference features;
+\item \textbf{none}: the settings, the packet's state and, for A, the trace physics only.
+\end{itemize}
+They were tested on amplifiers seen in training and on a module never seen (0 or 2 of its packets in training), over 3 training scans.
+Besides the usual error, two scores matter for an amplifier-agnostic model:
+\begin{itemize}
+\item the \textbf{shape} error: the error after removing each amplifier's own mean offset (is the dependence on the settings right?);
+\item the \textbf{rank} correlation within each amplifier between predicted and true values (does it order the settings correctly?).
+\end{itemize}
+
+\begin{table}[h]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccc}
+\toprule
+& known amplifiers & new module, 0 packets & new module, 2 packets \\
+Model & \multicolumn{3}{c}{$\sigma_e$: error / shape error / rank} \\
+\midrule
+A+B, amplifier identity & 1.7\,\% / 1.7\,\% / 0.99 & 33\,\% / 2.0\,\% / 0.98 & 2.0\,\% / 1.9\,\% / 0.98 \\
+\textbf{A + own features, no identity} & \textbf{1.8\,\% / 1.8\,\% / 0.99} & 30\,\% / 2.0\,\% / 0.98 & \textbf{2.2\,\% / 1.9\,\% / 0.98} \\
+A, no amplifier information at all & 31\,\% / 2.6\,\% / 0.98 & 34\,\% / 2.7\,\% / 0.97 & 34\,\% / 2.7\,\% / 0.97 \\
+CNN on curves, no identity & 1.7\,\% / 1.6\,\% / 0.99 & 9\,\% / 2.8\,\% / 0.97 & 9\,\% / 3.0\,\% / 0.96 \\
+first round: GP, settings + identity + features & 12\,\% / 12\,\% / 0.70 & 95\,\% / 13\,\% / 0.36 & 19\,\% / 15\,\% / 0.08 \\
+first round: GP, settings + features, no identity & 12\,\% / 12\,\% / 0.70 & 77\,\% / 12\,\% / 0.42 & 17\,\% / 13\,\% / 0.45 \\
+first round: GP, settings only & 60\,\% / 15\,\% / 0.27 & 60\,\% / 14\,\% / 0.23 & 59\,\% / 13\,\% / 0.44 \\
+\bottomrule
+\end{tabular}
+\caption{$\sigma_e$ against the truth, mean of 3 training scans. Gain error of A + own features: 0.2\,\% (known), 30\,\% (new, 0
+packets), 1.1\,\% (new, 2 packets); $\lambda$: 1.8--2.9\,\% throughout.}
+\label{tab:amplabels}
+\end{table}
+
+\begin{itemize}
+\item \textbf{With the amplifier's own traces the label adds almost nothing}: 1.8 against 1.7\,\% on known amplifiers, and 2.2 against
+  2.0\,\% on a new module after 2 of its packets. The first-round GP is also the same with or without the label.
+\item \textbf{Without any amplifier information}, the level is wrong (31\,\%, the gain), but the shape (2.6\,\%) and the order of the settings
+  (0.98) are still right: the trace physics carries them.
+\item \textbf{A never-seen amplifier} (0 packets): every model is off by the gain ($\sim$30\,\% in this toy world) in absolute terms, while the
+  physics models keep the shape (2\,\%) and the order (0.98).
+\item The toy world's amplifiers have distinctive trace signatures; so do the real ones (2026-10-08: pairs of different amplifiers differed in
+  22--28 trace comparisons, pairs of the same amplifier in none).
+\end{itemize}
+
+\subsection{Real amplifiers (\code{src/real\_amplifier\_check.py}, module 101)}
+\begin{itemize}
+\item \textbf{Gains.} From the electron peaks of the 1$\times$1, 3000-skip image of 2026-10-06 (no WADERs): ch0 1.310, ch1 1.300, ch3
+  1.250\,ADU/e$^-$, a spread of 2\,\%; ch2's peaks are not resolved (its noise, 0.74\,ADU, equals the spacing), so its gain is unknown.
+  Using the other channels' mean gain instead of a label costs 1.5--4.4\,\%. The toy world's factor-2 gain differences are not seen here.
+\item \textbf{Responses to the same change of settings} (2026-10-12, settings 3--5 against 2, 85 features): changes beyond 6 repeat-scatter
+  units agree in sign 86--99\,\% between channels (correlation 0.85--0.96), so the dependence on the settings is largely shared. But
+  only 7--14 features change on all four channels, and the noise of ch2 changes alone (settings 3 and 4). A model that reads each
+  amplifier's own trace sees this without a label.
+\item \textbf{Noise from the trace: an extrapolation check only.} A 500-skip trace and a 3000-skip image cannot be compared directly.
+  The fit $\sigma_A(n)^2 = a^2/n + b^2$ uses blocks of at most 100--160 skips and is evaluated at $N = 3000$, where the noise floor
+  dominates. Noise slower than the trace's reach, and the image's pixel-to-pixel baseline differences, are not constrained by the
+  trace, and the image and traces were taken at different times. The extrapolation is off by $-25$ to $+45\,\%$ (ch0, ch1, ch3), with
+  or without the label: the per-skip white noise agrees, the image's long-time-scale noise does not follow from a 500-skip trace.
+  \textbf{The real test needs the planned packets}: a 1$\times$1, 500-skip image with matched traces taken minutes apart.
+\end{itemize}
+
+\subsection{Consequences}
+\begin{itemize}
+\item \textbf{Default model} (since 2026-10-14): A without amplifier identity, with the amplifier's own trace and reference
+  features. In code: \code{PhysicsStructured()} with \code{StructuredPrep()}. The hierarchical B remains available
+  (\code{kind="hier"}).
+\item \textbf{Image labels are still needed} for training: the scan's images teach the correction from trace noise to image noise. What is
+  not needed is the amplifier's identity.
+\item \textbf{A new amplifier:} its settings can be optimized without any label (shape and order); for its absolute $\sigma_e$ in electrons,
+  one imaged packet gives its gain, or the typical gain of its module (2\,\% spread on module 101).
+\end{itemize}
+
 
 \clearpage
 %======================================================================
