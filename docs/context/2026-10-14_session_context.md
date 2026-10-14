@@ -513,3 +513,21 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
   trace set's Allan fit. The notes of 10-12 already suggest overscan 0.42–0.66 ADU vs a white-noise
   extrapolation of the ch0 CDS noise 5.7/√500 = 0.25 ADU, i.e. the image noise is ~2× the white-noise
   prediction (a floor or image-only noise; needs checking: binned 20×20 overscan, NCOLPRE 185 traces).
+
+**Stage-0 check on REAL data (2026-10-12, module 101; scratchpad `stage0.py`):**
+* **Trace noise:** white up to n = 100 skips (Allan / (CDS rms/√n) = 0.92–1.15 on ch0, ch1, ch3; ch2
+  falls to 0.57 at n = 100). The n = 160 point is ~0.43 on every channel: an artifact (500 skips → only 3
+  blocks).
+  * With that point, `allan_fit` gives b = 0 and a below the CDS rms (3.6–4.5 vs 5.7 ADU).
+  * **Fix:** on real data, use only n ≤ N/5.
+* **The real Allan curve is computed on the DETRENDED CDS** (trace_features), which removes exactly the
+  slow noise that makes a floor.
+  * **Recommendation:** add an Allan curve of the non-detrended CDS (or of the pixel means across the
+    trace's pixels) as a new curve, so that model A can measure the floor on real traces.
+* **Image vs trace:** the image overscan noise (binned 20×20, NDCM 500) is 0.42–0.66 ADU on ch0 against the
+  white-noise extrapolation 5.7/√500 = 0.25 ADU (×1.7–2.6), and 1.5–1.9 ADU on ch1/ch3 (×6–7).
+  * The image sees much more noise than the trace predicts: the world-v3 situation (or worse), so A's
+    learned correction r(x) will matter.
+  * Caveats: the binned overscan may hold serial-register charge; the traces had NCOLPRE 185; different
+    times.
+  * **The 1×1 packets will settle it** (stage 0 of the real-data plan).
