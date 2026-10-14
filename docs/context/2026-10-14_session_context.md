@@ -824,3 +824,46 @@ against the truth, world v2 unless noted):
   * 37 pages, 0 overfull, 0 undefined; zip rebuilt.
 * **Notebook:** E text updated, re-executed (0 errors).
 * **Nothing is running now.**
+
+## 2l. The group's voltage rules and the ACM manual (user added docs/voltage_rules.txt, docs/Sequencer Notes.pdf)
+
+* **User inputs (2026-10-14):**
+  * the rules file (safe operation) and the ACM/LDAQ manual (appendix: hardware ranges, sequencer
+    constants, functions);
+  * a reference sequencer (Sravan M., April 2026) pasted in chat: CDS timing constants delayInt, delayRGL/H,
+    delaySWH/L, delayOGL/H, delayDGL/H; clock map V1A/V1B/V2C/V3A/V3B, TGA/TGB, H1A/H1B/H2C/H3A/H3B; readout
+    stages SW1/OG1/RG1/DG1 and SW2/...; pointers Vtransfer22 / HtransferUU;
+  * "timing parameters can be changed freely (their relations are not essential)"; timing may not be
+    scanned in the first tests.
+* **Implemented** (`src/ccd_limits.py`, `configs/limits.toml`, `daq_scripts/manual_packet.sh`, new
+  `src/check_limits.py`, all checks OK):
+  * **relations on the COMPLETE configuration** (`limits.toml` [nominal] = module_PA03.bcf fills pins a theta
+    does not contain; stage i ↔ VRi/VDDi/VDRAINi):
+    * HIGH ≥ LOW (equality allowed: TG H = L nominally);
+    * VDD > VDRAIN, SW_H > OG_H, DG_H > VR, DG_L < VR, OG_L < VR, OG_L ≥ SW_L;
+    * V lows > every TG level; H lows < every TG level; H3 lows > SW_1_H and SW_2_H;
+    * VDRAIN < DG_L, VDD < VR;
+  * **hardware ranges from the manual:** VR −13.8..−2, VDD/VDRAIN −27.9..−6, VSUB 6.7..88.3; rails
+    −10..+10 V for all (the manual; acmpy's code suggested ±20 for vertical; the narrower range is used),
+    so V?_?_H max 10.0;
+  * **limits.toml:**
+    * timing windows (10-ns cycles): delay_V? 1000–20000, delay_H? 200–6000, delayInt 50–20000,
+      delayRG?/SW?/OG?/DG? 1–10000, NVWAIT 0–1000, NPSD 1–1000;
+    * readout-stage windows (SW, OG, RG, DG: ±2 V placeholders);
+    * reviewed = false;
+  * **manual_packet.sh:** the same rules + hardware ranges in its awk check (tested: nominal + example OK;
+    broken changes refused, exit 1);
+  * **scan_packets:** design group names (e.g. TG_L) expand onto the reference's pins;
+    `configs/scan_mixed_example.toml` now sweeps TG_L 6.8–7.4 (the TG may only go DOWN: V lows 7.7 above,
+    H lows below) and H1_A_L 6.0–7.3. Dry run valid (154 packets).
+* **Open (asked):**
+  * the rules file's "DGL<=SWL" was a typo; the user corrected it to "**DGL<=OGL**". But nominal has
+    DG_L −5 > OG_L −6 (and the manual example −8 > −9), so as written it refuses nominal. It is reported as a
+    WARNING (`Limits.warnings`), not enforced, until the direction is confirmed;
+  * my interim DG_L ≥ SW_L rule was removed.
+* **Still to consider:**
+  * the manual says "delay constants are in µs", but the sequencer has clockperiod 10 ns and our code uses
+    cycles (consistent with trace_geometry);
+  * which CCD (ch0..3 = CCD_D, C, A, B) uses which clock side (A/B, U/L) and readout stage (1/2): asked, for
+    amplifier-specific θ in the models;
+  * trace_geometry already takes every CDS/transfer delay from the .meta, so timing scans are handled.

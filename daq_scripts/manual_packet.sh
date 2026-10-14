@@ -81,9 +81,10 @@ SW_2_H 1.0  SW_2_L -6.0  OG_2_H 0.0  OG_2_L -6.0  RG_2_H 9.0  RG_2_L 3.0  DG_2_H
 # 4. the group's safe-operation rules (docs/voltage_rules.txt; the same as src/ccd_limits.py), on the
 #    COMPLETE configuration (nominal + changes), for readout stage / bias set i = 1, 2:
 #      VDDi > VDRAINi,  SW_i_H > OG_i_H,  DG_i_H > VRi,  DG_i_L < VRi,  OG_i_L < VRi,  OG_i_L >= SW_i_L,
-#      DG_i_L >= SW_i_L,  VDRAINi < DG_i_L,  VDDi < VRi;  every V clock low above every TG level;
+#      VDRAINi < DG_i_L,  VDDi < VRi;  every V clock low above every TG level;
 #      every H clock low below every TG level;  H3 lows above SW_1_H and SW_2_H.
-#    (The rules file's "DGL<=SWL" was a typo for DG_L >= SW_L: confirmed 2026-10-14.)
+#    (The rules file's "DGL<=SWL" was corrected to "DGL<=OGL" (2026-10-14); NOT checked yet: nominal
+#     has DG_L -5 > OG_L -6, so its direction is being confirmed.)
 # 5. hardware ranges of the ACM manual: clock rails -10..+10 V; VR -13.8..-2, VDD and VDRAIN -27.9..-6,
 #    VSUB 6.7..88.3 V.
 # The allowed WINDOWS of configs/limits.toml are not checked here (scan_packets.py / take_packet.py do).
@@ -115,7 +116,7 @@ check_and_show() {
             rule("VDD" i, ">", "VDRAIN" i);      rule("SW_" i "_H", ">", "OG_" i "_H")
             rule("DG_" i "_H", ">", "VR" i);     rule("DG_" i "_L", "<", "VR" i)
             rule("OG_" i "_L", "<", "VR" i);     rule("OG_" i "_L", ">=", "SW_" i "_L")
-            rule("DG_" i "_L", ">=", "SW_" i "_L"); rule("VDRAIN" i, "<", "DG_" i "_L")
+            rule("VDRAIN" i, "<", "DG_" i "_L")
             rule("VDD" i, "<", "VR" i)
             range("VR" i, -13.8, -2); range("VDD" i, -27.9, -6); range("VDRAIN" i, -27.9, -6)
           }

@@ -17,12 +17,13 @@ What is checked
    (:meth:`Limits.ramp_plan`).
 3. **Relationships**   - rules that tie several parameters together (:func:`relational_constraints`),
    from the group's safe-operation rules (``docs/voltage_rules.txt``, 2026-10-14): clock HIGH >= LOW,
-   VDD > VDRAIN, SW_H > OG_H, DG_H > VR, DG_L < VR, OG_L < VR, OG_L >= SW_L, DG_L >= SW_L, V clock lows
-   above TG, H clock lows below TG, H3 lows above SW_H, VDRAIN < DG_L, VDD below VR.  Rules that involve
+   VDD > VDRAIN, SW_H > OG_H, DG_H > VR, DG_L < VR, OG_L < VR, OG_L >= SW_L, V clock lows above TG,
+   H clock lows below TG, H3 lows above SW_H, VDRAIN < DG_L, VDD below VR.  Rules that involve
    pins a parameter set does not contain are checked with the NOMINAL values of those pins (``[nominal]``
    in limits.toml, the module's .bcf), so a partial change cannot break a rule unnoticed.  (The rules file
-   writes "DGL<=SWL"; that was a typo, confirmed by the group on 2026-10-14: the rule is DG_L >= SW_L, as
-   the nominal configuration (-5 >= -6) and the ACM manual's example (-8 >= -10) have it.)
+   writes "DGL<=SWL"; the group corrected it to "DGL<=OGL" on 2026-10-14.  That rule is NOT enforced yet:
+   the nominal configuration (DG_L -5 > OG_L -6) and the ACM manual's example (-8 > -9) both break it, so
+   its direction is being confirmed; until then it is reported by :meth:`Limits.warnings`.)
 
 The module only uses the Python standard library so that it runs on the DAQ
 computer without extra installs.
@@ -207,8 +208,6 @@ def relational_constraints(pins: Mapping[str, float], sequencer: Mapping[str, in
             violations.append(f"{og_l}={v[og_l]} must be below {vr}={v[vr]}")
         if need(og_l, sw_l) and not v[og_l] >= v[sw_l]:
             violations.append(f"{og_l}={v[og_l]} must be at or above {sw_l}={v[sw_l]}")
-        if need(dg_l, sw_l) and not v[dg_l] >= v[sw_l]:
-            violations.append(f"{dg_l}={v[dg_l]} must be at or above {sw_l}={v[sw_l]}")
         if need(vdrain, dg_l) and not v[vdrain] < v[dg_l]:
             violations.append(f"{vdrain}={v[vdrain]} must be below {dg_l}={v[dg_l]}")
         if need(vdd, vr) and not v[vdd] < v[vr]:
@@ -234,10 +233,20 @@ def relational_constraints(pins: Mapping[str, float], sequencer: Mapping[str, in
 
 def relational_warnings(pins: Mapping[str, float], nominal: Mapping[str, float] | None = None) -> list[str]:
     """
-    Written rules that are reported but not enforced.  None at present: the one candidate (the rules file's
-    "DGL<=SWL") was a typo for DG_L >= SW_L, which is now enforced in :func:`relational_constraints`.
+    Written rules that are reported but not enforced while they contradict the configurations in use:
+
+    * DG_L <= OG_L (the rules file's "DGL<=SWL", corrected by the group to "DGL<=OGL" on 2026-10-14): the
+      nominal .bcf has DG_L = -5 > OG_L = -6 and the ACM manual's example -8 > -9.  Direction to be confirmed;
+      then move it to relational_constraints.
     """
-    return []
+    v = {**(nominal or {}), **pins}
+    out = []
+    for i in ("1", "2"):
+        dg_l, og_l = f"DG_{i}_L", f"OG_{i}_L"
+        if dg_l in v and og_l in v and not v[dg_l] <= v[og_l]:
+            out.append(f"{dg_l}={v[dg_l]} is above {og_l}={v[og_l]}: the rule DG_L <= OG_L is not met "
+                       f"(the nominal .bcf and the ACM manual's example do the same; direction to be confirmed)")
+    return out
 
 
 # --------------------------------------------------------------------------- #
