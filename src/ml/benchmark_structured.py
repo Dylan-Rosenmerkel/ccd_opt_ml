@@ -135,6 +135,18 @@ STYLE = {"first round: GP, theta + amp + features": ("#8c8c8c", "-", "o"),
          "A+B, lambda = dark + CIC": ("#9b2226", "-.", "v")}
 
 
+def _plain_log_axis(ax, xticks=None):
+    """Log axes labelled with plain numbers (no labels on the minor ticks, which overlap)."""
+    from matplotlib.ticker import FuncFormatter, NullFormatter
+    fmt = FuncFormatter(lambda v, _: f"{v:g}")
+    if xticks is not None:
+        ax.set_xticks(xticks)
+    ax.xaxis.set_major_formatter(fmt)
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.yaxis.set_major_formatter(fmt)
+    ax.yaxis.set_minor_formatter(FuncFormatter(lambda v, _: f"{v:g}" if str(f"{v:g}")[0] in "25" else ""))
+
+
 def plot_learning(results, figs):
     fig, axes = plt.subplots(2, 3, figsize=(16, 8.4))
     for row, world in enumerate(results):
@@ -146,6 +158,7 @@ def plot_learning(results, figs):
                 ax.plot([int(n) for n in ns], [by_n[n]["truth"][t]["rel_error"] * 100 for n in ns], ls, color=color,
                         marker=marker, ms=4, label=label)
             ax.set(xscale="log", yscale="log", xlabel="training packets", ylabel="error against the truth (%)")
+            _plain_log_axis(ax, sorted({int(n) for by_n in results[world].values() for n in by_n}))
             ax.set_title(f"world {world}: " + {"sigma_e": "read noise $\\sigma_e$", "lambda": "dark charge $\\lambda$",
                                                "gain": "gain"}[t], fontsize=10)
             ax.grid(True, which="both", alpha=0.3)
@@ -188,9 +201,11 @@ def exp_newmodule(out, figs, n_train, ks):
             kk = sorted(by_k, key=int)
             ax.plot([int(k) + 0.5 for k in kk], [by_k[k]["truth"][t]["rel_error"] * 100 for k in kk], "-o", ms=4,
                     color=colors[label], label=label)
-        ax.set(xscale="log", yscale="log", xlabel="packets of the new module in training (+0.5)",
+        ax.set(xscale="log", yscale="log", xlabel="packets of the new module in training (k)",
                ylabel="error on the new module (%)",
                title={"sigma_e": "read noise $\\sigma_e$", "lambda": "dark charge $\\lambda$", "gain": "gain"}[t])
+        _plain_log_axis(ax, [k + 0.5 for k in ks])
+        ax.set_xticklabels([str(k) for k in ks])
         ax.grid(True, which="both", alpha=0.3)
     axes[0].legend(fontsize=7.5)
     fig.suptitle(f"A module never seen: trained on {n_train} packets of module 100 plus k packets of module 101", y=1.0)

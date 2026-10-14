@@ -393,3 +393,22 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
 * **Notebook generator:** written in the scratchpad (`make_structured_nb.py`, writes
   `notebooks/ml_structured_models.ipynb`), not run yet. It reads `structured_learning/newmodule/design/
   conformal/bo.json`.
+
+**Learning results (error against the truth, 200 test packets; `docs/ml_results/structured_learning.json`):**
+* **σe, v2:** A+B 2.4 % at 15 packets and 2.0 % from 30 on (flat: limited by the precision of the trace
+  measurement, 10 sets); A with an ordinary GP is about the same from 120 on. First-round GP: 18 → 12–14 %;
+  CNN: 12.7 % (60), 8.5 % (240), **1.2 % (480)**, so the CNN overtakes A+B only at ~480 packets.
+  Without the floor measurement: 12–17 %.
+* **σe, v3** (image-only noise): A+B 3.3 % (15), 4.4 % (30), 3.1 % (60), 2.2 % (240–480); first-round GP
+  10–17 %; CNN 7.7 % (240), 1.5 % (480).
+* **λ:** A+B is the same as the first-round GP (λ is not what A changes): v2 21 % (15), 10 % (30), 7 % (60),
+  3 % (120), 1.3–1.6 % (240–480); the first-round GP is better at 30–120 packets (8.5 %, 4.4 %, 2.1 %).
+  * **The dark + CIC split (v3) is WORSE at every size** (34 %, 32 %, 9.6 %, 5.7 %, 2.3 %, 2.3 %, against
+    41 %, 18 %, 6.2 %, 3.9 %, 1.6 %, 1.5 % direct) and its coverage is too wide (0.9–1.0). The 16-row
+    components are too noisy (CIC 26 %). The per-row λ is still worth having as a stage-0 physics check
+    and for longer images; a joint likelihood would be the right way to use it.
+* **Gain:** hierarchical 0.1–0.6 %; ordinary 0.2–0.9 %.
+* **Coverage:** A+B 0.56–0.59 at 15 packets, 0.66–0.74 from 30 on.
+* Figures redrawn with plain tick labels: `ml_structured_learning.png`, `ml_structured_newmodule.png`.
+* `models.n_rows` now handles dict inputs without curves; conformal + design were rerun (log
+  `structured_cd.log`).

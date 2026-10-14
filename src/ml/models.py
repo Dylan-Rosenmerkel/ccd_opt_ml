@@ -48,7 +48,9 @@ def take(X, idx):
 
 
 def n_rows(X) -> int:
-    return len(X["curves"]) if isinstance(X, dict) else len(X)
+    if isinstance(X, dict):
+        return len(X["curves"]) if "curves" in X else len(next(v for v in X.values() if v is not None))
+    return len(X)
 
 
 # --------------------------------------------------------------------------- #
