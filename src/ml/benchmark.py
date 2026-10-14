@@ -58,7 +58,7 @@ THETA_CURVES = sorted(synthetic.CURVES)                            # curves of t
 ALL_CURVES = THETA_CURVES + ["ref: " + n for n in THETA_CURVES]    # ... and of the reference traces
 
 
-def inputs_for(df, curves, groups, use_curves, curve_names=None):
+def inputs_for(df, curves, groups, use_curves, curve_names=None, log_frequency_spectra=False):
     """Model input for one input set (the same columns, in the same order, for every synthetic scan)."""
     if groups:
         X, cols = data.make_inputs(df, groups, drop_constant=False)
@@ -67,7 +67,8 @@ def inputs_for(df, curves, groups, use_curves, curve_names=None):
     if use_curves:
         names = curve_names or THETA_CURVES
         log_names = tuple(n for n in names if "Allan" in n or "spectrum" in n or "variation" in n)
-        return {"curves": data.curve_tensor(curves, names, log_names=log_names), "scalars": X}, cols
+        return {"curves": data.curve_tensor(curves, names, log_names=log_names, log_frequency_spectra=log_frequency_spectra),
+                "scalars": X}, cols
     return X, cols
 
 

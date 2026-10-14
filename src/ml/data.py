@@ -91,19 +91,38 @@ def resample(curve: np.ndarray, length: int) -> np.ndarray:
     return np.interp(np.linspace(0, 1, length), np.linspace(0, 1, curve.size), curve)
 
 
+def log_frequency(curve: np.ndarray) -> np.ndarray:
+    """
+    A spectrum sampled on a linear frequency axis (first point f = 0), resampled on a LOGARITHMIC axis with
+    the same number of points (f = 0 kept first).  On a linear axis the lowest frequencies, where noise that
+    does not average down shows up, are 2 points out of hundreds; on a log axis they get as many points as
+    every other decade.  (Self-supervised pre-training on the synthetic world only learned the noise floor
+    from log-frequency spectra: probe R^2 0.70 against 0.08.)
+    """
+    curve = np.atleast_2d(np.asarray(curve, float))
+    m = curve.shape[1]
+    f = np.linspace(0, 1, m)
+    g = np.r_[0, np.geomspace(f[1], 1, m)[:-1]]
+    return np.array([np.interp(g, f, row) for row in curve])
+
+
 def curve_tensor(curves: dict[str, np.ndarray], names: list[str] | None = None, length: int = 256,
-                 log_names: tuple[str, ...] = ("noise: Allan deviation", "noise: CDS spectrum")) -> np.ndarray:
+                 log_names: tuple[str, ...] = ("noise: Allan deviation", "noise: CDS spectrum"),
+                 log_frequency_spectra: bool = False) -> np.ndarray:
     """
     Stack curves as channels of one array (n_rows, n_curves, length) for a 1D CNN.
 
     Every curve is resampled to ``length`` points; spectra and Allan deviations are taken in log
-    (they span decades).  Normalization (per position, from the training rows only) is done by
+    (they span decades).  ``log_frequency_spectra``: curves whose name contains "spectrum" are first put
+    on a logarithmic frequency axis (``log_frequency``).  Normalization (per position, from the training rows only) is done by
     the model, not here, so that no information leaks from the test rows.
     """
     names = names or sorted(curves)
     stacked = []
     for name in names:
         c = np.asarray(curves[name], float)
+        if log_frequency_spectra and "spectrum" in name:
+            c = log_frequency(c)
         if name in log_names:
             c = np.log(np.clip(c, 1e-30, None))
         stacked.append(np.array([resample(row, length) for row in c]))
