@@ -144,7 +144,7 @@ sure of itself (coverage ~0.1 in the benchmark). Live, frozen, 60 labeled packet
 
 code(r"""
 tr, ctr = synthetic.make_dataset(60, seed=1)
-prep = st.StructuredPrep().fit(tr)
+prep = st.StructuredPrep(own_features=()).fit(tr)
 P_tr, P_te = prep.transform(tr, ctr), prep.transform(te, cte)
 C_tr, _ = inputs_for(tr, ctr, ("theta",), True, ALL_CURVES, log_frequency_spectra=True)
 dkl = deep.DeepKernelGP(pre, finetune=False, steps=150).fit({"curves": C_tr["curves"], "x": P_tr["x"], "amp": P_tr["amp"]}, data.make_targets(tr)[0])
@@ -240,7 +240,7 @@ print("one image (DC 0.03, CIC 0.04 e-/pixel): sd DC %.4f, sd CIC %.4f, correlat
       % (np.sqrt(cov[0, 0]), np.sqrt(cov[1, 1]), cov[0, 1] / np.sqrt(cov[0, 0] * cov[1, 1]), np.sqrt(cov.sum())))
 kw = {"image_only_noise": True, "per_row_lambda": True}
 tr3, c3 = synthetic.make_dataset(120, seed=1, **kw); te3, ct3 = synthetic.make_dataset(150, seed=99, **kw)
-prep3 = st.StructuredPrep().fit(tr3); X3, Xt3 = prep3.transform(tr3, c3), prep3.transform(te3, ct3)
+prep3 = st.StructuredPrep(own_features=()).fit(tr3); X3, Xt3 = prep3.transform(tr3, c3), prep3.transform(te3, ct3)
 for lm in ("direct", "split", "joint"):
     m, s = st.PhysicsStructured("hier", lambda_model=lm).fit(X3, data.make_targets(tr3)[0], st.component_targets(tr3)).predict(Xt3)
     sc = evaluate.scores(truth(te3), m, s, TARGETS)

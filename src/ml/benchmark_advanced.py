@@ -78,7 +78,7 @@ def exp_pretrain(out, figs, sizes, n_unlabeled, n_test, epochs):
         Ytr = data.make_targets(tr)[0]
         X = {lf: [inputs_for(d, c, ("theta", "amp"), True, ALL_CURVES, log_frequency_spectra=lf)[0] for d, c in ((tr, ctr), (te, cte))]
              for lf in (False, True)}
-        prep = st.StructuredPrep().fit(tr)
+        prep = st.StructuredPrep(own_features=()).fit(tr)
         P = [prep.transform(tr, ctr), prep.transform(te, cte)]
         dk = [{"curves": X[True][i]["curves"], "x": P[i]["x"], "amp": P[i]["amp"]} for i in range(2)]
         plan = {"CNN from scratch (first round)": (lambda: models.CurveCNN(), X[False]),
@@ -135,7 +135,7 @@ def exp_sets(out, figs, sizes, n_test, seeds):
     for n in sizes:
         for seed in seeds:
             tr, ctr = synthetic.make_dataset(n, seed=seed, **V4)
-            prep = st.StructuredPrep().fit(tr)
+            prep = st.StructuredPrep(own_features=()).fit(tr)
             Xtr = dict(prep.transform(tr, ctr), sets=ctr["sets: noise: Allan deviation"])
             Xte = dict(prep.transform(te, cte), sets=cte["sets: noise: Allan deviation"])
             for comb in setmodels.COMBINERS:

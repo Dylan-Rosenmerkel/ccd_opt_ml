@@ -32,6 +32,14 @@ B. HIERARCHICAL GAUSSIAN PROCESS (``HierGP``)
    shared prediction with the offset variances added to its error bar; after a few of its packets
    the offsets are learned from those packets alone (shrunk toward 0 by the prior).
 
+DEFAULT MODEL (recommended for real data, 2026-10-14): ``PhysicsStructured()`` with ``StructuredPrep()``, i.e. model A
+with NO amplifier identity, given each amplifier's OWN trace and reference features instead (``own_features``).  On
+the synthetic world it matched the version told the amplifier (sigma_e 1.8 vs 1.7 % on known amplifiers; 2.2 vs
+2.0 % on a new module after 2 of its packets; benchmark_amp.py), and it works for any amplifier: an amplifier is
+recognized by its traces, not by a label.  What no input can give for a never-seen amplifier is its gain (the
+trace measures sigma_1 x g): its absolute sigma_e in electrons then needs one imaged packet (on module 101 the
+measured gains differ by only 2 %).  The hierarchical version (kind="hier", B) remains available.
+
 Inputs for both (``StructuredPrep``): theta, and a PACKET STATE VECTOR: the reference-trace features of
 the packet, minus each amplifier's own average (learned on training rows), averaged over the
 amplifiers of the packet.  It measures the CCD's drifting state (temperature, history) with the
@@ -110,13 +118,13 @@ class StructuredPrep:
     """
 
     def __init__(self, allan_ns: np.ndarray | None = None, n_skips: int = 500, min_rows: int = 20,
-                 allan_max_n: float | None = None, own_features: tuple[str, ...] = ()):
+                 allan_max_n: float | None = None, own_features: tuple[str, ...] = ("trace", "ref")):
         from . import synthetic
         self.allan_ns = synthetic.ALLAN_N if allan_ns is None else np.asarray(allan_ns)
         self.n_skips, self.min_rows, self.allan_max_n = n_skips, min_rows, allan_max_n   # real data: allan_max_n = n_skips / 5
-        # own_features: also give each row its OWN trace features ("trace", "ref"): the amplifier is then recognized
-        # from its signature instead of an identity (no amplifier ID needed; it also works for an unseen amplifier
-        # if the signature-to-behaviour relation carries over)
+        # own_features (default ("trace", "ref")): also give each row its OWN trace features: the amplifier is then
+        # recognized from its signature instead of an identity (no amplifier ID needed; it also works for an
+        # unseen amplifier).  own_features=() reproduces the inputs of the benchmarks before 2026-10-14.
         self.own_features = tuple(own_features)
 
     def fit(self, df: pd.DataFrame):
@@ -525,13 +533,23 @@ class PhysicsStructured:
     predict(X) -> mean, std of the same three logs.
     """
 
-    def __init__(self, kind: str = "hier", n_skips: int = 500, use_components: bool = True, use_floor: bool = True,
+    def __init__(self, kind: str = "none", n_skips: int = 500, use_components: bool = False, use_floor: bool = True,
                  lambda_model: str | None = None, **kw):
-        """lambda_model: "direct" (a GP on log lambda), "split" (two separate GPs on log DC, log CIC) or "joint"
+        """kind: "none" (default: no amplifier identity; give the amplifier's own features through StructuredPrep),
+        "hier" (A+B: amplifier and module levels) or "plain" (ordinary GP + amplifier one-hot).
+        lambda_model: "direct" (a GP on log lambda), "split" (two separate GPs on log DC, log CIC) or "joint"
         (JointLambdaGP on the per-row line fits); default: "split" if use_components else "direct"."""
         self.kind, self.n_skips, self.use_components, self.use_floor, self.kw = kind, n_skips, use_components, use_floor, kw
         self.lambda_model = lambda_model or ("split" if use_components else "direct")
         self.name = ("A+B" if kind == "hier" else "A") + ": physics-structured"
+
+    def _lambda_inputs(self, X):
+        """The joint-lambda GP's inputs: as given (hier), with the amplifier one-hot (plain), or x only (none)."""
+        if self.kind == "hier":
+            return X
+        if self.kind == "plain":
+            return {"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"]}
+        return {"x": X["x"], "amp": X["amp"]}
 
     def physics_log_sigma_adu(self, X) -> np.ndarray:
         """1/2 log(a^2/N + b^2): the read noise after N skips, in ADU, measured on the trace (b = 0 if not use_floor)."""
@@ -547,8 +565,7 @@ class PhysicsStructured:
         self.joint = self.lambda_model == "joint" and "lambda_parts" in X
         self.split = self.lambda_model == "split" and components is not None
         if self.joint:
-            self.lam = JointLambdaGP(levels=("module", "amp") if self.kind == "hier" else ()).fit(
-                X if self.kind == "hier" else {"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"]}, X["lambda_parts"])
+            self.lam = JointLambdaGP(levels=("module", "amp") if self.kind == "hier" else ()).fit(self._lambda_inputs(X), X["lambda_parts"])
         elif self.split:
             self.dark = make_gp(self.kind, **self.kw).fit(X, components[:, 0])
             self.cic = make_gp(self.kind, **self.kw).fit(X, components[:, 1])
@@ -562,7 +579,7 @@ class PhysicsStructured:
         m_s = self.physics_log_sigma_adu(X) - mg[:, 0] + mr[:, 0]
         s_s = np.sqrt(sg[:, 0] ** 2 + sr[:, 0] ** 2)
         if self.joint:
-            ml, sl = self.lam.predict(X if self.kind == "hier" else {"x": np.hstack([X["x"], X["onehot"]])})
+            ml, sl = self.lam.predict(self._lambda_inputs(X))
             m_l, s_l = ml[:, 0], sl[:, 0]
         elif self.split:
             (md, sd), (mc, sc) = self.dark.predict(X), self.cic.predict(X)

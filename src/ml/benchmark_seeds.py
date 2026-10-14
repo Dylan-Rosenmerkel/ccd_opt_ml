@@ -119,7 +119,7 @@ def exp_pretrain(out, seeds, sizes, n_unlabeled, n_test, epochs):
             _record(results, key, "CNN from scratch, log-frequency", _cnn((tr, ctr), (te, cte), True, names=ALL_CURVES), "pretrain")
             _record(results, key, "D: pre-trained, fine-tuned",
                     _cnn((tr, ctr), (te, cte), True, names=ALL_CURVES, make=lambda: deep.PretrainedCNN(pre)), "pretrain")
-            prep = st.StructuredPrep().fit(tr)
+            prep = st.StructuredPrep(own_features=()).fit(tr)
             Xc = [inputs_for(d, c, ("theta",), True, ALL_CURVES, log_frequency_spectra=True)[0]["curves"] for d, c in ((tr, ctr), (te, cte))]
             P = [prep.transform(tr, ctr), prep.transform(te, cte)]
             t0 = time.time()
@@ -136,7 +136,7 @@ def exp_sets(out, seeds, sizes, n_test):
     for seed in seeds:
         for n in sizes:
             tr, ctr = synthetic.make_dataset(n, seed=seed, **V4)
-            prep = st.StructuredPrep().fit(tr)
+            prep = st.StructuredPrep(own_features=()).fit(tr)
             Xtr = dict(prep.transform(tr, ctr), sets=ctr["sets: noise: Allan deviation"])
             Xte = dict(prep.transform(te, cte), sets=cte["sets: noise: Allan deviation"])
             for comb in ("median", "robust mean", "robust mean of variances", "learned"):

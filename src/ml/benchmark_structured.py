@@ -69,7 +69,7 @@ def run_structured(make, train, test, full=None):
     """A second-round model.  ``full`` = (df, curves, train rows, test rows): the inputs are built on whole
     packets (the packet state vector needs every amplifier of the packet), then split."""
     (df_tr, cv_tr), (df_te, cv_te) = train, test
-    prep = st.StructuredPrep().fit(df_tr)
+    prep = st.StructuredPrep(own_features=()).fit(df_tr)
     if full is None:
         X_tr, X_te = prep.transform(df_tr, cv_tr), prep.transform(df_te, cv_te)
     else:
@@ -320,7 +320,7 @@ def exp_conformal(out, figs, sizes, n_test):
         train = synthetic.make_dataset(n, seed=1)
         Y_tr = data.make_targets(train[0])[0]
         groups = train[0]["packet_id"].to_numpy()
-        prep = st.StructuredPrep().fit(train[0])
+        prep = st.StructuredPrep(own_features=()).fit(train[0])
         plan = {"boosted trees, theta + amp + features": (models.GBT, *[inputs_for(*d, FEATURE_GROUPS, False)[0] for d in (train, test)], None),
                 "NN ensemble, theta + amp + features": (models.MLPEnsemble, *[inputs_for(*d, FEATURE_GROUPS, False)[0] for d in (train, test)], None),
                 "CNN, curves + theta + amp": (models.CurveCNN, *[inputs_for(*d, ("theta", "amp"), True, THETA_CURVES)[0] for d in (train, test)], None),
