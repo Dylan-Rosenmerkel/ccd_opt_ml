@@ -694,3 +694,22 @@ against the truth, world v2 unless noted):
   R² −0.37); the full benchmark does (0.71); the text says so.
 * **To do when the runs finish:** joint λ and robustness (seeds) into ml_models.tex; rerun the notebook's
   last cell (seeds_summary).
+* **Seeds results so far:**
+  * **Joint λ** (v3, 3 scans, mean ± sd):
+
+    | | n = 30 | 60 | 120 | 240 |
+    |---|---|---|---|---|
+    | direct | 13.5 ± 3.7 | 5.4 ± 0.6 | 3.1 ± 0.8 | 1.8 ± 0.3 |
+    | split | 16.9 ± 10.2 | 6.3 ± 2.3 | 3.9 ± 1.3 | 2.8 ± 0.8 |
+    | joint | 14.8 ± 9.3 | 4.8 ± 1.9 | 3.1 ± 1.3 | 1.6 ± 0.3 |
+
+    So joint ≈ direct (slightly better from 60, within the scatter) and always better than split.
+  * **New module** (5 scans), σe for A+B:
+
+    | | k = 0 | 1 | 2 | 5 |
+    |---|---|---|---|---|
+    | A+B | 33.2 ± 0.2 | 2.9 ± 0.4 | 2.6 ± 0.8 | 1.8 ± 0.0 |
+    | first-round GP | 78 ± 39 | 27 ± 4 | 20 ± 4 | 19 ± 4 |
+
+    * **Correction:** λ at k = 0 is 19 ± 15 % (one scan had shown 2–4 %); from k = 1 it is 1.2–1.7 %.
+    * The conclusion (1–2 imaged packets per new module) holds.
