@@ -52,9 +52,13 @@ from .models import _Scaler
 # --------------------------------------------------------------------------- #
 
 
-def allan_fit(allan: np.ndarray, ns: np.ndarray, rel_sd: float = 0.03) -> tuple[np.ndarray, np.ndarray]:
+def allan_fit(allan: np.ndarray, ns: np.ndarray, rel_sd: float = 0.03, max_n: float | None = None) -> tuple[np.ndarray, np.ndarray]:
     """
     Fit sigma_A(n)^2 = a^2 / n + b^2 to Allan-deviation curves (one per row), a, b >= 0.
+
+    ``max_n``: use only n <= max_n.  On REAL traces use max_n = N_skips / 5: with 500 skips the n = 160
+    point comes from 3 blocks and is biased low (~0.43 of the white-noise value on the 2026-10-12 traces),
+    which drags the fit to b = 0 and a below the CDS rms.
 
     Weighted least squares in sigma_A^2 with weights for a constant RELATIVE scatter of every point;
     if b^2 comes out negative the fit is redone with b = 0.  Returns (a, b) in the curve's units (ADU):
@@ -62,6 +66,8 @@ def allan_fit(allan: np.ndarray, ns: np.ndarray, rel_sd: float = 0.03) -> tuple[
     """
     allan = np.atleast_2d(np.asarray(allan, float))
     ns = np.asarray(ns, float)
+    if max_n is not None:
+        allan, ns = allan[:, ns <= max_n], ns[ns <= max_n]
     v = allan ** 2
     w = 1 / np.maximum(v * 2 * rel_sd, 1e-30) ** 2                     # 1 / var(sigma_A^2)
     x1, x2 = 1 / ns, np.ones_like(ns)
@@ -99,10 +105,11 @@ class StructuredPrep:
     packets would still contain those packets' state).
     """
 
-    def __init__(self, allan_ns: np.ndarray | None = None, n_skips: int = 500, min_rows: int = 20):
+    def __init__(self, allan_ns: np.ndarray | None = None, n_skips: int = 500, min_rows: int = 20,
+                 allan_max_n: float | None = None):
         from . import synthetic
         self.allan_ns = synthetic.ALLAN_N if allan_ns is None else np.asarray(allan_ns)
-        self.n_skips, self.min_rows = n_skips, min_rows
+        self.n_skips, self.min_rows, self.allan_max_n = n_skips, min_rows, allan_max_n   # real data: allan_max_n = n_skips / 5
 
     def fit(self, df: pd.DataFrame):
         self.ref_cols = data.columns(df, "ref")
@@ -138,7 +145,7 @@ class StructuredPrep:
     def transform(self, df: pd.DataFrame, curves: dict) -> dict:
         theta = df[self.theta_cols].to_numpy(float)
         x = np.hstack([theta, self.state_vector(df)])
-        a, b = allan_fit(curves["noise: Allan deviation"], self.allan_ns)
+        a, b = allan_fit(curves["noise: Allan deviation"], self.allan_ns, max_n=self.allan_max_n)
         keys = amplifier_key(df)
         amp = self.ids(self.amp_ids, keys)
         onehot = np.zeros((len(df), len(self.amp_ids)))
