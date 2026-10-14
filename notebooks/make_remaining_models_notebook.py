@@ -179,8 +179,9 @@ if E:
 """)
 
 md(r"""
-The learned combination is about as good as a **robust** fixed rule (the processing pipeline's robust mean), with conservative error
-bars. With two training scans the ranking at 30–60 packets changed, so a single scan is not enough to choose (section 9).
+With two training scans the learned combination looked about as good as a **robust** fixed rule. Over 5 scans (section 9) it is
+**better and much steadier from 60 packets on** (3.7 ± 0.5 % against 6.7 ± 3.0 % at 120), and worse with 30; its error bars are
+conservative.
 
 ## 5. G: several modules
 

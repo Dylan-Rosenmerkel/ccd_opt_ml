@@ -810,3 +810,17 @@ against the truth, world v2 unless noted):
     long-time-scale noise is not constrained by 500-skip traces;
   * image labels are still needed for training (the trace→image correction), amplifier labels are not.
 * **Still running:** `benchmark_seeds` (learning, pretrain). When done: robustness section in ml_models.tex.
+* **benchmark_seeds finished** (`docs/ml_results/seeds_*.json`, `seeds_summary.json`). 5 scans, mean ± sd:
+  * **A+B σe:** v2 2.3 ± 0.2 / 2.0 ± 0.1 / 1.9 ± 0.0 % (15 / 60 / 240 packets); v3 3.5 / 2.9 / 2.3 %. First round
+    10–17 %.
+  * **log-f CNN at 240:** 1.6 ± 0.2 % (linear 6.7 ± 1.8 %).
+  * **D fine-tuned at 60:** 6.6 ± 0.6 % vs 8.9 ± 1.1 % (scratch log-f).
+  * **C frozen:** λ 1.6 %, gain 0.18 % at 240; its σe varies (9.0 ± 4.6 %).
+  * **E, learned vs best fixed rule:** 6.3 ± 1.6 vs 4.0 ± 0.8 (30); 4.1 ± 1.1 vs 4.9 ± 2.3 (60);
+    3.7 ± 0.5 vs 6.7 ± 3.0 (120). **The E conclusion changed:** better and steadier from 60 packets on.
+* **ml_models.tex:**
+  * new section "How robust are these results?" (sec:robust, table);
+  * E statements updated (summary, basic box, results);
+  * 37 pages, 0 overfull, 0 undefined; zip rebuilt.
+* **Notebook:** E text updated, re-executed (0 errors).
+* **Nothing is running now.**
