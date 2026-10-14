@@ -581,3 +581,22 @@ against the truth, world v2 unless noted):
   * stage-0 "first look with existing data" paragraph in the real-data plan;
   * summary bullets, Plan and Software updated;
   * 34 pages, 0 overfull, 0 undefined; zip rebuilt.
+
+**Assessment of the day's work (given to the user) and proposed improvements:**
+* **Risks:**
+  * the synthetic world encodes A's physics (partly circular); the first real check already shows the
+    image noise is 1.2–9× the trace prediction;
+  * most benchmarks use one training seed: E's conclusion flipped with a second seed, so differences under
+    ~30 % are not established;
+  * several numbers were corrected mid-day;
+  * no unit tests for src/ml; the notebook generators live in the scratchpad.
+* **Proposed now (none started without the user's OK):**
+  1. trace_features: an Allan curve of the non-detrended CDS + spectra on a log-frequency axis
+     (+ max_n = N/5);
+  2. scan_packets: a "mixed" design (half one-at-a-time, half random/Sobol) + config;
+  3. WADERs per-row λ and label errors into labels.json;
+  4. repeat the benchmarks with 3–5 seeds and report spreads;
+  5. move the notebook generators into the repo, add `--quick` smoke tests;
+  6. joint likelihood for per-row λ;
+  7. run `src/stage0_trace_vs_image.py`-style checks on the first 1×1 packets.
+* **Notebook for the remaining models:** not written yet (offered).
