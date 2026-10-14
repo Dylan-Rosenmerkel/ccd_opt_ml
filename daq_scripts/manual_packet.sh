@@ -16,9 +16,9 @@
 #
 # Edit the SETTINGS block, nothing else.
 #
-# Duration with the defaults: 63 flushes (~30 s each: 3 initial, one before every trace, one after
-# the change and one at the end) = 31.5 min, 60 traces, the img.toml image (35x1000x500, 10.6 min):
-# about 44 min.  With FLUSH_BETWEEN="set": about 21 min.  With NROW = 16 in the image: -6 min.
+# Duration with the defaults: 18 flushes (~30 s each: 3 initial, one between trace sets, one after
+# the change, one at the end) = 9 min, 60 traces (~2 min), the img.toml image (16x1000x500,
+# 4.8 min readout + its EXPOSURE): about 16 min.
 # The nominal .bcf files are read at the start too, so every packet starts from the same state.
 # =============================================================================
 set -euo pipefail
@@ -26,15 +26,15 @@ set -euo pipefail
 # ------------------------------- SETTINGS ------------------------------------
 CDAQ_DIR="${CDAQ_DIR:-$HOME/Soft_JHU/cdaq}"     # where scripts/take_image.py lives
 PYTHON="${PYTHON:-python}"                      # or "pixi run python"
-IMAGE_TOML="image_params/tc1/img.toml"          # relative to CDAQ_DIR
+IMAGE_TOML="image_params/tc1/img.toml"          # relative to CDAQ_DIR (16 x 1000 x 500, 1x1, prescan 5300)
 LEADER=101                                      # master board for the image
 POOL=acmpool
 
 N_INITIAL_FLUSHES=3       # flushes before the first reference trace set
 N_REF_SETS=5              # reference trace sets (nominal parameters)
 N_SETS=10                 # trace sets at the new parameters
-FLUSH_BETWEEN="trace"     # "trace": a flush before every trace (also between the channels of a set)
-                          # "set":   a flush between trace sets only;  "none": no flushes between traces
+FLUSH_BETWEEN="set"       # "set":   a flush between trace sets, none between the channels of a set
+                          # "trace": a flush before every trace;  "none": no flushes between traces
 FLUSH_AFTER_CHANGE=1      # flushes after changing the parameters
 TRACE_CHANNELS="0 1 2 3"  # one trace per channel (take_trace records one channel at a time)
 

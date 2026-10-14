@@ -9,43 +9,28 @@ cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref1', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref1', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref1', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref1', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref2', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref2', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref2', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref2', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref3', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref3', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref3', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref3', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref4', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref4', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref4', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref4', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref5', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref5', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref5', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_ref5', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq['H1_A_L'] = 6.2" acmpool
 cdaq qadd "daq['H1_B_L'] = 6.0" acmpool
@@ -54,83 +39,53 @@ cdaq qadd "daq['H3_A_L'] = 6.2" acmpool
 cdaq qadd "daq['H3_B_L'] = 6.0" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new1', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new1', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new1', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new1', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new2', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new2', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new2', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new2', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new3', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new3', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new3', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new3', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new4', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new4', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new4', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new4', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new5', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new5', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new5', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new5', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new6', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new6', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new6', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new6', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new7', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new7', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new7', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new7', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new8', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new8', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new8', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new8', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new9', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new9', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new9', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new9', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new10', ch=0, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new10', ch=1, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new10', ch=2, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
-cdaq qadd "daq.flush_ccd()" acmpool
 cdaq qadd "daq.take_trace(fname='trace_new10', ch=3, subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0)" acmpool
 cdaq qadd "daq.master(101)" acmpool
 (cd /Users/dylanrosenmerkel/Soft_JHU/cdaq && python scripts/take_image.py image_params/tc1/img.toml)
