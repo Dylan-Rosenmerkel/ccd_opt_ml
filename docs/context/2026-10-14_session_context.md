@@ -660,3 +660,13 @@ against the truth, world v2 unless noted):
     2.8 ± 0.5 / 2.4 ± 0.4 %;
   * σe from A+B: 1.9–2.3 % in every design; first-round GP 13–15 %;
   * **the scan-design conclusion holds.** newmodule, sets, learning and pretrain are still running.
+
+## 2j. Notebook for C–G + joint per-row λ fit (user: do both while the seeds run)
+
+* **Joint λ plan:** `structured.JointLambdaGP`. Two GP outputs (dark current, CIC) in LINEAR scale with
+  their hierarchical kernels and the KNOWN 2×2 noise covariance of each image's line fit (OLS, rows with
+  12 % relative scatter), so the strong anti-correlation and the precise sum are used. λ = dark + CIC with
+  var = var_d + var_c + 2 cov_dc. `PhysicsStructured(lambda_model="joint")`. Test on v3 vs direct and vs
+  the separate split, over 3 seeds.
+* **Notebook plan:** `notebooks/ml_remaining_models.ipynb` (generator in the repo:
+  `notebooks/make_remaining_models_notebook.py`).
