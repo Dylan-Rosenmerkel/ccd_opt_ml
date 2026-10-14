@@ -575,3 +575,9 @@ against the truth, world v2 unless noted):
   * The learned constraint saves only ~3 failed packets, so encode the known limits (`ccd_limits.py`).
 * **Stage-0 script:** `src/stage0_trace_vs_image.py` (pushed).
 * **Next:** tex section, notebook, final answer with the assessment of the day's work.
+* **ml_models.tex:**
+  * new section "The remaining models: implementation and first tests (C, D, E, F, G)" (sec:rest): basic
+    box, implementation boxes per model, results tables (pretrain, BO) and figures `ml_advanced_*`;
+  * stage-0 "first look with existing data" paragraph in the real-data plan;
+  * summary bullets, Plan and Software updated;
+  * 34 pages, 0 overfull, 0 undefined; zip rebuilt.

@@ -68,6 +68,12 @@ comparison will be repeated on the first scan.
 \item \textbf{Second round} (Section~\ref{sec:proto}). A model that measures the noise on the trace and learns only the gain (A) on a GP
   that knows amplifiers and modules (B) predicts $\sigma_e$ to 2--3\,\% from 15 packets and a new module after 1--2 of its packets. A scan
   with joint changes (half random) makes $\lambda$ 5--10 times better than a one-at-a-time scan of the same length.
+\item \textbf{Remaining models} (Section~\ref{sec:rest}): putting the CDS spectrum on a logarithmic frequency axis made the plain CNN
+  6 times better ($\sigma_e$ 1.8\,\% at 240 packets); pre-training (D) helps with few labels; the deep kernel (C) needs a frozen encoder or
+  calibration; a trust region (F) found the best settings. Set models (E), several modules (G), multi-fidelity and ParEGO gave no gain
+  in the toy world.
+\item \textbf{Existing real data} (2026-10-12): the image's overscan noise is 1.2--9 times what the traces predict, which supports
+  learning a correction on top of the trace physics.
 \item \textbf{Real data} (Sections~\ref{sec:realtest}--\ref{sec:format}): a staged test plan; the packets need no extra time, but per-row
   $\lambda$ from WADERs, a scan design with joint changes, trace-only packets, recorded conditions and 2--5 packets per new module would help;
   and a set of linked tables (per trace set, curves, labels with errors, image rows) instead of one flat \code{dataset.csv}.
@@ -954,11 +960,228 @@ points: $-2.81$). Decomposing does not find a better optimum; it finds it in abo
 \label{fig:protobo}
 \end{figure}
 
-\paragraph{C, D, E on the synthetic world.} They are not tested here, on purpose. In this world A+B already uses everything the curves
-contain (the floor in the Allan deviation), and the image-only term is invisible to the traces by construction, so a learned encoder
-cannot show a gain. Whether the real curves contain effects that A's physics misses can only be tested on real data (stage 4 of
-Section~\ref{sec:realtest}).
+\paragraph{C, D, E on the synthetic world.} A+B already uses everything the toy curves contain (the floor in the Allan deviation),
+so the remaining models are tested against it on their own terms in the next section: what they learn without being told the physics,
+and with which data.
 
+%======================================================================
+\section{The remaining models: implementation and first tests (C, D, E, F, G)}
+\label{sec:rest}
+
+\begin{basic}
+The other candidates of Section~\ref{sec:next} now exist as code and were run on the synthetic world:
+\begin{itemize}
+\item \textbf{D}, a network pre-trained on traces without labels;
+\item \textbf{C}, a Gaussian process working on what that network sees;
+\item \textbf{E}, a network that learns how to combine the 10 trace sets;
+\item \textbf{G}, the hierarchical GP trained on several modules;
+\item \textbf{F}, four new ways to choose the next settings.
+\end{itemize}
+Code: \code{src/ml/deep.py} (C, D), \code{setmodels.py} (E), \code{bo\_advanced.py} (F), \code{benchmark\_advanced.py} (all
+experiments, G included).
+
+\textbf{What came out:}
+\begin{itemize}
+\item \textbf{The biggest gain was not a model but a representation:} the CDS spectrum on a \emph{logarithmic} frequency axis. With it,
+  the plain CNN reaches $\sigma_e$ 1.8\,\% with 240 packets (10.7\,\% before), and pre-training starts to learn the noise floor.
+\item Pre-training (D) helps with 30--120 packets.
+\item The deep kernel (C) is the most accurate network with few packets but over-confident when fine-tuned. With the encoder frozen it
+  is calibrated, and it is the best network for $\lambda$ and the gain (as good as A+B).
+\item The learned set combination (E) is about as good as a robust fixed rule.
+\item A trust region (F) found better settings than every other strategy.
+\item Multi-fidelity, ParEGO, the learned constraint and G gave no gain \emph{in this world}. The reasons are understood and are listed
+  below.
+\end{itemize}
+\end{basic}
+
+\subsection{D: self-supervised pre-training (\code{deep.Pretrainer})}
+\begin{advanced}
+\textbf{Encoder} $g_\phi$: the CurveCNN's three convolution stages ($7, 7, 5$ taps; 16, 32, 32 channels; pooling to 8 positions) and a
+linear map to a 16-number embedding. Input: the 14 curves (7 at $\theta$, 7 of the reference traces), resampled to 256 points;
+spectra, Allan deviations and the edge variation are taken in log, and every position is standardized on the unlabeled data. The
+objectives are summed:
+\begin{itemize}
+\item \textbf{masked reconstruction}: in half of the examples, blocks of 32 positions (25\,\%) are zeroed; in the other half, one
+  \emph{whole} curve. A decoder (MLP $16 \to 256 \to 14 \times 256$) rebuilds the input, and the loss is the squared error on the hidden
+  positions. Whole curves matter: short blocks can be interpolated from their neighbours without learning anything;
+\item \textbf{$\theta$ prediction}: a linear head predicts the standardized settings, which are known for every trace;
+\item \textbf{contrastive (InfoNCE)}: two views of the same curves (noise, a $\pm$5\,\% scale per curve, a shift of up to 2 samples) through a
+  projection head; temperature 0.2, weight 0.3.
+\end{itemize}
+AdamW, 40 epochs, batch 256, on the Apple GPU. Two ways to use it: \code{PretrainedHead} (encoder frozen; a network ensemble on
+[embedding, $\theta$, amplifier]) and \code{PretrainedCNN} (the whole network fine-tuned from the pre-trained weights, learning rate
+$5\times10^{-4}$).
+\end{advanced}
+
+\subsection{C: deep kernel learning (\code{deep.DeepKernelGP})}
+\begin{advanced}
+$z = \bigl(g_\phi(\text{curves}), x\bigr)$ with $x$ = ($\theta$, packet state vector). One exact GP per target with
+$k(i,j) = s^2 M_{5/2}(|z_i - z_j|/\ell) + c_a^2\,\mathbb{1}[\text{same amplifier}] + \sigma_n^2\delta_{ij}$, ARD length scales. The
+embedding is standardized with its values at the start. Adam on the summed negative log marginal likelihood: 250 steps, learning rate
+0.03 for the GP and $3\times10^{-4}$ for the encoder, which starts from model D. The encoder runs on the GPU in float32, the GP on the
+CPU in float64 (gradients flow through the device change). \code{finetune=False} keeps the encoder fixed.
+\end{advanced}
+
+\subsection{E: set models (\code{setmodels})}
+\begin{advanced}
+\textbf{World v4:} when the outside source is active in a packet (40\,\%), it is on a fraction $d \sim U(0.2,1)$ of the time. Each trace set
+(0.2\,s) sees it fully or not at all (probability $d$, the same sets on every amplifier), while the image sees its time average
+($\sigma_\text{floor}^2 d$). In addition, 10\,\% of the sets are damaged: the Allan deviation is multiplied by
+$1 + U(1,3)\sqrt{n/160}$. Every set's Allan deviation is kept.
+
+\textbf{Fixed rules} (\code{combine\_sets}): mean; median; robust mean (the processing rule: drop values beyond
+$5 \times 1.4826$\,MAD); mean of variances; robust mean of variances.
+
+\textbf{Learned} (\code{SetPooling}):
+\begin{itemize}
+\item per set, $\psi$: an MLP $13 \to 64 \to 64$ on the standardized log Allan curve;
+\item pooling: the mean and an attention pooling ($\text{softmax}$ over the sets of a learned score);
+\item $\rho$ on [both pools, the median-rule physics value], predicting $\log\sigma_\text{ADU}(N)$ with a variance;
+\item an ensemble of 5, trained on $\log\sigma_e + \log g$ with the labeled gain.
+\end{itemize}
+It replaces $\tfrac12\log(a^2/N+b^2)$ inside A+B (\code{SetStructured}); its variance is added to $\sigma_e$'s.
+\end{advanced}
+
+\subsection{G: several modules (\code{benchmark\_advanced.exp\_modules})}
+\begin{advanced}
+The hierarchical GP of B, trained on 1 or 4 modules (120 packets, 5 boards simulated) plus $k = 0, 1, 2, 5$ packets of a fifth. With
+several modules the module-level variances $c_m, s_m$ become identifiable: this is the Gaussian-process form of meta-learning
+(empirical Bayes over modules). A neural process or a meta-learned network prior would replace it only with tens of modules.
+\end{advanced}
+
+\subsection{F: better optimization (\code{bo\_advanced})}
+\begin{advanced}
+All strategies use the decomposed surrogate (hierarchical GPs on $\log\sigma_e$ and $\log\lambda$ per good amplifier).
+\begin{itemize}
+\item \textbf{Trust region} (TuRBO-like): candidates in a box of side $L$ (a fraction of each range, start 0.4) around the best point. $L$
+  doubles after 3 successes in a row, halves after 5 failures, and restarts below 0.02.
+\item \textbf{Learned constraint}: the relation VDRAIN $-$ VDD $\le -2.5$\,V is hidden; a packet beyond it fails (its labels are flagged).
+  A GP regression on $\pm1$ gives $P(\text{feasible}) = \Phi(\mu/\sigma)$, and the acquisition is EI$\,\times P$. Compared with the
+  known constraint and with none.
+\item \textbf{Multi-fidelity}: a trace-only packet (cost 0.25 or 0.5 of a full one) measures $\sigma_1 g/\sqrt N$ on the trace; with the gain
+  GP this is a $\sigma_e$ observation (model A) but gives no $\lambda$. Each round screens the 3 best EI candidates with trace-only
+  packets, refits, and takes one full packet at the best of them.
+\item \textbf{ParEGO}: each step draws $w \sim U(0.1, 2)$ and maximizes EI of $J_w = \log\sigma_e + w\log\lambda$. Scored by the
+  hypervolume of the true ($\log\sigma_e$, $\log\lambda$) points, up to a reference 20\,\% worse than nominal in both.
+\end{itemize}
+\end{advanced}
+
+\subsection{Results}
+
+\paragraph{C and D (Figure~\ref{fig:pretrain}; world v2, 3000 unlabeled packets, error against the truth).}
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lrrrrl}
+\toprule
+& \multicolumn{4}{c}{$\sigma_e$ error, labeled packets} & \\
+Model & 30 & 60 & 120 & 240 & coverage \\
+\midrule
+CNN from scratch (first round) & 15.6\,\% & 13.6\,\% & 12.5\,\% & 10.7\,\% & 0.53--0.67 \\
+CNN from scratch, log-frequency spectra & 10.7\,\% & 7.1\,\% & 4.5\,\% & \textbf{1.8\,\%} & 0.61--0.84 \\
+D: pre-trained, frozen + NN ensemble & 9.4\,\% & 7.8\,\% & 5.2\,\% & 4.6\,\% & 0.64--0.69 \\
+D: pre-trained, fine-tuned & 11.0\,\% & 6.9\,\% & 3.4\,\% & 2.2\,\% & 0.65--0.78 \\
+C: deep kernel, encoder frozen & 13.3\,\% & 10.3\,\% & 5.5\,\% & 4.6\,\% & 0.54--0.73 \\
+C: deep kernel, encoder fine-tuned & 7.7\,\% & 5.4\,\% & 2.9\,\% & 2.4\,\% & \textbf{0.08--0.11} \\
+A+B (reference) & 2.4\,\% & 2.0\,\% & 2.0\,\% & 2.0\,\% & 0.70--0.72 \\
+\bottomrule
+\end{tabular}
+\caption{$\sigma_e$ against the number of labeled packets. C and D use the log-frequency spectra.}
+\label{tab:pretrain}
+\end{table}
+\begin{itemize}
+\item \textbf{Log-frequency spectra.} On a linear frequency axis, the low frequencies where the floor shows are 2 points of 256.
+  \begin{itemize}
+  \item A probe of the pre-trained embedding found the floor with $R^2 = 0.08$ (the state with 0.97); on a logarithmic axis, 0.71.
+  \item The CNN from scratch improves 6-fold at 240 packets, and overtakes A+B there.
+  \item \code{data.curve\_tensor(log\_frequency\_spectra=True)} now does this. The real pipeline should store spectra this way (or
+    both ways).
+  \end{itemize}
+\item \textbf{Pre-training (D)} helps where labels are few: 9.4\,\% instead of 10.7\,\% with 30 packets, and 3.4\,\% instead of 4.5\,\% with
+  120 (fine-tuned). A frozen encoder caps the accuracy (4.6\,\% at 240); fine-tuning removes the cap.
+\item \textbf{The deep kernel (C)} fine-tuned is the most accurate network with 30--120 packets, but its error bars are wrong (coverage
+  0.1): the encoder bends the space until the GP is sure. With the encoder frozen it is calibrated. It is also the best network for
+  $\lambda$ (11.0, 7.7, 3.2, 1.7\,\%; A+B: 10.2, 6.9, 2.9, 1.6\,\%) and the gain (0.2--0.4\,\%, as A+B), because the GP uses $\theta$ and the state directly. For BO: frozen, or
+  fine-tuned plus conformal calibration (H).
+\item Nothing beats A+B for $\sigma_e$ with fewer than 240 packets. The networks matter where A's physics is incomplete, which is a
+  question for the real data.
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/ml_advanced_pretrain.png}
+\caption{C and D against the number of labeled packets (world v2). Dashed: A+B.}
+\label{fig:pretrain}
+\end{figure}
+
+\paragraph{E (Figure~\ref{fig:sets}; world v4, two training scans per size).} $\sigma_e$ error against the truth:
+\begin{itemize}
+\item the plain mean and the mean of variances fail (32--48\,\%), dragged by the damaged sets;
+\item median, robust mean and robust mean of variances: 3.4--7.5\,\%;
+\item the learned combination: 5.6, 4.8, 3.3, 3.1\,\% at 30, 60, 120, 240 packets, against 4.8, 6.5, 3.8, 3.4\,\% for the best fixed rule.
+\end{itemize}
+It is about as good as a robust rule, more stable between the two scans at 60 packets, and its error bars are conservative (coverage
+0.9). The processing rule already used (robust mean) is a good default. E becomes worth it when the sets differ in ways no rule
+anticipates, which only real repeats will show.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.62\textwidth]{figures/ml_advanced_sets.png}
+\caption{A+B with the 10 trace sets combined by fixed rules or by the learned set network (mean and spread of 2 training scans).}
+\label{fig:sets}
+\end{figure}
+
+\paragraph{G (Figure~\ref{fig:modules}).} Training on 4 modules instead of 1 did \emph{not} help a fifth. The errors are the same (A+B:
+$\sigma_e$ 33--35\,\% with none of its packets, 1.8--2.1\,\% with 1--5). With none of its packets the error bars were worse (coverage 0.40
+against 0.74), because the fitted amplifier-level variance came out smaller. In this toy world the noisy amplifier is the same channel on
+every module, a pattern a module/amplifier hierarchy does not represent. G will be judged on real modules.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/ml_advanced_modules.png}
+\caption{G: a new module after training on 1 or 4 modules: error (left) and coverage (right) of $\sigma_e$.}
+\label{fig:modules}
+\end{figure}
+
+\paragraph{F (Figure~\ref{fig:advbo}; 5 repeats, budget 40 full packets).}
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lrrrr}
+\toprule
+Strategy & $J$ at cost 20 & $J$ at cost 40 & failed packets & hypervolume \\
+\midrule
+global (decomposed surrogate) & $-2.784$ & $-2.806$ & 0 & 0.164 \\
+\textbf{trust region} & $-2.775$ & $\mathbf{-2.836}$ & 0 & -- \\
+learned constraint & $-2.738$ & $-2.800$ & 7.0 & -- \\
+no constraint & $-2.754$ & $-2.806$ & 10.2 & -- \\
+multi-fidelity (trace = 0.25) & $-2.760$ & $-2.806$ & 0 & -- \\
+multi-fidelity (trace = 0.5) & $-2.739$ & $-2.802$ & 0 & -- \\
+ParEGO & $-2.784$ & $-2.795$ & 0 & 0.161 \\
+random & $-2.556$ & $-2.665$ & 0 & 0.091 \\
+\bottomrule
+\end{tabular}
+\caption{Best true objective (mean of 5 repeats; nominal $-2.49$, best of 50{,}000 random points $-2.81$).}
+\label{tab:advbo}
+\end{table}
+\begin{itemize}
+\item \textbf{Trust region} is the best strategy after 40 packets ($-2.836 \pm 0.008$, better than 50{,}000 random points). Once near the
+  optimum, it refines locally. It also suits a CCD whose voltages should change in bounded steps.
+\item \textbf{Learned constraint}: 7 failed packets of 40 instead of 10 with none and 0 with the known relation. Learning a limit costs
+  packets, so the known limits belong in \code{ccd\_limits.py}. The learned version is for limits nobody knows yet.
+\item \textbf{Multi-fidelity} gave nothing here. In this world the improvement of $J$ comes from $\lambda$, which traces cannot measure, and
+  the nominal $\sigma_e$ is already near its best. It becomes useful when $\sigma_e$ is what is being optimized, for example a scan of the
+  output-stage voltages.
+\item \textbf{ParEGO} spreads its points along the $\sigma_e$--$\lambda$ trade-off, but its hypervolume equals that of the single-objective
+  search: in this world the two objectives barely conflict (Figure~\ref{fig:advbo}, right).
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/ml_advanced_bo.png}
+\caption{F: best true objective against cost (left) and the points tried in one repeat (right).}
+\label{fig:advbo}
+\end{figure}
+
+\clearpage
 %======================================================================
 \section{Testing every model on real data}
 \label{sec:realtest}
@@ -980,6 +1203,21 @@ physics that model A relies on holds on our CCD.
   is what A's residual $r(x)$ learns (world v3).
 \item \textbf{Dark current vs CIC.} Fit $\lambda$ row by row (16 rows): the slope is the dark current accumulated while the rows wait, the
   intercept the CIC. A clear slope means the per-row labels are worth adding to the dataset.
+\end{itemize}
+
+
+\paragraph{A first look with existing data (2026-10-12, module 101; \code{src/stage0\_trace\_vs\_image.py}).} The 2026-10-12 run has
+traces and binned 20$\times$20 images (500 skips) at the same five settings.
+\begin{itemize}
+\item \textbf{The traces' noise is white up to $n = 100$ skips}: the Allan deviation divided by CDS rms$/\sqrt n$ is 0.92--1.15 on ch0, ch1 and ch3.
+\item \textbf{The $n = 160$ point is biased low} (about 0.43): 500 skips make only 3 blocks. \code{allan\_fit} therefore takes
+  \code{max\_n} $= N/5$ for real data. With that cut, the single-skip noise $a$ equals the CDS rms, and small floors (up to 0.24\,ADU)
+  appear in some sets.
+\item \textbf{The trace features compute the Allan deviation on the detrended CDS}, which removes the slowest noise. An Allan curve of
+  the non-detrended CDS should be added so that the floor can be measured on real traces.
+\item \textbf{The image's overscan noise is 1.2--2.4 times the trace prediction} $\sqrt{a^2/500 + b^2}$ on ch0, and 4--9 times on ch1 and
+  ch3. If this holds for the 1$\times$1 packets, the real CCD is like world v3 or worse, and A's learned correction does real work.
+  Caveats: binned overscan (possible serial-register charge), traces with the wrong NCOLPRE, and different times.
 \end{itemize}
 
 \paragraph{Stage 1 -- the first scan.} All models of both rounds, the same splits and scores:
@@ -1090,16 +1328,21 @@ are rows without labels; new modules are new identifiers. Loading one table into
   \item test the held-out amplifier.
   \end{itemize}
 \item \textbf{CNN on curves:} train it on the same scan; pre-train an encoder on all unlabeled traces; compare; look at what it uses.
-\item \textbf{Next models:} A+B, H and F are prototyped (Section~\ref{sec:proto}); deep kernel with pre-training (C+D) and set models (E)
-  wait for real traces. The real-data test plan is in Section~\ref{sec:realtest}.
+\item \textbf{Next models:} all candidates are implemented (Sections~\ref{sec:proto} and \ref{sec:rest}). On real data, C+D and E
+  need the unlabeled traces and the individual trace sets. The real-data test plan is in Section~\ref{sec:realtest}.
 \item \textbf{Optimization:} Bayesian optimization in the screened parameters, with the limits and relations encoded, small steps and
   human approval of each proposal at first.
 \end{enumerate}
 
 \paragraph{Software.}
 \begin{itemize}
-\item \code{src/ml/}: \code{synthetic.py}, \code{data.py}, \code{models.py}, \code{evaluate.py}, \code{optimize.py}, \code{benchmark.py},
-  and the plots; second round: \code{structured.py}, \code{calibrate.py}, \code{benchmark\_structured.py}.
+\item \code{src/ml/}:
+  \begin{itemize}
+  \item first round: \code{synthetic.py}, \code{data.py}, \code{models.py}, \code{evaluate.py}, \code{optimize.py}, \code{benchmark.py}, plots;
+  \item second round: \code{structured.py}, \code{calibrate.py}, \code{benchmark\_structured.py};
+  \item remaining models: \code{deep.py}, \code{setmodels.py}, \code{bo\_advanced.py}, \code{benchmark\_advanced.py};
+  \end{itemize}
+\item real-data check: \code{src/stage0\_trace\_vs\_image.py}.
 \item Notebooks in \code{notebooks/}:
   \begin{itemize}
   \item first round: \code{ml\_models\_walkthrough.ipynb};
@@ -1110,7 +1353,8 @@ are rows without labels; new modules are new identifiers. Loading one table into
 \item The benchmarks, from \code{src/}:
   \begin{itemize}
   \item \code{../.venv/bin/python -m ml.benchmark};
-  \item \code{../.venv/bin/python -m ml.benchmark\_structured}.
+  \item \code{../.venv/bin/python -m ml.benchmark\_structured};
+  \item \code{../.venv/bin/python -m ml.benchmark\_advanced}.
   \end{itemize}
 \end{itemize}
 
