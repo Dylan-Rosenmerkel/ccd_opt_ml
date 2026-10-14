@@ -359,3 +359,26 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
      * 2–5 imaged packets per new module;
   3. data format: keep the raw files; add Parquet/HDF5 tables packets, trace_sets (per set, not
      combined), curves, labels with errors, image_rows, schema; `dataset.csv` becomes a view.
+
+**Results so far (full run):**
+* **New module** (240 packets of module 100 + k packets of module 101; error against the labels):
+
+  | | k = 0 | k = 1 | k = 2 |
+  |---|---|---|---|
+  | first-round GP | σe 72 %, λ 118 %, gain 35 % | σe 24 %, λ 37 %, gain 3 % | σe 18 %, λ 39 %, gain 3 % |
+  | B | σe 58 %, λ 3.6 %, gain 33 % | | σe 7.4 %, λ 3.1 %, gain 0.9 % |
+  | A+B | σe 33 %, λ 3.6 %, gain 33 % | σe 3.3 %, λ 3.1 %, gain 3.4 % | σe 2.4 %, λ 3.1 %, gain 0.9 % |
+
+  * With an ordinary GP, A breaks at k = 1 (λ 37 %): the one-hot of a nearly unseen amplifier. The
+    hierarchy is robust.
+  * **One or two imaged packets of a new module are enough with A+B** (the first round needed ~20).
+* **F, decomposed BO** (new experiment `bo` in benchmark_structured; `src/ml/benchmark_structured.py`
+  `decomposed_propose`): hierarchical GPs on log σe and log λ per good amplifier, combined into J, against
+  the GP on J. 5 seeds, 10 random start packets + 50.
+  * Best true J after 30 packets: decomposed −2.797 to −2.820; GP on J −2.747 to −2.791.
+  * After 60 both reach −2.80 to −2.82 (reference −2.81).
+  * So decomposing about halves the packets needed; the final value is the same.
+  * Outputs: `docs/ml_results/structured_bo.json`, figure `ml_structured_bo.png`.
+* **C, D, E are not testable meaningfully on this synthetic world:** A+B already uses everything the
+  toy curves contain (the Allan floor); the image-only term is invisible to traces by construction. They
+  belong to stage 4 on real data.

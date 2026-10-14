@@ -17,6 +17,8 @@ learning   error against the number of training packets (15 ... 480) in two worl
 newmodule  a second module seen in 0, 1, 2, 5, 10 or 20 of its packets (as benchmark.py's holdout).
 design     the scan design: one-at-a-time (the planned 10 parameters x 20 values), random points, or half
            of each, with the same number of packets; tested on random points (where an optimizer looks).
+bo         F: Bayesian optimization with a DECOMPOSED surrogate (one hierarchical GP for log sigma_e and one for
+           log lambda, per amplifier, combined into J) against the first round's GP on J itself.
 conformal  H: the coverage of the 68 % and 95 % error bars before and after conformal calibration
            (calibrate.py), for the boosted trees, the network ensemble, the CNN and A + B.
 
@@ -221,6 +223,80 @@ def exp_design(out, figs, n_test):
     return results
 
 
+GOOD_CHANNELS = (0, 1, 3)
+
+
+def measure_packet(theta, amps, rng):
+    """One packet at state 0 without pickup: per good amplifier the labels log sigma_e, log lambda (with label noise)."""
+    rows = []
+    for ch in GOOD_CHANNELS:
+        ph = synthetic.physics(np.asarray(theta, float), amps[ch], 0.0)
+        rows.append((np.log(ph["sigma_e"] * (1 + 0.015 * rng.normal())), np.log(ph["lambda"] * (1 + 0.03 * rng.normal()))))
+    return np.array(rows)                                            # (3, 2)
+
+
+def decomposed_propose(thetas, labels, low, high, rng, allowed, n_candidates=4000):
+    """EI on J = mean over amplifiers of (log sigma_e + 1/2 log lambda), from two hierarchical GPs on theta."""
+    n = len(thetas)
+    X = {"x": np.repeat(thetas, len(GOOD_CHANNELS), axis=0), "amp": np.tile(np.arange(len(GOOD_CHANNELS)), n)}
+    Y = labels.reshape(-1, 2)
+    gp = st.HierGP(levels=("amp",), iters=60).fit(X, Y)
+    cand = low + (high - low) * rng.random((n_candidates, len(low)))
+    cand = cand[allowed(cand)]
+    m, sd = gp.predict({"x": np.repeat(cand, len(GOOD_CHANNELS), axis=0), "amp": np.tile(np.arange(len(GOOD_CHANNELS)), len(cand))})
+    m = m.reshape(len(cand), len(GOOD_CHANNELS), 2)
+    sd = sd.reshape(len(cand), len(GOOD_CHANNELS), 2)
+    mu = (m[..., 0] + 0.5 * m[..., 1]).mean(1)
+    s = np.sqrt(sd[..., 0] ** 2 + 0.25 * sd[..., 1] ** 2).mean(1)    # amplifiers fully correlated: conservative
+    J = (labels[..., 0] + 0.5 * labels[..., 1]).mean(1)
+    from .optimize import expected_improvement
+    ei = expected_improvement(mu, s, float(J.min()))
+    return cand[int(np.argmax(ei))]
+
+
+def exp_bo(out, figs, n_seeds, n_total, n_initial):
+    from .optimize import propose
+    low, high, allowed = synthetic.LOW, synthetic.HIGH, synthetic.allowed
+    amps = synthetic.make_amplifiers(np.random.default_rng(1234))
+    curves = {"GP on the objective (first round)": [], "decomposed: hierarchical GPs on sigma_e and lambda": []}
+    for seed in range(n_seeds):
+        for label in curves:
+            rng, rng_m = np.random.default_rng(seed), np.random.default_rng(1000 + seed)
+            thetas = synthetic.sample_theta(rng, n_initial)
+            labels = np.array([measure_packet(t, amps, rng_m) for t in thetas])
+            while len(thetas) < n_total:
+                J = (labels[..., 0] + 0.5 * labels[..., 1]).mean(1)
+                if label.startswith("GP on"):
+                    nxt, _ = propose(thetas, J, low, high, rng, allowed=allowed)
+                else:
+                    nxt = decomposed_propose(thetas, labels, low, high, rng, allowed)
+                thetas = np.vstack([thetas, nxt])
+                labels = np.concatenate([labels, measure_packet(nxt, amps, rng_m)[None]])
+            J = (labels[..., 0] + 0.5 * labels[..., 1]).mean(1)
+            best_true = [synthetic.true_objective(thetas[int(np.argmin(J[:k + 1]))]) for k in range(len(J))]
+            curves[label].append(best_true)
+            print(f"[bo] seed {seed} {label:52s} best true objective after {n_total}: {best_true[-1]:.4f} (after 30: {best_true[min(29, len(best_true) - 1)]:.4f})", flush=True)
+            (out / "structured_bo.json").write_text(json.dumps({"curves": curves, "nominal": synthetic.true_objective(synthetic.NOMINAL)}, indent=1))
+    ref = json.loads((out / "bo.json").read_text())["reference_optimum"] if (out / "bo.json").exists() else None
+    fig, ax = plt.subplots(figsize=(7.5, 4.6))
+    for label, color in zip(curves, ("#8c8c8c", "#e76f51")):
+        arr = np.array(curves[label])
+        k = np.arange(1, arr.shape[1] + 1)
+        ax.plot(k, arr.mean(0), color=color, label=label)
+        ax.fill_between(k, arr.min(0), arr.max(0), color=color, alpha=0.2)
+    ax.axhline(synthetic.true_objective(synthetic.NOMINAL), color="k", ls=":", label="nominal settings")
+    if ref is not None:
+        ax.axhline(ref, color="k", ls="--", lw=0.8, label="best of 50,000 random points")
+    ax.axvline(n_initial, color="0.6", lw=0.8)
+    ax.set(xlabel="packets taken (each with an image)", ylabel="true objective of the best point so far",
+           title=f"Decomposed surrogate vs GP on the objective ({n_seeds} repeats; band = min-max)")
+    ax.legend(fontsize=8)
+    plt.tight_layout()
+    fig.savefig(figs / "ml_structured_bo.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+    return curves
+
+
 def exp_conformal(out, figs, sizes, n_test):
     test = synthetic.make_dataset(n_test, seed=99)
     Y_te = data.make_targets(test[0])[0]
@@ -256,7 +332,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--out", default="../docs/ml_results")
     parser.add_argument("--figs", default="../docs/overleaf_ml_models/figures")
-    parser.add_argument("--only", nargs="*", default=["learning", "newmodule", "conformal", "design"])
+    parser.add_argument("--only", nargs="*", default=["learning", "newmodule", "conformal", "design", "bo"])
     parser.add_argument("--quick", action="store_true")
     args = parser.parse_args()
     out, figs = Path(args.out), Path(args.figs)
@@ -272,6 +348,8 @@ def main():
         exp_conformal(out, figs, [30] if q else [60, 240], 50 if q else 200)
     if "design" in args.only:
         exp_design(out, figs, 50 if q else 200)
+    if "bo" in args.only:
+        exp_bo(out, figs, 2 if q else 5, 20 if q else 60, 10)
 
 
 if __name__ == "__main__":
