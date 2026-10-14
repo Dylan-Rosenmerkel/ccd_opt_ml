@@ -483,3 +483,33 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
     fine-tuned on 60 packets over-fits (coverage 0.2–0.3).
   * Probe: the pre-trained embedding knows the state (R² 0.96) but not the floor (R² 0.14), because masking
     16-point blocks is too easy. Added whole-curve masking (p = 0.5) and 32-point blocks; testing.
+* **User rule (2026-10-14):** if the session limit is reached, stop any commands and update (and push) the
+  context documents. Push as we go.
+* **Implemented:**
+  * `src/ml/setmodels.py` (E: `combine_sets` with mean / median / robust mean / mean of variances /
+    robust mean of variances; `SetPooling` DeepSets + attention; `SetStructured` = A+B with any combiner);
+  * `src/ml/bo_advanced.py` (F: trust region, learned / known / no constraint, multi-fidelity trace-only
+    screening, ParEGO + 2-D hypervolume);
+  * `src/ml/benchmark_advanced.py` (experiments sets, modules (G), bo, pretrain (C/D));
+  * `data.curve_tensor(log_frequency_spectra=True)` and `benchmark.inputs_for(..., log_frequency_spectra)`.
+* **Finding (D):**
+  * the self-supervised embedding learns the state (probe R² 0.95–0.98) but NOT the noise floor
+    (R² 0.08–0.15) with linear-frequency spectra; with LOG-FREQUENCY spectra the floor is learned (R² 0.70);
+  * on a linear axis the floor occupies ~2 of 256 points of the CDS spectrum;
+  * **real-pipeline implication:** store and feed spectra on a log-frequency axis.
+* **Hypervolume:** the reference is nominal + log 1.2 in both coordinates. The nominal σe is already near
+  its best, so no point beats nominal in both; the gains in J come from λ.
+* **Correction (E):** with two training scans the learned set combination does NOT consistently beat the
+  fixed rules:
+  * n = 60: 6.1 % vs best fixed 9.4 % (seed 1) but 3.4 % vs 3.4 % (seed 2);
+  * n = 30, seed 2: 7.2 % vs 5.7 %;
+  * n = 120: 3.3–3.4 % vs 3.7–4.0 %.
+  The plain mean and the mean of variances fail (32–48 %, damaged sets). Learned ≈ robust rules, with
+  wider (conservative) error bars, coverage ~0.9.
+* **Full run:** `benchmark_advanced` is running (PID in the scratchpad `advanced_full.pid`, log
+  `advanced_full.log`).
+* **Started, interrupted:** a stage-0 check on the REAL 2026-10-12 data (module 101). Script in the
+  scratchpad `stage0.py`. It compares the image overscan noise (NDCM 500) with √(a²/500 + b²) from each
+  trace set's Allan fit. The notes of 10-12 already suggest overscan 0.42–0.66 ADU vs a white-noise
+  extrapolation of the ch0 CDS noise 5.7/√500 = 0.25 ADU, i.e. the image noise is ~2× the white-noise
+  prediction (a floor or image-only noise; needs checking: binned 20×20 overscan, NCOLPRE 185 traces).
