@@ -739,3 +739,33 @@ against the truth, world v2 unless noted):
 * **The user's priority (explicit): find out whether the models can work WITHOUT amplifier labels, on REAL
   amplifiers.** Next: a real-data check with module 101's 4 amplifiers (2026-10-12 traces + binned images;
   any per-amplifier gains from 2026-10-06/08). Module 102 is not used for trace analysis.
+
+**REAL-amplifier check, without amplifier labels** (`src/real_amplifier_check.py`, output
+`docs/ml_results/real_amplifier_check.json`; module 101 only):
+1. **Gains** from the electron peaks of the 2026-10-06 1×1 image (3000 skips; no WADERs):
+   * ch0 1.310, ch1 1.300, ch3 1.250 ADU/e⁻: **a 2.0 % spread**;
+   * ch2: peaks not resolved (noise 0.74 ADU ≈ the spacing), so its gain is unknown;
+   * using the mean gain of the other channels (no label) costs 1.5–4.4 % in σe;
+   * the toy world's 2× gain differences are not seen on this module.
+2. **Image noise at 3000 skips** (ADU) vs the prediction from the channel's own traces (10-06 + 10-08,
+   nominal; common-pattern-removed Allan fit):
+
+   | | image | trace prediction | error, own gain | error, no label |
+   |---|---|---|---|---|
+   | ch0 | 0.134 | 0.098 | −27 % | −25 % |
+   | ch1 | 0.129 | 0.122 | −5 % | −4 % |
+   | ch3 | 0.157 | 0.238 | +52 % | +45 % |
+
+   * **The error comes from the trace→image noise relation, not from the missing label.** At 3000 skips the
+     floor dominates, and it is poorly measured by 500-skip, 10-pixel traces taken at other times.
+3. **Response to the same setting changes** (2026-10-12, settings 3–5 vs 2, 85 features, changes > 6
+   repeat-scatter units in either channel):
+   * the sign agrees 86–99 % between channels, correlation 0.85–0.96: the dependence on the settings is
+     largely SHARED;
+   * but only 7–14 features change on all 4 channels, and the noise (CDS rms) changes on ch2 alone
+     (+7.7 / −9.7 units for settings 3 / 4).
+   * A model that reads each amplifier's own trace (A) sees such amplifier-specific changes without a label.
+* **Conclusion so far:** amplifier labels are not needed for the gain (on this module) or for the
+  amplifier-specific noise changes (the own trace shows them). The weak point, with or without labels, is the
+  trace→image noise at many skips; the remedy is longer traces / more pixels, or a learned correction from a
+  real scan.
