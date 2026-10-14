@@ -73,6 +73,62 @@ command and sends nothing. The checks were tested with deliberate mistakes.
 
 Commits: `035d4bd`, `85f6852`, `d4b9d6a`, `3edf635`.
 
+## 2b. ML models (in progress, started 2026-10-14)
+
+**Request:** think about the model types, write code, install software, and draft a document (basic and
+advanced) on what the models do, their inputs, and the training data needed. Answer two questions:
+full trace or features, and can a model find its own features.
+
+**Software:**
+* project venv `.venv/` (gitignored) from `requirements-ml.txt`: numpy, scipy, pandas, matplotlib,
+  astropy, scikit-learn 1.9, torch 2.14 (MPS), nbformat/nbclient/ipykernel; plus pymupdf;
+* run with `cd src && ../.venv/bin/python -m ml.benchmark`.
+
+**Code `src/ml/`:**
+* `synthetic.py`: toy CCD world in the `dataset.csv` format. It has:
+  * 10 parameters with real names, 4 amplifiers per board (ch2 4× noisier);
+  * toy physics for σe, λ and gain, with a forbidden region VDRAIN − VDD > −2.5 that the design
+    respects (`allowed`);
+  * a drifting hidden state (λ ±35 %), intermittent pickup (40 % of packets, a noise floor visible
+    only in the curves), 17 hand features and 4 curves.
+* `data.py`: `load_dataset`, `make_inputs` (groups theta/delta/amp/trace/ref/diff),
+  `make_targets` (logs), `curve_tensor`, `curves_from_processed` (the real `.npz` curves).
+* `models.py`: BayesRidge, GBT (with quantile std), GP (ARD Matern; capped at 400 points and 150
+  iterations), MLPEnsemble, and CurveCNN (on the MPS GPU), all with `fit` / `predict(mean, std)`.
+* `evaluate.py` (grouped CV, scores incl. coverage) and `optimize.py` (EI Bayesian optimization,
+  trust region, `allowed` hook).
+* `benchmark.py`, with five experiments: inputs, relevance, holdout (new module, 0/5/20 of its
+  packets), learning, bo.
+* plots: `plot_representations.py` (real-trace ladder), `plot_overview.py`.
+
+**Performance fixes:**
+* sklearn HistGradientBoosting must run with 1 thread (threadpoolctl): 100× faster;
+* this torch build has no fast CPU convolutions, so the CNN runs on MPS with batch 256.
+
+**First results (synthetic, quick run):**
+* θ alone cannot know the amplifier (an `amp` one-hot was added);
+* the reference traces reveal the hidden state: λ error 3.6 % (GP) vs 16–24 % from θ alone;
+* GP ARD on 44 inputs with little data is worse for σe than GP on θ;
+* BO beats random search;
+* no model generalizes to a never-seen module from one training module (hence the k-shot test).
+
+The full benchmark was running in the background (log in the scratchpad `mlfull.log`; results
+go to `docs/ml_results/`, figures to `docs/overleaf_ml_models/figures/`).
+
+**Document:** `docs/overleaf_ml_models/ml_models.tex`, drafted. It has basic/advanced boxes,
+summary, two roles (predictor P, surrogate S + BO), inputs table, five model families with
+equations, full trace vs features (representation ladder), own-feature discovery, data needs,
+validation and BO. The results section is still a RESULTS-PLACEHOLDER.
+
+## 2c. Trace-features technote (in progress)
+
+**Request:** fix the formatting of `docs/trace_features.tex` (figures off the page, unreadable
+text) and write a separate, more mathematical technical note on how every feature is computed.
+
+* Tectonic 0.17 was installed in the scratchpad (`texenv`, conda-forge) to compile and check layouts.
+* `fit_damped_ringing`, `skip_tools`, `transfer_tools`, `trace_features` and the helpers were
+  re-read for the equations.
+
 ## 3. Not yet known or checked
 
 * What `read_config` resets: the mode is set explicitly afterwards, but whether it touches the
