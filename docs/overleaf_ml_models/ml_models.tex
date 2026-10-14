@@ -64,7 +64,11 @@ comparison will be repeated on the first scan.
   240 and 480 labeled packets. Pre-training on unlabeled traces (a scan produces $\sim$30{,}000) should lower that.
 \item \textbf{Reference traces matter}: the dark charge drifts with the CCD state. Settings alone predict it to $\sim$25\,\%; with the reference
   traces it is 3.6\,\%.
-\item \textbf{A new module} needs about 20 of its own packets before any model predicts it well.
+\item \textbf{A new module} needs about 20 of its own packets before any first-round model predicts it well.
+\item \textbf{Second round} (Section~\ref{sec:proto}). SUMMARY-PROTO-PLACEHOLDER
+\item \textbf{Real data} (Sections~\ref{sec:realtest}--\ref{sec:format}): a staged test plan; the packets need no extra time, but per-row
+  $\lambda$ from WADERs, a scan design with joint changes, trace-only packets, recorded conditions and 2--5 packets per new module would help;
+  and a set of linked tables (per trace set, curves, labels with errors, image rows) instead of one flat \code{dataset.csv}.
 \end{itemize}
 \end{basic}
 
@@ -743,6 +747,253 @@ The BoTorch/GPyTorch libraries implement these.
 Each will be tested the same way: synthetic world first, then the real scan, against the first-round models.
 
 %======================================================================
+\section{Prototypes of the next models (A, B, F, H)}
+\label{sec:proto}
+
+\begin{basic}
+The four cheapest candidates of Section~\ref{sec:next} were built and tested on the synthetic world:
+\begin{itemize}
+\item \textbf{A}, a model that measures on the trace what it can (the single-skip noise and the noise floor) and learns only the rest;
+\item \textbf{B}, a Gaussian process that knows the data come from amplifiers on modules;
+\item \textbf{H}, a calibration of every model's error bars;
+\item \textbf{F}, an optimizer that models the read noise and the dark charge separately.
+\end{itemize}
+Code: \code{src/ml/structured.py}, \code{calibrate.py}, \code{benchmark\_structured.py}; walkthrough:
+\code{notebooks/ml\_structured\_models.ipynb}.
+
+\textbf{Main results:} PROTO-SUMMARY-PLACEHOLDER
+\end{basic}
+
+\subsection{Two synthetic worlds}
+World \textbf{v2} is the world of Section~\ref{sec:results}: the trace physics is complete. World \textbf{v3} adds two things.
+\begin{itemize}
+\item \textbf{A noise term only the image sees}, $\sigma_\text{lf} = 0.10\,(1 + 0.5\,(V_R+3)^2)(1 + 0.3\,\Delta t_H)$\,e$^-$: low-frequency
+  noise over the 4.8-min image that a 0.2-s trace of 10 pixels cannot measure; on average 29\,\% of $\sigma_e$. A model built on the
+  trace physics must learn it from the labels.
+\item \textbf{$\lambda$ row by row.} With EXPOSURE 0 a pixel of row $r$ collects dark current while the rows below it are read:
+  $\lambda_r = \text{CIC} + \text{DC}\,(r+\tfrac12)/8$, each row measured to 12\,\% (about 80 events in 1000 pixels). A line through the
+  16 rows gives DC to 12\,\% and CIC to 26\,\%; their mean is the usual label (3\,\%).
+\end{itemize}
+
+\subsection{A: physics-structured outputs}
+\begin{basic}
+The trace measures the noise in ADU, both how it averages down with skips and the floor that does not. Only the gain, which converts ADU to
+electrons, cannot be seen on a trace. So A takes the noise from the trace, learns the gain, and learns a small correction for what
+the image sees and the trace does not. The dark charge is learned directly, or as dark current plus CIC when the image gives it
+row by row.
+\end{basic}
+\begin{advanced}
+A weighted least-squares fit of $\sigma_A(n)^2 = a^2/n + b^2$ to the trace's Allan deviation gives $a = \sigma_1 g$ and
+$b = \sigma_\text{floor}\,g$ (on real data also the features ``skip: CDS rms'' and ``fit: correlated noise floor''). Then
+\begin{equation}
+\log\sigma_e = \tfrac12\log\Bigl(\frac{a^2}{N} + b^2\Bigr) - \log\hat g(x) + \hat r(x),\qquad
+\lambda = e^{\hat f_\text{DC}(x)} + e^{\hat f_\text{CIC}(x)} \ \text{(or a GP on }\log\lambda),
+\end{equation}
+where $\hat g$, $\hat r$, $\hat f$ are GPs (ordinary for ``A'', hierarchical for ``A+B'') on $x = (\theta$, packet state vector$)$. The
+residual is trained on $\log\sigma_e - \tfrac12\log(a^2/N+b^2) + \log g$ with the \emph{labeled} gain, so it is not polluted by gain
+errors; the predicted variances add. The \textbf{packet state vector} is the reference features minus each amplifier's training average,
+averaged over the packet's amplifiers: it measures the drift without the amplifier signatures and exists for an amplifier never seen.
+With the true gain, the trace alone gives $\sigma_e$ to about 1\,\% in v2.
+\end{advanced}
+
+\subsection{B: hierarchical Gaussian process}
+\begin{advanced}
+An exact GP (PyTorch, float64, L-BFGS on the marginal likelihood) with
+\begin{equation}
+k(x,x') = s^2 M(x,x') + \mathbb{1}[m=m']\bigl(c_m^2 + s_m^2 M(x,x')\bigr) + \mathbb{1}[a=a']\bigl(c_a^2 + s_a^2 M(x,x')\bigr) + \sigma_n^2\,\mathbb{1}[x=x'],
+\end{equation}
+$M$ Matérn-5/2 with ARD length scales, $m$ the module and $a$ the amplifier. A new amplifier gets the shared function with the
+offset variances in its error bar; its first packets move it, shrunk toward the shared function. With a single training module $c_m$ is
+not identifiable and stays at its prior, so the error bars for a new module are conservative.
+\end{advanced}
+
+\subsection{Results}
+
+\paragraph{Number of packets (Figure~\ref{fig:protolearn}).} PROTO-LEARNING-PLACEHOLDER
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\textwidth]{figures/ml_structured_learning.png}
+\caption{Error against the noise-free truth on 200 new packets, against the number of training packets, in world v2 (top) and v3
+(bottom). Grey: the first round's best feature model; yellow: the CNN on curves; red: A+B.}
+\label{fig:protolearn}
+\end{figure}
+
+\paragraph{A new module (Figure~\ref{fig:protonew}).}
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lrrrrrr}
+\toprule
+& \multicolumn{3}{c}{$k=0$} & \multicolumn{3}{c}{$k=2$} \\
+Model & $\sigma_e$ & $\lambda$ & gain & $\sigma_e$ & $\lambda$ & gain \\
+\midrule
+first round: GP, $\theta$ + amp + features & 72\,\% & 118\,\% & 35\,\% & 18\,\% & 39\,\% & 3.1\,\% \\
+first round: boosted trees & 57\,\% & 50\,\% & 41\,\% & 38\,\% & 25\,\% & 20\,\% \\
+B: hierarchical GP & 58\,\% & 3.6\,\% & 33\,\% & 7.4\,\% & 3.1\,\% & 0.9\,\% \\
+A: physics + ordinary GP & 44\,\% & 3.1\,\% & 44\,\% & 2.6\,\% & 6.3\,\% & 1.5\,\% \\
+A+B & 33\,\% & 3.6\,\% & 33\,\% & 2.4\,\% & 3.1\,\% & 0.9\,\% \\
+\bottomrule
+\end{tabular}
+\caption{Error on a module never seen ($k=0$) or seen in 2 packets, after 240 packets of the first module (against the labels).}
+\label{tab:protonew}
+\end{table}
+\begin{itemize}
+\item With no packet of the new module, nothing can know its gain: the trace measures $\sigma_1 g$, never $g$. So $\sigma_e$ is off by the
+  module-to-module gain spread for every model. Only the hierarchical GP says so: its coverage stays at 0.75, while A with an ordinary GP
+  claims 0.00.
+\item $\lambda$ does not depend on the module, and the state is read from the \emph{other} module's reference traces in the same packet:
+  3\,\% instead of 50--118\,\%.
+\item With \textbf{one} packet of the new module, A+B reaches $\sigma_e$ 3.3\,\%, $\lambda$ 3.1\,\%, gain 3.4\,\%; with two, 2.4/3.1/0.9\,\%.
+  That is the level of a known module. The first round needed $\sim$20 packets. An ordinary GP is fragile here (A at $k=1$: $\lambda$
+  37\,\%, an almost unseen one-hot column), the hierarchy is not.
+\end{itemize}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\textwidth]{figures/ml_structured_newmodule.png}
+\caption{Error on a new module against the number $k$ of its packets in training (plotted at $k+0.5$).}
+\label{fig:protonew}
+\end{figure}
+
+\paragraph{Scan design.} PROTO-DESIGN-PLACEHOLDER
+
+\paragraph{Calibrated error bars (H).} PROTO-CONFORMAL-PLACEHOLDER
+
+\paragraph{Decomposed surrogate for optimization (F; Figure~\ref{fig:protobo}).} Two hierarchical GPs model $\log\sigma_e$ and $\log\lambda$
+per good amplifier, and $J$ is computed from them (its variance assuming fully correlated amplifiers). Each part depends on fewer
+parameters than $J$, so it is learned from fewer packets. Over 5 repeats, the best true $J$ after 30 packets is $-2.80$ to $-2.82$
+(decomposed) against $-2.75$ to $-2.79$ (one GP on $J$). After 60 packets both reach $-2.80$ to $-2.82$ (the best of 50{,}000 random
+points: $-2.81$). Decomposing does not find a better optimum; it finds it in about half the packets.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\textwidth]{figures/ml_structured_bo.png}
+\caption{Best true objective against the number of packets: one GP on $J$ (grey) and the decomposed surrogate (red), 5 repeats.}
+\label{fig:protobo}
+\end{figure}
+
+\paragraph{C, D, E on the synthetic world.} They are not tested here, on purpose. In this world A+B already uses everything the curves
+contain (the floor in the Allan deviation), and the image-only term is invisible to the traces by construction, so a learned encoder
+cannot show a gain. Whether the real curves contain effects that A's physics misses can only be tested on real data (stage 4 of
+Section~\ref{sec:realtest}).
+
+%======================================================================
+\section{Testing every model on real data}
+\label{sec:realtest}
+
+\begin{basic}
+The synthetic world only ranks methods. On the real CCD the models are tested in stages, each stage using data that the packets
+produce anyway, and each with a test that a model cannot pass by memorizing. Stage 0 needs no training at all: it checks whether the
+physics that model A relies on holds on our CCD.
+\end{basic}
+
+\paragraph{Stage 0 -- the first packets at nominal settings (no training).}
+\begin{itemize}
+\item \textbf{Label noise.} Repeat the nominal packet $\gtrsim$5 times: the scatter of WADERs' $\sigma_e$, $\lambda$ and gain between repeats is the
+  floor no model can beat (synthetic: 1.5\,\%, 3\,\%, 0.8\,\%). Compare with WADERs' own error bars (\code{sigma\_e\_err}, \code{lambda\_err}).
+\item \textbf{Does the trace physics hold?} With the gain from the image, the trace alone predicts
+  $\sigma_e^\text{trace} = \sqrt{a^2/N + b^2}/g$ ($a, b$ from the Allan deviation, or the features ``skip: CDS rms'' and
+  ``fit: correlated noise floor''). The ratio $\sigma_e^\text{image}/\sigma_e^\text{trace}$ and its scatter decide how much model A must
+  learn: a ratio near 1 with small scatter means A works almost without training (world v2); a ratio that depends on the settings
+  is what A's residual $r(x)$ learns (world v3).
+\item \textbf{Dark current vs CIC.} Fit $\lambda$ row by row (16 rows): the slope is the dark current accumulated while the rows wait, the
+  intercept the CIC. A clear slope means the per-row labels are worth adding to the dataset.
+\end{itemize}
+
+\paragraph{Stage 1 -- the first scan.} All models of both rounds, the same splits and scores:
+\begin{itemize}
+\item \textbf{splits:} (i) grouped by packet (5 folds); (ii) \emph{blocked in time}: train on the first 2/3 of the scan, test on the last
+  1/3 (does the model follow the drift?); (iii) \emph{leave one parameter out} for a one-at-a-time scan: train on 9 parameters' sweeps
+  and the references, test on the 10th (it measures what the model can \emph{not} know, and is the honest test for a design without joint
+  changes);
+\item \textbf{scores:} relative error against the labels, compared with the label noise of stage 0; coverage of the 68\,\% and 95\,\%
+  intervals before and after conformal calibration (H); for the surrogate, the rank correlation between the predicted and measured
+  objective and the regret of the best predicted point;
+\item \textbf{learning curves:} the same, on random subsets of 15, 30, 60, 120, 240 packets;
+\item \textbf{what the models use:} GP relevances, A's residual $r(x)$ (where the trace physics fails), and, for the CNN, which parts of the
+  curves matter (saliency).
+\end{itemize}
+
+\paragraph{Stage 2 -- a second module (when one is available).} Train on module 1 plus $k = 0, 1, 2, 5, 10, 20$ packets of module 2;
+test on its other packets (the \code{newmodule} experiment). This decides B against the first round and how many packets a new module needs.
+
+\paragraph{Stage 3 -- the optimizer.} First \emph{offline}: replay Bayesian optimization on the scan, choosing only among the measured
+packets (pool-based), for every surrogate; cheap and fair. Then one \emph{prospective} run with the best surrogate: it proposes, we take the
+packet, and the prediction made before the packet is compared with the result. Only this last test measures what we care about.
+
+\paragraph{Stage 4 -- the data-hungry models (C, D, E, F).} Once there are tens of thousands of traces: pre-train the encoder on all of them
+(D), put it under the GP (C), and compare with A+B at the same number of labeled packets. Set models (E) need the individual trace sets
+(see the data format below).
+
+%======================================================================
+\section{Do the packets need to change?}
+\label{sec:dataneeds}
+
+\begin{basic}
+Mostly no: the packet as designed (5 reference sets, 10 trace sets, one 16-row image) carries what every model needs. Four additions
+would make the models clearly better, and one choice in the scan design matters a lot. None of them makes a packet longer.
+\end{basic}
+
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.3cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{2.4cm}}
+\toprule
+Change & Why (which model) & Cost \\
+\midrule
+\textbf{Per-row $\lambda$ from WADERs} (and per-row $\sigma$) & splits dark current from CIC (A); 16 constraints per image instead of 1; was already an
+  open item (WADERs JSON with per-row dark current) & none (analysis only) \\
+\textbf{Keep the un-averaged skips of the image}, or of a few of its rows, if the DAQ can save them & the image's own $\sigma(N)$ curve: $\sigma_1$,
+  floor and the image-only noise measured on the image, not inferred (A; stage 0) & disk (tens of MB per channel for 16 rows; check that cdaq can save them) \\
+\textbf{A scan design with joint changes}: random/Sobol points inside the limits, or half one-at-a-time and half random & the
+  one-at-a-time design never changes two parameters together, so no model can learn interactions (the \code{design} experiment, below) & none
+  (same number of packets) \\
+\textbf{Trace-only packets} between the image packets, at extra settings & unlabeled traces for pre-training (D), the cheap fidelity of
+  multi-fidelity BO (F), and many more $\theta$ points for the trace physics $a(\theta), b(\theta)$ (A) & minutes each, no image \\
+\textbf{Record the conditions}: CCD and board temperatures, time since the last flush/erase, vacuum, the complete parameter set of every pin
+  (not only the scanned ones), software versions & the drifting state is today inferred from the reference traces; measured temperatures
+  make it direct (all models; B for modules) & none \\
+\textbf{Nominal image packets at intervals} (the scan already has \code{reference\_every = 5}) & labeled drift anchors: they measure the
+  state's effect on the labels directly & already planned \\
+\textbf{A few packets of every new module}, at nominal and around it & B needs $\gtrsim$2--5 imaged packets per new module before its gain
+  (and so $\sigma_e$) is known; traces alone cannot give the gain & 2--5 packets \\
+\bottomrule
+\end{tabularx}
+\caption{Changes to the data that the second-round models would use. None makes a packet longer.}
+\label{tab:dataneeds}
+\end{table}
+
+%======================================================================
+\section{A better data format}
+\label{sec:format}
+
+\begin{basic}
+Today the models read \code{dataset.csv}: one row per packet and amplifier, every feature already averaged over the repeats. That is
+the right table for the first-round models, but it throws away what the next ones need: the individual repeats, the curves, the label
+error bars, the row-by-row image information and the conditions. The proposal is to keep the raw files as they are and add a small set
+of linked tables, from which \code{dataset.csv} is just one view.
+\end{basic}
+
+\begin{advanced}
+\textbf{Keep} the raw data as the source of truth (FITS images, lossless \code{.npz} traces, \code{result.json}). \textbf{Add} a tidy,
+columnar store (Parquet tables plus one array store, HDF5 or Zarr), keyed by \code{packet\_id}, \code{board}, \code{channel}, \code{kind}
+(reference / $\theta$) and \code{set}:
+\begin{enumerate}
+\item \code{packets}: time stamps, module and CCD identifiers, configuration hashes, the complete parameter vector (every pin),
+  temperatures and other conditions, readout times, flags; also the trace-only packets;
+\item \code{trace\_sets}: one row per trace set (not combined): quality flags and all 85 features, so that set models (E) and robust
+  combinations can be learned, and the repeat scatter is a feature in its own right;
+\item \code{curves}: the 12 curves of every trace set, at their natural length (array store), for the CNN, pre-training (D) and deep kernels (C);
+\item \code{labels}: per packet and amplifier $\sigma_e$, $\lambda$, gain \emph{with their errors} (for heteroscedastic likelihoods: the GP
+  then uses WADERs' error instead of learning one noise level), fit flags, WADERs version;
+\item \code{image\_rows}: per row (and column) $\lambda$, $\sigma$, baseline: the information model A uses; and, if available, the image's own
+  $\sigma(N)$ curve;
+\item \code{schema}: version and the hash of the code that produced every table.
+\end{enumerate}
+\code{dataset.csv} becomes a derived view (combine the sets, join the labels), so the first-round code is unchanged. Trace-only packets
+are rows without labels; new modules are new identifiers. Loading one table into pandas or PyTorch is a single call.
+\end{advanced}
+
+%======================================================================
 \section{Plan}
 
 \begin{enumerate}
@@ -757,8 +1008,8 @@ Each will be tested the same way: synthetic world first, then the real scan, aga
   \item test the held-out amplifier.
   \end{itemize}
 \item \textbf{CNN on curves:} train it on the same scan; pre-train an encoder on all unlabeled traces; compare; look at what it uses.
-\item \textbf{Next models:} physics-structured hierarchical GP, conformal calibration, deep kernel with pre-training
-  (Section~\ref{sec:next}).
+\item \textbf{Next models:} A+B, H and F are prototyped (Section~\ref{sec:proto}); deep kernel with pre-training (C+D) and set models (E)
+  wait for real traces. The real-data test plan is in Section~\ref{sec:realtest}.
 \item \textbf{Optimization:} Bayesian optimization in the screened parameters, with the limits and relations encoded, small steps and
   human approval of each proposal at first.
 \end{enumerate}
@@ -766,10 +1017,11 @@ Each will be tested the same way: synthetic world first, then the real scan, aga
 \paragraph{Software.}
 \begin{itemize}
 \item \code{src/ml/}: \code{synthetic.py}, \code{data.py}, \code{models.py}, \code{evaluate.py}, \code{optimize.py}, \code{benchmark.py},
-  and the plots.
+  and the plots; second round: \code{structured.py}, \code{calibrate.py}, \code{benchmark\_structured.py}.
+\item Notebooks: \code{notebooks/ml\_models\_walkthrough.ipynb} (first round), \code{notebooks/ml\_structured\_models.ipynb} (second round).
 \item Environment: \code{python3 -m venv .venv \&\& .venv/bin/pip install -r requirements-ml.txt} (numpy, scipy, pandas, scikit-learn,
   PyTorch, matplotlib).
-\item The benchmark: \code{cd src \&\& ../.venv/bin/python -m ml.benchmark}.
+\item The benchmarks: \code{cd src \&\& ../.venv/bin/python -m ml.benchmark} and \code{-m ml.benchmark\_structured}.
 \end{itemize}
 
 \end{document}

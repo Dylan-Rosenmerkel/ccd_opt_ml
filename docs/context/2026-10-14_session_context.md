@@ -382,3 +382,14 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
 * **C, D, E are not testable meaningfully on this synthetic world:** A+B already uses everything the
   toy curves contain (the Allan floor); the image-only term is invisible to traces by construction. They
   belong to stage 4 on real data.
+* **ml_models.tex:**
+  * the draft sections are merged before "Plan": "Prototypes of the next models (A, B, F, H)" (sec:proto),
+    "Testing every model on real data" (sec:realtest), "Do the packets need to change?" (sec:dataneeds),
+    "A better data format" (sec:format);
+  * new summary bullets and updated Plan/Software;
+  * 5 placeholders (SUMMARY-PROTO, PROTO-SUMMARY, PROTO-LEARNING, PROTO-DESIGN, PROTO-CONFORMAL) wait for the
+    full run;
+  * the draft file was removed.
+* **Notebook generator:** written in the scratchpad (`make_structured_nb.py`, writes
+  `notebooks/ml_structured_models.ipynb`), not run yet. It reads `structured_learning/newmodule/design/
+  conformal/bo.json`.
