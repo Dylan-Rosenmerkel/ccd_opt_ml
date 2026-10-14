@@ -789,3 +789,24 @@ against the truth, world v2 unless noted):
   1. correct the 3000-skip wording;
   2. add a section "Do the models need amplifier labels?" (tex + notebook);
   3. make "A + own features, no ID" the default model.
+* **All three done:**
+  1. **3000-skip wording corrected** in `real_amplifier_check.py` (docstring + printout: "EXTRAPOLATION CHECK"),
+     ml_models.tex (stage-0 paragraph, new section, summary) and the notebook.
+  2. **New ml_models.tex section "Do the models need amplifier labels?"** (sec:amplabels): synthetic table
+     (abs / shape / rank), real module-101 results (gains 2 % spread, responses shared 86–99 % in sign,
+     noise = extrapolation only), consequences.
+     * Boxes are now breakable; 36 pages, 0 overfull, 0 undefined; zip rebuilt.
+     * Notebook section 8b updated and re-executed (0 errors).
+  3. **Default model = A without identity + own features:**
+     * `PhysicsStructured()` now defaults to kind="none", use_components=False (λ direct);
+     * `StructuredPrep()` defaults to own_features=("trace","ref");
+     * the benchmarks and notebook calls are pinned to `StructuredPrep(own_features=())` to reproduce earlier
+       results;
+     * the joint λ works with kind="none" (`_lambda_inputs`);
+     * check (v3, 120 packets): default σe 2.5 %, λ 2.8 % (joint 2.2 %), gain 0.4 %; A+B with ID 2.3 / 2.4 / 0.2 %.
+* **Answer given to the user** ("can the models still predict noise well?"):
+  * synthetic: yes, without amplifier labels (1.8–2.2 %; shape and order right even for a never-seen amplifier);
+  * real: unknown until matched 1×1 500-skip packets exist. The per-skip white noise agrees; the image's
+    long-time-scale noise is not constrained by 500-skip traces;
+  * image labels are still needed for training (the trace→image correction), amplifier labels are not.
+* **Still running:** `benchmark_seeds` (learning, pretrain). When done: robustness section in ml_models.tex.

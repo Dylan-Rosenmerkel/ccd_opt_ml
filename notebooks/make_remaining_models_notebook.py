@@ -316,12 +316,21 @@ if A:
 """)
 
 md(r"""
-**On the real amplifiers** (module 101, `src/real_amplifier_check.py`): the gains measured from the electron peaks of the
-2026-10-06 1×1 image differ by only 2 % between ch0, ch1 and ch3 (ch2's peaks are not resolved), so using the other channels' mean
-gain instead of a label costs 1.5–4.4 %. The image noise predicted from each channel's own traces is off by −25 to +45 % at 3000
-skips **with or without** the label: the limit is the trace-to-image noise relation, not the amplifier identity. The changes of the 85
-features with the settings agree in sign 86–99 % between channels (correlation 0.85–0.96), but the noise of ch2 changes alone,
-which a model sees in ch2's own trace without any label.
+**Result (synthetic, 3 training scans):** with the amplifier's own traces the label adds almost nothing ($\sigma_e$ 1.8 vs 1.7 % on
+known amplifiers, 2.2 vs 2.0 % on a new module after 2 of its packets). Without any amplifier information the level is wrong (the gain)
+but the shape (~2.6 %) and the order of the settings (0.98) stay right. For a never-seen amplifier every model is off by its gain in
+absolute terms, while the physics models keep shape and order. **This is now the default model**: `PhysicsStructured()` with
+`StructuredPrep()` (no identity, own trace and reference features).
+
+**On the real amplifiers** (module 101, `src/real_amplifier_check.py`):
+
+* **gains** from the electron peaks of the 2026-10-06 1×1 image differ by only 2 % between ch0, ch1 and ch3 (ch2's peaks are not
+  resolved), so using the other channels' mean gain instead of a label costs 1.5–4.4 %;
+* **responses**: the changes of the 85 features with the settings agree in sign 86–99 % between channels (correlation 0.85–0.96), but the
+  noise of ch2 changes alone, which a model sees in ch2's own trace without any label;
+* **noise from the trace: an extrapolation check only.** A 500-skip trace and a 3000-skip image are not directly comparable: the fit
+  uses blocks of at most 100–160 skips and is evaluated at 3000, where the floor dominates. It is off by −25 to +45 %, with or without the
+  label. The real test needs the planned packets (1×1, 500 skips, matched traces minutes apart).
 """)
 
 code(r"""
