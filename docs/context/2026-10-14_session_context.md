@@ -30,3 +30,12 @@ commands in this order:
 * `daq_scripts/manual_packet_commands.txt`: the 91 commands of the default run, for reference.
 * **Not checked:** what `read_config` resets exactly (the mode is set explicitly afterwards); the real
   voltage limits and relations, which the user is compiling.
+
+**Update (same day, on request):**
+* **The trace now reads its pixels like the image** (the matched trace of `docs/packet_design.md`):
+  `NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, NCOLPRE=100, BOOLCLR=0`, all other cuts 0 (0.19 s,
+  ~11 MB per channel). The group's 5×5/100-skip command is kept as a comment.
+* **A flush before every trace**, between the channels of a set too (`FLUSH_BETWEEN="trace"`;
+  `"set"` or `"none"` are the alternatives). That is 63 flushes and 60 traces, about 44 min with
+  img.toml (about 21 min with `"set"`).
+* `manual_packet_commands.txt` was regenerated (167 commands).

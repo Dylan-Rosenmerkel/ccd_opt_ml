@@ -16,8 +16,9 @@
 #
 # Edit the SETTINGS block, nothing else.
 #
-# Duration with the defaults: 18 flushes (~30 s each), 60 traces, the img.toml image (35x1000x500,
-# 10.6 min): about 21 min.  With NROW = 16 in the image (docs/packet_design.md): about 15 min.
+# Duration with the defaults: 63 flushes (~30 s each: 3 initial, one before every trace, one after
+# the change and one at the end) = 31.5 min, 60 traces, the img.toml image (35x1000x500, 10.6 min):
+# about 44 min.  With FLUSH_BETWEEN="set": about 21 min.  With NROW = 16 in the image: -6 min.
 # The nominal .bcf files are read at the start too, so every packet starts from the same state.
 # =============================================================================
 set -euo pipefail
@@ -32,15 +33,19 @@ POOL=acmpool
 N_INITIAL_FLUSHES=3       # flushes before the first reference trace set
 N_REF_SETS=5              # reference trace sets (nominal parameters)
 N_SETS=10                 # trace sets at the new parameters
-FLUSH_BETWEEN_SETS=1      # 1 = a flush between two trace sets, 0 = none
+FLUSH_BETWEEN="trace"     # "trace": a flush before every trace (also between the channels of a set)
+                          # "set":   a flush between trace sets only;  "none": no flushes between traces
 FLUSH_AFTER_CHANGE=1      # flushes after changing the parameters
 TRACE_CHANNELS="0 1 2 3"  # one trace per channel (take_trace records one channel at a time)
 
-# Trace: your command, plus the cuts set to 0 so nothing is inherited from the last image
-# (on 2026-10-12 traces taken after an image inherited NCOLPRE=185).
-TRACE_ARGS="subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=5, NSBIN=5, NDCM=100, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=0, NCOLPOST=0"
-# Trace that reads its pixels like img.toml (same skips and binning; docs/packet_design.md):
-# TRACE_ARGS="subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0"
+# Trace that reads its pixels like the image (docs/packet_design.md, section 6): the same skips
+# (NDCM 500) and no binning (1x1), as img.toml; its own small size: 2 x 5 pixels after a
+# 100-pixel prescan burst, no register clear, no exposure.  0.19 s, ~11 MB per channel.
+# Every cut is given, so nothing is inherited from the last image.
+# If the image's NDCM / NSBIN / NPBIN change, change them here too.
+TRACE_ARGS="subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0"
+# The group's earlier trace command (2x5, 5x5 binning, 100 skips), with the cuts set to 0:
+# TRACE_ARGS="subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=5, NSBIN=5, NDCM=100, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=0, NCOLPOST=0"
 
 # The parameter changes, one per line:  NAME=VALUE  (both boards, sent to acmpool)
 #                                   or  acm101:NAME=VALUE  (one board only)
@@ -98,14 +103,28 @@ q() {   # queue one command:  q "<python text>" <target>
   if [[ ${DRY_RUN:-0} == 1 ]]; then echo "cdaq qadd \"$1\" $2"; else cdaq qadd "$1" "$2"; fi
 }
 flushes() { for ((i = 0; i < $1; i++)); do q "daq.flush_ccd()" "$POOL"; done; }
-trace_set() {   # one trace per channel on every board of the pool
-  for ch in $TRACE_CHANNELS; do q "daq.take_trace(fname='$1', ch=$ch, $TRACE_ARGS)" "$POOL"; done
+traces() {   # traces <prefix> <number of sets>: one trace per channel per set, every board of the pool
+  local first=1 s ch
+  for ((s = 1; s <= $2; s++)); do
+    for ch in $TRACE_CHANNELS; do
+      if (( ! first )); then
+        if [[ $FLUSH_BETWEEN == trace ]] || [[ $FLUSH_BETWEEN == set && $ch == ${TRACE_CHANNELS%% *} ]]; then
+          flushes 1
+        fi
+      fi
+      q "daq.take_trace(fname='$1$s', ch=$ch, $TRACE_ARGS)" "$POOL"
+      first=0
+    done
+  done
 }
 nominal() { for pair in $BCF; do q "daq.read_config('${pair#*=}')" "${pair%%=*}"; done; }
 
 # --------------------------------- the plan ----------------------------------
 check_and_show || exit 1
-echo "Traces: $N_REF_SETS reference + $N_SETS new sets x channels [$TRACE_CHANNELS]; image: $IMAGE_TOML"
+echo "Traces: $N_REF_SETS reference + $N_SETS new sets x channels [$TRACE_CHANNELS], flush between: $FLUSH_BETWEEN"
+echo "Trace: $TRACE_ARGS"
+echo "Image: $IMAGE_TOML"
+case $FLUSH_BETWEEN in trace|set|none) ;; *) echo "ERROR: FLUSH_BETWEEN must be trace, set or none"; exit 1;; esac
 if [[ ${DRY_RUN:-0} != 1 ]]; then
   read -r -p "Queue all commands now? [y/N] " answer
   [[ $answer == [yY] ]] || { echo "nothing sent"; exit 0; }
@@ -118,10 +137,7 @@ q "daq.use_external_clock()" "$POOL"          # set once per session; harmless i
 
 # 1. reference traces at nominal
 flushes "$N_INITIAL_FLUSHES"
-for ((s = 1; s <= N_REF_SETS; s++)); do
-  (( s > 1 && FLUSH_BETWEEN_SETS )) && flushes 1
-  trace_set "trace_ref$s"
-done
+traces trace_ref "$N_REF_SETS"
 
 # 2. change the parameters
 for change in "${CHANGES[@]}"; do
@@ -132,10 +148,7 @@ done
 flushes "$FLUSH_AFTER_CHANGE"
 
 # 3. traces at the new parameters
-for ((s = 1; s <= N_SETS; s++)); do
-  (( s > 1 && FLUSH_BETWEEN_SETS )) && flushes 1
-  trace_set "trace_new$s"
-done
+traces trace_new "$N_SETS"
 
 # 4. master/slave mode and the image (take_image.py queues the take_image call itself)
 q "daq.master($LEADER)" "$POOL"
