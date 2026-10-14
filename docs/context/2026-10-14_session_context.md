@@ -600,3 +600,11 @@ against the truth, world v2 unless noted):
   6. joint likelihood for per-row λ;
   7. run `src/stage0_trace_vs_image.py`-style checks on the first 1×1 packets.
 * **Notebook for the remaining models:** not written yet (offered).
+
+## 2i. Improvements 1, 2, 4 (user: "go ahead with 1, 2 and 4, and push as you go")
+
+1. `trace_features`: add an Allan curve of the non-detrended CDS, a CDS spectrum on a log-frequency axis,
+   and n ≤ N/5 in the noise fits.
+2. `scan_packets.py`: a "mixed" design (half one-at-a-time, half random) + config.
+3. Repeat the key benchmarks over 5 training scans (`src/ml/benchmark_seeds.py`) and report mean ± sd;
+   correct the doc where a claim does not hold.
