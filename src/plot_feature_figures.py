@@ -421,7 +421,7 @@ def curve_figures(e: Example, out: Path) -> None:
     half = (len(names) + 1) // 2
     for part, chunk in (("a", names[:half]), ("b", names[half:])):
         rows = (len(chunk) + 1) // 2
-        fig, axes = plt.subplots(rows, 2, figsize=(FULL, 2.15 * rows))
+        fig, axes = plt.subplots(rows, 2, figsize=(FULL, 1.8 * rows))
         for ax, name in zip(axes.ravel(), chunk):
             c = np.asarray(curves[name], float)
             if name in ("noise: Allan deviation", "noise: Allan deviation, common pattern removed"):
