@@ -103,8 +103,8 @@ FIGS = {   # group -> [(source png, file name, caption, width)]
         ("slow_principal_components.png", "slow_principal_components.png", "Principal components of the skip-to-skip variation: explained variance (left), the first three component shapes (centre; shaded: windows) and the PC1 score along the skips (right). PC1 (82 %) is the sub-sample phase walk at the edges; PC2 is the level shift set by each reset. " + EX, 1.0),
     ],
     "curves": [
-        ("all_curves_a.png", "all_curves_a.png", "The 12 curves returned by trace_features, part 1 of 2. " + EX, 1.0),
-        ("all_curves_b.png", "all_curves_b.png", "The 12 curves returned by trace_features, part 2 of 2. " + EX, 1.0),
+        ("all_curves_a.png", "all_curves_a.png", "The 14 curves returned by trace_features, part 1 of 2. " + EX, 1.0),
+        ("all_curves_b.png", "all_curves_b.png", "The 14 curves returned by trace_features, part 2 of 2. " + EX, 1.0),
     ],
     "redundancy": [
         ("feature_correlation.png", "feature_correlation.png", "Correlation between the 85 features across the 19 healthy traces of the 2026-10-08 session, ordered as in the registry and grouped (the bands show the feature groups and how many features each has). The strongest individual pairs are listed in the table below.", 1.0),

@@ -415,13 +415,20 @@ def curve_figures(e: Example, out: Path) -> None:
                "vertical: mean shape": "sample", "level: common CDS pattern": "skip", "noise: CDS autocorrelation": "lag (skips)",
                "noise: Allan deviation": "skips averaged", "noise: CDS spectrum": "kHz", "noise: within-cycle spectrum": "MHz",
                "noise: noise vs window length": "window length (samples)", "edge: equivalent-time pulse": "samples from the edge",
-               "edge: variation along the cycle": "sample in the cycle"}
-    for part, chunk in (("a", names[:6]), ("b", names[6:])):
-        fig, axes = plt.subplots(3, 2, figsize=(FULL, 6.4))
+               "edge: variation along the cycle": "sample in the cycle",
+               "noise: Allan deviation, common pattern removed": "skips averaged",
+               "noise: CDS spectrum, log frequency": "log-frequency bin (lowest frequency to Nyquist)"}
+    half = (len(names) + 1) // 2
+    for part, chunk in (("a", names[:half]), ("b", names[half:])):
+        rows = (len(chunk) + 1) // 2
+        fig, axes = plt.subplots(rows, 2, figsize=(FULL, 2.15 * rows))
         for ax, name in zip(axes.ravel(), chunk):
             c = np.asarray(curves[name], float)
-            if name == "noise: Allan deviation":
+            if name in ("noise: Allan deviation", "noise: Allan deviation, common pattern removed"):
                 ax.loglog(ALLAN_N[:len(c)], c, "o-", ms=2.5)
+                ax.loglog(ALLAN_N, c[0] / np.sqrt(ALLAN_N), "k:", lw=0.7)       # white noise
+            elif name == "noise: CDS spectrum, log frequency":
+                ax.semilogy(c, "o-", ms=2, lw=0.7)
             elif name == "noise: CDS spectrum":
                 ax.semilogy(np.linspace(0, e.skip_rate / 2e3, len(c)), c, lw=0.7)
             elif name == "noise: within-cycle spectrum":
@@ -437,6 +444,8 @@ def curve_figures(e: Example, out: Path) -> None:
             else:
                 ax.plot(c, lw=0.7)
             ax.set(title=name, xlabel=xlabels.get(name, ""))
+        for ax in axes.ravel()[len(chunk):]:
+            ax.set_visible(False)
         fig.tight_layout()
         save(fig, out, f"all_curves_{part}.png")
 

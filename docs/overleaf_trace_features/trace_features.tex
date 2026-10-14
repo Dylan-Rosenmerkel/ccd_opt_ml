@@ -21,7 +21,7 @@
 
 \begin{abstract}
 This note lists every feature computed from one raw skipper-CCD trace by the function \code{trace\_features} in
-\code{src/trace\_features.py}: 85 numbers and 12 curves. They merge the 39
+\code{src/trace\_features.py}: 85 numbers and 14 curves. They merge the 39
 comparison tools of \code{compare\_trace.py} with the advanced features developed in
 \code{notebooks/advanced\_trace\_features.ipynb}. The features are candidate inputs for a model that relates traces and
 operating parameters to the read noise $\sigma_e$, the dark current $\lambda$ and the gain of calibrated images. They describe
@@ -474,8 +474,10 @@ for channel 0) is an assumption to confirm from the bcf.
 \texttt{vertical: mean shape} & ADU & Mean waveform of one vertical transfer (first 30 samples set to 0). Information only: consecutive vertical transfers are not exchangeable. \\
 \texttt{level: common CDS pattern} & ADU & The common pattern itself, skips 0-499. \\
 \texttt{noise: CDS autocorrelation} &  & Autocorrelation of the detrended CDS, lags 1-50. \\
-\texttt{noise: Allan deviation} & ADU & Allan deviation of the detrended CDS for n = 1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100, 160. \\
+\texttt{noise: Allan deviation} & ADU & Allan deviation of the detrended CDS for n = 1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100, 160. Points with n \textgreater{} N/5 are biased low: the degree-4 detrending absorbs most of the difference between so few block means (n = 160 of 490 skips: about 0.4 of the white-noise value). \\
 \texttt{noise: CDS spectrum} & ADU$^{2}$/Hz & Spectral density of the detrended CDS sequence, 0-15 kHz. \\
+\texttt{noise: Allan deviation, common pattern removed} & ADU & Overlapping Allan deviation (all windows of n skips; n as above) of each pixel's CDS minus the mean CDS of all usable pixels at the same skip, times sqrt(P/(P-1)) for P pixels. The pattern along the skips that every pixel shares is not noise for an image (it shifts every pixel alike), but no polynomial is removed: slow noise that differs from pixel to pixel (a noise floor) stays in, as it does in an image. \\
+\texttt{noise: CDS spectrum, log frequency} & ADU$^{2}$/Hz & Spectral density of the same series (common pattern removed, not detrended), averaged in 40 logarithmically spaced frequency bins from the lowest non-zero frequency to the Nyquist frequency (empty bins interpolated). The low frequencies, where a noise floor shows, get as many points as every other decade. \\
 \texttt{noise: within-cycle spectrum} & arb. & Power spectrum of the within-cycle noise (see the band fractions), 0-7.5 MHz. \\
 \texttt{noise: noise vs window length} & ADU & Detrended CDS noise for window lengths of 1/15, 2/15, 3/15, 1/3, 1/2, 2/3, 5/6 and 1 times the window (10 ... 150 samples for the usual windows). \\
 \texttt{edge: equivalent-time pulse} & ADU & The reset pulse at 0.1-sample resolution, from 15 samples before to 60 after the edge. \\
@@ -485,14 +487,14 @@ for channel 0) is an assumption to confirm from the bcf.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{all_curves_a.png}
-\caption{The 12 curves returned by trace\_features, part 1 of 2. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
+\caption{The 14 curves returned by trace\_features, part 1 of 2. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:all_curves_a}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{all_curves_b.png}
-\caption{The 12 curves returned by trace\_features, part 2 of 2. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
+\caption{The 14 curves returned by trace\_features, part 2 of 2. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:all_curves_b}
 \end{figure}
 
