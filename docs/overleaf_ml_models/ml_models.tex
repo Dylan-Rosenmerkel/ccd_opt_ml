@@ -71,8 +71,9 @@ comparison will be repeated on the first scan.
   with joint changes (half random) makes $\lambda$ 5--10 times better than a one-at-a-time scan of the same length.
 \item \textbf{Remaining models} (Section~\ref{sec:rest}): putting the CDS spectrum on a logarithmic frequency axis made the plain CNN
   6 times better ($\sigma_e$ 1.8\,\% at 240 packets); pre-training (D) helps with few labels; the deep kernel (C) needs a frozen encoder or
-  calibration; a trust region (F) found the best settings. Set models (E), several modules (G), multi-fidelity and ParEGO gave no gain
-  in the toy world.
+  calibration; a trust region (F) found the best settings; the learned set combination (E) is better and steadier than fixed rules
+  from 60 packets on. Several modules (G), multi-fidelity and ParEGO gave no gain in the toy world. Over 5 training scans these
+  conclusions hold (Section~\ref{sec:robust}).
 \item \textbf{Amplifier labels} (Section~\ref{sec:amplabels}): not needed. A model given each amplifier's own traces instead of its identity
   was as good (synthetic: $\sigma_e$ 1.8 vs 1.7\,\%), and is now the default. A never-seen amplifier's gain still needs one image; on
   module 101 the gains differ by only 2\,\%.
@@ -1014,7 +1015,8 @@ experiments, G included).
 \item Pre-training (D) helps with 30--120 packets.
 \item The deep kernel (C) is the most accurate network with few packets but over-confident when fine-tuned. With the encoder frozen it
   is calibrated, and it is the best network for $\lambda$ and the gain (as good as A+B).
-\item The learned set combination (E) is about as good as a robust fixed rule.
+\item The learned set combination (E) is about as good as a robust fixed rule with two training scans; over 5 scans it is better and
+  steadier from 60 packets on (Section~\ref{sec:robust}).
 \item A trust region (F) found better settings than every other strategy.
 \item Multi-fidelity, ParEGO, the learned constraint and G gave no gain \emph{in this world}. The reasons are understood and are listed
   below.
@@ -1146,9 +1148,10 @@ A+B (reference) & 2.4\,\% & 2.0\,\% & 2.0\,\% & 2.0\,\% & 0.70--0.72 \\
 \item median, robust mean and robust mean of variances: 3.4--7.5\,\%;
 \item the learned combination: 5.6, 4.8, 3.3, 3.1\,\% at 30, 60, 120, 240 packets, against 4.8, 6.5, 3.8, 3.4\,\% for the best fixed rule.
 \end{itemize}
-It is about as good as a robust rule, more stable between the two scans at 60 packets, and its error bars are conservative (coverage
-0.9). The processing rule already used (robust mean) is a good default. E becomes worth it when the sets differ in ways no rule
-anticipates, which only real repeats will show.
+It is about as good as a robust rule here, more stable between the two scans at 60 packets, and its error bars are conservative
+(coverage 0.9). Over 5 training scans (Section~\ref{sec:robust}) it is better and much steadier from 60 packets on ($3.7 \pm 0.5$ against
+$6.7 \pm 3.0$\,\% at 120), and worse with 30. The processing rule already used (robust mean) is a good default for few packets; E is
+worth it once there are $\gtrsim$60 packets, and whenever the sets differ in ways no rule anticipates.
 
 \begin{figure}[htbp]
 \centering
@@ -1207,6 +1210,47 @@ random & $-2.556$ & $-2.665$ & 0 & 0.091 \\
 \caption{F: best true objective against cost (left) and the points tried in one repeat (right).}
 \label{fig:advbo}
 \end{figure}
+
+%======================================================================
+\section{How robust are these results?}
+\label{sec:robust}
+
+\begin{basic}
+Most comparisons above used one training scan. To see which differences are real, the key ones were repeated with 5 training scans
+(\code{src/ml/benchmark\_seeds.py}; the joint $\lambda$ fit with 3). Almost every conclusion holds, with small spreads. One changed:
+the learned set combination (E) is better and more stable than the fixed rules from 60 packets on, not just ``about as good''.
+\end{basic}
+
+\begin{table}[h]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{2.2cm}}
+\toprule
+Comparison & & 5 training scans (mean $\pm$ sd, error against the truth) & Verdict \\
+\midrule
+A+B, $\sigma_e$ (v2) & 15 / 60 / 240 packets & $2.3 \pm 0.2$ / $2.0 \pm 0.1$ / $1.9 \pm 0.0$\,\% (first round: 17 / 14 / 12\,\%) & holds \\
+A+B, $\sigma_e$ (v3) & 15 / 60 / 240 & $3.5 \pm 0.3$ / $2.9 \pm 0.3$ / $2.3 \pm 0.0$\,\% (first round: 16 / 13 / 10\,\%) & holds \\
+CNN, log-frequency spectra & 60 / 240 (v2) & $7.9 \pm 3.1$ / $1.6 \pm 0.2$\,\% (linear axis: 12.4 / 6.7\,\%) & holds \\
+D, pre-trained, fine-tuned & 60 / 240 & $6.6 \pm 0.6$ / $2.5 \pm 0.4$\,\% (from scratch, log-f: 8.9 / 1.9\,\%) & holds: helps with few labels \\
+C, frozen encoder & 60 / 240 & $\lambda$ $6.3 \pm 3.1$ / $1.6 \pm 0.1$\,\%, gain 0.29 / 0.18\,\%; $\sigma_e$ $9.0 \pm 4.6$\,\% at 240 & holds for $\lambda$, gain \\
+scan design, $\lambda$ & 197 packets & one-at-a-time 10--13\,\%; random 1.6--1.9\,\%; half and half 2.4--2.8\,\% & holds \\
+new module, A+B $\sigma_e$ & 0 / 1 / 2 / 5 of its packets & $33.2 \pm 0.2$ / $2.9 \pm 0.4$ / $2.6 \pm 0.8$ / $1.8 \pm 0.0$\,\% & holds \\
+new module, $\lambda$ & 0 of its packets & $19 \pm 15$\,\% (one scan had shown 3\,\%) & corrected \\
+E, learned vs best fixed rule & 30 / 60 / 120 (v4) & $6.3 \pm 1.6$ vs $4.0 \pm 0.8$; $4.1 \pm 1.1$ vs $4.9 \pm 2.3$; $3.7 \pm 0.5$ vs $6.7 \pm 3.0$\,\% & changed: better from 60 \\
+joint vs direct $\lambda$ & 60 / 240 (v3, 3 scans) & $4.8 \pm 1.9$ vs $5.4 \pm 0.6$; $1.6 \pm 0.3$ vs $1.8 \pm 0.3$\,\% & equal within scatter \\
+\bottomrule
+\end{tabularx}
+\caption{The key comparisons over several training scans (test scan and toy CCDs fixed).}
+\label{tab:robust}
+\end{table}
+
+\begin{itemize}
+\item The physics-structured model's advantage is large and stable: its spread between scans is 0.0--0.3\,\%, far below the 10\,\%-level gap
+  to the first round.
+\item The fixed rules for combining trace sets (E) scatter strongly between scans at 60--120 packets (sd 2--4.5\,\%): whether the damaged
+  or pickup-affected sets fall among the training packets matters. The learned combination is steadier and, from 60 packets on,
+  better. With very few packets (30) the rules are better.
+\item The deep kernel's $\sigma_e$ varies a lot between scans (sd 4.6\,\%); its strength is $\lambda$ and the gain.
+\end{itemize}
 
 %======================================================================
 \section{Do the models need amplifier labels?}
