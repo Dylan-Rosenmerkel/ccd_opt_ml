@@ -13,6 +13,7 @@ it can be read without running it. Nothing here touches the DAQ hardware.
 | `trace_features_walkthrough.ipynb` | All trace features in one function (`trace_features.py`) | current |
 | `packet_tests_2026-10-12.ipynb` | First run with varied parameters: traces and images compared across 5 settings | analysis |
 | `ml_models_walkthrough.ipynb` | The first models on the synthetic world: inputs, five model types, error bars, relevance, benchmark results, Bayesian optimization, real-data loading | current (needs `.venv`) |
+| `ml_structured_models.ipynb` | The second-round models: physics-structured outputs (A), hierarchical GP (B), conformal error bars (H), decomposed optimizer (F); new module, scan design | current (needs `.venv`) |
 
 A suggested reading order: comparison → take packet → process packet → trace features.
 
@@ -158,6 +159,24 @@ Uses `src/ml/` and the benchmark results in `../docs/ml_results/`; run with the 
 6. The benchmark: learning curves, features vs curves vs both, a new module.
 7. Bayesian optimization against random search.
 8. Loading real processed packets (`dataset.csv`, curves).
+
+---
+
+## `ml_structured_models.ipynb`: the second-round models
+
+Uses `src/ml/structured.py`, `calibrate.py` and the results of `python -m ml.benchmark_structured` in `../docs/ml_results/structured_*.json`.
+
+1. Worlds v2 and v3 (image-only noise; λ row by row: dark current + CIC).
+2. Model A's physics: the Allan fit a²/n + b² gives σ1·g and the floor·g on the trace.
+3. The packet state vector (reference features without the amplifier signatures).
+4. The hierarchical GP (B) and what it attributes to the shared function, the module and the amplifier.
+5. A live comparison at 60 packets in both worlds.
+6. Learning curves (15–480 packets).
+7. A module never seen (0–20 of its packets).
+8. Scan design: one-at-a-time vs random vs half and half.
+9. Conformal calibration of the error bars (H).
+10. The decomposed surrogate for Bayesian optimization (F).
+11. What it means for the real CCD.
 
 ---
 

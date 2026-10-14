@@ -403,7 +403,7 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
   10–17 %; CNN 7.7 % (240), 1.5 % (480).
 * **λ:** A+B is the same as the first-round GP (λ is not what A changes): v2 21 % (15), 10 % (30), 7 % (60),
   3 % (120), 1.3–1.6 % (240–480); the first-round GP is better at 30–120 packets (8.5 %, 4.4 %, 2.1 %).
-  * **The dark + CIC split (v3) is WORSE at every size** (34 %, 32 %, 9.6 %, 5.7 %, 2.3 %, 2.3 %, against
+  * **The dark + CIC split (v3) is worse at every size from 30 packets on** (34 %, 32 %, 9.6 %, 5.7 %, 2.3 %, 2.3 %, against
     41 %, 18 %, 6.2 %, 3.9 %, 1.6 %, 1.5 % direct) and its coverage is too wide (0.9–1.0). The 16-row
     components are too noisy (CIC 26 %). The per-row λ is still worth having as a stage-0 physics check
     and for longer images; a joint likelihood would be the right way to use it.
@@ -412,3 +412,47 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
 * Figures redrawn with plain tick labels: `ml_structured_learning.png`, `ml_structured_newmodule.png`.
 * `models.n_rows` now handles dict inputs without curves; conformal + design were rerun (log
   `structured_cd.log`).
+
+**Second round finished (A, B, H, F prototyped):**
+* **Conformal** (`structured_conformal.json`; 68 % coverage of σe/λ/gain, raw → conformal):
+  * boosted trees at 60 packets: 0.36/0.22/0.60 → 0.72/0.77/0.67;
+  * boosted trees at 240: 0.44/0.59/0.60 → 0.63/0.72/0.72;
+  * NN, CNN and A+B at 240 were already 0.61–0.79 and end at 0.65–0.72;
+  * at 60 packets the factors are noisy (A+B λ 0.75 → 0.57), so use it from ~100 packets and also report
+    the 95 % interval.
+* **Design** (`structured_design.json`; 197 packets each, error against the truth on random test points):
+  * λ after a one-at-a-time scan: 8.9 % (GP), 11.4 % (B, A+B);
+  * after a random scan: 1.9 % (GP), 1.2 % (B, A+B); half and half: 2.3 % / 1.9 %;
+  * trees: 12–15 % in every design;
+  * σe from A+B: 1.9–2.1 % in every design;
+  * **recommendation: half one-at-a-time, half random** (`scan_packets.py` already has `type = "random"`).
+* **Corrections** (verified in the notebook):
+  * the trace alone with the true gain gives σe to ~3 %, not 1 %; A+B's learned correction brings it to 2 %;
+  * the per-row components are measured to 13–15 % each, not 26 % (the 26 % came from clipping at 1e-4).
+    With the 5 % clipping used by the model they are anti-correlated, and their sum is known to 3 %.
+    That is why two separate fits lose; a joint likelihood is the fix.
+* **ml_models.tex:**
+  * all placeholders filled (main results, learning, design table, conformal table);
+  * 28 pages, 0 overfull, 0 undefined; zip rebuilt;
+  * figures redrawn with plain tick labels.
+* **Notebook** `notebooks/ml_structured_models.ipynb`: executed, 0 errors, 27 s. The generator is in the
+  scratchpad (`make_structured_nb.py`).
+* READMEs updated.
+
+**Answers to the user's questions:**
+* **Different data?** The packet as designed is fine. Add (no extra packet time):
+  * the scan design: half random (the most important);
+  * per-row λ / σ from WADERs;
+  * the un-averaged image skips if cdaq can save them;
+  * trace-only packets;
+  * recorded temperatures / conditions / all pins;
+  * 2–5 imaged packets per new module.
+* **Data format:** keep the raw files; add the tables packets, trace_sets (per set), curves, labels (with
+  errors), image_rows, schema; `dataset.csv` becomes a view.
+
+**Possible next steps:**
+* joint likelihood for per-row λ;
+* use WADERs' label errors as GP noise;
+* stage-0 check on the first real packets;
+* C/D/E on real traces;
+* write the trace_sets / labels tables in process_packet.py.

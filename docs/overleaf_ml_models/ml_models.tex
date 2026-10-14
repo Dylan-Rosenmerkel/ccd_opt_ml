@@ -65,7 +65,9 @@ comparison will be repeated on the first scan.
 \item \textbf{Reference traces matter}: the dark charge drifts with the CCD state. Settings alone predict it to $\sim$25\,\%; with the reference
   traces it is 3.6\,\%.
 \item \textbf{A new module} needs about 20 of its own packets before any first-round model predicts it well.
-\item \textbf{Second round} (Section~\ref{sec:proto}). SUMMARY-PROTO-PLACEHOLDER
+\item \textbf{Second round} (Section~\ref{sec:proto}). A model that measures the noise on the trace and learns only the gain (A) on a GP
+  that knows amplifiers and modules (B) predicts $\sigma_e$ to 2--3\,\% from 15 packets and a new module after 1--2 of its packets. A scan
+  with joint changes (half random) makes $\lambda$ 5--10 times better than a one-at-a-time scan of the same length.
 \item \textbf{Real data} (Sections~\ref{sec:realtest}--\ref{sec:format}): a staged test plan; the packets need no extra time, but per-row
   $\lambda$ from WADERs, a scan design with joint changes, trace-only packets, recorded conditions and 2--5 packets per new module would help;
   and a set of linked tables (per trace set, curves, labels with errors, image rows) instead of one flat \code{dataset.csv}.
@@ -761,7 +763,18 @@ The four cheapest candidates of Section~\ref{sec:next} were built and tested on 
 Code: \code{src/ml/structured.py}, \code{calibrate.py}, \code{benchmark\_structured.py}; walkthrough:
 \code{notebooks/ml\_structured\_models.ipynb}.
 
-\textbf{Main results:} PROTO-SUMMARY-PLACEHOLDER
+\textbf{Main results:}
+\begin{itemize}
+\item $\sigma_e$ to 2--3\,\% from \textbf{15 packets} (first round: 11--20\,\% up to 240 packets; the CNN needs $\sim$480), as long as the trace
+  measures the noise floor; in the harder world v3 it stays at 2--4.5\,\%;
+\item a \textbf{new module} is predicted at the level of a known one after \textbf{1--2} of its packets (first round: $\sim$20); with none,
+  nothing can know its gain, and only B says so honestly;
+\item the \textbf{scan design} matters more than the model for $\lambda$: after a one-at-a-time scan it is 5--10 times worse than after a
+  random or half-random one;
+\item conformal calibration (H) repairs the trees' error bars; the decomposed optimizer (F) reaches the optimum in about half the packets;
+\item splitting $\lambda$ into dark current and CIC from the 16 rows did \emph{not} help as implemented (two separate fits lose the
+  information that their sum is measured much better than each part).
+\end{itemize}
 \end{basic}
 
 \subsection{Two synthetic worlds}
@@ -772,7 +785,7 @@ World \textbf{v2} is the world of Section~\ref{sec:results}: the trace physics i
   trace physics must learn it from the labels.
 \item \textbf{$\lambda$ row by row.} With EXPOSURE 0 a pixel of row $r$ collects dark current while the rows below it are read:
   $\lambda_r = \text{CIC} + \text{DC}\,(r+\tfrac12)/8$, each row measured to 12\,\% (about 80 events in 1000 pixels). A line through the
-  16 rows gives DC to 12\,\% and CIC to 26\,\%; their mean is the usual label (3\,\%).
+  16 rows gives DC and CIC to 13--15\,\% each, with strongly anti-correlated errors; their mean is the usual label (3\,\%).
 \end{itemize}
 
 \subsection{A: physics-structured outputs}
@@ -793,7 +806,8 @@ where $\hat g$, $\hat r$, $\hat f$ are GPs (ordinary for ``A'', hierarchical for
 residual is trained on $\log\sigma_e - \tfrac12\log(a^2/N+b^2) + \log g$ with the \emph{labeled} gain, so it is not polluted by gain
 errors; the predicted variances add. The \textbf{packet state vector} is the reference features minus each amplifier's training average,
 averaged over the packet's amplifiers: it measures the drift without the amplifier signatures and exists for an amplifier never seen.
-With the true gain, the trace alone gives $\sigma_e$ to about 1\,\% in v2.
+With the true gain, the trace alone gives $\sigma_e$ to about 3\,\% in v2 (the Allan fit's precision); the learned correction
+removes part of that, and A+B reaches 2\,\%.
 \end{advanced}
 
 \subsection{B: hierarchical Gaussian process}
@@ -809,7 +823,25 @@ not identifiable and stays at its prior, so the error bars for a new module are 
 
 \subsection{Results}
 
-\paragraph{Number of packets (Figure~\ref{fig:protolearn}).} PROTO-LEARNING-PLACEHOLDER
+\paragraph{Number of packets (Figure~\ref{fig:protolearn}).} Errors against the noise-free truth, on 200 new packets:
+\begin{itemize}
+\item \textbf{Read noise.} A+B reaches $\sigma_e$ 2.4\,\% with 15 packets and 2.0\,\% from 30 on (world v2). Every first-round feature
+  model is at 11--20\,\% at any size; the CNN on curves needs $\sim$480 packets to do as well, and then does better (1.2\,\%). In v3, where
+  29\,\% of the noise is invisible to the traces, A+B is at 3--4.5\,\% with 15--60 packets and 2.2\,\% from 240 on, because the learned
+  correction $\hat r(x)$ picks up the image-only term. A+B's error stops falling at $\sim$2\,\%: that is the precision of the trace
+  measurement itself (10 trace sets), and more sets or combining the Allan curve with the CDS spectrum would lower it.
+\item \textbf{The floor must be measured.} Without $b$ (``noise floor not measured''), A+B falls back to 10--17\,\%, no better than the first
+  round: the intermittent pickup is then invisible again. The Allan curve must reach $n \approx 100$--160 skips, which the 500-skip
+  traces do.
+\item \textbf{Dark charge.} A does not change how $\lambda$ is learned, and $\lambda$ is the same as with the first-round GP (1.3--1.6\,\% from
+  240 packets; the first-round GP is better at 30--120 packets). The split into dark current + CIC from the 16 rows is \emph{worse} from 30
+  packets on (e.g.\ 9.6\,\% against 6.2\,\% at 60), with too-wide error bars. Each part of one image is measured to 13--15\,\%, and the two errors are strongly anti-correlated (a
+  line's slope against its intercept), while their sum is known to 3\,\%; two separately fitted models throw that away. The
+  per-row $\lambda$ remains worth having as a physics check (stage 0) and for longer images; a joint likelihood of the per-row values,
+  rather than two separately fitted components, is the right way to use it.
+\item \textbf{Gain.} The hierarchy helps: 0.1--0.6\,\% against 0.2--0.9\,\% with an ordinary GP.
+\item \textbf{Error bars.} A+B's 68\,\% coverage is 0.56--0.59 with 15 packets and 0.66--0.74 from 30 on.
+\end{itemize}
 
 \begin{figure}[p]
 \centering
@@ -851,13 +883,63 @@ A+B & 33\,\% & 3.6\,\% & 33\,\% & 2.4\,\% & 3.1\,\% & 0.9\,\% \\
 \begin{figure}[p]
 \centering
 \includegraphics[width=\textwidth]{figures/ml_structured_newmodule.png}
-\caption{Error on a new module against the number $k$ of its packets in training (plotted at $k+0.5$).}
+\caption{Error against the truth on a new module, against the number $k$ of its packets in training. For $\lambda$ and the gain, B and
+A+B use the same GPs, so their lines coincide.}
 \label{fig:protonew}
 \end{figure}
 
-\paragraph{Scan design.} PROTO-DESIGN-PLACEHOLDER
+\paragraph{Scan design (Table~\ref{tab:design}).} The planned scan changes one parameter at a time (10 parameters $\times$ 20 values;
+197 points pass the relations here). An optimizer, however, asks about points where several parameters change together. With the same
+197 packets, tested on random points:
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lrrrrrr}
+\toprule
+& \multicolumn{2}{c}{one-at-a-time} & \multicolumn{2}{c}{random} & \multicolumn{2}{c}{half and half} \\
+Model & $\sigma_e$ & $\lambda$ & $\sigma_e$ & $\lambda$ & $\sigma_e$ & $\lambda$ \\
+\midrule
+first round: GP, $\theta$ + amp + features & 12.1\,\% & 8.9\,\% & 11.6\,\% & 1.9\,\% & 14.0\,\% & 2.3\,\% \\
+first round: boosted trees & 13.0\,\% & 14.7\,\% & 12.1\,\% & 11.7\,\% & 11.9\,\% & 13.4\,\% \\
+B: hierarchical GP & 16.0\,\% & 11.4\,\% & 13.3\,\% & 1.2\,\% & 13.8\,\% & 1.9\,\% \\
+A+B & 2.1\,\% & 11.4\,\% & 1.9\,\% & 1.2\,\% & 2.0\,\% & 1.9\,\% \\
+\bottomrule
+\end{tabular}
+\caption{Error against the truth on random test points, for three scan designs of 197 packets each.}
+\label{tab:design}
+\end{table}
+\begin{itemize}
+\item \textbf{$\lambda$ is 5--10 times worse after a one-at-a-time scan} for the GP models (9--11\,\% against 1.2--1.9\,\%; the
+  trees are poor for $\lambda$ in every design): it depends on several clock rails
+  together (H, V low rails, TG), and a one-at-a-time scan never shows two of them changed at once.
+\item $\sigma_e$ from A+B hardly depends on the design: it is measured on each packet's own traces.
+\item \textbf{Half one-at-a-time, half random} is almost as good as all random (1.9\,\% for $\lambda$), and keeps the one-at-a-time sweeps
+  that people read directly. This is the recommended design (\code{scan\_packets.py} already has \code{type = "random"}).
+\end{itemize}
 
-\paragraph{Calibrated error bars (H).} PROTO-CONFORMAL-PLACEHOLDER
+\paragraph{Calibrated error bars (H).} \code{calibrate.Conformal} wraps any model: 5-fold grouped out-of-fold errors, divided by the
+model's own std, give the factor for 68\,\% and for 95\,\% (with the finite-sample correction); the model is then refitted on all packets.
+Coverage on 200 new packets ($\sigma_e$ / $\lambda$ / gain):
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lll}
+\toprule
+Model (training packets) & 68\,\% interval: raw $\to$ conformal & 95\,\% interval: raw $\to$ conformal \\
+\midrule
+boosted trees (60) & 0.36/0.22/0.60 $\to$ 0.72/0.77/0.67 & 0.64/0.48/0.76 $\to$ 0.96/0.99/0.95 \\
+boosted trees (240) & 0.44/0.59/0.60 $\to$ 0.63/0.72/0.72 & 0.73/0.87/0.81 $\to$ 0.94/0.96/0.98 \\
+NN ensemble (240) & 0.71/0.72/0.75 $\to$ 0.72/0.70/0.69 & 0.92/0.96/0.97 $\to$ 0.96/0.97/0.94 \\
+CNN on curves (240) & 0.79/0.61/0.74 $\to$ 0.70/0.67/0.70 & 0.99/0.92/0.95 $\to$ 0.99/0.94/0.93 \\
+A+B (60) & 0.70/0.75/0.71 $\to$ 0.71/0.57/0.71 & 0.95/0.98/0.94 $\to$ 0.95/0.92/0.96 \\
+A+B (240) & 0.70/0.72/0.69 $\to$ 0.65/0.67/0.69 & 0.95/0.98/0.95 $\to$ 0.95/0.95/0.93 \\
+\bottomrule
+\end{tabular}
+\caption{Coverage of the error bars before and after conformal calibration (target 0.68 and 0.95).}
+\label{tab:conformal}
+\end{table}
+Conformal calibration repairs the boosted trees (0.22--0.60 $\to$ 0.63--0.77 at 68\,\%) and leaves the already honest models (GP, A+B,
+ensembles at 240 packets) where they were. With 60 packets the factors themselves are noisy (e.g.\ A+B $\lambda$ 0.75 $\to$ 0.57), so it is
+worth applying from $\sim$100 packets on, and always reporting the 95\,\% interval too. It does not help for a new module, whose packets
+are not like the calibration packets: that is B's job.
 
 \paragraph{Decomposed surrogate for optimization (F; Figure~\ref{fig:protobo}).} Two hierarchical GPs model $\log\sigma_e$ and $\log\lambda$
 per good amplifier, and $J$ is computed from them (its variance assuming fully correlated amplifiers). Each part depends on fewer
@@ -1018,10 +1100,18 @@ are rows without labels; new modules are new identifiers. Loading one table into
 \begin{itemize}
 \item \code{src/ml/}: \code{synthetic.py}, \code{data.py}, \code{models.py}, \code{evaluate.py}, \code{optimize.py}, \code{benchmark.py},
   and the plots; second round: \code{structured.py}, \code{calibrate.py}, \code{benchmark\_structured.py}.
-\item Notebooks: \code{notebooks/ml\_models\_walkthrough.ipynb} (first round), \code{notebooks/ml\_structured\_models.ipynb} (second round).
-\item Environment: \code{python3 -m venv .venv \&\& .venv/bin/pip install -r requirements-ml.txt} (numpy, scipy, pandas, scikit-learn,
-  PyTorch, matplotlib).
-\item The benchmarks: \code{cd src \&\& ../.venv/bin/python -m ml.benchmark} and \code{-m ml.benchmark\_structured}.
+\item Notebooks in \code{notebooks/}:
+  \begin{itemize}
+  \item first round: \code{ml\_models\_walkthrough.ipynb};
+  \item second round: \code{ml\_structured\_models.ipynb}.
+  \end{itemize}
+\item Environment (numpy, scipy, pandas, scikit-learn, PyTorch, matplotlib):\\
+  \code{python3 -m venv .venv \&\& .venv/bin/pip install -r requirements-ml.txt}.
+\item The benchmarks, from \code{src/}:
+  \begin{itemize}
+  \item \code{../.venv/bin/python -m ml.benchmark};
+  \item \code{../.venv/bin/python -m ml.benchmark\_structured}.
+  \end{itemize}
 \end{itemize}
 
 \end{document}
