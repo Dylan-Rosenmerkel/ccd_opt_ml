@@ -531,3 +531,47 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
   * Caveats: the binned overscan may hold serial-register charge; the traces had NCOLPRE 185; different
     times.
   * **The 1×1 packets will settle it** (stage 0 of the real-data plan).
+
+**Full results of benchmark_advanced** (`docs/ml_results/advanced_*.json`; figures `ml_advanced_*.png`; σe errors
+against the truth, world v2 unless noted):
+* **C/D** (pre-training on 3000 unlabeled packets; n = 30 / 60 / 120 / 240 labeled):
+  * probe R² of the floor: 0.08 with linear-frequency spectra, 0.71 with log-frequency;
+  * σe:
+
+    | model | n = 30 | 60 | 120 | 240 |
+    |---|---|---|---|---|
+    | CNN from scratch, linear-f (first round) | 15.6 | 13.6 | 12.5 | 10.7 |
+    | **CNN from scratch, log-f** | 10.7 | 7.1 | 4.5 | **1.8** |
+    | D frozen + NN | 9.4 | 7.8 | 5.2 | 4.6 |
+    | D fine-tuned | 11.0 | 6.9 | 3.4 | 2.2 |
+    | C frozen | 13.3 | 10.3 | 5.5 | 4.6 |
+    | C fine-tuned | 7.7 | 5.4 | 2.9 | 2.4 |
+    | A+B (reference) | 2.4 | 2.0 | 2.0 | 2.0 |
+
+  * C fine-tuned has coverage 0.08–0.11 (over-fitted error bars). C frozen is calibrated (0.67–0.75) and
+    the best for λ (11.0 / 7.7 / 3.2 / 1.7 %) and gain (0.2–0.4 %).
+  * **The log-frequency representation alone is the biggest gain**; pre-training helps at 30–120 packets.
+* **E** (v4, mean of 2 scans): learned 5.6 / 4.8 / 3.3 / 3.1 % against the best fixed rule 4.8 / 6.5 / 3.8 / 3.4 %;
+  mean 32–35 %, mean of variances 42–47 %. The learned combination is about equal to the robust rules and
+  more stable at n = 60, with conservative error bars (coverage ~0.9).
+* **G:** training on 4 modules instead of 1 did not improve a new module. The errors are the same, and the
+  k = 0 coverage is WORSE (σe 0.40 vs 0.74), because the amplifier-level variance came out smaller. Toy
+  caveat: the noisy channel repeats at the same index on every module. G needs real modules.
+* **F** (best true J, mean ± sd of 5 repeats, at a cost of 20 / 40 full packets):
+
+  | strategy | J at 20 | J at 40 | failures | hypervolume |
+  |---|---|---|---|---|
+  | global decomposed | −2.784 | −2.806 | 0 | 0.164 |
+  | **trust region** | −2.775 | **−2.836** (beats the 50k-random reference −2.81) | 0 | |
+  | learned constraint | −2.738 | −2.800 | 7.0 of 40 | |
+  | no constraint | −2.754 | −2.806 | 10.2 | |
+  | multi-fidelity, trace = 0.25 | −2.760 | −2.806 | 0 | |
+  | multi-fidelity, trace = 0.5 | −2.739 | −2.802 | 0 | |
+  | ParEGO | −2.784 | −2.795 | 0 | 0.161 |
+  | random | −2.556 | −2.665 | 0 | 0.091 |
+
+  * Multi-fidelity does not help here: the J improvement comes from λ, which traces cannot measure, and
+    nominal σe is already near its best.
+  * The learned constraint saves only ~3 failed packets, so encode the known limits (`ccd_limits.py`).
+* **Stage-0 script:** `src/stage0_trace_vs_image.py` (pushed).
+* **Next:** tex section, notebook, final answer with the assessment of the day's work.
