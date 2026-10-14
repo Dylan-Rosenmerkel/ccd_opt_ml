@@ -218,8 +218,9 @@ def curves(theta: np.ndarray, amp: Amplifier, state: float, phys: dict, rng: np.
 
 def allowed(thetas: np.ndarray) -> np.ndarray:
     """
-    The toy world's relation between parameters (as ccd_limits.py will have the real ones):
-    the dump drain must stay at least 2.5 V more negative than VDD.  Beyond that the noise explodes.
+    The toy world's relation between parameters (a stand-in for the real ones, which ccd_limits.py enforces
+    from docs/voltage_rules.txt, e.g. VDD > VDRAIN): the dump drain must stay at least 2.5 V more negative
+    than VDD.  Beyond that the noise explodes.
     """
     thetas = np.atleast_2d(thetas)
     return thetas[:, NAMES.index("VDRAIN")] - thetas[:, NAMES.index("VDD")] <= -2.5

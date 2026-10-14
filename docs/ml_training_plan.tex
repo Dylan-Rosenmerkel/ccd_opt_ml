@@ -68,7 +68,8 @@ The number of skips and the binning are held fixed for now (500 skips, one binni
         reparametrization such as one reference voltage plus offsets, using the group's empirical relations. Your proposal expects an effective
         dimension of 8 to 12.
   \item The parameters are not independent: the CCD works only if certain bias and clock relationships hold. They must be encoded as
-        constraints (\code{relational\_constraints} in \code{ccd\_limits.py} is still an empty placeholder) so that the optimizer never proposes a forbidden
+        constraints (\code{relational\_constraints} in \code{ccd\_limits.py}; encoded on 2026-10-14 from the group's
+        \code{docs/voltage\_rules.txt}) so that the optimizer never proposes a forbidden
         combination.
   \item Changes are made from the best configuration so far in bounded steps (voltages are ramped in steps no larger than \code{max\_step}),
         so the optimizer works in a trust region around the incumbent, not in jumps.
@@ -214,7 +215,9 @@ Figure~\ref{fig:tradeoff} sketches what the optimizer is balancing.
   \item The CDS level changed between back-to-back acquisitions; the cause (real charge in the pixels) is not confirmed.
   \item The first-skip transient and the anti-correlated skip noise mean simple white-noise models do not describe the noise.
   \item Generalizing to amplifiers never seen is the hardest goal; a one-reference-packet scheme or a few-shot adaptation is the realistic path.
-  \item The relationships between biases and clock levels required for proper CCD operation are not yet encoded in \code{ccd\_limits.py}.
+  \item The relationships between biases and clock levels required for proper CCD operation are encoded in \code{ccd\_limits.py} since
+  2026-10-14 (the group's \code{docs/voltage\_rules.txt}, checked on the complete configuration with the module's nominal values);
+  the allowed windows in \code{configs/limits.toml} still have to be replaced by the group's voltage limits (\code{reviewed = false}).
 \end{itemize}
 
 \section{Where this lives in the code}

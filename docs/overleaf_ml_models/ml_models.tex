@@ -457,8 +457,8 @@ With incumbent $J^+ = \min_i J_i$ and $z = (J^+ - \mu(\theta))/s(\theta)$, the e
 \begin{equation}
 \mathrm{EI}(\theta) = \bigl(J^+ - \mu(\theta)\bigr)\,\Phi(z) + s(\theta)\,\phi(z).
 \end{equation}
-It is maximized over random candidates drawn in the allowed box, filtered by the relational constraints (\code{allowed} hook; still to be
-filled with the limits being compiled), optionally within a trust region $|\theta - \theta^+| \le \Delta$ (bounded voltage steps).
+It is maximized over random candidates drawn in the allowed box, filtered by the relational constraints (\code{allowed} hook; on the real CCD
+\code{ccd\_limits.Limits.violations}, which encodes the group's safe-operation rules since 2026-10-14, Section~\ref{sec:safety}), optionally within a trust region $|\theta - \theta^+| \le \Delta$ (bounded voltage steps).
 Extensions:
 \begin{itemize}
 \item batch proposals (several packets per refit);
@@ -631,7 +631,8 @@ With the GP surrogate and expected improvement, the optimizer came within 0.04 o
 nominal settings; since $J=\log\sigma_e+\tfrac12\log\lambda$, $\sigma_e\sqrt\lambda$ is about 27\,\% lower) by 30 packets in all 5 repeats,
 and ended at $-2.77$ to $-2.82$ after 60. Random search stalled at
 $-2.61$ to $-2.72$ after 60 packets. In 10 dimensions a model-guided search needs a fraction of the packets of a random or grid scan.
-On the real CCD the same loop runs with the limits and relations encoded, small steps, and a human approving each proposal at first.
+On the real CCD the same loop runs with the limits and relations encoded (Section~\ref{sec:safety}), small steps, and a human approving
+each proposal at first.
 
 
 
@@ -1492,6 +1493,40 @@ are rows without labels; new modules are new identifiers. Loading one table into
 \end{advanced}
 
 %======================================================================
+\section{Safe operating region: what the optimizer may propose}
+\label{sec:safety}
+
+\begin{basic}
+An optimizer only proposes settings that pass the same checks as every acquisition (\code{src/ccd\_limits.py}). Since 2026-10-14 these
+include the group's safe-operation rules (\code{docs/voltage\_rules.txt}) and the hardware ranges of the ACM manual
+(\code{docs/Sequencer Notes.pdf}). Timing constants can be changed freely: their relations are not essential to the CCD's safety.
+\end{basic}
+
+\begin{itemize}
+\item \textbf{Relations}, checked on the complete configuration (pins a proposal does not change keep their nominal values from the module's
+  \code{.bcf}), for readout stage and bias set $i = 1, 2$:
+  \begin{itemize}
+  \item every clock HIGH $\ge$ LOW;
+  \item $V_{DD,i} > V_{DRAIN,i}$, and $V_{DD,i} < V_{R,i}$ (generally much lower);
+  \item $SW_{i,H} > OG_{i,H}$; $DG_{i,H} > V_{R,i}$; $DG_{i,L} < V_{R,i}$; $OG_{i,L} < V_{R,i}$; $OG_{i,L} \ge SW_{i,L}$;
+  \item every V clock low above every TG level, and every H clock low below it;
+  \item the H3 lows above $SW_H$;
+  \item $V_{DRAIN,i} < DG_{i,L}$.
+  \end{itemize}
+  VSUB is not restricted by the rules.
+\item \textbf{Hardware ranges} (ACM manual): $V_R$ $-13.8$ to $-2$\,V; $V_{DD}$ and $V_{DRAIN}$ $-27.9$ to $-6$\,V; $V_{SUB}$ 6.7 to 88.3\,V;
+  clock rails $-10$ to $+10$\,V with the offsets at $-10$\,V.
+\item \textbf{Windows} (\code{configs/limits.toml}): placeholders around the nominal configuration until the group's voltage limits are
+  entered (\code{reviewed = false}: the scripts refuse to drive real hardware). Timing windows are wide (in 10-ns cycles: vertical holds
+  1000--20000, horizontal holds 200--6000, integration window 50--20000, RG/SW/OG/DG holds 1--10000).
+\item \textbf{Consequence for the design}: the TG levels are squeezed between the V clock lows (7.7\,V nominal) and the H clock lows
+  (6.7\,V): from nominal the TG can only go down, by at most $\sim$0.7\,V. Random design points that break a rule are redrawn when a scan
+  is planned (\code{scan\_packets.py}); the hand-run script \code{daq\_scripts/manual\_packet.sh} checks the same rules.
+\item The synthetic world's single relation (VDRAIN $-$ VDD $\le -2.5$\,V) is a stand-in; the real optimizer uses \code{Limits.violations}
+  as its \code{allowed} hook (the known-constraint strategy of Section~\ref{sec:rest}; learning a constraint wasted 7 of 40 packets).
+\end{itemize}
+
+%======================================================================
 \section{Plan}
 
 \begin{enumerate}
@@ -1508,8 +1543,9 @@ are rows without labels; new modules are new identifiers. Loading one table into
 \item \textbf{CNN on curves:} train it on the same scan; pre-train an encoder on all unlabeled traces; compare; look at what it uses.
 \item \textbf{Next models:} all candidates are implemented (Sections~\ref{sec:proto} and \ref{sec:rest}). On real data, C+D and E
   need the unlabeled traces and the individual trace sets. The real-data test plan is in Section~\ref{sec:realtest}.
-\item \textbf{Optimization:} Bayesian optimization in the screened parameters, with the limits and relations encoded, small steps and
-  human approval of each proposal at first.
+\item \textbf{Optimization:} Bayesian optimization in the screened parameters, with the limits and relations encoded
+  (Section~\ref{sec:safety}; the windows still to be replaced by the group's voltage limits), small steps and human approval of each
+  proposal at first.
 \end{enumerate}
 
 \paragraph{Software.}

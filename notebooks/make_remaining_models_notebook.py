@@ -223,7 +223,8 @@ if B:
 
 md(r"""
 * **Trust region**: the best settings after 40 packets; it refines locally once near the optimum, and suits bounded voltage steps.
-* **Learned constraint**: still wasted packets, so the known limits belong in `ccd_limits.py`.
+* **Learned constraint**: still wasted packets, so the known limits belong in `ccd_limits.py` (encoded there since 2026-10-14 from
+  `docs/voltage_rules.txt` and the ACM manual); a learned constraint is only for limits nobody knows yet.
 * **Multi-fidelity** and **ParEGO** gave nothing here: the objective's gain comes from $\lambda$, which traces cannot measure, and
   $\sigma_e$ and $\lambda$ barely conflict in this world.
 

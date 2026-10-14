@@ -50,9 +50,8 @@ def main() -> None:
         case("unknown parameter (OFS_CLK) is refused", {"OFS_CLK": -5}, False, "unknown"),
     ]
     warnings = LIMITS.warnings(NOMINAL)
-    expect = any("DG_1_L" in w and "OG_1_L" in w for w in warnings)
-    print(f"{'OK  ' if expect else 'FAIL'} {'DG_L <= OG_L reported (not enforced) at nominal: to confirm':62s} {warnings[:1]}")
-    results.append(expect)
+    print(f"{'OK  ' if not warnings else 'FAIL'} {'no rule warnings at nominal':62s} {warnings}")
+    results.append(not warnings)
     vr = bias_hw_range("VR1")
     results.append(abs(vr[1] - (-2.0)) < 1e-9)
     print(f"{'OK  ' if results[-1] else 'FAIL'} {'VR hardware range capped by the manual (max -2 V)':62s} {vr}")

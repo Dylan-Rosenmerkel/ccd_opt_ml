@@ -20,10 +20,10 @@ suggest better settings.
 | Folder | Contents |
 |---|---|
 | `src/` | All code (see below) |
-| `daq_scripts/` | `manual_packet.sh`: one packet by hand with plain `cdaq qadd` commands (nominal → reference traces → change → traces → master → image → nominal), with sanity checks and a dry run; `manual_packet_commands.txt`: its command list |
-| `configs/` | DAQ setup, packet and scan examples, the recommended packet and scan (`packet_recommended.toml`, `scan_recommended.toml`: 10 + 10 matched trace sets, 1×1 image), parameter limits (`limits.toml`, **not yet reviewed**), processing settings |
+| `daq_scripts/` | `manual_packet.sh`: one packet by hand with plain `cdaq qadd` commands (nominal → reference traces → change → traces → master → image → nominal), with the group's voltage rules and the ACM manual's hardware ranges checked before anything is queued, and a dry run; `manual_packet_commands.txt`: its command list |
+| `configs/` | DAQ setup, packet and scan examples, the recommended packet and scan (`packet_recommended.toml`, `scan_recommended.toml`: 10 + 10 matched trace sets, 1×1 image), a mixed one-at-a-time + random design (`scan_mixed_example.toml`), parameter limits (`limits.toml`: relations and hardware ranges encoded, timing windows wide, voltage windows **not yet reviewed**), processing settings |
 | `notebooks/` | Step-by-step walkthroughs with saved outputs; see `notebooks/README.md` |
-| `docs/` | Notes: `overleaf_ml_models/` (the models: what they do, inputs, data needs, results, next models and their prototypes, the real-data test plan, the data format), `overleaf_trace_features_technical/` (the math of every trace feature), `trace_fit_tools.tex` (comparison tools), `trace_features.tex` (all trace features), `ml_training_plan.tex` (ML plan), `packet_design.md` (image size, skips, binning, matched traces), `context/` (session records and handoff notes) |
+| `docs/` | Notes: `overleaf_ml_models/` (the models: what they do, inputs, data needs, results, next models and their prototypes, the real-data test plan, the data format), `overleaf_trace_features_technical/` (the math of every trace feature), `trace_fit_tools.tex` (comparison tools), `trace_features.tex` (all trace features), `ml_training_plan.tex` (ML plan), `packet_design.md` (image size, skips, binning, matched traces), `voltage_rules.txt` (the group's safe-operation rules), `Sequencer Notes.pdf` (ACM/LDAQ manual appendix: hardware ranges, sequencer; not in the repository), `context/` (session records and handoff notes) |
 | `data/`, `rehearsal/`, `plots/` | Raw data, rehearsal output and figures: **not in the repository** (see `.gitignore`) |
 
 ## Code (`src/`)
@@ -38,14 +38,16 @@ suggest better settings.
 | `take_packet.py` | Take one packet through the cdaq queue: flushes, reference traces, traces, synchronized image, manifest |
 | `daq_commands.py`, `daq_control.py` | The exact text sent to each board; the cdaq/fake controllers and step receipts |
 | `scan_packets.py` | Run a series of packets (scan design, dry run, resume) |
-| `ccd_limits.py` | Safety checks of every parameter set; voltage ramps |
+| `ccd_limits.py` | Safety checks of every parameter set (windows, hardware ranges of the ACM manual, the group's voltage rules on the complete configuration); voltage ramps |
+| `check_limits.py` | Regression check of the safety limits (every rule must refuse a breaking change; nominal must pass) |
 | `fake_daq.py` | Fake boards for rehearsals (the fake cdaq queue is in `daq_control.py`) |
 | `fake_cdaq_monitor.py` | Watch a fake rehearsal in the layout of the real tmux session (queues, logs, clients) |
 | `simulate_trace.py` | Synthetic traces in the real file format, for any geometry and timing (for testing) |
 | `check_trace_analysis.py` | Runs the trace analysis on 25 synthetic geometries/timings and on the real traces, checks the layout found |
 | `process_packet.py` | Packet → decoded traces and features, decompressed FITS → WADERs labels → `dataset.csv` |
+| `stage0_trace_vs_image.py`, `real_amplifier_check.py` | Real-data checks: trace-predicted vs image read noise; gains, noise and setting responses of the real amplifiers without labels |
 | `plot_*.py`, `view_trace.py` | Plots and interactive trace viewers |
-| `ml/` | The models: synthetic CCD world, data loading, ridge / boosted trees / Gaussian process / NN ensemble / 1D CNN on curves, grouped evaluation, Bayesian optimization, benchmark (`python -m ml.benchmark`); second round: physics-structured outputs + hierarchical GP (`structured.py`), conformal error bars (`calibrate.py`), `python -m ml.benchmark_structured`; see `docs/overleaf_ml_models/ml_models.tex` |
+| `ml/` | The models: synthetic CCD world, data loading, ridge / boosted trees / Gaussian process / NN ensemble / 1D CNN on curves, grouped evaluation, Bayesian optimization, benchmark (`python -m ml.benchmark`); second round: physics-structured outputs + hierarchical GP (`structured.py`; the default model needs no amplifier labels), conformal error bars (`calibrate.py`), joint dark + CIC fit; remaining models: pre-training and deep kernels (`deep.py`), set models (`setmodels.py`), trust region / constraints / multi-fidelity / ParEGO (`bo_advanced.py`); benchmarks `ml.benchmark_structured`, `ml.benchmark_advanced`, `ml.benchmark_seeds` (robustness), `ml.benchmark_amp` (amplifier labels); see `docs/overleaf_ml_models/ml_models.tex` |
 | `plot_feature_figures.py`, `make_trace_features_note.py` | Figures and generator of the trace-features note |
 
 ## Quick start
@@ -54,6 +56,7 @@ suggest better settings.
 python src/decode_trace.py TRACE.RJ45ADCDATA0                          # decode and check a trace
 python src/trace_features.py TRACE.RJ45ADCDATA0                        # all features of a trace (any geometry)
 python src/check_trace_analysis.py                                     # test the analysis on many geometries
+python src/check_limits.py                                             # test the safety limits and rules
 python src/compare_trace.py TRACE_A TRACE_B --clean-pixels             # compare two traces
 python src/take_packet.py --params configs/packet_example.toml --show-commands   # what a packet would send
 python src/scan_packets.py --scan configs/scan_example.toml --dry-run  # plan a scan
@@ -65,6 +68,7 @@ python src/process_packet.py MANIFEST.json                             # packet 
 The scripts need Python 3.11+ with numpy (and matplotlib for plots). The models need the packages of `requirements-ml.txt` (`python3 -m venv .venv && .venv/bin/pip install -r requirements-ml.txt`). Running on the DAQ needs the
 group's `ccd_cdaq`/`acmpy`. Processing images needs WADERs (`pysimdamicm`, `panaSKImg`).
 
-**Before using the real DAQ:** review `configs/limits.toml` and encode the bias/clock relationships
-in `ccd_limits.py`. Then follow the checklist in `notebooks/take_packet_walkthrough.ipynb` and
+**Before using the real DAQ:** replace the placeholder voltage windows in `configs/limits.toml` by the group's
+limits and set `reviewed = true` (the relations of `docs/voltage_rules.txt` and the manual's hardware ranges are
+already enforced; `python src/check_limits.py` tests them). Then follow the checklist in `notebooks/take_packet_walkthrough.ipynb` and
 `docs/context/data_taking_scripts_handoff.md`.
