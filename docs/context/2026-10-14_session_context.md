@@ -456,3 +456,20 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
 * stage-0 check on the first real packets;
 * C/D/E on real traces;
 * write the trace_sets / labels tables in process_packet.py.
+
+## 2h. Remaining models C, D, E, F (rest), G (started later on 2026-10-14)
+
+**User request:**
+* write code for the remaining models and sections on their implementation;
+* give an opinion on today's work and what to improve now.
+
+**Plan:**
+* `synthetic.py` world v4 (`within_packet_pickup`, `damaged_fraction`, per-set Allan curves) for E;
+* `src/ml/deep.py`:
+  * D: curve encoder, pre-training by masked reconstruction + θ prediction + contrastive, fine-tuning;
+  * C: deep kernel GP;
+* `src/ml/setmodels.py`: E, a DeepSets/attention pooling of the trace sets inside A (learned combination);
+* `src/ml/bo_advanced.py`: F, trust region (TuRBO-like), learned feasibility (constrained EI), multi-fidelity
+  trace-only screening, ParEGO multi-objective;
+* G: HierGP across several training modules (empirical-Bayes meta-learning) in the benchmark;
+* `src/ml/benchmark_advanced.py` with the experiments; tex sections; maybe a third notebook.
