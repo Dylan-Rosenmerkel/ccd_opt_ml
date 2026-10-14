@@ -129,6 +129,31 @@ text) and write a separate, more mathematical technical note on how every featur
 * `fit_damped_ringing`, `skip_tools`, `transfer_tools`, `trace_features` and the helpers were
   re-read for the equations.
 
+**Update (later on 2026-10-14):**
+* **First full benchmark (v1 world):**
+  * the CNN on curves gave σe 2.7 % against 11–13 % for every feature model (the intermittent
+    pickup is visible only in the curves);
+  * λ was best with the reference features (GP 3.8 %, NN 4.5 %);
+  * a new module never seen in training failed for all models;
+  * BO beat random.
+* **The user asked: features + trace, or trace alone?**
+  * A new benchmark experiment `representation` compares features only, curves only (θ and
+    reference curves) and both, with and without θ, at 60–960 packets.
+  * The toy curves were made consistent with the real curve definitions: they carry the same
+    information as the features except the absolute levels, which real curves remove.
+  * There are now 7 curves (plus `ref:` versions).
+  * The benchmark was restarted with this world (the old log is `mlfull_v1.log` in the scratchpad).
+* **Trace-features note fixed:**
+  * new `src/plot_feature_figures.py` redraws all 25 figures from the real 2026-10-08 trace at
+    page width (6.9 in / 3.4 in, 8–9 pt);
+  * the generator moved into the repo as `src/make_trace_features_note.py`: natural widths, a
+    height cap, the curve grid split into two, full pages for separation/correlation, narrower
+    table columns;
+  * the correlation matrix now has group bands instead of 85 unreadable names;
+  * the separation numbers were recomputed with the corrected ringing fit (73 redundant pairs);
+  * compiled with tectonic: 31 overfull warnings went down to 3 tiny ones.
+* **Technical note (math of every feature):** being written in `docs/overleaf_trace_features_technical/`.
+
 ## 3. Not yet known or checked
 
 * What `read_config` resets: the mode is set explicitly afterwards, but whether it touches the

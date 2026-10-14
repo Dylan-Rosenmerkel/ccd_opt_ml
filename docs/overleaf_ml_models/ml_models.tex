@@ -1,0 +1,494 @@
+\documentclass[10pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=0.85in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+\graphicspath{{figures/}}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newtcolorbox{basic}[1][]{colback=green!4,colframe=green!40!black,title={In plain words},fonttitle=\bfseries,#1}
+\newtcolorbox{advanced}[1][]{colback=blue!3,colframe=blue!40!black,title={The precise version},fonttitle=\bfseries,#1}
+
+\title{Machine-Learning Models for Optimizing Skipper-CCD Operating Parameters:\\
+What They Do, What They Need, and Whether They Should See the Full Trace}
+\author{ML-assisted optimization of CCD operating parameters --- working note (draft)}
+\date{14 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note describes the models that will learn from the data packets: what they take in, what they predict, how they are
+trained and checked, and how much data each needs. Each model is explained twice, in plain words and precisely. It then
+addresses two design questions. Should a model be given the full trace, the hand-made trace features, or both? And can a
+model find useful properties of the trace that we did not think of?
+
+All models are implemented in \code{src/ml/} and were compared on a \emph{synthetic} CCD world built to mimic the packets
+(\code{src/ml/synthetic.py}). The synthetic results compare methods only; they say nothing about the real CCD. The real
+comparison will be repeated on the first scan.
+\end{abstract}
+
+\tableofcontents
+
+%======================================================================
+\section{Summary}
+
+\begin{basic}
+\begin{itemize}
+\item \textbf{What the models do.} A packet gives, for one choice of settings, cheap measurements (traces, a few minutes) and an
+  expensive one: the image, whose WADERs fit gives the read noise $\sigma_e$, the dark charge $\lambda$ and the gain. The models
+  learn how these three numbers depend on the settings and on what the traces show.
+\item \textbf{Two jobs.} The \emph{predictor} looks at a packet's traces and says what the image would show (a ``virtual image'')
+  with an error bar. The \emph{surrogate} looks only at the settings and is used to choose the next settings to try (Bayesian
+  optimization).
+\item \textbf{Which models.} The surrogate is a Gaussian process: it works with tens to a few hundred packets and knows how sure it
+  is. For the predictor, Gaussian processes and gradient-boosted trees on the hand-made features come first. Neural networks
+  that read the trace curves come once there are enough packets, or when they are pre-trained on the many unlabeled
+  traces.
+\item \textbf{Full trace or features?} Both, in layers. The hand-made features are the main input. The trace \emph{curves} (mean
+  skip waveform, transfer shapes, noise spectra) go to a network that can learn its own features. The raw 3-million-sample trace
+  is not given directly: it is mostly repetitions of the same cycle, and the curves keep its information in a compact form.
+\item \textbf{Can a model find features we missed?} Yes, if it is given the curves (or the folded trace) and enough data. On the
+  synthetic world a network on the curves found a noise floor that is missing from the hand-made list.
+\item \textbf{Data.} One scan of 10 parameters $\times$ 20 values (241 packets, about 76\,h) is enough for the surrogate and the
+  feature-based predictor. Networks that learn from curves need roughly 2--4 times more labeled packets, or pre-training on
+  unlabeled traces (a scan produces $\sim$30{,}000 of them).
+\end{itemize}
+\end{basic}
+
+%======================================================================
+\section{The problem}
+
+\begin{basic}
+We can set about 40 knobs on the CCD electronics: bias voltages, clock levels and clock timing. Every combination gives an image
+with some read noise, some dark charge and some gain. We want the knobs that give the lowest noise and dark charge. Trying a
+combination costs about 16 minutes (a packet with an image), so we can try a few hundred, not millions. A model learns from the
+combinations tried so far how the result depends on the knobs, and suggests where to look next. The traces make each try more
+informative: in a minute they show how the clocks, the amplifier and the noise behave right now.
+\end{basic}
+
+\begin{advanced}
+Let $\theta \in \mathbb{R}^d$ be the operating parameters ($d \approx 10$ after grouping pins, up to $\sim$40), $a$ the amplifier
+and $z$ the unobserved state of the CCD and electronics (temperature, history, drifts). The image gives noisy labels
+\begin{equation}
+y = \bigl(\log\sigma_e,\ \log\lambda,\ \log g\bigr) = f(\theta, a, z) + \varepsilon,\qquad \varepsilon \sim \mathcal N(0, \Sigma_\text{label}),
+\end{equation}
+with label noise of about 1.5\,\% ($\sigma_e$), 3\,\% ($\lambda$) and 0.8\,\% ($g$) for the 16-row image (\code{docs/packet\_design.md}).
+Logs are used because all three quantities are positive and an error in the log is a relative error.
+The traces give a feature vector $x = h(\theta, a, z) + \eta$ at $\theta$, and $x_\text{ref} = h(\theta_\text{ref}, a, z) + \eta'$ at
+the reference, taken in the same packet. The goal is
+\begin{equation}
+\theta^\star = \arg\min_{\theta \in \Theta_\text{allowed}} \; J(\theta),\qquad J = \log\sigma_e + w\,\log\lambda ,
+\end{equation}
+or a multi-objective version (the Pareto front of $\sigma_e$ and $\lambda$). $\Theta_\text{allowed}$ is set by the voltage
+limits and the relations between parameters.
+\end{advanced}
+
+%======================================================================
+\section{The two jobs: predictor and surrogate}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{ml_roles.png}
+\caption{The two roles. A: the predictor $P$ turns a packet's traces (and settings) into predicted image labels. B: the
+surrogate $S$ maps settings to the objective, and Bayesian optimization uses its mean and uncertainty to choose the next
+settings.}
+\label{fig:roles}
+\end{figure}
+
+\begin{basic}
+\textbf{Predictor $P$.} \emph{After} a packet's traces are taken, $P$ says what the image would show. This is useful because
+traces take a minute and images a quarter of an hour. Settings could be screened with traces only, and images taken
+only where $P$ is unsure. It also uses the reference traces, which tell it which amplifier it is looking at and how the CCD
+is doing today.
+
+\textbf{Surrogate $S$.} \emph{Before} anything is measured, $S$ guesses the result at settings never tried, and how unsure it is.
+The optimizer picks the next settings where the guess is good or the uncertainty is large. $S$ cannot use traces at new
+settings, because they do not exist yet.
+\end{basic}
+
+\begin{advanced}
+\begin{itemize}
+\item $P(\theta, a, x, x_\text{ref}) \rightarrow (\hat y, \hat\sigma_y)$ is a regression with heteroscedastic uncertainty.
+  $x_\text{ref}$ identifies the amplifier (it generalizes to amplifiers never seen, unlike an amplifier one-hot) and estimates the
+  state $z$, which $\theta$ cannot. $\Delta x = x - x_\text{ref}$ removes the amplifier's own signature.
+\item $S(\theta, a) \rightarrow (\mu_J(\theta), s_J(\theta))$ is a probabilistic surrogate, normally a Gaussian process. The
+  acquisition (Section~\ref{sec:bo}) needs a calibrated $s_J$.
+\item \textbf{Multi-fidelity:} traces are a cheap, correlated fidelity of the labels. A co-kriging or multi-task GP can use
+  trace-only packets ($x$ at many $\theta$) together with full packets ($x$ and $y$ at fewer $\theta$). This is the natural extension
+  once $P$ is shown to work.
+\end{itemize}
+\end{advanced}
+
+%======================================================================
+\section{What goes in and what comes out}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}p{4.6cm}Xc}
+\toprule
+Input group & Content & Why & Size \\
+\midrule
+\code{theta}, \code{delta} & the operating parameters; their change from the reference & what we control & 10--40 \\
+\code{amp} & which amplifier (one-hot of board and channel) & amplifiers differ by 4$\times$ in noise and 2$\times$ in gain & 4--8 \\
+\code{trace} & the 85 hand-made features at $\theta$, mean over the trace sets & how the clocks, amplifier and noise behave & 85 \\
+\code{ref} & the same at the reference, minutes earlier in the same packet & the amplifier's identity and the CCD state now & 85 \\
+\code{diff} & \code{trace} $-$ \code{ref} & the change the settings caused & 85 \\
+\code{trace\_sd} & the scatter of each feature over the trace sets & how much to trust each feature & 85 \\
+curves & 12 curves: mean skip waveform, H/V transfer shapes, CDS pattern, autocorrelation, Allan deviation, spectra, noise vs window length, equivalent-time pulse, variation along the cycle & room for features nobody has defined & 4{,}187 \\
+CDS matrix & the CDS of every pixel and skip & skip-to-skip structure & 5{,}000 \\
+raw trace & every ADC sample & everything & $3\times10^6$ \\
+\midrule
+\textbf{Outputs} & $\log\sigma_e$, $\log\lambda$, $\log g$ per amplifier, each with a standard deviation; or $J$ for the surrogate & & 3 \\
+\bottomrule
+\end{tabularx}
+\caption{Model inputs. All are in \code{dataset.csv} or the \code{.npz} files written by \code{process\_packet.py}; \code{src/ml/data.py}
+builds any combination (\code{make\_inputs}, \code{curve\_tensor}, \code{curves\_from\_processed}).}
+\label{tab:inputs}
+\end{table}
+
+\paragraph{One training example} is one amplifier in one packet: its settings, its features or curves, and its three labels.
+A packet with 4 working amplifiers gives 4 examples. The examples of one packet share the CCD state and must stay together
+when the data are split for testing.
+
+%======================================================================
+\section{The model families}
+
+Table~\ref{tab:families} lists the five families in \code{src/ml/models.py}. All have the same interface
+(\code{fit(X, Y)}, \code{predict(X)} $\rightarrow$ mean, std) and standardize their inputs using the training rows only.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.6cm}X>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{2.7cm}}
+\toprule
+Model & Idea & Strengths & Labeled packets \\
+\midrule
+Bayesian ridge & a weighted sum of the inputs & baseline; readable; never wild & 20+ \\
+Gradient-boosted trees & a sum of hundreds of small yes/no decision trees & nonlinear; robust to scale and outliers; feature importances & 100+ \\
+Gaussian process & a smooth function; predictions are similarity-weighted averages of the examples & calibrated uncertainty; best with little data; drives Bayesian optimization & 20--1000 \\
+Neural-net ensemble & 5 small networks, each predicts a value and its variance & smooth nonlinear; scales to many examples & 300+ \\
+1D CNN on curves & filters slide along the curves and learn which shapes matter & finds its own features & 500+ (fewer with pre-training) \\
+\bottomrule
+\end{tabularx}
+\caption{The model families.}
+\label{tab:families}
+\end{table}
+
+\subsection{Bayesian ridge (linear)}
+\begin{basic}
+Each output is a weighted sum of the inputs; the weights are learned. ``Bayesian'' means the weights are kept small unless the data
+insist, and the model reports how sure it is. It cannot represent an optimum (a noise minimum in VDD), so it serves as the
+yardstick the other models must beat.
+\end{basic}
+\begin{advanced}
+$y = w^\top \tilde x + b + \varepsilon$, with standardized inputs $\tilde x$, prior $w \sim \mathcal N(0, \alpha^{-1} I)$ and noise
+$\varepsilon \sim \mathcal N(0, \beta^{-1})$. $\alpha$ and $\beta$ maximize the marginal likelihood. The predictive variance is
+$\beta^{-1} + \tilde x^\top \Sigma_w \tilde x$.
+\end{advanced}
+
+\subsection{Gradient-boosted trees}
+\begin{basic}
+A decision tree asks a few yes/no questions (``is VDD below $-19.4$?'', ``is the H-transfer minimum deeper than $-10^5$?'') and
+returns a number. Boosting adds a few hundred small trees, each correcting the errors of the ones before. Trees handle thresholds,
+different scales and irrelevant inputs well. The error bar comes from two extra models that predict the 16\,\% and 84\,\% quantiles.
+\end{basic}
+\begin{advanced}
+$\hat y(x) = \sum_{m=1}^{M} \nu\, t_m(x)$, with depth-limited regression trees $t_m$ fitted to the gradient of the loss at stage $m$
+(histogram-based, \code{HistGradientBoostingRegressor}; $M = 300$, $\nu = 0.05$, 15 leaves, $\geq 10$ examples per leaf). The
+uncertainty is $\hat\sigma = (\hat q_{0.84} - \hat q_{0.16})/2$ from quantile (pinball) losses. These quantile estimates are noisy with few
+examples (Section~\ref{sec:results}).
+\end{advanced}
+
+\subsection{Gaussian process}
+\begin{basic}
+A Gaussian process predicts at new settings by averaging the examples it has seen, weighting each by how similar its settings are.
+Far from all examples the prediction falls back to the average and the error bar grows. That is exactly the honesty an optimizer needs
+(``I have not looked there''). It learns one ``similarity distance'' per input: inputs that do not matter get a huge distance and are
+ignored. These distances show which settings and features matter.
+\end{basic}
+\begin{advanced}
+$f \sim \mathcal{GP}(m, k)$ with
+\begin{equation}
+k(x, x') = c\;\mathrm{Mat\acute ern}_{5/2}\!\left(r\right) + \sigma_n^2\,\delta_{xx'},\qquad
+r^2 = \sum_i \frac{(x_i - x'_i)^2}{\ell_i^2},
+\end{equation}
+one length scale $\ell_i$ per input (automatic relevance determination). With $K$ the kernel matrix of the training inputs,
+\begin{equation}
+\mu(x_*) = k_*^\top (K + \sigma_n^2 I)^{-1} y,\qquad
+s^2(x_*) = k(x_*, x_*) - k_*^\top (K + \sigma_n^2 I)^{-1} k_* .
+\end{equation}
+$c$, $\ell_i$ and $\sigma_n$ maximize the log marginal likelihood
+$-\tfrac12 y^\top (K+\sigma_n^2 I)^{-1} y - \tfrac12 \log|K+\sigma_n^2 I| - \tfrac n2 \log 2\pi$. The cost is $O(n^3)$, so above
+$\sim$400--800 examples a subset or a sparse approximation is used. Relevance $= 1/\ell_i$ (Figure~\ref{fig:relevance}).
+\end{advanced}
+
+\subsection{Neural-network ensemble}
+\begin{basic}
+A small neural network is a flexible curve-fitter with a few thousand adjustable numbers. Five of them are trained from different
+random starts. Where they agree, the prediction is trusted; where they disagree, the error bar grows. Each network also predicts its
+own error bar, which captures noise that no input explains.
+\end{basic}
+\begin{advanced}
+Each member $j$ has two hidden layers of 64 units (SiLU) and outputs $(\mu_j, \log\sigma_j^2)$. It is trained with the Gaussian
+negative log-likelihood $\tfrac12\log\sigma_j^2 + (y-\mu_j)^2/2\sigma_j^2$, with AdamW, weight decay $10^{-3}$ and early stopping on 15\,\%
+of the training packets. The ensemble ``deep ensemble'' predicts $\mu = \bar\mu_j$ and
+$s^2 = \overline{\sigma_j^2} + \mathrm{Var}_j(\mu_j)$ (aleatoric plus epistemic uncertainty).
+\end{advanced}
+
+\subsection{1D convolutional network on the trace curves}
+\begin{basic}
+This model gets the curves themselves, not numbers computed from them. It slides small learned ``templates'' (filters) along each
+curve. It does not decide in advance where the reset pulse is or what a noise floor looks like: it finds the shapes that help predict
+the labels. Settings and hand-made features can be added at the end, so it has both.
+\end{basic}
+\begin{advanced}
+The curves are resampled to $L = 256$ points (spectra and Allan deviations in log) and stacked as channels, $C \times L$. Each position
+is standardized with the training rows. Three convolution blocks (kernel sizes 7, 7, 5; 16, 32, 32 filters; SiLU; max-pooling) are
+followed by adaptive average pooling to $8 \times 32$. The scalar inputs are appended, and a dense layer (64) outputs $(\mu, \log\sigma^2)$
+per target. It is trained like the ensemble above (3 members). About 14{,}000 weights; translation-equivariant filters suit curves
+whose features move with the timing.
+\end{advanced}
+
+%======================================================================
+\section{Full trace, hand-made features, or both?}
+\label{sec:fulltrace}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{ml_representations.png}
+\caption{One real trace (2026-10-08, module 101, channel 0) at four levels of detail: 3 million raw samples, the same samples folded
+into skip cycles, the 12 curves, and the 85 numbers.}
+\label{fig:representations}
+\end{figure}
+
+\subsection{What each level contains}
+\begin{basic}
+\begin{itemize}
+\item The \textbf{raw trace} is mostly the same 33-microsecond skip cycle repeated 5{,}000 times, plus the transfers between pixels.
+  Nearly all its 3 million numbers are repetitions.
+\item \textbf{Folding} stacks the cycles on top of each other (Figure~\ref{fig:representations}, panel 2). Nothing is lost; it is just
+  rearranged so that ``the same moment of the cycle'' lines up.
+\item The \textbf{curves} average over the cycles (the mean waveform) or summarize how the cycles differ (spectra, Allan deviation,
+  variation along the cycle). They keep almost everything that is systematic, in 4{,}000 numbers.
+\item The \textbf{85 features} pick the parts of the curves we know to be meaningful: a pulse height, a time constant, a noise level.
+\end{itemize}
+\end{basic}
+
+\begin{advanced}
+Let the trace be $v_t$, $t = 1\dots T$ ($T \approx 3\times10^6$). With the exact cycle length $P$ (488.7 samples), the folded
+array $V_{pk\tau} = v_{t_0(p) + kP + \tau}$ (pixel $p$, skip $k$, phase $\tau$) is a lossless re-indexing apart from the transfer
+segments. The curves are mostly first and second moments of $V$ over $k$ and $p$: the mean $\bar V_\tau$; the variance along the
+cycle $\mathrm{Var}_k V_{\cdot k\tau}$; and the spectrum and Allan deviation of the CDS series
+$c_{pk} = \bar V_{pk,\text{ped}} - \bar V_{pk,\text{sig}}$. These are sufficient statistics if the trace is a stationary Gaussian
+process within each phase; they drop only higher-order structure and rare events, and the 85 features summarize that remainder (outliers,
+kurtosis, steps). The 85 features are fixed, nonlinear functionals of these curves.
+\end{advanced}
+
+\subsection{The trade-off}
+\begin{basic}
+More detail can only help \emph{if there are enough examples to learn from it}. A model has to learn what each input means. With
+85 numbers and a few hundred packets that is feasible; with 3 million numbers per example it would memorize the training packets
+instead of learning. The hand-made features are knowledge we put in so that the model does not need thousands of examples to discover
+that the reset-pulse height matters.
+\end{basic}
+
+\begin{advanced}
+For $n$ labeled examples and an input of dimension $p$, a flexible model's estimation error grows with its effective number of
+parameters relative to $n$ (bias--variance; for linear models the excess risk is $\propto \sigma^2 p / n$). Here
+$n \approx 10^3$ (241 packets $\times$ 4 amplifiers) and the 4 amplifiers of a packet are correlated (one CCD state). Rough data needs:
+\begin{itemize}
+\item 85 features: manageable, especially with priors (GP length scales, tree regularization);
+\item the curves ($p \approx 4{,}000$ but highly structured): a CNN with weight sharing has $\sim 10^4$ weights; feasible at
+  $n \sim 10^3$--$10^4$, or with pre-training;
+\item the raw trace: needs $n \gg 10^4$ or a pre-trained encoder.
+\end{itemize}
+\end{advanced}
+
+\subsection{Recommendation}
+\begin{enumerate}
+\item \textbf{Hand-made features (and $\theta$, $x_\text{ref}$, $\Delta x$) are the primary input} for the first models: they need
+  the least data and are interpretable.
+\item \textbf{Add the curves in a second model (CNN) and compare} on held-out packets. If the CNN wins, look at what it uses
+  (Section~\ref{sec:own}) and turn it into a new hand-made feature where possible.
+\item \textbf{Do not feed the raw trace directly.} Use the folded trace or the CDS matrix only through a pre-trained encoder (below),
+  and only if the curves leave something unexplained.
+\item \textbf{Keep everything.} \code{process\_packet.py} already saves the raw samples, the CDS matrix and the curves of every trace
+  (\code{.npz}), so any representation can be tried later without new data.
+\end{enumerate}
+
+%======================================================================
+\section{Can the model find its own features?}
+\label{sec:own}
+
+\begin{basic}
+Yes, with three conditions:
+\begin{enumerate}
+\item \textbf{The information must be in what it sees.} A network on the 85 numbers can only combine those 85 numbers. A network on the
+  curves can find any shape in the curves: a bump, a slope, a floor, a resonance.
+\item \textbf{It needs enough examples} to tell a real pattern from chance.
+\item \textbf{It needs a reason}: the pattern must help predict the labels. Patterns that do not matter for $\sigma_e$, $\lambda$ or the
+  gain are ignored, even if they are real.
+\end{enumerate}
+The synthetic test (Section~\ref{sec:results}) hides one effect from the hand-made list on purpose: a noise floor that does not average
+down with more skips. It is visible only in the Allan-deviation and spectrum curves. Models on the hand-made features cannot see it;
+the network on the curves can, once it has enough examples.
+\end{basic}
+
+\begin{advanced}
+\paragraph{Why convolutions can discover features.} A convolutional filter $w$ applied to a curve $u$ gives
+$(w * u)_\tau = \sum_j w_j u_{\tau+j}$; after a nonlinearity and pooling, this is a learned, localized detector (``a steep drop here'',
+``a flattening at large $n$''). Training adjusts the $w$ by gradient descent on the label loss, so detectors that predict the labels are
+reinforced. Hand-made features are fixed detectors chosen by us; the network can learn the same ones (e.g.\ a pulse height) or others.
+
+\paragraph{Seeing what it learned.}
+\begin{itemize}
+\item \emph{Saliency / occlusion}: the change of the prediction when a stretch of a curve is perturbed or masked shows which positions
+  it uses.
+\item \emph{Probing}: regress the network's internal features on the 85 hand-made features. What is not explained by them is new.
+\item \emph{Ablation}: compare the CNN with and without the hand-made features as extra inputs (Section~\ref{sec:results}).
+\end{itemize}
+
+\paragraph{Using unlabeled traces (self-supervised pre-training).} Labels are scarce (one image per packet), but traces are not: a 241-packet scan
+with 5 + 10 trace sets gives $241 \times 15 \times 8 \approx 29{,}000$ traces, plus the 2026-10-08/12 data. An encoder can be
+trained without labels:
+\begin{itemize}
+\item to reconstruct masked parts of the curves (masked autoencoder);
+\item to map two repeats of the same packet close together and different settings apart (contrastive learning);
+\item or to predict $\theta$ from the trace, which is known for every trace.
+\end{itemize}
+The supervised models then start from these learned features and need far fewer labeled packets. This is the realistic route to
+using the folded trace or the CDS matrix.
+
+\paragraph{Limits.} With few labels a flexible model can latch onto artifacts that happen to correlate with the labels in one scan
+(e.g.\ the drift of one night). Grouped validation on an independent scan (and on other days) is essential before trusting a
+``new feature''.
+\end{advanced}
+
+%======================================================================
+\section{Training data needed}
+\label{sec:data}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.4cm}X}
+\toprule
+Requirement & Why \\
+\midrule
+\textbf{Labeled packets}: traces and an image at the same settings, close in time & every example needs inputs and labels from the same
+CCD state \\
+\textbf{A space-filling design} (random or Latin-hypercube in all scanned parameters), after a one-at-a-time screening & one-at-a-time
+scans cannot separate interactions; random designs let every model see combinations \\
+\textbf{Several values per parameter} over a range that moves $\sigma_e$ and $\lambda$ clearly & a parameter that changes nothing teaches
+nothing \\
+\textbf{The reference repeated} (every 5--10 packets) & label noise floor, drift, and the state $z$ \\
+\textbf{All four amplifiers}, ideally more than one module & to learn what is common and to test on an amplifier never seen \\
+\textbf{An independent test scan} (another night) & the only honest test of a model and of any ``discovered'' feature \\
+\textbf{Labels with uncertainties and flags} (WADERs) & the models are trained on log-labels; flagged fits are left out \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{How many packets.} From the learning curves (Figure~\ref{fig:learning}; synthetic, so only indicative):
+\begin{itemize}
+\item the Gaussian process (surrogate and feature-based predictor) is useful from $\sim$30--60 packets;
+\item the feature-based models level off at a few hundred packets;
+\item the CNN on the curves needs several hundred to $\sim$1000 packets to match or beat them, fewer with pre-training.
+\end{itemize}
+The 241-packet scan (10 parameters $\times$ 20 values, $\sim$76\,h) is enough for the first two. Bayesian optimization
+(Section~\ref{sec:bo}) needs far fewer packets than a grid to find good settings.
+
+%======================================================================
+\section{Validation and uncertainty}
+
+\begin{itemize}
+\item \textbf{Grouped splits}: all amplifiers of a packet are in training or in test, never both (\code{evaluate.grouped\_cv}).
+\item \textbf{Independent test scan}: train on one scan, test on another (here: another synthetic scan).
+\item \textbf{Held-out amplifier}: train on three amplifiers, test on the fourth. This works only with reference-based inputs
+  (Section~\ref{sec:results}).
+\item \textbf{Scores}: relative error $\sqrt{\overline{(\hat y - y)^2}}$ in log; $R^2$; \emph{coverage}, the fraction of test points
+  within $\hat y \pm \hat\sigma$, which should be 0.68; negative log-likelihood. Coverage tells whether the error bars can be trusted,
+  which matters for the optimizer.
+\end{itemize}
+
+%======================================================================
+\section{Optimization}
+\label{sec:bo}
+
+\begin{basic}
+After each packet the surrogate is refitted. Thousands of candidate settings within the allowed region are scored by how much they are
+expected to improve on the best result so far. That score is large where the prediction is good \emph{or} where the model is unsure, so
+the search both exploits and explores. The best candidate is checked against the limits again and measured, and the loop repeats.
+\end{basic}
+\begin{advanced}
+With incumbent $J^+ = \min_i J_i$ and $z = (J^+ - \mu(\theta))/s(\theta)$, the expected improvement is
+\begin{equation}
+\mathrm{EI}(\theta) = \bigl(J^+ - \mu(\theta)\bigr)\,\Phi(z) + s(\theta)\,\phi(z).
+\end{equation}
+It is maximized over random candidates drawn in the allowed box, filtered by the relational constraints (\code{allowed} hook; still to be
+filled with the limits being compiled), optionally within a trust region $|\theta - \theta^+| \le \Delta$ (bounded voltage steps).
+Extensions:
+\begin{itemize}
+\item batch proposals (several packets per refit);
+\item multi-objective acquisition (expected hypervolume improvement for the $\sigma_e$--$\lambda$ front);
+\item multi-fidelity acquisition that decides between a trace-only packet and a full packet.
+\end{itemize}
+\end{advanced}
+
+%======================================================================
+\section{Results on the synthetic world}
+\label{sec:results}
+
+\paragraph{The synthetic world} (\code{src/ml/synthetic.py}) has:
+\begin{itemize}
+\item 10 parameters with the real names and nominal values;
+\item 4 amplifiers per board, one 4$\times$ noisier;
+\item toy physics with optima, a forbidden region (\code{VDRAIN} within 2.5\,V of \code{VDD}) and trade-offs: lower H rails mean less
+  charge-transfer loss but more clock-induced charge;
+\item a slowly drifting hidden state (``temperature'') that changes $\lambda$ by $\pm$35\,\% and shifts a few trace features;
+\item a hidden noise floor, visible only in the curves;
+\item label noise and repeat scatter as measured.
+\end{itemize}
+Models are trained on one synthetic scan and tested on an independent one.
+
+RESULTS-PLACEHOLDER
+
+%======================================================================
+\section{Plan}
+
+\begin{enumerate}
+\item \textbf{Now (no labels yet):} the pipeline runs end to end on synthetic data (\code{python -m ml.benchmark}). The real
+  \code{dataset.csv} loads with \code{ml.data.load\_dataset}, and the curves with \code{curves\_from\_processed}.
+\item \textbf{First real packets:} check the label noise and the repeat scatter; fit the GP surrogate on the first tens of packets;
+  check the coverage on held-out packets.
+\item \textbf{First scan (241 packets):}
+  \begin{itemize}
+  \item compare ridge, trees, GP and the neural-net ensemble on the hand-made features (grouped CV and a second night);
+  \item read the GP relevances;
+  \item test the held-out amplifier.
+  \end{itemize}
+\item \textbf{CNN on curves:} train it on the same scan; pre-train an encoder on all unlabeled traces; compare; look at what it uses.
+\item \textbf{Optimization:} Bayesian optimization in the screened parameters, with the limits and relations encoded, small steps and
+  human approval of each proposal at first.
+\end{enumerate}
+
+\paragraph{Software.}
+\begin{itemize}
+\item \code{src/ml/}: \code{synthetic.py}, \code{data.py}, \code{models.py}, \code{evaluate.py}, \code{optimize.py}, \code{benchmark.py},
+  and the plots.
+\item Environment: \code{python3 -m venv .venv \&\& .venv/bin/pip install -r requirements-ml.txt} (numpy, scipy, pandas, scikit-learn,
+  PyTorch, matplotlib).
+\item The benchmark: \code{cd src \&\& ../.venv/bin/python -m ml.benchmark}.
+\end{itemize}
+
+\end{document}

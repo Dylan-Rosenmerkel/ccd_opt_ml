@@ -1,0 +1,13 @@
+# Python packages for the trace analysis and the ML models (src/ml/).
+# Create the environment once:
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements-ml.txt
+numpy
+scipy
+pandas
+matplotlib
+astropy
+scikit-learn      # ridge, Gaussian process, gradient-boosted trees, cross-validation
+torch             # neural networks on the trace curves (1D CNN), deep ensembles
+nbformat          # running the notebooks from the command line
+nbclient
+ipykernel

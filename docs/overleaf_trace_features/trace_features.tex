@@ -125,7 +125,7 @@ Total & & 85 \\
 \section{Comparison tools: parametric fits}
 Exponentials are fitted by variable projection: the amplitude and offset are solved by least squares for every time constant on a logarithmic grid, and the best time constant is refined on a finer grid. The damped ringing and the noise model are fitted the same way. Computed per usable pixel; the feature is the median over pixels.
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{fit: settling time after pulse (us)} & $\mu$s & Time constant of an exponential fitted to the mean skip shape after the reset-pulse maximum. & amplifier recovery speed; reset settings \\
@@ -134,7 +134,7 @@ Exponentials are fitted by variable projection: the amplitude and offset are sol
 \texttt{fit: dip recovery amplitude} & ADU & Amplitude of that exponential. & SW feedthrough size \\
 \texttt{fit: baseline droop time constant (skips)} & skips & Time constant of an exponential fitted to the per-skip baseline (pedestal-window mean) along the 500 skips of a pixel. & reset leakage, output-stage operating point \\
 \texttt{fit: baseline droop amplitude} & ADU & Amplitude of that exponential. & reset leakage \\
-\texttt{fit: first-skip ringing frequency (cyc/skip)} & cycles/skip & Frequency of a damped oscillation plus a constant offset, fitted to the CDS of skips 1--19 (skip 0 left out: own feature; median of later skips removed). Searched in 0.02--0.5 cycles/skip, refined by a parabola. (Before 2026-10-13 the model had no offset and returned 0.01 for every trace.) & transient after the horizontal transfers \\
+\texttt{fit: first-skip ringing frequency (cyc/skip)} & cycles/skip & Frequency of a damped oscillation plus a constant offset, fitted to the CDS of skips 1-19 (skip 0 left out: own feature; median of later skips removed). Searched in 0.02-0.5 cycles/skip, refined by a parabola. (Before 2026-10-13 the model had no offset and returned 0.01 for every trace.) & transient after the horizontal transfers \\
 \texttt{fit: first-skip ringing decay (skips)} & skips & Decay constant of that oscillation. & transient after the horizontal transfers \\
 \texttt{fit: first-skip ringing amplitude} & ADU & Amplitude of that oscillation (envelope extrapolated to skip 0). & transient after the horizontal transfers \\
 \texttt{fit: white noise per skip (ADU)} & ADU & White term $\sigma$\_w of the model $\sigma$(N)$^{2}$ = $\sigma$\_w$^{2}$/N + $\sigma$\_f$^{2}$ fitted to the noise of N-skip averages (N = 1, 2, 5, 10, 25, 50) of the detrended CDS. & read noise per skip \\
@@ -145,7 +145,7 @@ Exponentials are fitted by variable projection: the amplitude and offset are sol
 \section{Comparison tools: skip-cycle tools}
 Computed per usable pixel from the 500 skip cycles (one row of 489 samples per skip) and from the CDS sequence; the feature is the median over pixels.
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{skip: dip height} & ADU & Minimum of the mean shape between the pedestal and signal windows (summing-well clock feedthrough). & SW coupling $\times$ amplification \\
@@ -171,7 +171,7 @@ Computed per usable pixel from the 500 skip cycles (one row of 489 samples per s
 \section{Comparison tools: horizontal transfers}
 From the 19 complete horizontal transfers before each pixel, baseline (first 30 samples) removed; median over pixels.
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{horizontal: minimum} & ADU & Minimum of that mean shape. & H-clock coupling \\
@@ -184,7 +184,7 @@ From the 19 complete horizontal transfers before each pixel, baseline (first 30 
 \section{Comparison tools: vertical transfers}
 From the vertical transfers of the first row change; one replicate per transfer (median over transfers). Consecutive vertical transfers are not exchangeable, so these were information only in the comparison test. NaN when the vertical transfers are not found (module 102, Vtransfer21).
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{vertical: minimum} & ADU & Minimum of a vertical-transfer waveform (median over transfers). & V-clock coupling \\
@@ -196,7 +196,7 @@ From the vertical transfers of the first row change; one replicate per transfer 
 \section{Advanced features: CDS level}
 The CDS level of a pixel is its charge plus an offset from the electronics. With 20$\times$20 binning each trace pixel collects the charge of 400 CCD pixels.
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{level: common CDS rise (ADU)} & ADU & The median CDS of the usable pixels is a pattern shared by all pixels; its mean over the last 10 \% of the skips minus its mean over the 10 \% after the first skips (skips 450-499 minus 10-59 for 500 skips). & baseline leaking into the CDS; output-stage operating point \\
@@ -208,21 +208,21 @@ The CDS level of a pixel is its charge plus an offset from the electronics. With
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{level_common_pattern.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{level_common_pattern.png}
 \caption{Left: CDS of every pixel along its 500 skips (10-skip average; dotted: row-start pixels). Right: the common pattern (median of the usable pixels), which rises by about 29 ADU along the skips. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:level_common_pattern}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.6\textwidth]{level_pixel_levels.png}
+\includegraphics[width=0.5\textwidth,height=0.86\textheight,keepaspectratio]{level_pixel_levels.png}
 \caption{Relative CDS level of each pixel (mean CDS minus the common pattern) with its $\pm$1$\sigma$ uncertainty from 10-skip blocks (about $\pm$0.2 ADU). Pixel 0 is a row-start pixel. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:level_pixel_levels}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.7\textwidth]{level_charge_loss.png}
+\includegraphics[width=0.5\textwidth,height=0.86\textheight,keepaspectratio]{level_charge_loss.png}
 \caption{The charged pixel of the fourth channel-0 repeat (about 18,400 ADU): CDS minus the common pattern along its skips, with a straight-line fit ($-$2.8 \% over the pixel).}
 \label{fig:level_charge_loss}
 \end{figure}
@@ -232,7 +232,7 @@ The CDS level of a pixel is its charge plus an offset from the electronics. With
 \section{Advanced features: noise character}
 These describe how the noise behaves (correlation, averaging, spectrum, window length, settling, coupling), not only its size.
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{noise: CDS autocorrelation at lag 1} &  & Autocorrelation of the detrended CDS (skips 10-499) at lag 1. & how the noise averages down \\
@@ -254,49 +254,49 @@ These describe how the noise behaves (correlation, averaging, spectrum, window l
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.75\textwidth]{noise_autocorrelation.png}
+\includegraphics[width=0.5\textwidth,height=0.86\textheight,keepaspectratio]{noise_autocorrelation.png}
 \caption{Autocorrelation of the detrended CDS, lags 1--50 (mean of the usable pixels); grey band: $\pm$2/$\surd$N expected for white noise. Lags 2 and 3 are about $-$0.2. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:noise_autocorrelation}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.55\textwidth]{noise_allan.png}
+\includegraphics[width=0.5\textwidth,height=0.86\textheight,keepaspectratio]{noise_allan.png}
 \caption{Allan deviation of the detrended CDS (mean of the usable pixels); dashed: white noise scaled from n = 1. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:noise_allan}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.7\textwidth]{noise_cds_spectrum.png}
+\includegraphics[width=0.5\textwidth,height=0.86\textheight,keepaspectratio]{noise_cds_spectrum.png}
 \caption{Spectral density of the detrended CDS sequence (sampled at the skip rate, 0--15 kHz); note the peak near 5 kHz. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:noise_cds_spectrum}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{noise_reset_and_bands.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{noise_reset_and_bands.png}
 \caption{Left: reset-level scatter (about 146 ADU) and CDS noise per skip (about 5.6 ADU) for each usable pixel. Right: noise spectrum inside a cycle (pedestal-window start to signal-window end, each cycle's own mean removed). Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:noise_reset_and_bands}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.55\textwidth]{noise_window_length.png}
+\includegraphics[width=0.5\textwidth,height=0.86\textheight,keepaspectratio]{noise_window_length.png}
 \caption{CDS noise per skip recomputed with shorter windows (circles: windows starting at the flag; squares: windows ending at the flag), against 1/$\surd$L white noise (dashed). Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:noise_window_length}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{noise_window_settling.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{noise_window_settling.png}
 \caption{Mean waveform inside the pedestal window (left) and the signal window (right), window mean removed. The signal window starts about 150 ADU low and settles within about 30 samples (2 $\mu$s). Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:noise_window_settling}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{noise_baseline_coupling.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{noise_baseline_coupling.png}
 \caption{Left: CDS against the baseline level of each skip (usable pixels); the slope is the baseline coupling (about 2.1$\times$10$^{-3}$). Right: CDS noise in 50-skip blocks along the pixel. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:noise_baseline_coupling}
 \end{figure}
@@ -306,7 +306,7 @@ These describe how the noise behaves (correlation, averaging, spectrum, window l
 \section{Advanced features: discrete and transient noise}
 Steps, heavy tails, interference lines and ADC code non-uniformity.
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{discrete: largest baseline step (t)} &  & Largest difference between the 20-skip means before and after a skip of the detrended per-skip baseline, in units of its standard error. & telegraph noise in the output transistor \\
@@ -320,21 +320,21 @@ Steps, heavy tails, interference lines and ADC code non-uniformity.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{discrete_steps.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{discrete_steps.png}
 \caption{Detrended baseline (top) and CDS (bottom) of one pixel, with the position of the largest step (dashed), and their histograms with a Gaussian of the same variance. No telegraph noise is seen. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:discrete_steps}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{discrete_lines.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{discrete_lines.png}
 \caption{Line search in the within-cycle spectrum (left, MHz) and the CDS spectrum (right, kHz); no peak exceeds 5 times the local median in this trace. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:discrete_lines}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.7\textwidth]{discrete_adc_codes.png}
+\includegraphics[width=0.5\textwidth,height=0.86\textheight,keepaspectratio]{discrete_adc_codes.png}
 \caption{Relative excess of each value of (ADC sample mod 64) inside the pedestal windows; $\chi$$^{2}$ = 58 for 63 degrees of freedom (flat). Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:discrete_adc_codes}
 \end{figure}
@@ -344,7 +344,7 @@ Steps, heavy tails, interference lines and ADC code non-uniformity.
 \section{Advanced features: edges}
 From the reset pulse and the summing-well dip: timing, sub-sample shape, recovery, coupling per volt, and the skip-to-skip variation along the cycle.
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{edge: jitter (ns)} & ns & Scatter of the reset-edge times (half-height crossing, linear interpolation) around a straight line in skip number. & timing jitter; matters where windows sit on slopes \\
@@ -366,28 +366,28 @@ From the reset pulse and the summing-well dip: timing, sub-sample shape, recover
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{edge_jitter.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{edge_jitter.png}
 \caption{Left: position of the reset edge inside its own cycle; it saws by a third of a sample because the cycle is 488.7 samples long but starts on whole samples. Right: edge time minus the straight-line fit against the skip number (jitter about 1.7 ns rms). Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:edge_jitter}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.75\textwidth]{edge_equivalent_time.png}
+\includegraphics[width=0.62\textwidth,height=0.86\textheight,keepaspectratio]{edge_equivalent_time.png}
 \caption{The reset pulse rebuilt by equivalent-time sampling (red, 0.1-sample bins) compared with the plain average of whole samples (dots); grey: individual samples at their exact time. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:edge_equivalent_time}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{edge_recovery_ringing.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{edge_recovery_ringing.png}
 \caption{Left: equivalent-time waveform after the pulse peak with a two-exponential fit. Right: the residual, a decaying oscillation at about 3 MHz (ringing). Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:edge_recovery_ringing}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.8\textwidth]{edge_cycle_variation.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{edge_cycle_variation.png}
 \caption{Standard deviation across skips at every position of the cycle (each skip's pedestal level removed); shaded: pedestal and signal windows. Small and flat inside the windows, large at the dip and the reset pulse, a few hundred ADU after the reset. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:edge_cycle_variation}
 \end{figure}
@@ -397,7 +397,7 @@ From the reset pulse and the summing-well dip: timing, sub-sample shape, recover
 \section{Advanced features: slow structure}
 Row-start recovery, drift across the trace, horizontal-transfer amplitude and principal components.
 
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.095\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}}
 \toprule Feature & Unit & What is computed & Possible link \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{slow: row-start recovery time (skips)} & skips & Time constant of an exponential fitted to the baseline of the second row-start pixel minus that of the next pixel, skip by skip. & electronics recovering from the vertical clocking \\
@@ -412,28 +412,28 @@ Row-start recovery, drift across the trace, horizontal-transfer amplitude and pr
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{slow_row_start.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{slow_row_start.png}
 \caption{Left: baseline of every skip through the trace (red: row-start pixels). Right: baseline of the second row-start pixel minus that of the next pixel, with an exponential fit (about 230 skips). Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:slow_row_start}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.5\textwidth]{slow_drift.png}
+\includegraphics[width=0.5\textwidth,height=0.86\textheight,keepaspectratio]{slow_drift.png}
 \caption{Baseline at skip 250 of successive usable pixels against time in the trace; the slope is the drift feature. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:slow_drift}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{slow_h_transfers.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{slow_h_transfers.png}
 \caption{Left: every 4th horizontal transfer before a pixel. Right: peak-to-peak amplitude of each transfer (mean of the usable pixels). Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:slow_h_transfers}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{slow_principal_components.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{slow_principal_components.png}
 \caption{Principal components of the skip-to-skip variation: explained variance (left), the first three component shapes (centre; shaded: windows) and the PC1 score along the skips (right). PC1 (82 \%) is the sub-sample phase walk at the edges; PC2 is the level shift set by each reset. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
 \label{fig:slow_principal_components}
 \end{figure}
@@ -465,7 +465,7 @@ $\mathrm{RG\_1\_H}-\mathrm{RG\_1\_L}$; their ratio cancels the common amplificat
 for channel 0) is an assumption to confirm from the bcf.
 
 \section{Curves}
-\begin{longtable}{>{\raggedright\arraybackslash}p{0.30\textwidth}>{\raggedright\arraybackslash}p{0.10\textwidth}>{\raggedright\arraybackslash}p{0.52\textwidth}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.29\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.50\textwidth}}
 \toprule Curve & Unit & Content \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{skip: mean shape} & ADU & Mean waveform of one skip cycle (each skip's baseline removed; skips 0-4 excluded), block-averaged to at most 500 points. \\
@@ -484,9 +484,16 @@ for channel 0) is an assumption to confirm from the bcf.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{all_curves.png}
-\caption{The 12 curves returned by trace\_features for the example trace. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
-\label{fig:all_curves}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{all_curves_a.png}
+\caption{The 12 curves returned by trace\_features, part 1 of 2. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
+\label{fig:all_curves_a}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{all_curves_b.png}
+\caption{The 12 curves returned by trace\_features, part 2 of 2. Example trace: module 101, channel 0, 2026-10-08, first repeat.}
+\label{fig:all_curves_b}
 \end{figure}
 
 \FloatBarrier
@@ -507,9 +514,9 @@ A low separation does not make a feature useless: a feature that is the same on 
 a clean parameter signal if it moves with $\theta$. Only a scan with varied parameters can show which features respond to $\theta$
 and to the image labels.
 
-\begin{figure}[htbp]
+\begin{figure}[p]
 \centering
-\includegraphics[width=0.8\textwidth]{feature_separation.png}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{feature_separation.png}
 \caption{Median separation over the 6 channel pairs (difference of the means divided by the pooled repeat scatter), coloured by group; dashed line: 3.}
 \label{fig:feature_separation}
 \end{figure}
@@ -560,6 +567,7 @@ and to the image labels.
 \texttt{skip: end-of-cycle tail level} & 4 & 5.3 \\
 \texttt{noise: window-length ratio 75/150} & 5 & 5.1 \\
 \texttt{skip: droop total} & 5 & 5.1 \\
+\texttt{fit: first-skip ringing decay (skips)} & 3 & 5.0 \\
 \texttt{fit: dip recovery time (us)} & 5 & 5.0 \\
 \texttt{horizontal: scatter between transfers} & 5 & 4.7 \\
 \texttt{noise: reset-level scatter (ADU)} & 3 & 4.7 \\
@@ -571,11 +579,7 @@ and to the image labels.
 \texttt{skip: skips 1-4 CDS ringing} & 3 & 3.5 \\
 \texttt{noise: CDS autocorrelation at lag 1} & 3 & 3.2 \\
 \texttt{discrete: within-cycle spectrum lines} & 0 & 2.5 \\
-\texttt{fit: first-skip ringing decay (skips)} & 0 & 2.1 \\
 \texttt{discrete: largest baseline step (t)} & 3 & 2.1 \\
-\texttt{fit: first-skip ringing frequency (cyc/skip)} & 2 & 2.0 \\
-\texttt{fit: first-skip ringing amplitude} & 2 & 1.8 \\
-\multicolumn{3}{l}{\footnotesize (the three first-skip ringing rows were computed with the old fit, before 2026-10-13)} \\
 \texttt{fit: dip recovery amplitude} & 2 & 1.7 \\
 \texttt{discrete: largest CDS step (t)} & 0 & 1.7 \\
 \texttt{skip: first-skip CDS excess} & 2 & 1.6 \\
@@ -583,6 +587,7 @@ and to the image labels.
 \texttt{noise: pedestal-window settling (ADU)} & 2 & 1.5 \\
 \texttt{noise: CDS power \textless{}1 kHz / \textgreater{}10 kHz} & 0 & 1.3 \\
 \texttt{noise: Allan slope n=10-100} & 0 & 1.2 \\
+\texttt{fit: first-skip ringing amplitude} & 1 & 1.2 \\
 \texttt{skip: droop half-time (skips)} & 0 & 1.2 \\
 \texttt{edge: cycle variation at reset (ADU)} & 0 & 1.1 \\
 \texttt{noise: signal-window settling (ADU)} & 0 & 1.0 \\
@@ -596,29 +601,30 @@ and to the image labels.
 \texttt{fit: baseline droop time constant (skips)} & 2 & 0.7 \\
 \texttt{level: pixel level spread (ADU)} & 0 & 0.7 \\
 \texttt{discrete: CDS spectrum lines} & 0 & 0.6 \\
+\texttt{fit: first-skip ringing frequency (cyc/skip)} & 0 & 0.6 \\
 \texttt{slow: row-start recovery time (skips)} & 0 & 0.6 \\
 \texttt{slow: drift (ADU/ms)} & 0 & 0.5 \\
 \texttt{noise: noise trend along skips (ADU/100 skips)} & 0 & 0.4 \\
 \texttt{discrete: ADC low-bit chi2/dof} & 0 & 0.4 \\
 \texttt{noise: late/early window ratio} & 0 & 0.4 \\
 \texttt{level: charge-loss slope (\%)} & 0 & -- \\
-\texttt{discrete: CDS outlier fraction} & 0 & -- \\
-\texttt{fit: correlated noise floor (ADU)} & 0 & -- \\
 \texttt{level: charged-pixel skewness} & 0 & -- \\
+\texttt{fit: correlated noise floor (ADU)} & 0 & -- \\
+\texttt{discrete: CDS outlier fraction} & 0 & -- \\
 \end{longtable}
 
 \section{Nearly redundant features}
 
-Pairs of features whose values are correlated with $|r|>0.98$ across the same 19 traces (67 pairs;
+Pairs of features whose values are correlated with $|r|>0.98$ across the same 19 traces (73 pairs;
 the 30 strongest are listed). With 19 traces from 4 amplifiers, such correlations mostly mean that both features follow the same
 amplifier difference; they suggest redundancy, but only a parameter scan shows whether they also move together with $\theta$.
 Some pairs are redundant by construction (e.g.\ the signal-window level and the CDS mean; the dip height and the dip per volt at a
 fixed swing).
 
-\begin{figure}[htbp]
+\begin{figure}[p]
 \centering
-\includegraphics[width=0.95\textwidth]{feature_correlation.png}
-\caption{Correlation between the features across the 19 healthy traces of the 2026-10-08 session (order as in the registry).}
+\includegraphics[width=1.0\textwidth,height=0.86\textheight,keepaspectratio]{feature_correlation.png}
+\caption{Correlation between the 85 features across the 19 healthy traces of the 2026-10-08 session, ordered as in the registry and grouped (the bands show the feature groups and how many features each has). The strongest individual pairs are listed in the table below.}
 \label{fig:feature_correlation}
 \end{figure}
 

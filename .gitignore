@@ -25,3 +25,6 @@ __pycache__/
 
 # Private correspondence
 docs/*email*
+
+# Python environment for the ML models (requirements-ml.txt)
+.venv/
