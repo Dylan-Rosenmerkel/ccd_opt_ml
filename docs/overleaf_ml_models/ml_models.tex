@@ -57,10 +57,14 @@ comparison will be repeated on the first scan.
   skip waveform, transfer shapes, noise spectra) go to a network that can learn its own features. The raw 3-million-sample trace
   is not given directly: it is mostly repetitions of the same cycle, and the curves keep its information in a compact form.
 \item \textbf{Can a model find features we missed?} Yes, if it is given the curves (or the folded trace) and enough data. On the
-  synthetic world a network on the curves found a noise floor that is missing from the hand-made list.
+  synthetic world, a network on the curves found an intermittent noise floor that is missing from the hand-made list: $\sigma_e$ error
+  1.9\,\% at 480 packets, against $\sim$11\,\% for every model on the hand-made features.
 \item \textbf{Data.} One scan of 10 parameters $\times$ 20 values (241 packets, about 76\,h) is enough for the surrogate and the
-  feature-based predictor. Networks that learn from curves need roughly 2--4 times more labeled packets, or pre-training on
-  unlabeled traces (a scan produces $\sim$30{,}000 of them).
+  feature-based predictor; they are useful from $\sim$60 packets. In the synthetic tests, the network on the curves overtook them between
+  240 and 480 labeled packets. Pre-training on unlabeled traces (a scan produces $\sim$30{,}000) should lower that.
+\item \textbf{Reference traces matter}: the dark charge drifts with the CCD state. Settings alone predict it to $\sim$25\,\%; with the reference
+  traces it is 3.6\,\%.
+\item \textbf{A new module} needs about 20 of its own packets before any model predicts it well.
 \end{itemize}
 \end{basic}
 
@@ -403,7 +407,8 @@ nothing \\
 \begin{itemize}
 \item the Gaussian process (surrogate and feature-based predictor) is useful from $\sim$30--60 packets;
 \item the feature-based models level off at a few hundred packets;
-\item the CNN on the curves needs several hundred to $\sim$1000 packets to match or beat them, fewer with pre-training.
+\item the CNN on the curves matched them up to $\sim$240 packets and overtook them by 480 (when the curves hold information the features
+  lack); pre-training should bring that down.
 \end{itemize}
 The 241-packet scan (10 parameters $\times$ 20 values, $\sim$76\,h) is enough for the first two. Bayesian optimization
 (Section~\ref{sec:bo}) needs far fewer packets than a grid to find good settings.
@@ -461,7 +466,104 @@ Extensions:
 \end{itemize}
 Models are trained on one synthetic scan and tested on an independent one.
 
-RESULTS-PLACEHOLDER
+\subsection{Which inputs help (240 training packets)}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{ml_inputs_models.png}
+\caption{Relative error on 200 new packets, for each input set and model, after training on 240 packets (log scale).}
+\label{fig:inputs}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llccc}
+\toprule
+Inputs & Model & $\sigma_e$ & $\lambda$ & gain \\
+\midrule
+$\theta$ + amplifier & GP & 12.2\,\% & 25.9\,\% & 0.9\,\% \\
+trace features only & GP & 11.6\,\% & 16.3\,\% & 0.9\,\% \\
+$\theta$ + amplifier + features & GP & 11.6\,\% & \textbf{3.6\,\%} & 0.8\,\% \\
+$\theta$ + amplifier + features & NN ensemble & 12.4\,\% & 4.2\,\% & 0.9\,\% \\
+$\theta$ + amplifier + features & boosted trees & 12.9\,\% & 11.5\,\% & 0.9\,\% \\
+curves + $\theta$ + amplifier & CNN & \textbf{8.5\,\%} & 4.7\,\% & 0.9\,\% \\
+\bottomrule
+\end{tabular}
+\caption{Selected results of Figure~\ref{fig:inputs} (single training runs; differences of a few percent are within run-to-run variation).}
+\end{table}
+
+\begin{itemize}
+\item \textbf{$\theta$ alone cannot predict $\lambda$} (26\,\%): the hidden drifting state changes $\lambda$ by $\pm35$\,\% and is not in $\theta$.
+  The reference traces measure it: with the features, the GP reaches 3.6\,\%. This is the main reason to take reference traces in every packet.
+\item \textbf{The gain} is set mostly by the amplifier and is easy for every model ($<1$\,\%, at the label noise).
+\item \textbf{$\sigma_e$ is limited to about 12\,\% for every feature-based model}: the intermittent pickup adds a noise floor in 40\,\% of the
+  packets, and no hand-made feature in the synthetic world describes it.
+\item \textbf{Coverage}: the GP and the ensembles give calibrated error bars (coverage 0.67--0.80 for a target of 0.68). The boosted trees'
+  quantile error bars are too narrow (0.4--0.6) with this little data; they are not suited to drive the optimizer.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{ml_gp_relevance.png}
+\caption{Gaussian-process relevance ($1/\ell_i$) of every input, per target. The GP picks the physically right inputs: the CDS noise for $\sigma_e$,
+the reference baseline (the hidden state) and the V low rails for $\lambda$, the amplifier for the gain.}
+\label{fig:relevance}
+\end{figure}
+
+\subsection{How many packets}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{ml_learning_curves.png}
+\caption{Error on new packets against the number of training packets. Middle: only the packets in which the hidden pickup was on.}
+\label{fig:learning}
+\end{figure}
+
+\begin{itemize}
+\item The \textbf{feature-based models level off} at about 11--12\,\% for $\sigma_e$ from $\sim$120 packets: more data does not help them see the
+  pickup.
+\item The \textbf{CNN on the curves} matches them up to $\sim$240 packets and then drops to \textbf{1.9\,\% at 480 and 1.7\,\% at 960 packets},
+  also on the packets with pickup. It has \emph{found} the noise floor in the Allan-deviation and spectrum curves, without being told
+  what to look for.
+\item For $\lambda$, the GP with features is good from $\sim$60 packets (5\,\%) and reaches 3.5\,\%; the CNN reaches 3.3\,\% at 960.
+\item \textbf{Lesson}: hand-made features win while data are scarce; a network on the curves overtakes them once there are several
+  hundred labeled packets, if the curves hold something the features do not.
+\end{itemize}
+
+\subsection{Features, curves, or both?}
+\label{sec:representation}
+
+REPRESENTATION-PLACEHOLDER
+
+\subsection{A module never seen in training}
+
+A second synthetic module (its own gain, noise and VDD optimum) was predicted by models trained on the first module plus 0, 5 or 20 of the
+new module's packets:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{2}{c}{0 packets} & \multicolumn{2}{c}{5 packets} & \multicolumn{2}{c}{20 packets} \\
+Model, inputs & $\sigma_e$ & gain & $\sigma_e$ & gain & $\sigma_e$ & gain \\
+\midrule
+GP, $\theta$ + amp & 62\,\% & 33\,\% & 16\,\% & 2.5\,\% & 15\,\% & 1.2\,\% \\
+GP, $\theta$ + amp + features & 72\,\% & 35\,\% & 16\,\% & 2.5\,\% & 15\,\% & 1.2\,\% \\
+trees, $\theta$ + amp & 67\,\% & 44\,\% & 63\,\% & 36\,\% & 5\,\% & 1.8\,\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+With one module in training, \emph{no} model generalizes to a new one: the new module's gain and noise level lie outside everything seen.
+A few packets of the new module are enough for the gain (5), and about 20 for $\sigma_e$. In practice: \textbf{start every new module or
+amplifier with $\sim$20 packets around its reference}, and train on several modules before expecting transfer.
+
+\subsection{Bayesian optimization}
+
+BO-PLACEHOLDER
+
 
 %======================================================================
 \section{Plan}

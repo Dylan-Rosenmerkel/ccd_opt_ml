@@ -168,6 +168,41 @@ text) and write a separate, more mathematical technical note on how every featur
 
 It reuses the readable figures. `docs/overleaf_trace_features.zip` was rebuilt as well.
 
+## 2d. ML benchmark results (synthetic world v2, full run)
+
+**Inputs** (240 training packets, 200 test packets), relative error on new packets:
+* θ + amp: σe 12 %, λ 26 % (θ cannot know the drifting state), gain 0.9 %;
+* θ + amp + features: GP λ 3.6 %, NN 4.2 %, σe ~12 % for every feature model (the intermittent pickup
+  is invisible to the features);
+* curves + θ + amp (CNN): σe 8.5 %, λ 4.7 %.
+
+**Coverage:** GP and ensembles 0.67–0.80 (target 0.68); boosted-tree quantiles are too narrow (0.4–0.6).
+
+**Learning curves:** the feature models level off at σe ~11–12 % from ~120 packets. The CNN on curves
+matches them up to ~240 packets, then reaches σe 1.9 % at 480 and 1.7 % at 960 (it found the pickup
+floor). For λ: GP + features 3.5 % from ~120 packets; CNN 3.3 % at 960.
+
+**GP relevance:** σe ← CDS rms; λ ← reference baseline (the state) + V_low; gain ← amplifier.
+
+**New module:** with 0 of its packets, σe/gain are off by 35–70 % for every model; with 5 packets, gain is
+2.5 % (GP); with 20 packets, σe is 5–15 %. Start each new module with ~20 packets.
+
+**Representation** (features vs curves vs both, each with θ and reference traces; n = 60…480 so far,
+960 and BO still running):
+* without θ, λ stays ~16 % for every representation: λ depends on rails the traces do not show, so
+  θ must be an input;
+* σe: at ≤120 packets all ~11–15 %; at 240, curves only 5.6 % and both 7.3 %, against features only
+  12 %; at 480, curves only 2.2 %, both 2.1 %, features only 11.5 %;
+* with θ + amp: λ 3.6–4.3 % for all representations at 240+.
+
+**Process note:** watcher loops of the form `until ! pgrep -f "<pattern>"` never end, because they match
+their own command line. Four were killed. Use `pgrep -f "[m]l.benchmark"` or wait on the PID instead.
+
+**Still to do:**
+* fill REPRESENTATION/BO-PLACEHOLDER in `ml_models.tex`, compile, zip;
+* write a notebook walkthrough (`notebooks/ml_models_walkthrough.ipynb`);
+* add a "next-generation models" section (user question: more complex models with better error).
+
 ## 3. Not yet known or checked
 
 * What `read_config` resets: the mode is set explicitly afterwards, but whether it touches the
