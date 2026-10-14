@@ -724,3 +724,12 @@ against the truth, world v2 unless noted):
 * **Metrics:** absolute error, "shape" error (each amplifier's mean offset removed), and the within-amplifier
   rank correlation (what an optimizer needs).
 * 3 training scans.
+* **Code:**
+  * `src/ml/benchmark_amp.py`;
+  * `structured.make_gp("none")` (no amplifier information);
+  * `StructuredPrep(own_features=("trace","ref"))` (implicit ID through the amplifier's own signature).
+* **Quick test** (40 packets): on known amplifiers, A with its own features and no ID gives σe 2.2 % vs A+B
+  1.8 %. On a new module, every model has the gain level wrong (~30 %), but the shape error is ~2 % and the
+  within-amplifier rank is 0.98 for the physics models.
+* **Full run:** 3 scans, 240 packets, k = 0 and 2. PID in the scratchpad `amp_full.pid`, log `amp_full.log`,
+  output `docs/ml_results/amp_information*.json`.
