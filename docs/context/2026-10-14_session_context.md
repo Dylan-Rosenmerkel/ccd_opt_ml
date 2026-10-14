@@ -733,3 +733,9 @@ against the truth, world v2 unless noted):
   within-amplifier rank is 0.98 for the physics models.
 * **Full run:** 3 scans, 240 packets, k = 0 and 2. PID in the scratchpad `amp_full.pid`, log `amp_full.log`,
   output `docs/ml_results/amp_information*.json`.
+
+**Status at this point (2026-10-14, later):**
+* Running: `benchmark_seeds` (design, newmodule, sets done; learning, pretrain to go) and `benchmark_amp` (3 scans).
+* **The user's priority (explicit): find out whether the models can work WITHOUT amplifier labels, on REAL
+  amplifiers.** Next: a real-data check with module 101's 4 amplifiers (2026-10-12 traces + binned images;
+  any per-amplifier gains from 2026-10-06/08). Module 102 is not used for trace analysis.
