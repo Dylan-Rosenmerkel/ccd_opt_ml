@@ -655,3 +655,8 @@ against the truth, world v2 unless noted):
   `seeds_full.log`; outputs `docs/ml_results/seeds_*.json` + `seeds_summary.json`). Order: design,
   newmodule, sets, learning, pretrain. Then a "Robustness over training scans" subsection in ml_models.tex
   with mean ± sd, and corrections where needed.
+* **Item 4, first result: design (5 training scans, mean ± sd, error against the truth):**
+  * λ: one-at-a-time 10.3 ± 1.7 % (GP) / 12.6 ± 0.3 % (A+B); random 1.9 ± 0.2 / 1.6 ± 0.2 %; half and half
+    2.8 ± 0.5 / 2.4 ± 0.4 %;
+  * σe from A+B: 1.9–2.3 % in every design; first-round GP 13–15 %;
+  * **the scan-design conclusion holds.** newmodule, sets, learning and pretrain are still running.
