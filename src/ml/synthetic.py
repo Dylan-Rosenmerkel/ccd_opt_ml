@@ -109,12 +109,17 @@ def _sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-def physics(theta: np.ndarray, amp: Amplifier, state: float, pickup: float = 0.0) -> dict[str, float]:
+def physics(theta: np.ndarray, amp: Amplifier, state: float, pickup: float = 0.0,
+            image_only: bool = False) -> dict[str, float]:
     """
     The toy truth for one amplifier: single-skip noise, noise floor, labels.
 
     theta: the 10 parameters (order of NAMES).  state: the hidden drift (~N(0,1)).
     pickup: 1 when the intermittent outside source is on during this packet, else 0.
+    image_only: add a noise term that only the image sees ("world v3"): low-frequency noise between
+    rows (think: the video board or the substrate drifting over the 4.8-min image) that a 0.2-s trace
+    of 10 pixels cannot measure.  It depends on VR and delay_H.  Models built on the trace physics
+    must learn it from the labels.
     """
     VDD, VR, VSUB, VDRAIN, H_low, V_low, TG, RG_high, SW_low, delay_H = theta
     dH, dV, dTG = H_low - 6.6, V_low - 7.8, TG - 7.4
@@ -129,14 +134,16 @@ def physics(theta: np.ndarray, amp: Amplifier, state: float, pickup: float = 0.0
     # the susceptibility h grows when SW_low is raised and with longer H clocks
     h = (0.3 + _sigmoid(3 * (dSW - 0.3))) * (1 + 0.4 * dDH)
     floor = 0.25 * max(h, 0) * pickup
-    sigma_e = np.sqrt(sigma1 ** 2 / N_SKIPS + floor ** 2)
+    lf = 0.10 * (1 + 0.5 * (VR + 3) ** 2) * (1 + 0.3 * dDH) if image_only else 0.0
+    sigma_e = np.sqrt(sigma1 ** 2 / N_SKIPS + floor ** 2 + lf ** 2)
     gain = amp.gain * (1 + 0.02 * (VDD + 19) - 0.015 * (VR + 3)) * (1 + 0.005 * state)
     # dark charge per pixel in the 16-row image: dark current (substrate, V low rails, temperature)
     # plus clock-induced charge (larger clock swings: lower H and V low rails, lower TG)
     dark = 0.03 * np.exp(0.04 * (VSUB - 45)) * (1 + 1.5 * _sigmoid(4 * (dV + 0.3))) * np.exp(0.35 * state)
     cic = 0.025 * np.exp(-1.2 * dH) * np.exp(-0.6 * dV) * np.exp(-0.4 * dTG)
     lam = dark + cic
-    return {"sigma1": sigma1, "floor": floor, "sigma_e": sigma_e, "gain": gain, "lambda": lam, "h": h}
+    return {"sigma1": sigma1, "floor": floor, "sigma_e": sigma_e, "gain": gain, "lambda": lam, "h": h,
+            "dark": dark, "cic": cic, "lf": lf}
 
 
 def features(theta: np.ndarray, amp: Amplifier, state: float, phys: dict, rng: np.random.Generator,
@@ -232,9 +239,29 @@ def sample_theta(rng: np.random.Generator, n: int, design: str = "random", respe
     return out[:n]
 
 
+#: Rows of the image and the relative scatter of one row's lambda (a WADERs fit of ~1000 pixels with
+#: ~0.08 e- each: ~80 events, ~12 %); the mean of the 16 rows then scatters by 3 %, as the total label.
+N_ROWS, ROW_LAMBDA_SD = 16, 0.12
+
+
+def lambda_per_row(dark: float, cic: float, rng: np.random.Generator) -> tuple[float, float, float]:
+    """
+    Per-row dark charge of the image, and its split into dark current and clock-induced charge.
+
+    With EXPOSURE 0 a pixel of row r collects dark current while the rows below it are read, so the
+    dark part grows linearly with r (mean over rows = ``dark``) while CIC is the same in every row:
+    lambda_r = cic + dark (r + 1/2) / (N_ROWS / 2).  A straight-line fit of the measured rows gives
+    the two parts.  Returns (mean over rows, fitted dark, fitted cic).
+    """
+    x = (np.arange(N_ROWS) + 0.5) / (N_ROWS / 2)
+    rows = (cic + dark * x) * (1 + ROW_LAMBDA_SD * rng.normal(size=N_ROWS))
+    slope, intercept = np.polyfit(x, rows, 1)
+    return float(rows.mean()), float(slope), float(intercept)
+
+
 def make_dataset(n_packets: int, seed: int = 0, n_boards: int = 1, n_sets: int = 10, n_ref_sets: int = 5,
                  thetas: np.ndarray | None = None, drift: float = 0.95, label_noise: bool = True,
-                 world_seed: int = 1234):
+                 world_seed: int = 1234, image_only_noise: bool = False, per_row_lambda: bool = False):
     """
     Simulate a scan: n_packets packets, each with traces at the reference and at theta and an image.
 
@@ -246,6 +273,10 @@ def make_dataset(n_packets: int, seed: int = 0, n_boards: int = 1, n_sets: int =
 
     world_seed fixes the amplifiers (the "CCDs"); seed fixes the scan (operating points, drift,
     noise).  Two scans with different seeds and the same world_seed are two runs on the same CCDs.
+
+    image_only_noise: add the image-only noise term of ``physics`` (world v3).
+    per_row_lambda: measure lambda row by row (``lambda_per_row``) and add the labels
+    label.lambda_dark and label.lambda_cic (world v3).  The defaults give world v2 exactly.
     """
     world = np.random.default_rng(world_seed)
     amps = make_amplifiers(world, n_boards)
@@ -256,11 +287,13 @@ def make_dataset(n_packets: int, seed: int = 0, n_boards: int = 1, n_sets: int =
         state = drift * state + np.sqrt(1 - drift ** 2) * rng.normal()   # slow drift between packets
         pickup = float(rng.random() < 0.4)                                # the outside source, on or off
         for a, amp in enumerate(amps):
-            phys = physics(theta, amp, state, pickup)
+            phys = physics(theta, amp, state, pickup, image_only_noise)
             ref_phys = physics(NOMINAL, amp, state, pickup)
             f_theta = features(theta, amp, state, phys, rng, n_sets)
             f_ref = features(NOMINAL, amp, state, ref_phys, rng, n_ref_sets)
             noise = (lambda rel: 1 + rel * rng.normal()) if label_noise else (lambda rel: 1.0)
+            if per_row_lambda:
+                lam_label, dark_fit, cic_fit = lambda_per_row(phys["dark"], phys["cic"], rng)
             row = {"packet_id": f"syn_{p:05d}", "board": 100 + a // 4, "channel": a % 4, "amplifier": amp.name,
                    **{f"theta.{n}": v for n, v in zip(NAMES, theta)},
                    **{f"delta.{n}": v - v0 for n, v, v0 in zip(NAMES, theta, NOMINAL)},
@@ -268,11 +301,14 @@ def make_dataset(n_packets: int, seed: int = 0, n_boards: int = 1, n_sets: int =
                    **{f"ref.{n}": v for n, v in zip(FEATURES, f_ref)},
                    **{f"diff.{n}": v - r for n, v, r in zip(FEATURES, f_theta, f_ref)},
                    "label.sigma_e": phys["sigma_e"] * noise(0.015),
-                   "label.lambda_e_per_bin": phys["lambda"] * noise(0.03),
+                   "label.lambda_e_per_bin": lam_label if per_row_lambda else phys["lambda"] * noise(0.03),
                    "label.gain_adu_per_e": phys["gain"] * noise(0.008),
                    "label.ok": True,
                    "truth.state": state, "truth.pickup": pickup, "truth.floor": phys["floor"], "truth.sigma1": phys["sigma1"],
-                   "truth.sigma_e": phys["sigma_e"], "truth.lambda": phys["lambda"], "truth.gain": phys["gain"]}
+                   "truth.sigma_e": phys["sigma_e"], "truth.lambda": phys["lambda"], "truth.gain": phys["gain"],
+                   "truth.dark": phys["dark"], "truth.cic": phys["cic"], "truth.image_only": phys["lf"]}
+            if per_row_lambda:
+                row.update({"label.lambda_dark": dark_fit, "label.lambda_cic": cic_fit})
             rows.append(row)
             for name, c in curves(theta, amp, state, phys, rng, n_sets).items():
                 curve_rows[name].append(c)

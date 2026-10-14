@@ -270,3 +270,54 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
 * Decide whether to keep the flush between trace sets (test sets with and without it, compare the
   trace-to-trace scatter).
 * Everything open from 2026-10-13 (WADERs JSON with per-row dark current; the first scan design).
+
+## 2g. Second-round models A + B (prototyping, started later on 2026-10-14)
+
+**User request:**
+* prototype A (physics-structured outputs) + B (hierarchical GP) on the synthetic data, then the other
+  candidates if time allows;
+* update the context and the tex as we go, and start a new notebook;
+* plan how to test all models on real data, and say whether the packets need different data;
+* think about a better data format for new models;
+* **back up the context often** (the session is near its limit).
+
+**Code, done:**
+* `src/ml/synthetic.py`: two optional flags. The defaults reproduce world v2 bit for bit (checked against
+  HEAD).
+  * `image_only_noise`: a noise term only the image sees: lf = 0.10 (1 + 0.5 (VR+3)^2)(1 + 0.3 dDH) e-,
+    on average 29 % of σe;
+  * `per_row_lambda`: λ is measured on each of the 16 rows, λ_r = cic + dark (r+½)/8 with 12 % scatter per
+    row; a line fit gives the labels `label.lambda_dark` (12 % error) and `label.lambda_cic` (26 %);
+  * world v3 = both flags; there are also the new truth columns `truth.dark`, `truth.cic` and
+    `truth.image_only`.
+* `src/ml/structured.py`:
+  * `allan_fit`: a²/n + b² on the Allan curve gives a = σ1·g and b = floor·g in ADU;
+  * `StructuredPrep`: x = θ + a packet state vector. The state vector is the reference features minus each
+    amplifier's training mean (only amplifiers with ≥ 20 rows), averaged over the packet's amplifiers;
+  * `HierGP`: torch float64 exact GP with kernel shared + [same module](c + s·M) + [same amp](c + s·M),
+    fitted with L-BFGS;
+  * `DirectGP` (B);
+  * `PhysicsStructured` (A or A+B): log σe = ½ log(a²/N + b²) − log ĝ + r(x), with ĝ and the residual r
+    as GPs; λ is a GP on log λ, or exp(dark GP) + exp(CIC GP).
+* `src/ml/benchmark_structured.py`:
+  * `learning` (worlds v2, v3; n = 15…480; scored against the labels and against the truth);
+  * `newmodule` (k = 0, 1, 2, 5, 10, 20).
+
+**First numbers** (60 training packets, 100 test packets):
+* σe:
+  * A / A+B: 2.4 % (1.9 % against the truth) in v2 and 3.4 % in v3;
+  * first round at 60 packets: 13–15 %;
+  * B alone: 14 %.
+* λ: 5.4 % (hierarchical GP); the dark + CIC split is not better at 60 packets (the CIC labels are noisy).
+* Gain: hierarchical 0.8 % (0.2 % against the truth); ordinary GP 0.9 % (0.4 %).
+* New module with k = 0 (quick run): the σe error equals the gain error (~33 %). The trace cannot show the
+  gain, so ≥ 1 imaged packet of a new module is needed. The hierarchical GP's coverage stays 0.75; the
+  others drop to 0.
+* A "no curves" variant was dropped: the toy hand features carry large per-amplifier offsets, so the toy
+  CDS-rms feature is not a physical σ1. Real data has "skip: CDS rms" and "fit: correlated noise floor".
+
+**Next:**
+* full benchmark run, figures, ml_models.tex section "Prototypes of the next models";
+* notebook `notebooks/ml_structured_models.ipynb`;
+* H (conformal), then others;
+* test plan + data needs + data format section.
