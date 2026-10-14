@@ -670,3 +670,21 @@ against the truth, world v2 unless noted):
   the separate split, over 3 seeds.
 * **Notebook plan:** `notebooks/ml_remaining_models.ipynb` (generator in the repo:
   `notebooks/make_remaining_models_notebook.py`).
+* **Joint λ, done (`structured.JointLambdaGP`, `line_fit_covariance`; `PhysicsStructured(lambda_model=
+  "direct" | "split" | "joint")`):**
+  * the linear-scale version found the right inputs (DC ← VSUB, V_low, state; CIC ← H_low, V_low, TG) and the
+    right noise correlation (−0.84), but was worse than direct (6.2 % vs 3.9 % at 120 packets), because the
+    dark current is a product of factors;
+  * **the log-scale version** (log parts, delta-method covariance) is the default. v3, one scan, λ error
+    against the truth:
+
+    | | n = 30 | 120 | 240 |
+    |---|---|---|---|
+    | direct | 17.9 % | 3.9 % | 1.6 % |
+    | split | 31.3 % | 5.7 % | 2.3 % |
+    | **joint** | 28.0 % | 4.7 % | **1.3 %** |
+
+  * joint coverage 0.49–0.70 (calibrated from 120 on; split 0.94–1.0);
+  * **joint > split everywhere; joint > direct only with ≥ ~240 packets** (two 27-input GPs need more data);
+  * 3-scan check running: `benchmark_seeds --only lambda --seeds 1 2 3 --summary seeds_summary_lambda.json`
+    (PID in the scratchpad `seeds_lambda.pid`).
