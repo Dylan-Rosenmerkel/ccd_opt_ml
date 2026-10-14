@@ -321,3 +321,41 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
 * notebook `notebooks/ml_structured_models.ipynb`;
 * H (conformal), then others;
 * test plan + data needs + data format section.
+
+**Update (A+B work, continued):**
+* **Bug fixed:** in the new-module test the state vector must be built on whole packets. The test rows of
+  module 101 alone gave state = 0, which caused the λ error of 26 %. `run_structured(full=…)` now builds
+  the inputs on the full df and then splits. With the fix, a never-seen module (k = 0) has λ error
+  3.1–3.6 % (first round: 50–118 %); σe and gain are still ~33 % because the gain is unknown without an
+  image.
+  * Caveat: with one training module the module-level variance cannot be learned. It stays at its
+    prior, so B's λ error bars are too wide there (coverage 1.0); conservative, not wrong.
+* **New `src/ml/calibrate.py` (H):**
+  * `Conformal(make_model).fit(X, Y, groups, extra)`: 5-fold grouped out-of-fold normalized errors give
+    the factors for 68 % and 95 %; then a refit on everything;
+  * `coverage_report`.
+* **New experiment `design`:** the planned one-at-a-time scan (`synthetic.oat_thetas(20)`, 197 allowed
+  points) vs random points vs half and half, tested on random points.
+  * Why: `configs/scan_recommended.toml` / `scan_packets.py` support `oat` and `random`, and the "10 × 20"
+    plan is one-at-a-time, but every synthetic test so far trained on random joint points.
+* **Full run** (learning, newmodule, conformal, design) running in the background. Log in the scratchpad
+  `structured_full.log` (PID in `structured_full.pid`).
+* **Drafted** `docs/overleaf_ml_models/draft_realdata_sections.tex`, to be merged into ml_models.tex.
+  It has three sections:
+  1. testing every model on real data, in stages:
+     * stage 0: label noise + "does the trace physics hold" + per-row λ;
+     * stage 1: scan splits (grouped, blocked in time, leave one parameter out), scores, learning curves;
+     * stage 2: new module;
+     * stage 3: offline replay BO, then prospective;
+     * stage 4: C/D/E/F;
+  2. do the packets need to change:
+     * no longer packets;
+     * add per-row λ (+σ) from WADERs;
+     * keep the un-averaged image skips if cdaq can;
+     * use a design with joint changes;
+     * take trace-only packets;
+     * record temperatures / conditions / all pins;
+     * nominal image packets (already reference_every = 5);
+     * 2–5 imaged packets per new module;
+  3. data format: keep the raw files; add Parquet/HDF5 tables packets, trace_sets (per set, not
+     combined), curves, labels with errors, image_rows, schema; `dataset.csv` becomes a view.

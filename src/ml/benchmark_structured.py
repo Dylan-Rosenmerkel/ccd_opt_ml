@@ -15,6 +15,10 @@ learning   error against the number of training packets (15 ... 480) in two worl
            measurement, and in v3 A + B with lambda = dark + CIC.  Scored against the labels (which have
            1.5 % / 3 % / 0.8 % noise) and against the noise-free truth.
 newmodule  a second module seen in 0, 1, 2, 5, 10 or 20 of its packets (as benchmark.py's holdout).
+design     the scan design: one-at-a-time (the planned 10 parameters x 20 values), random points, or half
+           of each, with the same number of packets; tested on random points (where an optimizer looks).
+conformal  H: the coverage of the 68 % and 95 % error bars before and after conformal calibration
+           (calibrate.py), for the boosted trees, the network ensemble, the CNN and A + B.
 
 All numbers come from toy physics and only compare methods.
 """
@@ -31,7 +35,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from . import data, evaluate, models, structured as st, synthetic
+from . import calibrate, data, evaluate, models, structured as st, synthetic
 from .benchmark import THETA_CURVES, inputs_for
 
 TARGETS = ["sigma_e", "lambda", "gain"]
@@ -59,12 +63,19 @@ def structured_candidates(world):
     return out
 
 
-def run_structured(make, train, test):
+def run_structured(make, train, test, full=None):
+    """A second-round model.  ``full`` = (df, curves, train rows, test rows): the inputs are built on whole
+    packets (the packet state vector needs every amplifier of the packet), then split."""
     (df_tr, cv_tr), (df_te, cv_te) = train, test
     prep = st.StructuredPrep().fit(df_tr)
+    if full is None:
+        X_tr, X_te = prep.transform(df_tr, cv_tr), prep.transform(df_te, cv_te)
+    else:
+        X = prep.transform(full[0], full[1])
+        X_tr, X_te = models.take(X, full[2]), models.take(X, full[3])
     t0 = time.time()
-    model = make().fit(prep.transform(df_tr, cv_tr), data.make_targets(df_tr)[0], st.component_targets(df_tr))
-    mean, std = model.predict(prep.transform(df_te, cv_te))
+    model = make().fit(X_tr, data.make_targets(df_tr)[0], st.component_targets(df_tr))
+    mean, std = model.predict(X_te)
     return score_both(df_te, mean, std, time.time() - t0), model
 
 
@@ -163,7 +174,7 @@ def exp_newmodule(out, figs, n_train, ks):
             if isinstance(make, tuple):
                 r = run_first_round(*make, train, test, full=(df, curves, np.flatnonzero(train_rows), np.flatnonzero(test_rows)))
             else:
-                r, _ = run_structured(make, train, test)
+                r, _ = run_structured(make, train, test, full=(df, curves, np.flatnonzero(train_rows), np.flatnonzero(test_rows)))
             results.setdefault(label, {})[k] = r
             print(_line(f"new module k={k:2d}", label, r), flush=True)
         (out / "structured_newmodule.json").write_text(json.dumps(results, indent=1))
@@ -187,11 +198,65 @@ def exp_newmodule(out, figs, n_train, ks):
     return results
 
 
+def exp_design(out, figs, n_test):
+    test = synthetic.make_dataset(n_test, seed=99)
+    oat = synthetic.oat_thetas(20)
+    n = len(oat)
+    rng = np.random.default_rng(5)
+    oat_half = synthetic.oat_thetas(10)
+    designs = {"one-at-a-time": oat, "random": synthetic.sample_theta(rng, n),
+               "half one-at-a-time, half random": np.vstack([oat_half, synthetic.sample_theta(rng, n - len(oat_half))])}
+    plan = {"first round: GP, theta + amp + features": ("gp", FEATURE_GROUPS, False),
+            "first round: boosted trees, theta + amp + features": ("gbt", FEATURE_GROUPS, False),
+            "B: hierarchical GP": structured_candidates("v2")["B: hierarchical GP"],
+            "A+B: physics + hierarchical GP": structured_candidates("v2")["A+B: physics + hierarchical GP"]}
+    results = {}
+    for dname, thetas in designs.items():
+        train = synthetic.make_dataset(len(thetas), seed=1, thetas=np.random.default_rng(2).permutation(thetas))
+        for label, make in plan.items():
+            r = run_first_round(*make, train, test) if isinstance(make, tuple) else run_structured(make, train, test)[0]
+            results.setdefault(dname, {})[label] = r
+            print(_line(f"design {dname} ({len(thetas)} packets)", label, r), flush=True)
+        (out / "structured_design.json").write_text(json.dumps(results, indent=1))
+    return results
+
+
+def exp_conformal(out, figs, sizes, n_test):
+    test = synthetic.make_dataset(n_test, seed=99)
+    Y_te = data.make_targets(test[0])[0]
+    results = {}
+    for n in sizes:
+        train = synthetic.make_dataset(n, seed=1)
+        Y_tr = data.make_targets(train[0])[0]
+        groups = train[0]["packet_id"].to_numpy()
+        prep = st.StructuredPrep().fit(train[0])
+        plan = {"boosted trees, theta + amp + features": (models.GBT, *[inputs_for(*d, FEATURE_GROUPS, False)[0] for d in (train, test)], None),
+                "NN ensemble, theta + amp + features": (models.MLPEnsemble, *[inputs_for(*d, FEATURE_GROUPS, False)[0] for d in (train, test)], None),
+                "CNN, curves + theta + amp": (models.CurveCNN, *[inputs_for(*d, ("theta", "amp"), True, THETA_CURVES)[0] for d in (train, test)], None),
+                "A+B: physics + hierarchical GP": (lambda: st.PhysicsStructured("hier", use_components=False),
+                                                   prep.transform(*train), prep.transform(*test), None)}
+        for label, (make, X_tr, X_te, extra) in plan.items():
+            t0 = time.time()
+            c = calibrate.Conformal(make).fit(X_tr, Y_tr, groups, extra)
+            m, s = c.model.predict(X_te)
+            r = {"coverage": calibrate.coverage_report(Y_te, m, s, c.factors),
+                 "factors": {str(k): v.tolist() for k, v in c.factors.items()},
+                 "rel_error": [float(np.sqrt(np.mean((m[:, t] - Y_te[:, t]) ** 2))) for t in range(3)],
+                 "seconds": time.time() - t0}
+            results.setdefault(label, {})[n] = r
+            cov = r["coverage"]
+            print(f"[conformal n={n}] {label:38s} " + "  ".join(
+                f"{t}: 68% {cov['raw 0.68'][i]:.2f}->{cov['conformal 0.68'][i]:.2f}, 95% {cov['raw 0.95'][i]:.2f}->{cov['conformal 0.95'][i]:.2f}"
+                for i, t in enumerate(TARGETS)) + f"  {r['seconds']:5.0f}s", flush=True)
+            (out / "structured_conformal.json").write_text(json.dumps(results, indent=1))
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--out", default="../docs/ml_results")
     parser.add_argument("--figs", default="../docs/overleaf_ml_models/figures")
-    parser.add_argument("--only", nargs="*", default=["learning", "newmodule"])
+    parser.add_argument("--only", nargs="*", default=["learning", "newmodule", "conformal", "design"])
     parser.add_argument("--quick", action="store_true")
     args = parser.parse_args()
     out, figs = Path(args.out), Path(args.figs)
@@ -203,6 +268,10 @@ def main():
     if "learning" in args.only:
         exp_learning(out, figs, [15, 30] if q else [15, 30, 60, 120, 240, 480], 50 if q else 200,
                      [30] if q else [60, 240, 480])
+    if "conformal" in args.only:
+        exp_conformal(out, figs, [30] if q else [60, 240], 50 if q else 200)
+    if "design" in args.only:
+        exp_design(out, figs, 50 if q else 200)
 
 
 if __name__ == "__main__":

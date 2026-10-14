@@ -225,6 +225,22 @@ def allowed(thetas: np.ndarray) -> np.ndarray:
     return thetas[:, NAMES.index("VDRAIN")] - thetas[:, NAMES.index("VDD")] <= -2.5
 
 
+def oat_thetas(n_values: int = 20) -> np.ndarray:
+    """
+    The one-at-a-time design of scan_packets.py (``type = "oat"``): every parameter at n_values evenly
+    spaced values, the others at nominal.  Points that break the relations are dropped (as the real
+    limit checks refuse them).
+    """
+    out = []
+    for i in range(len(NAMES)):
+        for v in np.linspace(LOW[i], HIGH[i], n_values):
+            t = NOMINAL.copy()
+            t[i] = v
+            out.append(t)
+    out = np.array(out)
+    return out[allowed(out)]
+
+
 def sample_theta(rng: np.random.Generator, n: int, design: str = "random", respect_relations: bool = True) -> np.ndarray:
     """
     Operating points: 'random' (uniform in the ranges, as a random scan design; points that break

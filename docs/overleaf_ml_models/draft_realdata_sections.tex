@@ -1,0 +1,115 @@
+%======================================================================
+\section{Testing every model on real data}
+\label{sec:realtest}
+
+\begin{basic}
+The synthetic world only ranks methods. On the real CCD the models are tested in stages, each stage using data that the packets
+produce anyway, and each with a test that a model cannot pass by memorizing. Stage 0 needs no training at all: it checks whether the
+physics that model A relies on holds on our CCD.
+\end{basic}
+
+\paragraph{Stage 0 -- the first packets at nominal settings (no training).}
+\begin{itemize}
+\item \textbf{Label noise.} Repeat the nominal packet $\gtrsim$5 times: the scatter of WADERs' $\sigma_e$, $\lambda$ and gain between repeats is the
+  floor no model can beat (synthetic: 1.5\,\%, 3\,\%, 0.8\,\%). Compare with WADERs' own error bars (\code{sigma\_e\_err}, \code{lambda\_err}).
+\item \textbf{Does the trace physics hold?} With the gain from the image, the trace alone predicts
+  $\sigma_e^\text{trace} = \sqrt{a^2/N + b^2}/g$ ($a, b$ from the Allan deviation, or the features ``skip: CDS rms'' and
+  ``fit: correlated noise floor''). The ratio $\sigma_e^\text{image}/\sigma_e^\text{trace}$ and its scatter decide how much model A must
+  learn: a ratio near 1 with small scatter means A works almost without training (world v2); a ratio that depends on the settings
+  is what A's residual $r(x)$ learns (world v3).
+\item \textbf{Dark current vs CIC.} Fit $\lambda$ row by row (16 rows): the slope is the dark current accumulated while the rows wait, the
+  intercept the CIC. A clear slope means the per-row labels are worth adding to the dataset.
+\end{itemize}
+
+\paragraph{Stage 1 -- the first scan.} All models of both rounds, the same splits and scores:
+\begin{itemize}
+\item \textbf{splits:} (i) grouped by packet (5 folds); (ii) \emph{blocked in time}: train on the first 2/3 of the scan, test on the last
+  1/3 (does the model follow the drift?); (iii) \emph{leave one parameter out} for a one-at-a-time scan: train on 9 parameters' sweeps
+  and the references, test on the 10th (it measures what the model can \emph{not} know, and is the honest test for a design without joint
+  changes);
+\item \textbf{scores:} relative error against the labels, compared with the label noise of stage 0; coverage of the 68\,\% and 95\,\%
+  intervals before and after conformal calibration (H); for the surrogate, the rank correlation between the predicted and measured
+  objective and the regret of the best predicted point;
+\item \textbf{learning curves:} the same, on random subsets of 15, 30, 60, 120, 240 packets;
+\item \textbf{what the models use:} GP relevances, A's residual $r(x)$ (where the trace physics fails), and, for the CNN, which parts of the
+  curves matter (saliency).
+\end{itemize}
+
+\paragraph{Stage 2 -- a second module (when one is available).} Train on module 1 plus $k = 0, 1, 2, 5, 10, 20$ packets of module 2;
+test on its other packets (the \code{newmodule} experiment). This decides B against the first round and how many packets a new module needs.
+
+\paragraph{Stage 3 -- the optimizer.} First \emph{offline}: replay Bayesian optimization on the scan, choosing only among the measured
+packets (pool-based), for every surrogate; cheap and fair. Then one \emph{prospective} run with the best surrogate: it proposes, we take the
+packet, and the prediction made before the packet is compared with the result. Only this last test measures what we care about.
+
+\paragraph{Stage 4 -- the data-hungry models (C, D, E, F).} Once there are tens of thousands of traces: pre-train the encoder on all of them
+(D), put it under the GP (C), and compare with A+B at the same number of labeled packets. Set models (E) need the individual trace sets
+(see the data format below).
+
+%======================================================================
+\section{Do the packets need to change?}
+\label{sec:dataneeds}
+
+\begin{basic}
+Mostly no: the packet as designed (5 reference sets, 10 trace sets, one 16-row image) carries what every model needs. Four additions
+would make the models clearly better, and one choice in the scan design matters a lot. None of them makes a packet longer.
+\end{basic}
+
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.3cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{2.4cm}}
+\toprule
+Change & Why (which model) & Cost \\
+\midrule
+\textbf{Per-row $\lambda$ from WADERs} (and per-row $\sigma$) & splits dark current from CIC (A); 16 constraints per image instead of 1; was already an
+  open item (WADERs JSON with per-row dark current) & none (analysis only) \\
+\textbf{Keep the un-averaged skips of the image}, or of a few of its rows, if the DAQ can save them & the image's own $\sigma(N)$ curve: $\sigma_1$,
+  floor and the image-only noise measured on the image, not inferred (A; stage 0) & disk (tens of MB per channel for 16 rows; check that cdaq can save them) \\
+\textbf{A scan design with joint changes}: random/Sobol points inside the limits, or half one-at-a-time and half random & the
+  one-at-a-time design never changes two parameters together, so no model can learn interactions (the \code{design} experiment, below) & none
+  (same number of packets) \\
+\textbf{Trace-only packets} between the image packets, at extra settings & unlabeled traces for pre-training (D), the cheap fidelity of
+  multi-fidelity BO (F), and many more $\theta$ points for the trace physics $a(\theta), b(\theta)$ (A) & minutes each, no image \\
+\textbf{Record the conditions}: CCD and board temperatures, time since the last flush/erase, vacuum, the complete parameter set of every pin
+  (not only the scanned ones), software versions & the drifting state is today inferred from the reference traces; measured temperatures
+  make it direct (all models; B for modules) & none \\
+\textbf{Nominal image packets at intervals} (the scan already has \code{reference\_every = 5}) & labeled drift anchors: they measure the
+  state's effect on the labels directly & already planned \\
+\textbf{A few packets of every new module}, at nominal and around it & B needs $\gtrsim$2--5 imaged packets per new module before its gain
+  (and so $\sigma_e$) is known; traces alone cannot give the gain & 2--5 packets \\
+\bottomrule
+\end{tabularx}
+\caption{Changes to the data that the second-round models would use. None makes a packet longer.}
+\label{tab:dataneeds}
+\end{table}
+
+%======================================================================
+\section{A better data format}
+\label{sec:format}
+
+\begin{basic}
+Today the models read \code{dataset.csv}: one row per packet and amplifier, every feature already averaged over the repeats. That is
+the right table for the first-round models, but it throws away what the next ones need: the individual repeats, the curves, the label
+error bars, the row-by-row image information and the conditions. The proposal is to keep the raw files as they are and add a small set
+of linked tables, from which \code{dataset.csv} is just one view.
+\end{basic}
+
+\begin{advanced}
+\textbf{Keep} the raw data as the source of truth (FITS images, lossless \code{.npz} traces, \code{result.json}). \textbf{Add} a tidy,
+columnar store (Parquet tables plus one array store, HDF5 or Zarr), keyed by \code{packet\_id}, \code{board}, \code{channel}, \code{kind}
+(reference / $\theta$) and \code{set}:
+\begin{enumerate}
+\item \code{packets}: time stamps, module and CCD identifiers, configuration hashes, the complete parameter vector (every pin),
+  temperatures and other conditions, readout times, flags; also the trace-only packets;
+\item \code{trace\_sets}: one row per trace set (not combined): quality flags and all 85 features, so that set models (E) and robust
+  combinations can be learned, and the repeat scatter is a feature in its own right;
+\item \code{curves}: the 12 curves of every trace set, at their natural length (array store), for the CNN, pre-training (D) and deep kernels (C);
+\item \code{labels}: per packet and amplifier $\sigma_e$, $\lambda$, gain \emph{with their errors} (for heteroscedastic likelihoods: the GP
+  then uses WADERs' error instead of learning one noise level), fit flags, WADERs version;
+\item \code{image\_rows}: per row (and column) $\lambda$, $\sigma$, baseline: the information model A uses; and, if available, the image's own
+  $\sigma(N)$ curve;
+\item \code{schema}: version and the hash of the code that produced every table.
+\end{enumerate}
+\code{dataset.csv} becomes a derived view (combine the sets, join the labels), so the first-round code is unchanged. Trace-only packets
+are rows without labels; new modules are new identifiers. Loading one table into pandas or PyTorch is a single call.
+\end{advanced}
