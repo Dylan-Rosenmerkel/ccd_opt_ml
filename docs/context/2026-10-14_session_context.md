@@ -949,3 +949,48 @@ against the truth, world v2 unless noted):
 6. **ch2's gain** needs a charge or LED image (its electron peaks are not resolved).
 7. **Trace length:** a trace must span enough time to see the slow noise (0.8-s traces saw no floor).
    Consider occasional longer noise traces.
+
+### 5.4 The DGL decision and the voltage limits to confirm (as explained to the user at the end of the day)
+
+**DGL decision:**
+* The rules file's "DGL<=SWL" was called a typo; the user's correction "DGL<=OGL" is also broken by the
+  nominal .bcf (DG_L −5 > OG_L −6) and by the manual's example (−8 > −9).
+* The user then said to **disregard it**. There is **no** DG_L-vs-SW_L/OG_L rule, enforced or warned.
+* The DG_L rules that remain: DG_L < VR and VDRAIN < DG_L.
+
+**User edit:** the VSUB window is now **35–70 V** (was 40–60), committed as the user set it.
+`check_limits.py` is OK; the take_packet walkthrough's "bad VSUB" demo now uses 75 V (cells re-executed).
+
+**Placeholder windows the user must confirm** (`configs/limits.toml`; then `reviewed = true`):
+
+| Parameter | Window (V) | Max step (V) |
+|---|---|---|
+| VSUB | 35–70 (user) | 5 |
+| VDD1/2 | −21 to −17 | 1 |
+| VDRAIN1/2 | −25 to −21 | 1 |
+| VR1/2 | −4 to −2 | 0.5 |
+| V highs | 8.4–10.0 | 0.5 |
+| V lows | 6.4–9.4 | 0.5 |
+| H highs | 8.0–11.0 (hardware cap 10) | 0.5 |
+| H lows | 5.2–8.2 | 0.5 |
+| TG | 5.9–8.9 | 0.5 |
+| SW high | −1 to 3 | 0.5 |
+| SW low | −8 to −4 | 0.5 |
+| OG high | −2 to 2 | 0.5 |
+| OG low | −8 to −4 | 0.5 |
+| RG high | 7 to 10 | 0.5 |
+| RG low | 1 to 5 | 0.5 |
+| DG high | −2 to 2 | 0.5 |
+| DG low | −7 to −3 | 0.5 |
+
+**Interpretation choices to confirm:**
+* vertical rails capped at ±10 V (the manual) rather than ±20 (acmpy code);
+* stage i ↔ VRi/VDDi/VDRAINi;
+* "VCLs above TG" / "HCLs below TG" applied to every TG level (both sides, high and low);
+* "HGL3 > SWH" = both H3 lows above both SW highs;
+* HIGH ≥ LOW allows equality (TG H = L);
+* "VDD much lower than VR" enforced only as VDD < VR;
+* timing windows (10-ns cycles): delay_V? 1000–20000, delay_H? 200–6000, delayInt 50–20000,
+  RG/SW/OG/DG holds 1–10000.
+
+**Final state:** all work committed and pushed; nothing running.
