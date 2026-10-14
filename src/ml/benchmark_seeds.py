@@ -9,7 +9,8 @@ test scan, seed 99, and the toy CCDs stay the same) and reported as mean +- stan
     python -m ml.benchmark_seeds --out ../docs/ml_results            # all (~1 h)
     python -m ml.benchmark_seeds --only design --seeds 1 2
 
-Experiments: learning (worlds v2 and v3), design, newmodule, pretrain (C, D), sets (E).
+Experiments: learning (worlds v2 and v3), design, newmodule, pretrain (C, D), sets (E), lambda (world v3:
+lambda direct, as two separate parts, or as the joint dark + CIC fit of the per-row line fits).
 Output: seeds_<experiment>.json with every run, and seeds_summary.json / the printed table with mean, sd.
 """
 
@@ -146,6 +147,20 @@ def exp_sets(out, seeds, sizes, n_test):
     return results
 
 
+def exp_lambda(out, seeds, sizes, n_test):
+    kw = {"image_only_noise": True, "per_row_lambda": True}
+    test = synthetic.make_dataset(n_test, seed=99, **kw)
+    results = {}
+    for seed in seeds:
+        for n in sizes:
+            train = synthetic.make_dataset(n, seed=seed, **kw)
+            for lm in ("direct", "split", "joint"):
+                r = run_structured(lambda: st.PhysicsStructured("hier", lambda_model=lm), train, test)[0]
+                _record(results, f"n={n}", f"A+B, lambda {lm}", r, "lambda")
+        (out / "seeds_lambda.json").write_text(json.dumps(results, indent=1))
+    return results
+
+
 def summarize(results: dict) -> dict:
     """mean and sd over the training scans of the error against the truth (%), per target, and of the sigma_e coverage."""
     out = {}
@@ -166,16 +181,18 @@ def main():
     parser.add_argument("--only", nargs="*", default=["design", "newmodule", "sets", "learning", "pretrain"])
     parser.add_argument("--seeds", nargs="*", type=int, default=[1, 2, 3, 4, 5])
     parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--summary", default="seeds_summary.json", help="summary file (use another one when two runs overlap)")
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     q, seeds = args.quick, args.seeds
-    summary_path = out / "seeds_summary.json"
+    summary_path = out / args.summary
     summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
     runs = {"design": lambda: exp_design(out, seeds, 50 if q else 200),
             "newmodule": lambda: exp_newmodule(out, seeds, 60 if q else 240, [0, 2] if q else [0, 1, 2, 5]),
             "sets": lambda: exp_sets(out, seeds, [30] if q else [30, 60, 120], 50 if q else 200),
             "learning": lambda: exp_learning(out, seeds, [15, 60] if q else [15, 60, 240], 50 if q else 200),
+            "lambda": lambda: exp_lambda(out, seeds, [30] if q else [30, 60, 120, 240], 50 if q else 200),
             "pretrain": lambda: exp_pretrain(out, seeds, [60] if q else [60, 240], 300 if q else 3000, 50 if q else 200, 3 if q else 40)}
     for name in args.only:
         summary[name] = summarize(runs[name]())

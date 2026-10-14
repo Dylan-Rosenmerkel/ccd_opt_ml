@@ -154,12 +154,15 @@ class StructuredPrep:
         name = REAL_ALLAN if REAL_ALLAN in curves else "noise: Allan deviation"
         a, b = allan_fit(curves[name], self.allan_ns, max_n=self.allan_max_n if name != REAL_ALLAN else None)
         keys = amplifier_key(df)
+        extra = {}
+        if "label.lambda_dark" in df:          # the per-row line fit of the image (used only for training JointLambdaGP)
+            extra["lambda_parts"] = df[["label.lambda_dark", "label.lambda_cic"]].to_numpy(float)
         amp = self.ids(self.amp_ids, keys)
         onehot = np.zeros((len(df), len(self.amp_ids)))
         seen = amp < len(self.amp_ids)
         onehot[np.flatnonzero(seen), amp[seen]] = 1.0
         return {"x": x, "a": a, "b": b, "amp": amp, "onehot": onehot,
-                "module": self.ids(self.module_ids, df["board"].to_numpy())}
+                "module": self.ids(self.module_ids, df["board"].to_numpy()), **extra}
 
 
 def component_targets(df: pd.DataFrame, floor_fraction: float = 0.05) -> np.ndarray | None:
@@ -169,6 +172,22 @@ def component_targets(df: pd.DataFrame, floor_fraction: float = 0.05) -> np.ndar
     lam = df["label.lambda_e_per_bin"].to_numpy(float)
     parts = [np.maximum(df[c].to_numpy(float), floor_fraction * lam) for c in ("label.lambda_dark", "label.lambda_cic")]
     return np.log(np.column_stack(parts))
+
+
+def line_fit_covariance(dark: np.ndarray, cic: np.ndarray, rel_sd: float = 0.12, n_rows: int = 16) -> np.ndarray:
+    """
+    Covariance (n, 2, 2) of the (dark, CIC) estimates of each image: the ordinary least-squares line
+    lambda_r = CIC + DC (r + 1/2) / (n_rows / 2) through n_rows rows, each with relative scatter ``rel_sd``
+    (synthetic.lambda_per_row; on real data use the per-row errors WADERs reports).  The slope and the
+    intercept are strongly ANTI-correlated: their sum (the image's mean lambda) is known far better than
+    either.  Order: (dark, cic).
+    """
+    xr = (np.arange(n_rows) + 0.5) / (n_rows / 2)
+    A = np.column_stack([xr, np.ones(n_rows)])                    # columns: slope (dark), intercept (cic)
+    P = np.linalg.solve(A.T @ A, A.T)                             # (2, n_rows): the OLS estimator
+    fitted = np.maximum(np.asarray(cic)[:, None] + np.asarray(dark)[:, None] * xr[None, :], 1e-6)
+    var_rows = (rel_sd * fitted) ** 2                             # (n, n_rows)
+    return np.einsum("ir,nr,jr->nij", P, var_rows, P)
 
 
 # --------------------------------------------------------------------------- #
@@ -305,6 +324,151 @@ class HierGP:
         return {k: float(v.exp()) for k, v in q.items() if k not in ("ls", "mu")}
 
 
+class JointLambdaGP:
+    """
+    lambda = dark current + CIC, learned JOINTLY from the per-row line fits of the images.
+
+    Two outputs, f_DC(x) and f_CIC(x), each a GP with the hierarchical kernel of ``HierGP`` (own
+    hyperparameters, own constant mean), in LINEAR scale.  The observations of one image are the line-fit
+    estimates (DC_hat, CIC_hat) with their KNOWN 2x2 covariance (``line_fit_covariance``), plus a small
+    learned nugget per output for model error:
+
+        [DC_hat; CIC_hat] ~ N([f_DC(x); f_CIC(x)],  blockdiag(K_DC, K_CIC) + Sigma_noise)
+
+    Sigma_noise has the off-diagonal (anti-)correlation, so the posterior of f_DC + f_CIC is as precise as the
+    mean of the rows, while the two parts still get their own dependence on the settings.
+
+    ``space="log"`` (default) models log DC and log CIC instead: products of factors (dark current ~
+    exp(state) x f(VSUB)) become sums, which a GP learns far more easily.  The observations are then
+    log(DC_hat), log(CIC_hat) with the covariance transformed to first order (J Sigma J, J = diag(1/DC_hat,
+    1/CIC_hat); fits below 5 % of lambda are clipped).  On world v3 the linear version was worse than a GP on
+    log lambda (6.2 % vs 3.9 % at 120 packets) although it found the right inputs for each part.  Separately fitted
+    parts (``use_components`` in PhysicsStructured) throw that correlation away and were worse than fitting
+    lambda directly.  Prediction: log lambda = log(m_DC + m_CIC), variance var_DC + var_CIC + 2 cov.
+    """
+    name = "joint dark + CIC GP"
+
+    def __init__(self, levels=("module", "amp"), max_points: int = 600, iters: int = 120, rel_sd: float = 0.12,
+                 n_rows: int = 16, seed: int = 0, include_noise: bool = True, space: str = "log"):
+        self.levels, self.max_points, self.iters, self.rel_sd, self.n_rows = tuple(levels), max_points, iters, rel_sd, n_rows
+        self.space = space
+        self.seed, self.include_noise = seed, include_noise
+        self.kernel = HierGP(levels=self.levels)
+
+    def fit(self, X, parts):
+        torch = _torch()
+        parts = np.asarray(parts, float)
+        idx = self.kernel._subset(len(parts), np.asarray(X.get("amp", np.zeros(len(parts)))))
+        self.sx = _Scaler().fit(X["x"][idx])
+        self.xt = torch.tensor(self.sx(X["x"][idx]), dtype=torch.float64)
+        self.idt = self.kernel._ids(X, idx)
+        cov = line_fit_covariance(parts[idx, 0], parts[idx, 1], self.rel_sd, self.n_rows)
+        if self.space == "log":
+            pos = np.maximum(parts[idx], 0.05 * parts[idx].sum(1, keepdims=True))
+            y = np.log(pos)
+            cov = cov / (pos[:, :, None] * pos[:, None, :])               # J Sigma J with J = diag(1/value)
+            self.scale = 1.0
+        else:
+            self.scale = float(parts[idx].sum(1).mean())
+            y = parts[idx] / self.scale                                   # (n, 2)
+            cov = cov / self.scale ** 2
+        n, d = self.xt.shape
+        yt = torch.tensor(np.concatenate([y[:, 0], y[:, 1]]), dtype=torch.float64)
+        N = torch.zeros(2 * n, 2 * n, dtype=torch.float64)
+        ar = torch.arange(n)
+        N[ar, ar] = torch.tensor(cov[:, 0, 0])
+        N[n + ar, n + ar] = torch.tensor(cov[:, 1, 1])
+        N[ar, n + ar] = torch.tensor(cov[:, 0, 1])
+        N[n + ar, ar] = torch.tensor(cov[:, 0, 1])
+        self.n = n
+
+        def params(mean):
+            unit = 1.0 if self.space == "log" else mean                  # amplitudes relative to the output's size
+            p = {"ls": torch.full((d,), np.log(np.sqrt(d)), dtype=torch.float64), "s": torch.tensor(np.log(0.3 * unit), dtype=torch.float64),
+                 "nug": torch.tensor(np.log(0.02 * unit), dtype=torch.float64), "mu": torch.tensor(mean, dtype=torch.float64)}
+            for lvl in self.levels:
+                p[f"c_{lvl}"] = torch.tensor(np.log(0.1 * unit), dtype=torch.float64)
+                p[f"s_{lvl}"] = torch.tensor(np.log(0.05 * unit), dtype=torch.float64)
+            for v in p.values():
+                v.requires_grad_(True)
+            return p
+        self.p = [params(float(y[:, 0].mean())), params(float(y[:, 1].mean()))]
+        opt = torch.optim.LBFGS([v for p in self.p for v in p.values()], lr=0.5, max_iter=self.iters, line_search_fn="strong_wolfe")
+        eye = torch.eye(2 * n, dtype=torch.float64)
+
+        def clamp(p):
+            return {k: (v.clamp(-12, 4) if k not in ("mu", "ls") else v) for k, v in p.items()} | {"ls": p["ls"].clamp(-7, 4)}
+
+        def build(ps):
+            K = torch.zeros(2 * n, 2 * n, dtype=torch.float64)
+            K[:n, :n] = self.kernel._K(torch, ps[0], self.xt, self.xt, self.idt, self.idt) + ps[0]["nug"].exp() ** 2 * torch.eye(n, dtype=torch.float64)
+            K[n:, n:] = self.kernel._K(torch, ps[1], self.xt, self.xt, self.idt, self.idt) + ps[1]["nug"].exp() ** 2 * torch.eye(n, dtype=torch.float64)
+            return K + N + 1e-8 * eye
+
+        def mean_vec(ps):
+            return torch.cat([ps[0]["mu"].expand(n), ps[1]["mu"].expand(n)])
+
+        def nll():
+            opt.zero_grad()
+            ps = [clamp(p) for p in self.p]
+            L = torch.linalg.cholesky(build(ps))
+            r = (yt - mean_vec(ps))[:, None]
+            loss = 0.5 * (r * torch.cholesky_solve(r, L)).sum() + torch.log(torch.diagonal(L)).sum()
+            loss = loss + sum(0.5 * ((ps_["ls"] - np.log(np.sqrt(d))) ** 2).sum() / 9 for ps_ in ps)
+            loss.backward()
+            return loss
+
+        try:
+            opt.step(nll)
+        except RuntimeError:
+            pass
+        with torch.no_grad():
+            self.q = [{k: v.detach() for k, v in clamp(p).items()} for p in self.p]
+            self.L = torch.linalg.cholesky(build(self.q))
+            self.alpha = torch.cholesky_solve((yt - mean_vec(self.q))[:, None], self.L)
+        return self
+
+    def predict_parts(self, X):
+        """Posterior means (n, 2) of (DC, CIC) -- in e-/pixel, or their logs if space == "log" -- and covariance (n, 2, 2)."""
+        torch = _torch()
+        n = self.n
+        with torch.no_grad():
+            xs = torch.tensor(self.sx(X["x"]), dtype=torch.float64)
+            ids = self.kernel._ids(X)
+            Kd = self.kernel._K(torch, self.q[0], xs, self.xt, ids, self.idt)
+            Kc = self.kernel._K(torch, self.q[1], xs, self.xt, ids, self.idt)
+            zeros = torch.zeros_like(Kd)
+            Kstar_d, Kstar_c = torch.cat([Kd, zeros], 1), torch.cat([zeros, Kc], 1)
+            md = self.q[0]["mu"] + (Kstar_d @ self.alpha)[:, 0]
+            mc = self.q[1]["mu"] + (Kstar_c @ self.alpha)[:, 0]
+            vd = torch.linalg.solve_triangular(self.L, Kstar_d.T, upper=False)
+            vc = torch.linalg.solve_triangular(self.L, Kstar_c.T, upper=False)
+            var_d = self.kernel._prior_var(self.q[0]) - (vd * vd).sum(0)
+            var_c = self.kernel._prior_var(self.q[1]) - (vc * vc).sum(0)
+            cov_dc = -(vd * vc).sum(0)
+        s2 = self.scale ** 2
+        means = np.column_stack([md.numpy(), mc.numpy()]) * self.scale
+        cov = np.zeros((len(means), 2, 2))
+        cov[:, 0, 0], cov[:, 1, 1] = var_d.clamp_min(1e-12).numpy() * s2, var_c.clamp_min(1e-12).numpy() * s2
+        cov[:, 0, 1] = cov[:, 1, 0] = cov_dc.numpy() * s2
+        return means, cov
+
+    def predict(self, X):
+        """mean, std of log lambda (n, 1); with include_noise, the scatter of an image's mean lambda is added."""
+        m, cov = self.predict_parts(X)
+        if self.space == "log":
+            parts = np.exp(m)                                              # median of each part
+            lam = parts.sum(1)
+            J = parts                                                      # d lambda / d log part
+            var = J[:, 0] ** 2 * cov[:, 0, 0] + J[:, 1] ** 2 * cov[:, 1, 1] + 2 * J[:, 0] * J[:, 1] * cov[:, 0, 1]
+        else:
+            lam = np.maximum(m.sum(1), 1e-6)
+            var = cov[:, 0, 0] + cov[:, 1, 1] + 2 * cov[:, 0, 1]
+        if self.include_noise:
+            var = var + (self.rel_sd * lam) ** 2 / self.n_rows
+        return np.log(lam)[:, None], (np.sqrt(np.maximum(var, 1e-18)) / lam)[:, None]
+
+
 def _plain_gp(**kw):
     """The non-hierarchical variant: an ARD GP on x + amplifier one-hot (as the first round)."""
     class Plain(HierGP):
@@ -351,8 +515,12 @@ class PhysicsStructured:
     predict(X) -> mean, std of the same three logs.
     """
 
-    def __init__(self, kind: str = "hier", n_skips: int = 500, use_components: bool = True, use_floor: bool = True, **kw):
+    def __init__(self, kind: str = "hier", n_skips: int = 500, use_components: bool = True, use_floor: bool = True,
+                 lambda_model: str | None = None, **kw):
+        """lambda_model: "direct" (a GP on log lambda), "split" (two separate GPs on log DC, log CIC) or "joint"
+        (JointLambdaGP on the per-row line fits); default: "split" if use_components else "direct"."""
         self.kind, self.n_skips, self.use_components, self.use_floor, self.kw = kind, n_skips, use_components, use_floor, kw
+        self.lambda_model = lambda_model or ("split" if use_components else "direct")
         self.name = ("A+B" if kind == "hier" else "A") + ": physics-structured"
 
     def physics_log_sigma_adu(self, X) -> np.ndarray:
@@ -366,8 +534,12 @@ class PhysicsStructured:
         # what the image sees that the trace physics does not (0 if the physics were complete)
         resid = log_s - (self.physics_log_sigma_adu(X) - log_g)
         self.resid = make_gp(self.kind, **self.kw).fit(X, resid)
-        self.split = self.use_components and components is not None
-        if self.split:
+        self.joint = self.lambda_model == "joint" and "lambda_parts" in X
+        self.split = self.lambda_model == "split" and components is not None
+        if self.joint:
+            self.lam = JointLambdaGP(levels=("module", "amp") if self.kind == "hier" else ()).fit(
+                X if self.kind == "hier" else {"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"]}, X["lambda_parts"])
+        elif self.split:
             self.dark = make_gp(self.kind, **self.kw).fit(X, components[:, 0])
             self.cic = make_gp(self.kind, **self.kw).fit(X, components[:, 1])
         else:
@@ -379,7 +551,10 @@ class PhysicsStructured:
         mr, sr = self.resid.predict(X)
         m_s = self.physics_log_sigma_adu(X) - mg[:, 0] + mr[:, 0]
         s_s = np.sqrt(sg[:, 0] ** 2 + sr[:, 0] ** 2)
-        if self.split:
+        if self.joint:
+            ml, sl = self.lam.predict(X if self.kind == "hier" else {"x": np.hstack([X["x"], X["onehot"]])})
+            m_l, s_l = ml[:, 0], sl[:, 0]
+        elif self.split:
             (md, sd), (mc, sc) = self.dark.predict(X), self.cic.predict(X)
             d, c = np.exp(md[:, 0]), np.exp(mc[:, 0])
             m_l = np.log(d + c)
