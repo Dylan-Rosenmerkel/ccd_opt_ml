@@ -473,3 +473,13 @@ Nothing. The full benchmark (PID 61289) finished; no background jobs or watchers
   trace-only screening, ParEGO multi-objective;
 * G: HierGP across several training modules (empirical-Bayes meta-learning) in the benchmark;
 * `src/ml/benchmark_advanced.py` with the experiments; tex sections; maybe a third notebook.
+* **Progress (C/D/E):**
+  * `synthetic.py`: world v4 flags `within_packet_pickup`, `damaged_fraction`; v2 still identical. In v4
+    with the true gain, averaging the Allan curves of the sets gives σe with a 35 % bias (damaged sets),
+    the median 10 % error (it destroys the duty cycle);
+  * `src/ml/deep.py`: `Pretrainer` (D: masked reconstruction + θ prediction + contrastive),
+    `PretrainedHead` (frozen), `PretrainedCNN` (fine-tune), `DeepKernelGP` (C).
+  * First tests at 60 labeled packets: no σe gain over the CNN from scratch (~14 %). The DKL
+    fine-tuned on 60 packets over-fits (coverage 0.2–0.3).
+  * Probe: the pre-trained embedding knows the state (R² 0.96) but not the floor (R² 0.14), because masking
+    16-point blocks is too easy. Added whole-curve masking (p = 0.5) and 32-point blocks; testing.

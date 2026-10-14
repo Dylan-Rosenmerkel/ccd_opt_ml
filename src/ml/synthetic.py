@@ -277,7 +277,8 @@ def lambda_per_row(dark: float, cic: float, rng: np.random.Generator) -> tuple[f
 
 def make_dataset(n_packets: int, seed: int = 0, n_boards: int = 1, n_sets: int = 10, n_ref_sets: int = 5,
                  thetas: np.ndarray | None = None, drift: float = 0.95, label_noise: bool = True,
-                 world_seed: int = 1234, image_only_noise: bool = False, per_row_lambda: bool = False):
+                 world_seed: int = 1234, image_only_noise: bool = False, per_row_lambda: bool = False,
+                 within_packet_pickup: bool = False, damaged_fraction: float = 0.0):
     """
     Simulate a scan: n_packets packets, each with traces at the reference and at theta and an image.
 
@@ -293,6 +294,13 @@ def make_dataset(n_packets: int, seed: int = 0, n_boards: int = 1, n_sets: int =
     image_only_noise: add the image-only noise term of ``physics`` (world v3).
     per_row_lambda: measure lambda row by row (``lambda_per_row``) and add the labels
     label.lambda_dark and label.lambda_cic (world v3).  The defaults give world v2 exactly.
+    within_packet_pickup, damaged_fraction (world v4, for set models): when the outside source is
+    active in a packet it is on only a fraction d ~ U(0.2, 1) of the time; each trace set (0.2 s)
+    sees it fully or not at all (probability d, the same sets for every amplifier), while the
+    4.8-min image sees its time average (floor^2 * d).  A fraction ``damaged_fraction`` of the trace
+    sets is damaged (a glitch that inflates the long-average scatter).  The Allan deviation of every
+    trace set is returned as curves["sets: noise: Allan deviation"] (n_rows, n_sets, 13), and the
+    usual curve is their mean.
     """
     world = np.random.default_rng(world_seed)
     amps = make_amplifiers(world, n_boards)
@@ -302,6 +310,12 @@ def make_dataset(n_packets: int, seed: int = 0, n_boards: int = 1, n_sets: int =
     for p, theta in enumerate(thetas):
         state = drift * state + np.sqrt(1 - drift ** 2) * rng.normal()   # slow drift between packets
         pickup = float(rng.random() < 0.4)                                # the outside source, on or off
+        per_set = within_packet_pickup or damaged_fraction > 0
+        if per_set:
+            duty = rng.uniform(0.2, 1.0) * pickup if within_packet_pickup else pickup
+            on_sets = (rng.random(n_sets) < duty).astype(float) if within_packet_pickup else np.full(n_sets, pickup)
+            damaged = rng.random(n_sets) < damaged_fraction
+            pickup = float(np.sqrt(duty)) if within_packet_pickup else pickup   # the image sees the time average
         for a, amp in enumerate(amps):
             phys = physics(theta, amp, state, pickup, image_only_noise)
             ref_phys = physics(NOMINAL, amp, state, pickup)
@@ -326,7 +340,19 @@ def make_dataset(n_packets: int, seed: int = 0, n_boards: int = 1, n_sets: int =
             if per_row_lambda:
                 row.update({"label.lambda_dark": dark_fit, "label.lambda_cic": cic_fit})
             rows.append(row)
-            for name, c in curves(theta, amp, state, phys, rng, n_sets).items():
+            theta_curves = curves(theta, amp, state, phys, rng, n_sets)
+            if per_set:
+                on_floor = physics(theta, amp, state, 1.0, image_only_noise)["floor"] * phys["gain"]
+                s1 = phys["sigma1"] * phys["gain"]
+                sets = np.sqrt(s1 ** 2 / ALLAN_N + on_sets[:, None] * on_floor ** 2)
+                sets = sets * (1 + 0.03 * rng.normal(size=sets.shape))
+                glitch = 1 + rng.uniform(1, 3, (n_sets, 1)) * np.sqrt(ALLAN_N / ALLAN_N[-1])
+                sets = np.where(damaged[:, None], sets * glitch, sets)
+                theta_curves["noise: Allan deviation"] = sets.mean(0)
+                curve_rows.setdefault("sets: noise: Allan deviation", []).append(sets)
+                row["truth.duty"] = duty
+                row["truth.n_damaged"] = int(damaged.sum())
+            for name, c in theta_curves.items():
                 curve_rows[name].append(c)
             for name, c in curves(NOMINAL, amp, state, ref_phys, rng, n_ref_sets).items():
                 curve_rows.setdefault("ref: " + name, []).append(c)     # the reference traces' curves
