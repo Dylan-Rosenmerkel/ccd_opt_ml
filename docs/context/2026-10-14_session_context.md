@@ -867,3 +867,85 @@ against the truth, world v2 unless noted):
   * which CCD (ch0..3 = CCD_D, C, A, B) uses which clock side (A/B, U/L) and readout stage (1/2): asked, for
     amplifier-specific θ in the models;
   * trace_geometry already takes every CDS/transfer delay from the .meta, so timing scans are handled.
+* **User decision:** "disregard that DGL message". The rules file's line "DGL<=SWL" (and the correction
+  "DGL<=OGL") is dropped entirely: neither enforced nor warned (`relational_warnings` returns []).
+* **Documents and notebooks updated for the encoded rules:**
+  * ml_models.tex: new section "Safe operating region: what the optimizer may propose" (sec:safety) with
+    the rules, hardware ranges, windows, and the TG squeeze (the TG can only go down, by ≤ ~0.7 V);
+    references from the BO section and the Plan; 37 pages, 0 overfull, 0 undefined; zip rebuilt;
+  * `docs/ml_training_plan.tex`: the "empty placeholder" statements are updated. It still needs
+    ../plots/ml_example.png to compile (pre-existing; plots/ is not in the repo);
+  * README: new files and checks, a "Before using the real DAQ" update;
+  * `docs/context/data_taking_scripts_handoff.md`: the relations item marked done;
+  * take_packet_walkthrough: section 4 text updated; cells before the fake run re-executed (the bad-set demo
+    now also shows "DG_1_L=-2.5 must be below VR1=-3.0");
+  * ml_models_walkthrough and ml_remaining_models: markdown updated (the synthetic relation is a stand-in;
+    the known limits are in ccd_limits.py); `synthetic.allowed` docstring updated.
+
+## 5. End-of-day summary (2026-10-14) — supersedes sections 2f, 3 and 4
+
+**Nothing is running.** Everything is committed and pushed.
+
+### 5.1 Data taking and safety
+* **`daq_scripts/manual_packet.sh`** (one packet by hand):
+  * nominal bcf → standalone → flushes → 5 reference trace sets → changes → 10 trace sets → master → image
+    → nominal;
+  * matched 2×5×500 traces; FLUSH_BETWEEN="set";
+  * checks: names, numbers, HIGH ≥ LOW, **all of the group's voltage rules**, and the manual's hardware ranges.
+* **`src/ccd_limits.py` + `configs/limits.toml`:**
+  * the rules are checked on the complete configuration (`[nominal]` = module_PA03.bcf);
+  * manual hardware ranges; timing windows wide; readout-stage windows ±2 V placeholders;
+  * **voltage windows still placeholders, reviewed = false**; `src/check_limits.py` all OK.
+* **`src/scan_packets.py`:**
+  * new `mixed` design (one-at-a-time + Latin hypercube) and `random` with `sampling="lhs"`;
+  * refused random points are redrawn; group design names expand onto the reference pins;
+  * `configs/scan_mixed_example.toml`: 154 packets, ~48.7 h, valid; the ranges are placeholders.
+* **`src/trace_features.py`:**
+  * 14 curves (85 features unchanged); new: "noise: Allan deviation, common pattern removed" (overlapping;
+    keeps the slow pixel-to-pixel noise) and "noise: CDS spectrum, log frequency";
+  * the detrended Allan curve's n > N/5 points are biased (documented).
+
+### 5.2 ML models (all in `src/ml/`; doc `docs/overleaf_ml_models/ml_models.tex`)
+
+| Model | Code | Status / key result (synthetic) |
+|---|---|---|
+| Bayesian ridge, boosted trees, GP, NN ensemble, CNN on curves (first round) | models.py, benchmark.py | σe 10–17 % (features miss the floor); CNN 1.2–1.7 % at ≥ 480 |
+| **A physics-structured** (+ **B hierarchical GP**) | structured.py | σe 2–3.5 % from 15 packets (5 scans: v2 2.3 ± 0.2 → 1.9 %) |
+| **Default model** | `PhysicsStructured()` + `StructuredPrep()` | A without amplifier ID, own trace/ref features; = ID version (1.8 vs 1.7 %) |
+| Joint dark + CIC λ | `JointLambdaGP`, `lambda_model="joint"` | ≈ direct λ (1.6 vs 1.8 % at 240); better than separate fits |
+| H conformal | calibrate.py | fixes the trees' coverage (0.22–0.60 → 0.63–0.77) |
+| F decomposed BO / trust region / learned constraint / multi-fidelity / ParEGO | benchmark_structured.py, bo_advanced.py | decomposed: optimum in ~30 packets; trust region best (−2.836); the others no gain here |
+| D pre-training, C deep kernel | deep.py | D helps at 30–120 packets; C frozen best for λ and gain |
+| E set models | setmodels.py | better and steadier than fixed rules from 60 packets (5 scans) |
+| G several modules | benchmark_advanced.py | no gain in the toy world |
+
+* **Representation:** log-frequency spectra: CNN 10.7 → 1.8 % at 240 packets (`data.curve_tensor(log_frequency_spectra=True)`).
+* **Robustness** (`benchmark_seeds.py`, 5 scans): every conclusion holds except E (improved) and the
+  new-module λ at k = 0 (19 ± 15 %).
+* **Amplifier labels** (`benchmark_amp.py` + `real_amplifier_check.py`):
+  * not needed;
+  * module 101 gains (ch0, ch1, ch3) differ by 2 %; ch2's gain is not measurable from the 1×1 image;
+  * the setting responses are shared by 86–99 % in sign.
+* **Real data:**
+  * there is no skip-matched trace/image pair yet; the 3000-skip comparison is an extrapolation check only;
+  * the first 1×1 500-skip packets are the real test (`src/stage0_trace_vs_image.py`).
+* **Benchmark outputs:** `docs/ml_results/*.json`. Figures: `docs/overleaf_ml_models/figures/ml_*`.
+* **Notebooks** (all executed):
+  * `ml_models_walkthrough.ipynb` (first round);
+  * `ml_structured_models.ipynb` (A, B, H, F);
+  * `ml_remaining_models.ipynb` (C–G, joint λ, amplifier labels, real data, robustness; generator
+    `notebooks/make_remaining_models_notebook.py`).
+
+### 5.3 Open
+1. The group's **voltage limits** → `limits.toml` windows, then `reviewed = true`.
+2. **First real packets** (1×1, 500 skips, matched traces):
+   * stage 0: trace vs image noise per amplifier, label noise, per-row λ;
+   * then the mixed scan.
+3. **Mapping** of ch0..3 (CCD_D, C, A, B) to the clock sides (A/B, U/L) and readout stages (1/2): asked; it
+   would let the models use the voltages that drive each amplifier.
+4. **Delay units:** the manual says µs, the sequencer and our code use 10-ns cycles (kept).
+5. **WADERs:** per-row λ (and σ), label errors into labels.json; the un-averaged image skips if cdaq can
+   save them.
+6. **ch2's gain** needs a charge or LED image (its electron peaks are not resolved).
+7. **Trace length:** a trace must span enough time to see the slow noise (0.8-s traces saw no floor).
+   Consider occasional longer noise traces.

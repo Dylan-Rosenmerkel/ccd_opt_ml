@@ -25,7 +25,7 @@ script, including WADERs, ran for real on those copies.
 | `src/fake_cdaq_monitor.py` | Terminal display of a fake rehearsal in the layout of the real tmux session (queues, logs, clients, published commands); `--tmux`, `--once` |
 | `src/scan_packets.py` | Scan plan (per-board reference + design, reference repeated), `--dry-run` plans every packet, resumable, stops at the first failure |
 | `src/fake_daq.py` | Strict fake boards (misuse that would hang raises); start on the internal clock; traces cycle through the real repeats |
-| `src/ccd_limits.py` | Limits, hardware ranges, relationships (placeholder), ramps (unchanged) |
+| `src/ccd_limits.py` | Limits, hardware ranges, relationships, ramps (relationships from `docs/voltage_rules.txt` and the ACM manual's ranges encoded on 2026-10-14; `src/check_limits.py` tests them) |
 | `src/process_packet.py` | Manifest → decoded traces (.npz) + features (repeats combined) → decompressed FITS → WADERs → labels → dataset.csv/jsonl |
 | `src/trace_regions.py` | Changed 2026-10-09: no crash when the vertical transfers cannot be found (module 102, `Vtransfer21`); `v = None` |
 | `configs/daq_setup.toml` | Queue, pool, boards, leader, θ boards, trace boards, work dir, timeouts, **the acmpy command texts** |
@@ -125,8 +125,9 @@ by the clients (receipts) and by the cdaq main process (`queue_backups/`, writte
 
 * Trace parameters: they follow take_trace.py (20×20 binning, NDCM 500), not the image's 1×10
   binning.
-* Bias/clock relationships in `ccd_limits.relational_constraints`; review `limits.toml` and set
-  `reviewed = true`.
+* ~~Bias/clock relationships in `ccd_limits.relational_constraints`~~ (done 2026-10-14, from
+  `docs/voltage_rules.txt`); replace the placeholder voltage windows of `limits.toml` by the group's limits
+  and set `reviewed = true`.
 * The WADERs JSON for the 100×130 scan images (an overscan region must exist); `img_9.json` is for
   1000-column images.
 * Gain: a charge image per voltage set, or a fixed gain.
