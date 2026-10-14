@@ -34,7 +34,7 @@ suggest better settings.
 | `trace_regions.py` | Cut a trace into skip cycles, horizontal and vertical transfers; works for any geometry and timing |
 | `trace_geometry.py` | Expected trace layout and durations from the `.meta` (cross-check and fallback) |
 | `compare_trace.py` | 39 comparison tools and a permutation test: can two traces be told apart? |
-| `trace_features.py` | `trace_features(trace)`: 85 features and 12 curves per trace, documented in a registry |
+| `trace_features.py` | `trace_features(trace)`: 85 features and 14 curves per trace, documented in a registry |
 | `take_packet.py` | Take one packet through the cdaq queue: flushes, reference traces, traces, synchronized image, manifest |
 | `daq_commands.py`, `daq_control.py` | The exact text sent to each board; the cdaq/fake controllers and step receipts |
 | `scan_packets.py` | Run a series of packets (scan design, dry run, resume) |

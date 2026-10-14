@@ -144,8 +144,10 @@ FEATURES: dict[str, Feature] = {
     "noise: baseline coupling (1e-3)": _f("noise", "×10⁻³", "Slope of the CDS against the skip's baseline level over skips 10-499 of a pixel (the baseline droops by thousands of ADU).", "common-mode rejection of the output stage; VDD, VDRAIN, VR"),
     "noise: noise trend along skips (ADU/100 skips)": _f("noise", "ADU/100 skips", "Slope of the standard deviation of 50-skip blocks of the detrended CDS along the pixel.", "noise depending on the amplifier operating point"),
     "noise: CDS autocorrelation": _f("noise", "", "Autocorrelation of the detrended CDS, lags 1-50.", "", "curve"),
-    "noise: Allan deviation": _f("noise", "ADU", "Allan deviation of the detrended CDS for n = 1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100, 160.", "", "curve"),
+    "noise: Allan deviation": _f("noise", "ADU", "Allan deviation of the detrended CDS for n = 1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100, 160. Points with n > N/5 are biased low: the degree-4 detrending absorbs most of the difference between so few block means (n = 160 of 490 skips: about 0.4 of the white-noise value).", "", "curve"),
     "noise: CDS spectrum": _f("noise", "ADU²/Hz", "Spectral density of the detrended CDS sequence, 0-15 kHz.", "", "curve"),
+    "noise: Allan deviation, common pattern removed": _f("noise", "ADU", "Overlapping Allan deviation (all windows of n skips; n as above) of each pixel's CDS minus the mean CDS of all usable pixels at the same skip, times sqrt(P/(P-1)) for P pixels. The pattern along the skips that every pixel shares is not noise for an image (it shifts every pixel alike), but no polynomial is removed: slow noise that differs from pixel to pixel (a noise floor) stays in, as it does in an image.", "", "curve"),
+    "noise: CDS spectrum, log frequency": _f("noise", "ADU²/Hz", "Spectral density of the same series (common pattern removed, not detrended), averaged in 40 logarithmically spaced frequency bins from the lowest non-zero frequency to the Nyquist frequency (empty bins interpolated). The low frequencies, where a noise floor shows, get as many points as every other decade.", "", "curve"),
     "noise: within-cycle spectrum": _f("noise", "arb.", "Power spectrum of the within-cycle noise (see the band fractions), 0-7.5 MHz.", "", "curve"),
     "noise: noise vs window length": _f("noise", "ADU", "Detrended CDS noise for window lengths of 1/15, 2/15, 3/15, 1/3, 1/2, 2/3, 5/6 and 1 times the window (10 ... 150 samples for the usual windows).", "", "curve"),
     # ---------------------------------------------------------------- C. discrete noise
@@ -249,6 +251,43 @@ def allan_deviation(x: np.ndarray, ns=ALLAN_N) -> np.ndarray:
         means = x[:m * n].reshape(m, n).mean(axis=1)
         out.append(np.sqrt(0.5 * np.mean(np.diff(means) ** 2)) if m > 2 else np.nan)
     return np.array(out)
+
+
+def allan_deviation_overlapping(x: np.ndarray, ns=ALLAN_N) -> np.ndarray:
+    """
+    Overlapping Allan deviation: for block length n, sqrt(1/2 mean((m_{i+n} - m_i)^2)) over EVERY start i, where
+    m_i is the mean of x[i:i+n].  Same expectation as the disjoint-block version, much less scatter for long
+    blocks.  NaN where fewer than 3 disjoint blocks fit (as allan_deviation).
+    """
+    x = np.asarray(x, float)
+    c = np.r_[0.0, np.cumsum(x)]
+    out = []
+    for n in ns:
+        if len(x) // n <= 2:
+            out.append(np.nan)
+            continue
+        means = (c[n:] - c[:-n]) / n
+        d = means[n:] - means[:-n]
+        out.append(np.sqrt(0.5 * np.mean(d ** 2)))
+    return np.array(out)
+
+
+def log_frequency_bins(f: np.ndarray, S: np.ndarray, n_bins: int = 40) -> np.ndarray:
+    """
+    A spectrum averaged in ``n_bins`` logarithmically spaced bins between the lowest non-zero frequency and the
+    highest; bins without an FFT frequency (at the low end) are interpolated in log frequency.
+    """
+    f, S = np.asarray(f, float), np.asarray(S, float)
+    keep = f > 0
+    f, S = f[keep], S[keep]
+    edges = np.geomspace(f[0], f[-1] * (1 + 1e-9), n_bins + 1)
+    centers = np.sqrt(edges[:-1] * edges[1:])
+    which = np.digitize(f, edges) - 1
+    out = np.array([S[which == k].mean() if np.any(which == k) else np.nan for k in range(n_bins)])
+    ok = np.isfinite(out)
+    if ok.sum() >= 2 and not ok.all():
+        out[~ok] = np.exp(np.interp(np.log(centers[~ok]), np.log(centers[ok]), np.log(np.maximum(out[ok], 1e-300))))
+    return out
 
 
 def spectrum(series_list: list[np.ndarray], rate: float) -> tuple[np.ndarray, np.ndarray]:
@@ -474,6 +513,16 @@ def _trace_features(trace: DecodedTrace, meta: dict | None, regions: TraceRegion
         i50, i10, i100 = (list(ALLAN_N).index(k) for k in (50, 10, 100))
         per_pixel("noise: Allan deviation n=50 (ADU)", allan[:, i50])
         per_pixel("noise: Allan slope n=10-100", np.log(allan[:, i100] / allan[:, i10]) / np.log(10))
+        # not detrended: only the pattern every pixel shares is removed (it is not noise for an image)
+        P = len(good)
+        shared = Cm[good, first:].mean(0) if P > 1 else 0.0
+        scale = np.sqrt(P / (P - 1)) if P > 1 else 1.0
+        raw = {p: scale * (Cm[p, first:] - shared - (Cm[p, first:] - shared).mean()) for p in good}
+        allan_raw = np.array([allan_deviation_overlapping(raw[p]) for p in good])
+        Cv["noise: Allan deviation, common pattern removed"] = np.nanmean(allan_raw, axis=0) if np.isfinite(allan_raw).any() else allan_raw[0]
+        if len(raw[good[0]]) >= 8:
+            f_raw, S_raw = spectrum(list(raw.values()), skip_rate)
+            Cv["noise: CDS spectrum, log frequency"] = log_frequency_bins(f_raw, S_raw)
         if len(det[good[0]]) >= 8:
             f_cds, S_cds = spectrum(list(det.values()), skip_rate)
             Cv["noise: CDS spectrum"] = S_cds

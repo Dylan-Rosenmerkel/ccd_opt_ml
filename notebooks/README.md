@@ -85,7 +85,7 @@ Uses `process_packet.py`, `configs/processing.toml` and WADERs (`panaSKImg`, run
 **Writes:** `../rehearsal/processed/`.
 
 Step 2 uses the general region splitter (any geometry, `.meta` cross-check) and `trace_features`:
-85 numbers and 12 curves per trace.
+85 numbers and 14 curves per trace.
 
 ## `advanced_trace_features.ipynb`: brainstormed features, one by one (reference)
 
@@ -108,12 +108,12 @@ is `trace_features.py`.
 ## `trace_features_walkthrough.ipynb`: all features in one function
 
 Uses `src/trace_features.py`: `trace_features(trace)` returns 85 numbers (the 39 comparison tools
-plus the advanced features), their pixel spread, and 12 curves. The `FEATURES` registry describes
+plus the advanced features), their pixel spread, and 14 curves. The `FEATURES` registry describes
 each one.
 
 1. The registry: groups and counts.
 2. Every feature of one trace, with units and pixel spread.
-3. The 12 curves.
+3. The curves (14 since 2026-10-14).
 4. When features are missing (NaN): charged pixel, module 102, no `.meta`, damaged trace.
 5. Redundancy: feature pairs correlated with |r| > 0.98 across 19 traces.
 6. Separation of all 6 channel pairs vs repeat scatter.

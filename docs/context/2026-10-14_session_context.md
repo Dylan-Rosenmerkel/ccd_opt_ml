@@ -608,3 +608,21 @@ against the truth, world v2 unless noted):
 2. `scan_packets.py`: a "mixed" design (half one-at-a-time, half random) + config.
 3. Repeat the key benchmarks over 5 training scans (`src/ml/benchmark_seeds.py`) and report mean ± sd;
    correct the doc where a claim does not hold.
+* **Item 1, done in `src/trace_features.py`:**
+  * two new curves, 12 → 14; the 85 features are unchanged:
+    * "noise: Allan deviation, common pattern removed": overlapping Allan deviation of each pixel's CDS minus
+      the mean CDS of all usable pixels at the same skip, × √(P/(P−1)), not detrended;
+    * "noise: CDS spectrum, log frequency": the same series, spectrum averaged in 40 log bins;
+  * new helpers `allan_deviation_overlapping` and `log_frequency_bins`;
+  * the description of the detrended Allan curve warns that n > N/5 is biased low (detrending absorbs the
+    differences of 3 block means);
+  * "Not detrended" alone is wrong: the raw CDS has a deterministic pattern along the skips shared by all
+    pixels (4–17× white at large n), which an image does not see as noise. Hence the common pattern is
+    removed instead of a polynomial;
+  * `check_trace_analysis.py`: all configurations OK. README and notebooks/README curve counts updated.
+* **Stage-0 with the new curve** (`src/stage0_trace_vs_image.py`, last column):
+  * ch0 image/trace ratio 0.91–1.34 for settings 2–4 (traces 1.7 s long, NCOLPRE 185), against 1.2–2.3 with
+    the detrended curve. **The trace physics now explains the image noise on ch0.**
+  * Setting 1 (NCOLPRE 0, 0.8-s traces) shows no floor (ratio 2.4): the trace's time span limits which slow
+    noise it sees, which is relevant for the matched-trace design (NCOLPRE 100).
+  * ch1/ch3 are still 3–8× (extra image noise: binned overscan / serial register?); ch2 1.4–4.
