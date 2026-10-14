@@ -1,0 +1,578 @@
+\documentclass[10pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\graphicspath{{figures/}}
+\setlist{itemsep=1pt,topsep=2pt}
+
+% ------------------------------------------------------------------ notation
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\feat}[2]{\par\medskip\noindent\textbf{\texttt{#1}}\hfill{\small [#2]}\par\nopagebreak\smallskip}
+\newcommand{\med}{\operatorname*{median}}
+\newcommand{\mean}{\operatorname*{mean}}
+\newcommand{\std}{\operatorname{sd}}
+\newcommand{\rsd}{\operatorname{rsd}}
+\newcommand{\argmax}{\operatorname*{arg\,max}}
+\newcommand{\argmin}{\operatorname*{arg\,min}}
+\newcommand{\Dt}{\mathcal D}
+\newcommand{\nw}{n_\text{w}}
+\newcommand{\kt}{k_\text{t}}
+\newcommand{\ko}{k_0}
+\newcommand{\G}{\mathcal G}
+
+\title{Trace Features: Technical Definitions\\[2pt]
+\large How every feature of \code{trace\_features.py} is computed}
+\author{ML-assisted optimization of CCD operating parameters --- technical note\\
+\small companion to ``Trace Features for Machine Learning: the Complete List''}
+\date{14 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The first note on the trace features (\code{docs/trace\_features.tex}) lists the 85 scalar features and 12 curves with a one-line
+description each. This note gives the mathematics. It covers:
+\begin{itemize}
+\item how a raw trace is turned into skip cycles, CDS values and transfers;
+\item the common operations (robust statistics, detrending, spectra, Allan deviation, step statistics, the fitting procedures);
+\item the exact formula of every feature and curve, with the index ranges and constants used in the code.
+\end{itemize}
+All counts are given for a general trace. The values for the usual trace geometry (2$\times$5 pixels, 500 skips,
+150-sample windows) are in brackets. The equations follow \code{src/trace\_regions.py}, \code{src/compare\_trace.py} and
+\code{src/trace\_features.py} (version of 2026-10-13); where the code makes a choice (a degree of freedom, a tolerance), it is
+stated.
+\end{abstract}
+
+\tableofcontents
+
+%======================================================================
+\section{The trace and its notation}
+
+\subsection{Samples, windows and cycles}
+A trace is the ADC output of one channel at $f_s = 15$\,MHz: samples $v_t$ in ADU, $t = 0, 1, \dots$, with
+$\Delta t = 1/f_s = 66.7$\,ns. Each sample carries flag bits from the sequencer. Bit 0 (RD) is high in the pedestal window, bit 1
+(RU) in the signal window, bit 6 during the first part of each horizontal transfer, and bit 7 during the first part of each
+vertical transfer. After every window, the ADC writes an inline record with the window's sample sum $\Sigma$ and length $n$.
+
+\paragraph{Pixels and skips.} The pedestal and signal windows are taken in time order. A pixel is $N$ (pedestal, signal) pairs
+followed by one extra pedestal window, so a pixel ends where a pedestal window is followed by another pedestal window. This gives pixels
+$p = 0, \dots, N_p - 1$ [10] and skips $k = 0, \dots, N - 1$ [500] (\code{NDCM}). Let $t^\text{ped}_{p,k}$ be the first sample of
+the pedestal window of skip $k$.
+
+\paragraph{Cycle length.} With $\delta = t^\text{ped}_{p,k+1} - t^\text{ped}_{p,k}$ over all pixels and skips,
+\begin{equation}
+P = \med \delta \quad[488], \qquad P_\text{exact} = \mean\{\delta : |\delta - P| \le 1\} \quad[488.7].
+\end{equation}
+The cycle is not a whole number of samples (3258 sequencer ticks of 10\,ns $= 488.7$ samples), so the window starts walk by a third of a
+sample from skip to skip. The window length is $\nw = \med(\text{pedestal end} - \text{start})$ [150]; the signal-window offset is
+$s = \med(t^\text{sig}_{p,k} - t^\text{ped}_{p,k})$ [207]; the signal window ends at $e = \min(s + \nw, P)$ [357].
+
+\paragraph{Cycle matrix, baseline, shape.} For pixel $p$ (index $p$ dropped when clear):
+\begin{align}
+Y_{k,\tau} &= v_{t^\text{ped}_{p,k} + \tau}, \qquad \tau = 0, \dots, P-1 \qquad\text{(one row per skip)},\\
+b_k &= \frac{1}{\nw}\sum_{\tau=0}^{\nw-1} Y_{k,\tau} \qquad\text{(the skip's baseline: its pedestal-window mean)},\\
+X_{k,\tau} &= Y_{k,\tau} - b_k \qquad\text{(shape with the baseline removed)}.
+\end{align}
+
+\paragraph{CDS.} From the inline records, the correlated double sample of skip $k$ is
+\begin{equation}
+c_k = \frac{\Sigma^\text{ped}_k}{n^\text{ped}_k} - \frac{\Sigma^\text{sig}_k}{n^\text{sig}_k}\qquad\text{(ADU)},
+\end{equation}
+pedestal minus signal, so that charge (which lowers the signal level) gives a positive CDS.
+
+\paragraph{Transfers.} In the gap before each pixel, the rising edges of bit 6 mark horizontal transfers. They are stacked into
+$H^{(p)}_{m,\tau}$, $m = 1\dots M_p$ (transfer) [19 complete ones], $\tau = 0\dots L_H - 1$. The rising edges of bit 7 mark vertical
+transfers, stacked into $V_{m,\tau}$ for the vertical block of the first row change. The first transfer of the block is dropped when there are
+at least three, because it follows the skip region.
+
+\subsection{Pixel sets and counts}
+\paragraph{Row-start pixels} $\mathcal S$ are pixel 0 and every pixel read right after vertical transfers ($p \bmod \code{NCOL} = 0$ from
+the \code{.meta}).
+
+\paragraph{Usable pixels} $\G$ are the other pixels, minus pixels holding a large charge. With
+$\bar c_p = \mean_{k \ge \ko} c_{p,k}$ over the non-row-start candidates,
+\begin{equation}
+p \in \G \iff |\bar c_p - \med_q \bar c_q| < 8 \max\bigl(1.4826\,\med_q |\bar c_q - \med_{q'} \bar c_{q'}|,\; 5\ \text{ADU}\bigr).
+\end{equation}
+If every pixel starts a row (one column), all pixels are candidates.
+
+\paragraph{Counts} (\code{trace\_sizes}, \code{skip\_counts}), all derived from the trace:
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+Symbol & Meaning & Definition & [usual] \\
+\midrule
+$\kt$ & first skip in mean shapes & $\min(5, \lfloor N/10\rfloor)$ & [5] \\
+$\ko$ & first skip in noise features & $\min(10, \lfloor N/10\rfloor)$ & [10] \\
+$n_r$ & skips in the ringing fit & $\min(20, \lfloor N/2\rfloor)$ & [20] \\
+$K$ & a tenth of the skips & $\max(1, \lfloor N/10\rfloor)$ & [50] \\
+$B$ & noise block & $50$ if $N - \ko \ge 250$, else $\max(2, \lfloor (N-\ko)/5\rfloor)$ & [50] \\
+$w$ & step window & $\min(20, \lfloor (N-\ko)/10\rfloor)$ & [20] \\
+$k_\text{ets}$ & first skip for equivalent time & $\lfloor N/5\rfloor$ & [100] \\
+$q$ & settling samples & $\min(10, \max(1, \lfloor\nw/10\rfloor))$ & [10] \\
+$L_h$ & half window & $\max(1, \lfloor \nw/2\rfloor)$ & [75] \\
+$\mathcal L$ & window lengths & $\{\max(1, \mathrm{round}(f\,\nw)) : f \in \{10,20,30,50,75,100,125,150\}/150\}$ & [10\dots150] \\
+\bottomrule
+\end{tabular}
+\end{center}
+A feature that needs more skips, pixels or transfers than the trace has is NaN.
+
+%======================================================================
+\section{Common operations}
+
+\paragraph{Aggregation over pixels.} A \emph{per-pixel} feature $f_p$ is computed for each $p \in \G$, and the trace's value is
+\begin{equation}
+F = \med_{p \in \G} f_p, \qquad \text{spread} = \rsd_{p\in\G}(f_p),\quad \rsd(x) = 1.4826\,\med_i |x_i - \med_j x_j|.
+\end{equation}
+The factor $1.4826 = 1/\Phi^{-1}(0.75)$ makes $\rsd$ equal to the standard deviation for Gaussian data: $P(|X - \mu| < 0.6745\sigma) = 0.5$.
+Unlike the standard deviation, a few outlying pixels barely change it.
+
+\paragraph{Polynomial detrending.} For a sequence $x_0 \dots x_{n-1}$,
+\begin{equation}
+\Dt(x)_k = x_k - \sum_{j=0}^{d} \hat\beta_j u_k^j,\qquad u_k = \frac{k - n/2}{n/2},\qquad d = \min\bigl(4, \lfloor n/50\rfloor\bigr),
+\end{equation}
+where $\hat\beta$ is the least-squares fit. A degree-4 polynomial removes variations slower than about a quarter of the record (drift,
+droop) but keeps the noise of averages over up to $\sim$50 skips. A running mean is \emph{not} used: subtracting a running mean of
+length $n$ would cancel the averages over $n$ skips and make their noise look far too small.
+
+The detrended CDS of pixel $p$ is $r_{p,k} = \Dt(c_{p,\ko:})_k$, $k = 0 \dots N - \ko - 1$ [490 values].
+
+\paragraph{Residual cycles.} At each position $\tau$ of the cycle, a polynomial of degree $d$ in the (standardized) skip index is
+fitted across the skips $k \ge \ko$ and removed:
+\begin{equation}
+R_{k,\tau} = Y_{\ko+k,\tau} - \sum_{j=0}^{d} \hat\gamma_{j\tau}\, u_k^j .
+\end{equation}
+This removes the mean waveform and its slow change along the pixel (the droop), and leaves the skip-to-skip variation.
+
+\paragraph{Block noise.} The noise of an $n$-skip average is the standard deviation of the means of consecutive blocks,
+\begin{equation}
+\sigma(n) = \std_{j}\Bigl(\tfrac{1}{n}\textstyle\sum_{i=0}^{n-1} r_{jn+i}\Bigr) \quad(\text{ddof} = 1),
+\end{equation}
+undefined with fewer than 3 blocks. For white noise $\sigma(n) = \sigma(1)/\sqrt n$.
+
+\paragraph{Autocorrelation} at lag $\ell$ of a sequence $x$ (mean removed, $\tilde x = x - \bar x$):
+$\rho(\ell) = \sum_{k} \tilde x_k \tilde x_{k+\ell} \big/ \sum_k \tilde x_k^2$.
+
+\paragraph{Allan deviation.} With $\bar x^{(n)}_j$ the means of consecutive $n$-blocks ($m = \lfloor N'/n\rfloor$ blocks; needs $m > 2$),
+\begin{equation}
+\sigma_A(n) = \sqrt{\tfrac12\,\mean_j\bigl(\bar x^{(n)}_{j+1} - \bar x^{(n)}_j\bigr)^2},\qquad n \in \{1,2,3,5,7,10,15,20,30,50,75,100,160\}.
+\end{equation}
+White noise gives $\sigma_A \propto n^{-1/2}$; anticorrelated noise falls faster; $1/f$ noise flattens.
+
+\paragraph{Spectral density} of $M$ equal-length sequences $x^{(m)}$ of length $n$, sampled at rate $f_r$, with a Hann window $h$:
+\begin{equation}
+S(f_j) = \frac{2}{f_r\sum_k h_k^2}\;\mean_m \Bigl|\sum_k h_k x^{(m)}_k e^{-2\pi \mathrm{i}\, jk/n}\Bigr|^2,\qquad f_j = j f_r/n,
+\end{equation}
+a one-sided density in ADU$^2$/Hz. For the CDS the rate is the skip rate $f_\text{skip} = f_s/P_\text{exact}$ [30.69\,kHz].
+
+\paragraph{Largest step.} For a sequence $x$ and window $w \ge 3$, at every $k \in [w, n - w)$ the means and variances of the $w$ values
+before and after are compared:
+\begin{equation}
+t_k = \frac{|\bar x_{[k,k+w)} - \bar x_{[k-w,k)}|}{\sqrt{(s^2_{[k-w,k)} + s^2_{[k,k+w)})/w}},\qquad T = \max_k t_k .
+\end{equation}
+For Gaussian white noise the maximum over $\sim$470 positions is about 4; a telegraph (two-level) process gives much larger values.
+
+\paragraph{Spectral lines.} In a spectrum $S_i$, bin $i$ is a line if $S_i > 5\,\med\{S_{i-5..i-1}, S_{i+1..i+5}\}$ and $S_i$ is the
+largest of $S_{i-1..i+1}$; the feature is the number of lines.
+
+\subsection{Fitting procedures}
+\paragraph{One exponential (variable projection).} To fit $y(x) = A e^{-x/\tau} + C$:
+\begin{enumerate}
+\item For each trial $\tau$ on a logarithmic grid of 60 values in $[\tau_\text{min}, \tau_\text{max}]$, $A$ and $C$ enter linearly and
+  are solved exactly by least squares. The residual sum of squares is $Q(\tau) = \min_{A,C}\sum_i (y_i - Ae^{-x_i/\tau} - C)^2$.
+\item The best grid value is refined on 41 log-spaced values in $[\tau/1.25, 1.25\tau]$.
+\item A parabola through $Q$ at the best point and its two neighbours, in $\log\tau$, gives
+  $\log\hat\tau = \log\tau_i + \tfrac12\Delta\,(Q_{i-1} - Q_{i+1})/(Q_{i-1} - 2Q_i + Q_{i+1})$, with $\Delta$ the grid step in $\log\tau$.
+\end{enumerate}
+Reported: $\hat\tau$, $\hat A$ (and $\hat C$). The parabola removes the quantization to the grid, which would otherwise make repeats
+give identical values.
+
+\paragraph{Two exponentials.} $y = A_1 e^{-x/\tau_1} + A_2 e^{-x/\tau_2} + C$ with $\tau_1 < \tau_2$:
+\begin{itemize}
+\item all pairs from a 40-value log grid in $[0.5, 200]$ samples;
+\item a 21$\times$21 log grid between the neighbouring grid values of the best pair;
+\item a parabola in $\log\tau$ for each time constant;
+\item the refined pair is kept only if it does not increase $Q$.
+\end{itemize}
+
+\paragraph{Damped ringing} (corrected 2026-10-13). For $y_k = c_k - \med_{k' \ge \ko} c_{k'}$, $k = 1 \dots n_r - 1$:
+\begin{equation}
+y_k = C + e^{-k/\tau}\bigl(a\cos 2\pi f k + b\sin 2\pi f k\bigr).
+\end{equation}
+$C, a, b$ are linear and solved for every $(f, \tau)$ pair, using normal equations for all pairs at once. The grid is $f \in [0.02, 0.5]$
+cycles/skip (97 values) and $\tau \in [0.5, 30]$ skips (31 log values). It is refined on $25\times25$ points within
+$f \pm 0.006$, $\tau \times 1.2^{\pm1}$, then by a parabola in $f$. Skip 0 is left out (it has its own feature). $C$ absorbs the level that
+has not yet settled. Reported: $f$, $\tau$, $\sqrt{a^2+b^2}$. Below $f = 0.02$ (a period longer than 50 skips) an oscillation cannot be
+told from $C$ in 20 skips.
+
+\paragraph{Noise model.} $\sigma(n)^2 = \sigma_w^2/n + \sigma_f^2$ is linear in $(\sigma_w^2, \sigma_f^2)$. It is fitted by least squares
+to the block noise at $n \in \{1, 2, 5, 10, 25, 50\}$ (those with $\ge 3$ blocks), and the coefficients are clipped at 0.
+
+\paragraph{Interpolated crossings and peaks.} A level crossing between samples $i-1$ and $i$ is placed at
+$x_{i-1} + (\ell - y_{i-1})(x_i - x_{i-1})/(y_i - y_{i-1})$. A spectral peak at bin $i$ is refined with the parabola through the
+log-powers $a, b, c$ of bins $i-1, i, i+1$: $f = f_i + \tfrac12 (a - c)/(a - 2b + c)\,\Delta f$.
+
+%======================================================================
+\section{Comparison tools: parametric fits (group \code{fit}, per pixel)}
+
+The mean shape (template) of a pixel is $m_\tau = \mean_{k \ge \kt} X_{k,\tau}$. Times are converted with $1\,\mu\text{s} = 15$ samples.
+
+\feat{fit: settling time after pulse (us)}{µs}
+$i^\star = e + \argmax_{\tau \ge e} m_\tau$ (the reset-pulse maximum). Fit $m_\tau = A e^{-x/\tau_s} + C$ for $\tau \ge i^\star$,
+$x = (\tau - i^\star)/15$\,µs, with $\tau_s \in [0.05, 20]$\,µs. The feature is $\tau_s$; \code{fit: settling amplitude after pulse} is $A$ (ADU).
+
+\feat{fit: dip recovery time (us)}{µs}
+$i_d = \nw + \argmin_{\nw \le \tau < s} m_\tau$ (the bottom of the summing-well dip). Fit $m_\tau$ for $i_d \le \tau < s$ with
+$\tau_d \in [0.02, 10]$\,µs. Feature $\tau_d$; \code{fit: dip recovery amplitude} is $A$. Undefined if $s \le \nw + 5$.
+
+\feat{fit: baseline droop time constant (skips)}{skips}
+Fit $b_k = A e^{-k/\tau_b} + C$ for $k = 1 \dots N-1$, $\tau_b \in [\min(5, \max(1, \lfloor N/100\rfloor)),\ \max(5000, 10N)]$.
+Feature $\tau_b$; \code{fit: baseline droop amplitude} is $A$ (negative when the baseline rises).
+
+\feat{fit: first-skip ringing frequency (cyc/skip)}{cycles/skip}
+The damped-ringing fit of Section~2 on the first $n_r$ CDS values: $f$. \code{decay (skips)} is $\tau$; \code{amplitude} is $\sqrt{a^2+b^2}$
+(the envelope extrapolated to skip 0).
+
+\feat{fit: white noise per skip (ADU)}{ADU}
+$\sigma_w$ of the noise model; \code{fit: correlated noise floor (ADU)} is $\sigma_f$, the part that averaging over skips does not remove.
+
+%======================================================================
+\section{Comparison tools: skip-cycle tools (group \code{skip}, per pixel)}
+
+With $\mu = \min(10, \lfloor\nw/8\rfloor)$ and $\tilde c = \med_{k \ge \ko} c_k$:
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.33\textwidth}>{\raggedright\arraybackslash}p{0.6\textwidth}}
+\toprule
+Feature & Definition \\
+\midrule
+\endhead
+\code{skip: dip height} & $\min_{\nw \le \tau < s} m_\tau$ \\
+\code{skip: signal-window level} & $\mean_{s+\mu \le \tau < e - \mu} m_\tau$ (the signal level relative to the pedestal, inside the window) \\
+\code{skip: pulse peak height} & $\max_{\tau \ge e} m_\tau$ \\
+\code{skip: end-of-cycle tail level} & mean of the last $\min(30, \max(1, \lfloor(P - e)/4\rfloor))$ values of $m_\tau$ \\
+\code{skip: baseline at skip 1} & $b_1$ \\
+\code{skip: droop total} & $\Delta_b = b_{N-1} - b_1$ \\
+\code{skip: droop half-time (skips)} & $\min\{j \ge 0 : (b_{1+j} - b_1)\,\mathrm{sgn}\,\Delta_b \ge |\Delta_b|/2\}$ \\
+\code{skip: CDS mean (skips>=10)} & $\mean_{k \ge \ko} c_k$ \\
+\code{skip: CDS rms (detrended)} & $\std(r)$, ddof $=1$ \\
+\code{skip: first-skip CDS excess} & $c_0 - \tilde c$ \\
+\code{skip: skips 1-4 CDS ringing} & $\sqrt{\tfrac14 \sum_{k=1}^{4}(c_k - \tilde c)^2}$ \\
+\code{skip: CDS autocorrelation at lag 2} & $\rho(2)$ of $r$ \\
+\code{skip: noise of 10-skip average} & $\sigma(10)$ of $r$ \\
+\code{skip: noise of 50-skip average} & $\sigma(50)$ of $r$ \\
+\code{skip: noise power 0.1-1 MHz} & $\log_{10}\sum_{f_j \in [0.1, 1)\,\text{MHz}} \Pi(f_j)$, see below \\
+\code{skip: noise power 1-3 MHz} & same, $[1, 3)$\,MHz \\
+\code{skip: noise power 3-7.5 MHz} & same, $[3, 7.51)$\,MHz \\
+\bottomrule
+\end{longtable}
+\end{center}
+\textbf{Window noise power.} Inside the pedestal window, the noise left after removing the template is
+$\omega_{k,\tau} = X_{k,\tau} - m_\tau$ ($k \ge \kt$, $\tau < \nw$), with each row's own mean removed, and
+$\Pi(f_j) = \tfrac{1}{\nw}\mean_k |\sum_\tau \omega_{k,\tau} e^{-2\pi i j\tau/\nw}|^2$, $f_j = j f_s/\nw$ (100\,kHz bins for
+$\nw = 150$).
+
+%======================================================================
+\section{Comparison tools: transfers (groups \code{horizontal}, \code{vertical})}
+
+For a stack of transfers $T_{m,\tau}$ of length $L$, with $n_b = \min(30, \max(1, \lfloor L/10\rfloor))$ and
+$n_e = \min(50, \max(1, \lfloor L/10\rfloor))$:
+\begin{align}
+h_{m,\tau} &= T_{m,\tau} - \tfrac{1}{n_b}\textstyle\sum_{\tau' < n_b} T_{m,\tau'}, \qquad \bar h_\tau = \mean_m h_{m,\tau},\\
+\text{minimum} &= \min_\tau \bar h_\tau,\quad \text{maximum} = \max_\tau \bar h_\tau,\quad
+\text{end level} = \tfrac{1}{n_e}\textstyle\sum_{\tau \ge L - n_e} \bar h_\tau,\\
+\text{scatter between transfers} &= \med_\tau \std_m(h_{m,\tau}) \quad(\text{ddof}=1).
+\end{align}
+\textbf{Horizontal:} $T = H^{(p)}$, all transfers of one usable pixel; the trace value is the median over pixels.
+\textbf{Vertical:} each transfer of the block is one replicate ($M = 1$), so there is no scatter; the trace value is the median over the transfers.
+
+%======================================================================
+\section{CDS level (group \code{level})}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{level_common_pattern.png}
+\caption{Left: CDS of every pixel along its skips (10-skip means; dotted: row-start pixels). Right: the common pattern $\hat c_k$.
+Example trace: module 101, channel 0, 2026-10-08, first repeat (all figures).}
+\end{figure}
+
+Common pattern and relative level:
+\begin{equation}
+\hat c_k = \med_{p \in \G} c_{p,k},\qquad \rho_p = \mean_{k \ge \ko}\bigl(c_{p,k} - \hat c_k\bigr).
+\end{equation}
+\feat{level: common CDS rise (ADU)}{ADU}
+$\mean_{k \ge N - K} \hat c_k - \mean_{\ko \le k < \ko + K} \hat c_k$ [skips 450--499 minus 10--59].
+\feat{level: pixel level spread (ADU)}{ADU}
+$\rsd_{p \in \G}\, \rho_p$. With binning, each trace pixel holds the dark charge of $\code{NPBIN}\times\code{NSBIN}$ CCD pixels, so
+this spread grows with the dark current.
+\feat{level: pixel level max (ADU)}{ADU}
+$\max_{p \in \G} \rho_p$.
+\feat{level: charge-loss slope (\%)}{\%}
+For every pixel (row starts included) with $\rho_p > 1000$\,ADU (charged): $d_k = c_{p,k} - \hat c_k$, $k \ge \ko$, $n' = N - \ko$;
+straight-line fit $d_k \approx \alpha + \beta k$; loss $= 100\,\beta n'/\bar d$ (percent of the charge lost over the pixel). Median over
+charged pixels; NaN if none.
+\feat{level: charged-pixel skewness}{---}
+$\mean(d - \bar d)^3/\std(d)^3$ for the same pixels; median.
+
+%======================================================================
+\section{Noise character (group \code{noise})}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.5\textwidth]{noise_autocorrelation.png}\hfill
+\includegraphics[width=0.48\textwidth]{noise_allan.png}
+\caption{Left: autocorrelation of $r$ (mean of the usable pixels; grey band $\pm2/\sqrt{n}$). Right: Allan deviation with the white-noise line.}
+\end{figure}
+
+\feat{noise: CDS autocorrelation at lag 1}{---}
+$\rho(1)$ of $r_p$; median over $\G$.
+\feat{noise: Allan deviation n=50 (ADU)}{ADU}
+$\sigma_A(50)$ of $r_p$; median. \code{noise: Allan slope n=10-100} $= \log_{10}\bigl(\sigma_A(100)/\sigma_A(10)\bigr)$ per pixel, median
+(white noise: $-0.5$).
+\feat{noise: CDS power <1 kHz / >10 kHz}{---}
+With $S(f)$ the spectral density of the $r_p$ ($p \in \G$, needs $\ge 8$ values) at $f_\text{skip}$, and Nyquist frequency
+$f_N = f_\text{skip}/2$, the bands are scaled to the usual $f_N^\text{ref} = 15.35$\,kHz so that they exist for any skip rate:
+\begin{equation}
+\frac{\mean\{S(f) : 0 < f < f_N \cdot 1/15.35\}}{\mean\{S(f) : f > f_N \cdot 10/15.35\}}
+\quad\text{[exactly $<1$\,kHz over $>10$\,kHz at the usual rate]}.
+\end{equation}
+Low-frequency ($1/f$) noise raises it; white noise gives about 1.
+\feat{noise: reset-level scatter (ADU)}{ADU}
+$\std_k\bigl(\tfrac{1}{\nw}\sum_{\tau<\nw} R_{k,\tau}\bigr)$: the scatter of the level that each reset leaves, after the mean waveform
+and the droop are removed. Median over $\G$. The CDS cancels it, because both windows of a skip share it.
+\feat{noise: within-cycle power 0.1-0.3 MHz}{fraction}
+On the segment $0 \le \tau < e$ (pedestal-window start to signal-window end): $u_{k,\tau} = R_{k,\tau} - \mean_{\tau'<e} R_{k,\tau'}$,
+\begin{equation}
+S_\text{in}(f_j) = \mean_{p}\mean_k\Bigl|\sum_{\tau<e} h_\tau u_{k,\tau} e^{-2\pi i j\tau/e}\Bigr|^2,\quad f_j = j f_s/e,\qquad
+\text{feature} = \frac{\sum_{f_j \in [0.1, 0.3)\,\text{MHz}} S_\text{in}}{\sum_{f_j \ge 0.1\,\text{MHz}} S_\text{in}} .
+\end{equation}
+The \code{0.3-1}, \code{1-3} and \code{3-7.5\,MHz} features use the bands $[0.3,1)$, $[1,3)$ and $[3, 7.6)$\,MHz.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{noise_reset_and_bands.png}
+\caption{Left: reset-level scatter and CDS noise per skip for each usable pixel. Right: $S_\text{in}$ with the band edges.}
+\end{figure}
+
+\feat{noise: window-length ratio 75/150}{---}
+The CDS recomputed from the raw samples with windows of $L$ samples starting $o$ samples into each window:
+\begin{equation}
+c^{(L,o)}_k = \tfrac{1}{L}\textstyle\sum_{\tau=o}^{o+L-1} Y_{k,\tau} - \tfrac{1}{L}\sum_{\tau=s+o}^{s+o+L-1} Y_{k,\tau},\qquad
+\sigma(L,o) = \std\bigl(\Dt(c^{(L,o)}_{\ko:})\bigr)\ (\text{ddof }0).
+\end{equation}
+Feature $\sigma(L_h, 0)/\sigma(\nw, 0)$ per pixel, median (white noise: $\sqrt2$). \code{noise: late/early window ratio} is
+$\sigma(L_h, \nw - L_h)/\sigma(L_h, 0)$: the second half of the windows against the first half (below 1 if the windows still settle at their
+start). The curve \code{noise: noise vs window length} is $\mean_p \sigma(L, 0)$ for $L \in \mathcal L$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.5\textwidth]{noise_window_length.png}
+\caption{$\sigma(L, 0)$ (circles) and $\sigma(L, \nw - L)$ (squares) against $1/\sqrt L$.}
+\end{figure}
+
+\feat{noise: pedestal-window settling (ADU)}{ADU}
+The mean waveform inside the window, each skip's window mean removed:
+$\bar W_\tau = \mean_{p}\mean_{k \ge \ko}\bigl(Y_{k,o+\tau} - \tfrac{1}{\nw}\sum_{\tau'}Y_{k,o+\tau'}\bigr)$, $\tau < \nw$, with $o = 0$.
+Feature $\tfrac1q\sum_{\tau \ge \nw - q}\bar W_\tau - \tfrac1q\sum_{\tau<q}\bar W_\tau$. \code{signal-window settling} uses $o = s$.
+\feat{noise: baseline coupling (1e-3)}{$\times10^{-3}$}
+Slope $\gamma$ of $c_{p,k}$ against $b_{p,k}$ ($k \ge \ko$) by least squares, $\times10^3$; median. A slope means that the baseline (which
+moves with each reset and droops) leaks into the CDS.
+\feat{noise: noise trend along skips (ADU/100 skips)}{ADU/100 skips}
+$s_j = \std(r_{jB:(j+1)B})$ for complete blocks; slope of $s_j$ against $jB$, $\times 100$ (needs $\ge 3$ blocks); median.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{noise_window_settling.png}
+\caption{$\bar W_\tau$ in the pedestal (left) and signal (right) windows.}
+\end{figure}
+
+%======================================================================
+\section{Discrete and transient noise (group \code{discrete})}
+
+\feat{discrete: largest baseline step (t)}{---}
+$T$ (largest step, window $w$) of $\Dt(b_{\ko:})$; median over $\G$. \code{discrete: largest CDS step (t)}: $T$ of $r$.
+\feat{discrete: CDS excess kurtosis}{---}
+$\mean(\tilde r^4)/\mean(\tilde r^2)^2 - 3$ (0 for a Gaussian); median.
+\feat{discrete: CDS outlier fraction}{fraction}
+Fraction of $k$ with $|r_k - \med r| > 5\,\rsd(r)$; median.
+\feat{discrete: CDS spectrum lines}{count}
+Number of lines in $S(f)$ (excluding $f=0$). \code{discrete: within-cycle spectrum lines}: lines in $S_\text{in}$.
+\feat{discrete: ADC low-bit chi2/dof}{---}
+All pedestal-window samples of the usable pixels, $n_\text{tot}$ of them: counts $n_j$ of $v \bmod 64 = j$,
+$\chi^2/\text{dof} = \tfrac{1}{63}\sum_{j=0}^{63}(n_j - n_\text{tot}/64)^2/(n_\text{tot}/64)$. A flat distribution of the low bits gives
+about 1; missing or doubled ADC codes give more.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{discrete_steps.png}
+\caption{Detrended baseline and CDS of one pixel, with the largest step (dashed) and their distributions against a Gaussian.}
+\end{figure}
+
+%======================================================================
+\section{Edges (group \code{edge})}
+
+\paragraph{Pulse window.} With the mean shape over usable pixels $M_\tau = \mean_p m^{(p)}_\tau$, the pulse peak is
+$\tau_\text{pk} = e + \argmax_{\tau \ge e} M_\tau$. The edge is searched in $[\ell_o, \ell_h)$ with
+$\ell_o = \max(e - 7, \tau_\text{pk} - 30)$ and $\ell_h = \min(P, \tau_\text{pk} + 46)$. The level before the edge is the mean over
+$[\max(s, \ell_o - 10), \ell_o + 6)$.
+
+\paragraph{Edge times.} In each skip, with $y = Y_{k,\ell_o:\ell_h}$, the peak $i = \argmax y$ and the half-height
+$\lambda = (\bar y_\text{before} + y_i)/2$, the last sample $j \le i$ below $\lambda$ gives
+\begin{equation}
+t^\text{edge}_k = t^\text{ped}_{p,k} + \ell_o + j + \frac{\lambda - y_j}{y_{j+1} - y_j}\qquad\text{(absolute sample time)}.
+\end{equation}
+A straight line $t^\text{edge}_k \approx \alpha k + \beta$ is fitted for $k \ge \min(5, \lfloor N/10\rfloor)$.
+
+\feat{edge: jitter (ns)}{ns}
+$\std_k\bigl(t^\text{edge}_k - \alpha k - \beta\bigr)\cdot 10^9/f_s$; median over pixels.
+\feat{edge: period offset (1e-3 samples)}{$10^{-3}$ samples}
+$10^3(\alpha - P_\text{expected})$, with $P_\text{expected}$ the cycle from the \code{.meta} sequencer formula (else $P_\text{exact}$).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{edge_jitter.png}
+\caption{Left: the edge position inside its own cycle saws by a third of a sample, because the cycle is 488.7 samples long. Right:
+residuals from the line.}
+\end{figure}
+
+\paragraph{Equivalent-time pulse.} Every sample of skips $k \ge k_\text{ets}$ of the usable pixels is placed at its time relative to
+the fitted edge line, $\phi = t^\text{ped}_{p,k} + \tau - (\alpha k + \beta)$, and kept if $-15 < \phi < 60$. The values
+$Y_{k,\tau} - b_k$ are averaged in 0.1-sample bins of $\phi$, giving $E(\phi)$: the pulse at 10$\times$ the sampling resolution. This
+works because the 0.7-sample fractional part of the cycle spreads the samples over all phases.
+
+\feat{edge: rise time (ns)}{ns}
+$(\phi_{90} - \phi_{10})\cdot 10^9/f_s$, the interpolated crossings of 10\,\% and 90\,\% of $\max E$ on the rising side.
+\feat{edge: recovery tau1 (us)}{µs}
+Two exponentials fitted to $E$ for $\phi > \phi_\text{pk} + 0.5$, $x = \phi - \phi_\text{pk}$: $\tau_1/15$ (µs);
+\code{tau2} $= \tau_2/15$; \code{recovery amplitude ratio} $= A_1/A_2$.
+\feat{edge: ringing frequency (MHz)}{MHz}
+On the residual $\epsilon(x) = E - \text{fit}$ for $x < 25$ samples: the Hann-windowed spectrum, zero-padded to 4$\times$ the length, at bin
+spacing $10 f_s/(4n)$ (the equivalent-time samples are 0.1 sample apart). The frequency of the highest non-zero bin, refined by a parabola. \code{edge: ringing rms (ADU)} $= \std(\epsilon)$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\textwidth]{edge_equivalent_time.png}
+\caption{Equivalent-time pulse $E(\phi)$ (red) against whole-sample averages (dots).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{edge_recovery_ringing.png}
+\caption{Two-exponential fit after the peak and its residual (the ringing).}
+\end{figure}
+
+\feat{edge: dip per volt SW (ADU/V)}{ADU/V}
+Per pixel, with the template from $\ko$: dip $= \min_{\nw \le \tau < s} m_\tau$, divided by the summing-well swing
+$\code{SW\_1\_H} - \code{SW\_1\_L}$ from the \code{.meta}. \code{edge: pulse per volt RG (ADU/V)}: pulse
+$= \max_{\tau \ge e} m_\tau - \mean_{e - q' \le \tau < e} m_\tau$, $q' = \min(20, \max(1, \lfloor\nw/4\rfloor))$, divided by
+$\code{RG\_1\_H} - \code{RG\_1\_L}$. \code{edge: pulse/dip ratio}: pulse/dip, in which the common amplification cancels.
+
+\paragraph{Variation along the cycle.} $\Sigma_\tau = \mean_{p}\,\std_{k \ge \ko}\bigl(Y_{k,\tau} - b_k\bigr)$ (ddof 0), the
+skip-to-skip scatter at each position.
+\feat{edge: cycle variation in signal window (ADU)}{ADU}
+$\med_{s \le \tau < e}\Sigma_\tau$. \code{at dip}: $\max_{\nw \le \tau < s}\Sigma_\tau$. \code{at reset}:
+$\max \Sigma_\tau$ over $[\max(e, \tau_\text{pk} - 17), \min(P, \tau_\text{pk} + 23))$. \code{after reset}: $\med_{\tau \ge \tau_\text{pk} + 46}\Sigma_\tau$.
+On steep edges $\Sigma_\tau \approx |\partial_\tau M| \times$ (timing jitter and the sub-sample walk), so it measures timing $\times$
+slope; inside the windows it measures the noise that enters the CDS.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{edge_cycle_variation.png}
+\caption{$\Sigma_\tau$ with the pedestal (green) and signal (red) windows.}
+\end{figure}
+
+%======================================================================
+\section{Slow structure (group \code{slow})}
+
+\feat{slow: row-start recovery time (skips)}{skips}
+Take the first row-start pixel $r > 0$ whose next pixel $r + 1$ is not a row start (else $r = 0$). Then
+$d_k = b_{r,k} - b_{r+1,k}$, $k < N$, and the fit $d_k = A e^{-k/\tau} + C$ with $\tau \in [2, \max(2000, 4N)]$ gives $\tau$;
+\code{amplitude} is $A$. It measures how the electronics recover from the vertical clocking.
+\feat{slow: drift (ADU/ms)}{ADU/ms}
+Slope of $b_{p,\lfloor N/2\rfloor}$ against the time $t^\text{ped}_{p,\lfloor N/2\rfloor}/f_s$ (ms) over $p \in \G$ (needs $\ge 2$ pixels).
+\feat{slow: H-transfer peak-to-peak (ADU)}{ADU}
+Per pixel and transfer $a_{p,m} = \max_\tau h_{m,\tau} - \min_\tau h_{m,\tau}$ (baseline from $\min(30, \max(1,\lfloor L/10\rfloor))$
+samples). Feature $\mean_p\mean_m a_{p,m}$; \code{first-to-last change} $= \mean_p (a_{p,M_p} - a_{p,1})$.
+\feat{slow: PC1 variance fraction}{fraction}
+The residual cycles of all usable pixels, stacked ($\sum_p (N - \ko)$ rows $\times$ $P$ columns) and centred, have singular values
+$s_1 \ge s_2 \ge \dots$; PC$i$ fraction $= s_i^2/\sum_j s_j^2$, $i = 1, 2, 3$. On real traces PC1 ($\sim$82\,\%) is the sub-sample phase
+walk at the edges, and PC2 is the level shift set by each reset.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{slow_principal_components.png}
+\caption{Principal components of the residual cycles: explained variance, the first three components, the PC1 score of the first 100 skips.}
+\end{figure}
+
+%======================================================================
+\section{The curves}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.3\textwidth}>{\raggedright\arraybackslash}p{0.63\textwidth}}
+\toprule
+Curve & Definition \\
+\midrule
+\endhead
+\code{skip: mean shape} & $\med_{p \in \G} m^{(p)}_\tau$, block-averaged to $\le 500$ points \\
+\code{skip: baseline droop curve} & $\med_p (b_{p,k} - b_{p,1})$, $k = 1 \dots N - 1$ \\
+\code{horizontal: mean shape} & $\med_p \bar h^{(p)}_\tau$ \\
+\code{vertical: mean shape} & $\med$ over transfers of $h_{m,\tau}$ \\
+\code{level: common CDS pattern} & $\hat c_k$, $k = 0 \dots N-1$ \\
+\code{noise: CDS autocorrelation} & $\mean_p \rho_p(\ell)$, $\ell = 1 \dots 50$ \\
+\code{noise: Allan deviation} & $\mean_p \sigma_A(n)$ at the 13 values of $n$ \\
+\code{noise: CDS spectrum} & $S(f)$ of the $r_p$, $0 \le f \le f_N$ \\
+\code{noise: within-cycle spectrum} & $S_\text{in}(f)$, $0 \le f \le 7.5$\,MHz \\
+\code{noise: noise vs window length} & $\mean_p \sigma(L, 0)$, $L \in \mathcal L$ \\
+\code{edge: equivalent-time pulse} & $E(\phi)$, $-15 \le \phi < 60$ in 0.1-sample bins \\
+\code{edge: variation along the cycle} & $\Sigma_\tau$, $\tau = 0 \dots P-1$ \\
+\bottomrule
+\end{longtable}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth,height=0.8\textheight,keepaspectratio]{all_curves_a.png}
+\caption{Curves 1--6 of the example trace.}
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth,height=0.8\textheight,keepaspectratio]{all_curves_b.png}
+\caption{Curves 7--12 of the example trace.}
+\end{figure}
+
+%======================================================================
+\section{From one trace to a packet's features}
+
+A packet has $n$ repeated trace sets at $\theta$ [10] and $n_\text{ref}$ at the reference [5], one trace per channel each.
+The function \code{combine\_repeats} of \code{process\_packet.py} combines, per channel and feature, the values $f_1 \dots f_n$ of the usable traces:
+\begin{itemize}
+\item if $n \ge 5$, values with $|f_i - \med f| > 5\,\rsd(f)$ are left out (and counted in \code{n\_rejected});
+\item \code{trace.}$f = \bar f$ over the kept values, \code{trace\_sd.}$f = \std(f)$ (ddof 1);
+\item the same for the reference: \code{ref.}$f$, \code{ref\_sd.}$f$;
+\item \code{diff.}$f = $ \code{trace.}$f - $ \code{ref.}$f$.
+\end{itemize}
+The scatter \code{trace\_sd} is the feature's measurement noise, used to judge changes (separation $=|\Delta\bar f|/s_\text{pooled}$) and
+to weight features in the models.
+
+%======================================================================
+\section{Summary of the conventions}
+\begin{itemize}
+\item Medians over pixels or transfers, and $\rsd$ for spreads, keep single bad pixels from dominating.
+\item Noise features use $r$ (polynomial-detrended CDS from skip $\ko$), never a running mean.
+\item Times: samples $\times 1/15$ = µs, $\times 10^9/f_s$ = ns. Frequencies are scaled to the skip rate where they depend on it.
+\item Every count follows the trace's own geometry (Section~1.2); impossible features are NaN, not zero.
+\item Fits are least squares in the linear parameters with a grid-and-parabola search in the nonlinear ones, so they never get stuck
+  at a grid point.
+\end{itemize}
+
+\end{document}

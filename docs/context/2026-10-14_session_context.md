@@ -154,6 +154,20 @@ text) and write a separate, more mathematical technical note on how every featur
   * compiled with tectonic: 31 overfull warnings went down to 3 tiny ones.
 * **Technical note (math of every feature):** being written in `docs/overleaf_trace_features_technical/`.
 
+**Technical note on the trace features (done):** `docs/overleaf_trace_features_technical/trace_features_technical.tex`
+(+ zip), 16 pages, 0 overflow warnings. It covers:
+* notation: samples, windows, exact cycle, cycle matrix, baseline, CDS, transfers, usable / row-start
+  pixels, the counts table;
+* common operations: rsd (1.4826 MAD), detrending (degree min(4, n/50); why no running mean), residual
+  cycles, block noise, autocorrelation, Allan deviation, spectral density, largest-step t, line count;
+* fitting: variable projection with a log grid, fine grid and parabola; two exponentials; the corrected
+  damped ringing; the noise model;
+* the exact formula of every one of the 85 features and 12 curves, with the code's index ranges and
+  constants;
+* the packet-level combination with outlier rejection.
+
+It reuses the readable figures. `docs/overleaf_trace_features.zip` was rebuilt as well.
+
 ## 3. Not yet known or checked
 
 * What `read_config` resets: the mode is set explicitly afterwards, but whether it touches the
