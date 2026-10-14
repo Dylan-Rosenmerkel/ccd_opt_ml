@@ -778,8 +778,10 @@ Code: \code{src/ml/structured.py}, \code{calibrate.py}, \code{benchmark\_structu
 \item the \textbf{scan design} matters more than the model for $\lambda$: after a one-at-a-time scan it is 5--10 times worse than after a
   random or half-random one;
 \item conformal calibration (H) repairs the trees' error bars; the decomposed optimizer (F) reaches the optimum in about half the packets;
-\item splitting $\lambda$ into dark current and CIC from the 16 rows did \emph{not} help as implemented (two separate fits lose the
-  information that their sum is measured much better than each part).
+\item splitting $\lambda$ into dark current and CIC from the 16 rows did \emph{not} help when the two parts were fitted separately
+  (that loses the information that their sum is measured much better than each part). A \emph{joint} fit with each image's exact
+  error covariance (\code{JointLambdaGP}) is better than the separate fits at every size and about as good as fitting $\lambda$
+  directly (1.6 against 1.8\,\% at 240 packets, within the scatter between training scans).
 \end{itemize}
 \end{basic}
 
@@ -843,8 +845,28 @@ not identifiable and stays at its prior, so the error bars for a new module are 
   240 packets; the first-round GP is better at 30--120 packets). The split into dark current + CIC from the 16 rows is \emph{worse} from 30
   packets on (e.g.\ 9.6\,\% against 6.2\,\% at 60), with too-wide error bars. Each part of one image is measured to 13--15\,\%, and the two errors are strongly anti-correlated (a
   line's slope against its intercept), while their sum is known to 3\,\%; two separately fitted models throw that away. The
-  per-row $\lambda$ remains worth having as a physics check (stage 0) and for longer images; a joint likelihood of the per-row values,
-  rather than two separately fitted components, is the right way to use it.
+  per-row $\lambda$ remains worth having as a physics check (stage 0) and for longer images.
+\item \textbf{Joint fit of dark current and CIC} (\code{structured.JointLambdaGP}). Two GPs, on $\log$ DC and $\log$ CIC, each with the
+  hierarchical kernel, are fitted \emph{together} to the line-fit estimates of every image, with their exact 2$\times$2 covariance
+  (\code{line\_fit\_covariance}: the ordinary least-squares line through 16 rows with 12\,\% scatter each, transformed to log scale to
+  first order; correlation about $-0.84$). The prediction is $\lambda = e^{f_\text{DC}} + e^{f_\text{CIC}}$, with variance
+  $J\Sigma J^\top$. It finds the right inputs for each part (DC: VSUB, V low rails, the state; CIC: H low rails, V low rails, TG). A
+  linear-scale version was worse (6.2 against 3.9\,\% at 120 packets): the dark current is a product of factors, which a GP learns far
+  more easily as a sum of logs. $\lambda$ error over 3 training scans (world v3, mean $\pm$ sd):
+  \begin{center}\small
+  \begin{tabular}{lrrrr}
+  \toprule
+  & 30 packets & 60 & 120 & 240 \\
+  \midrule
+  $\lambda$ directly & $13.5 \pm 3.7$\,\% & $5.4 \pm 0.6$\,\% & $3.1 \pm 0.8$\,\% & $1.8 \pm 0.3$\,\% \\
+  two separate fits & $16.9 \pm 10.2$\,\% & $6.3 \pm 2.3$\,\% & $3.9 \pm 1.3$\,\% & $2.8 \pm 0.8$\,\% \\
+  joint fit & $14.8 \pm 9.3$\,\% & $4.8 \pm 1.9$\,\% & $3.1 \pm 1.3$\,\% & $1.6 \pm 0.3$\,\% \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  The joint fit beats the separate fits everywhere and has calibrated error bars (coverage 0.65--0.70 against 0.94--1.0). It matches
+  fitting $\lambda$ directly from $\sim$60 packets. Its added value is the two parts themselves, the dark current and the CIC as
+  functions of the settings, which the optimizer and the physics checks can use.
 \item \textbf{Gain.} The hierarchy helps: 0.1--0.6\,\% against 0.2--0.9\,\% with an ordinary GP.
 \item \textbf{Error bars.} A+B's 68\,\% coverage is 0.56--0.59 with 15 packets and 0.66--0.74 from 30 on.
 \end{itemize}
@@ -879,8 +901,9 @@ A+B & 33\,\% & 3.6\,\% & 33\,\% & 2.4\,\% & 3.1\,\% & 0.9\,\% \\
 \item With no packet of the new module, nothing can know its gain: the trace measures $\sigma_1 g$, never $g$. So $\sigma_e$ is off by the
   module-to-module gain spread for every model. Only the hierarchical GP says so: its coverage stays at 0.75, while A with an ordinary GP
   claims 0.00.
-\item $\lambda$ does not depend on the module, and the state is read from the \emph{other} module's reference traces in the same packet:
-  3\,\% instead of 50--118\,\%.
+\item $\lambda$ does not depend on the module, and the state is read from the \emph{other} module's reference traces in the same packet.
+  With this training scan, that gave 3\,\% instead of 50--118\,\%, but over 5 training scans it is $19 \pm 15$\,\% with none of the
+  module's packets: not reliable. From one packet on it is 1.2--1.7\,\%.
 \item With \textbf{one} packet of the new module, A+B reaches $\sigma_e$ 3.3\,\%, $\lambda$ 3.1\,\%, gain 3.4\,\%; with two, 2.4/3.1/0.9\,\%.
   That is the level of a known module. The first round needed $\sim$20 packets. An ordinary GP is fragile here (A at $k=1$: $\lambda$
   37\,\%, an almost unseen one-hot column), the hierarchy is not.
