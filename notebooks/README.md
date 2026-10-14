@@ -13,6 +13,7 @@ it can be read without running it. Nothing here touches the DAQ hardware.
 | `trace_features_walkthrough.ipynb` | All trace features in one function (`trace_features.py`) | current |
 | `packet_tests_2026-10-12.ipynb` | First run with varied parameters: traces and images compared across 5 settings | analysis |
 | `ml_models_walkthrough.ipynb` | The first models on the synthetic world: inputs, five model types, error bars, relevance, benchmark results, Bayesian optimization, real-data loading | current (needs `.venv`) |
+| `ml_remaining_models.ipynb` | The remaining models: log-frequency spectra, pre-training (D), deep kernel (C), set models (E), several modules (G), trust region / constraints / multi-fidelity / ParEGO (F), joint dark + CIC fit, the real-data noise check, robustness over training scans (generator: `make_remaining_models_notebook.py`) | current (needs `.venv`) |
 | `ml_structured_models.ipynb` | The second-round models: physics-structured outputs (A), hierarchical GP (B), conformal error bars (H), decomposed optimizer (F); new module, scan design | current (needs `.venv`) |
 
 A suggested reading order: comparison → take packet → process packet → trace features.
