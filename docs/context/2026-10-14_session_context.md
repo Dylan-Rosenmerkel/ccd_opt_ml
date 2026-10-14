@@ -649,3 +649,9 @@ against the truth, world v2 unless noted):
     VDRAIN − VDD is not yet enforced.
 * **Possible extension:** design parameters that move a GROUP of pins together (e.g. all H low rails by
   an offset), as in the synthetic world.
+* `StructuredPrep` uses "noise: Allan deviation, common pattern removed" when it is present (real data).
+* The ml_models.tex stage-0 paragraph is updated with the new-curve result; 0 overfull.
+* **Item 4 running:** `python -m ml.benchmark_seeds` (PID in the scratchpad `seeds_full.pid`, log
+  `seeds_full.log`; outputs `docs/ml_results/seeds_*.json` + `seeds_summary.json`). Order: design,
+  newmodule, sets, learning, pretrain. Then a "Robustness over training scans" subsection in ml_models.tex
+  with mean ± sd, and corrections where needed.
