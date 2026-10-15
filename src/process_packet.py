@@ -30,8 +30,12 @@ Steps (each is a function below; the walkthrough notebook runs them one by one)
     2. traces:  decode -> quality check -> regions -> tools -> .npz + features; then the
                 repeated trace sets are combined per (kind, board, channel)
     3. images:  decompress .fits.bz2 -> run panaSKImg -> read MEGAIN/MESIG/MEDC from the header
-    4. labels:  sigma_e = MESIG/MEGAIN, lambda = MEDC/MEGAIN, flags for fits stuck at a bound
+    4. labels:  sigma_e = MESIG/MEGAIN, lambda = MEDC/MEGAIN, flags for fits stuck at a bound;
+                lambda row by row and its split into dark current and CIC (image_rows.py)
     5. group:   rebuild dataset.csv / dataset.jsonl from every result.json
+    6. model inputs: one ready-to-train file per model family in model_inputs/ (ml/real_inputs.py)
+
+Packets taken by hand (daq_scripts/manual_packet.sh) get their manifest from make_manual_manifest.py.
 
 Usage
 -----
@@ -84,6 +88,9 @@ class ProcessingConfig:
     waders_timeout_s: float = 1800
     pysimdamicm_dir: Path | None = None
     image_overrides: dict[str, Any] = field(default_factory=dict)
+    rows_enabled: bool = True              # per-row lambda and the dark-current / CIC split (image_rows.py)
+    rows_reverse: bool = False             # True if FITS row 0 is the LAST row read out
+    model_inputs: bool = True              # also write the per-model input files (ml/real_inputs.py)
 
     @classmethod
     def load(cls, path: str | Path) -> "ProcessingConfig":
@@ -105,7 +112,10 @@ class ProcessingConfig:
             waders_extra_args=list(waders.get("extra_args", ["--acm"])),
             waders_timeout_s=float(waders.get("timeout_s", 1800)),
             pysimdamicm_dir=resolve(waders["pysimdamicm_dir"]) if waders.get("pysimdamicm_dir") else None,
-            image_overrides=dict(waders.get("image_overrides", {})))
+            image_overrides=dict(waders.get("image_overrides", {})),
+            rows_enabled=bool(data.get("rows", {}).get("enabled", True)),
+            rows_reverse=bool(data.get("rows", {}).get("reverse", False)),
+            model_inputs=bool(data.get("model_inputs", {}).get("enabled", True)))
 
 
 def localize(path: str | Path, path_map: dict[str, str]) -> Path:
@@ -557,6 +567,14 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
             entry["waders"] = run
             if run["returncode"] == 0 and run["output"]:
                 entry["labels"] = extract_labels(read_fits_primary(Path(run["output"])), bounds, meta)
+                if cfg.rows_enabled:
+                    try:
+                        from image_rows import image_rows
+                        rows = image_rows(fits, entry["labels"], meta, reverse=cfg.rows_reverse)
+                        for lab in entry["labels"]:
+                            lab.update(rows.get(lab["channel"], {}))
+                    except Exception as exc:                      # never lose the labels over the row fit
+                        result["warnings"].append(f"per-row lambda failed on board {image['board']}: {exc}")
             else:
                 entry["error"] = f"panaSKImg failed (return code {run['returncode']}); see {run['log']}"
         images.append(entry)
@@ -609,8 +627,12 @@ def dataset_rows(result: dict, manifest: dict) -> list[dict[str, Any]]:
             ch = label["channel"]
             row = {**base, "channel": ch, "amplifier": label.get("amplifier")}
             for key in ("gain_adu_per_e", "gain_err", "sigma_e", "sigma_e_err", "lambda_e_per_bin",
-                        "lambda_err", "sigma_adu", "dc_adu", "mu_adu", "included_fraction"):
+                        "lambda_err", "sigma_adu", "sigma_err", "dc_adu", "dc_err", "mu_adu", "included_fraction",
+                        "lambda_dark", "lambda_cic", "lambda_dark_err", "lambda_cic_err", "lambda_dark_cic_cov",
+                        "rows_chi2_dof", "n_rows_fit"):
                 row[f"label.{key}"] = label.get(key)
+            for key, value in (image.get("image_header") or {}).items():
+                row[f"image.{key}"] = value
             row["label.flags"] = "; ".join(label.get("flags", []))
             row["label.ok"] = not label.get("flags")
             for kind, prefix in (("theta", "trace"), ("ref", "ref")):
@@ -646,6 +668,17 @@ def build_dataset(out_dir: Path) -> Path:
     return out_dir / "dataset.csv"
 
 
+def build_model_inputs(out_dir: Path) -> None:
+    """The per-model input files (``<out_dir>/model_inputs/``; ml/real_inputs.py), from dataset.csv and the .npz curves."""
+    try:
+        from ml import real_inputs
+    except ImportError as exc:                                  # the ML environment (requirements-ml.txt) is missing
+        print(f"model inputs not written ({exc}); run: python -m ml.real_inputs {out_dir}")
+        return
+    for path in real_inputs.build_all(out_dir):
+        print("wrote", path)
+
+
 # --------------------------------------------------------------------------- #
 # Command line                                                                 #
 # --------------------------------------------------------------------------- #
@@ -671,8 +704,11 @@ def main() -> None:
     manifests = [Path(m) for m in args.manifests]
     if args.packets_dir:
         for path in sorted(Path(args.packets_dir).glob("*.json")):
-            if json.loads(path.read_text()).get("status") == "ok":
+            status = json.loads(path.read_text()).get("status")
+            if status == "ok":
                 manifests.append(path)
+            else:
+                print(f"skipped {path.name}: status {status!r} (check its warnings; give it explicitly to process it)")
     if not manifests:
         parser.error("give manifest files or --packets-dir")
 
@@ -684,6 +720,8 @@ def main() -> None:
               f"{sum(1 for l in labels if not l['flags'])}/{len(labels)} labels without flags"
               + ("".join(f"\n   WARNING {w}" for w in result["warnings"])))
     print(f"dataset: {build_dataset(cfg.out_dir)}")
+    if cfg.model_inputs:
+        build_model_inputs(cfg.out_dir)
 
 
 if __name__ == "__main__":

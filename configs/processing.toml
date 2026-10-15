@@ -37,3 +37,13 @@ pysimdamicm_dir = "/Users/dylanrosenmerkel/Documents/Software/pysimdamicm"
 # ccd_rows = 100
 # ccd_cols = 100
 [waders.image_overrides]
+
+[rows]
+# lambda row by row (WADERs' gain and noise held fixed) and the straight line lambda_r = CIC + DC x_r through the
+# rows (src/image_rows.py): labels lambda_dark, lambda_cic with errors and covariance.
+enabled = true
+reverse = false               # set true if FITS row 0 is the LAST row read out (then DC comes out negative)
+
+[model_inputs]
+# After dataset.csv: one ready-to-train file per model family in <output dir>/model_inputs/ (src/ml/real_inputs.py).
+enabled = true

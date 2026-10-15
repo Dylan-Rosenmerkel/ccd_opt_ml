@@ -236,7 +236,9 @@ class DeepKernelGP:
     name = "C: deep kernel GP"
 
     def __init__(self, pretrainer: Pretrainer | None = None, finetune: bool = True, emb_dim: int = 16, steps: int = 250,
-                 lr_encoder: float = 3e-4, lr_gp: float = 0.03, max_points: int = 1200, seed: int = 0):
+                 lr_encoder: float = 3e-4, lr_gp: float = 0.03, max_points: int = 1200, seed: int = 0, amp_term: bool = True):
+        """amp_term=False: no amplifier term in the kernel (no amplifier labels; X["amp"] is not needed)."""
+        self.amp_term = amp_term
         self.pre, self.finetune, self.emb_dim, self.steps = pretrainer, finetune, emb_dim, steps
         self.lr_encoder, self.lr_gp, self.max_points, self.seed = lr_encoder, lr_gp, max_points, seed
         self.device = _device(prefer_gpu=True)
@@ -258,8 +260,10 @@ class DeepKernelGP:
         return (1 + np.sqrt(5.0) * r + 5.0 / 3.0 * r * r) * torch.exp(-np.sqrt(5.0) * r)
 
     def _K(self, torch, q, za, zb, aa, ab):
-        same = (aa[:, None] == ab[None, :]).double()
-        return q["s"].exp() ** 2 * self._matern(torch, za, zb, q["ls"].exp()) + q["c"].exp() ** 2 * same
+        K = q["s"].exp() ** 2 * self._matern(torch, za, zb, q["ls"].exp())
+        if self.amp_term:
+            K = K + q["c"].exp() ** 2 * (aa[:, None] == ab[None, :]).double()
+        return K
 
     def fit(self, X, Y):
         torch = _torch()
@@ -278,7 +282,7 @@ class DeepKernelGP:
         self.sx = _Scaler().fit(X["x"][idx])
         ct = torch.tensor(self._standardize(curves), dtype=torch.float32, device=self.device)
         self.xt = torch.tensor(self.sx(X["x"][idx]), dtype=torch.float64)
-        self.at = torch.as_tensor(np.asarray(X["amp"])[idx])
+        self.at = torch.as_tensor(np.asarray(X.get("amp", np.zeros(n, int)))[idx])
         with torch.no_grad():
             e0 = self.encoder(ct).cpu().double()
         self.e_mean, self.e_sd = e0.mean(0), e0.std(0).clamp_min(1e-6)
@@ -331,13 +335,13 @@ class DeepKernelGP:
             ct = torch.tensor(self._standardize(X["curves"]), dtype=torch.float32, device=self.device)
             xs = torch.tensor(self.sx(X["x"]), dtype=torch.float64)
             zs = torch.cat([self._z(ct[i:i + 2048], xs[i:i + 2048]) for i in range(0, len(xs), 2048)])
-            amp = torch.as_tensor(np.asarray(X["amp"]))
+            amp = torch.as_tensor(np.asarray(X.get("amp", np.zeros(len(X["x"]), int))))
             means, stds = [], []
             for t, (q, L, alpha) in enumerate(self.fits):
                 Ks = self._K(torch, q, zs, self.z, amp, self.at)
                 m = q["mu"] + (Ks @ alpha)[:, 0]
                 v = torch.linalg.solve_triangular(L, Ks.T, upper=False)
-                var = q["s"].exp() ** 2 + q["c"].exp() ** 2 - (v * v).sum(0) + q["noise"].exp() ** 2
+                var = q["s"].exp() ** 2 + (q["c"].exp() ** 2 if self.amp_term else 0.0) - (v * v).sum(0) + q["noise"].exp() ** 2
                 means.append(m.numpy() * self.ys[t] + self.ym[t])
                 stds.append(np.sqrt(var.clamp_min(1e-12).numpy()) * self.ys[t])
         return np.column_stack(means), np.column_stack(stds)

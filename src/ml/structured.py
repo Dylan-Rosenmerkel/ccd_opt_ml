@@ -265,9 +265,13 @@ class HierGP:
         return {lvl: torch.as_tensor(np.asarray(X[lvl])[sel]) for lvl in self.levels}
 
     # fit / predict --------------------------------------------------------------
-    def fit(self, X, Y):
+    def fit(self, X, Y, y_var=None):
+        """``y_var`` (n, T) or (n,): the KNOWN variance of each label (e.g. WADERs' error, in log units), added to
+        the kernel's diagonal on top of the learned noise; None: the learned noise only."""
         torch = _torch()
         Y = np.atleast_2d(np.asarray(Y, float).T).T
+        if y_var is not None:
+            y_var = np.nan_to_num(np.atleast_2d(np.asarray(y_var, float).T).T, nan=0.0)
         idx = self._subset(len(Y), np.asarray(X.get("amp", np.zeros(len(Y)))))
         self.sx = _Scaler().fit(X["x"][idx])
         self.xt = torch.tensor(self.sx(X["x"][idx]), dtype=torch.float64)
@@ -278,6 +282,7 @@ class HierGP:
             y = Y[idx, t]
             ym, ys = y.mean(), y.std() if y.std() > 0 else 1.0
             yt = torch.tensor((y - ym) / ys, dtype=torch.float64)
+            known = torch.diag(torch.tensor(y_var[idx, t] / ys ** 2 if y_var is not None else np.zeros(n), dtype=torch.float64))
             p = {"ls": torch.full((d,), np.log(np.sqrt(d)), dtype=torch.float64),
                  "s": torch.tensor(np.log(0.7), dtype=torch.float64),
                  "noise": torch.tensor(np.log(0.1), dtype=torch.float64),
@@ -293,7 +298,7 @@ class HierGP:
             def nll():
                 opt.zero_grad()
                 q = {k: (v.clamp(-7, 4) if k != "mu" else v) for k, v in p.items()}
-                K = self._K(torch, q, self.xt, self.xt, self.idt, self.idt) + (q["noise"].exp() ** 2 + 1e-6) * eye
+                K = self._K(torch, q, self.xt, self.xt, self.idt, self.idt) + (q["noise"].exp() ** 2 + 1e-6) * eye + known
                 L = torch.linalg.cholesky(K)
                 r = (yt - q["mu"])[:, None]
                 alpha = torch.cholesky_solve(r, L)
@@ -308,7 +313,7 @@ class HierGP:
                 pass
             with torch.no_grad():
                 q = {k: (v.detach().clamp(-7, 4) if k != "mu" else v.detach()) for k, v in p.items()}
-                K = self._K(torch, q, self.xt, self.xt, self.idt, self.idt) + (q["noise"].exp() ** 2 + 1e-6) * eye
+                K = self._K(torch, q, self.xt, self.xt, self.idt, self.idt) + (q["noise"].exp() ** 2 + 1e-6) * eye + known
                 L = torch.linalg.cholesky(K)
                 alpha = torch.cholesky_solve((yt - q["mu"])[:, None], L)
             self.fits.append({"p": q, "L": L, "alpha": alpha, "ym": ym, "ys": ys})
@@ -374,7 +379,15 @@ class JointLambdaGP:
         self.sx = _Scaler().fit(X["x"][idx])
         self.xt = torch.tensor(self.sx(X["x"][idx]), dtype=torch.float64)
         self.idt = self.kernel._ids(X, idx)
-        cov = line_fit_covariance(parts[idx, 0], parts[idx, 1], self.rel_sd, self.n_rows)
+        if X.get("lambda_cov") is not None:                      # real data: the per-row fit's own covariance (image_rows.py)
+            cov = np.asarray(X["lambda_cov"], float)[idx]
+            bad = ~np.isfinite(cov).all(axis=(1, 2))
+            cov[bad] = line_fit_covariance(parts[idx][bad, 0], parts[idx][bad, 1], self.rel_sd, self.n_rows)
+            lam_mean = parts[idx].sum(1)
+            self.obs_rel_var = float(np.median((cov[:, 0, 0] + cov[:, 1, 1] + 2 * cov[:, 0, 1]) / np.maximum(lam_mean, 1e-9) ** 2))
+        else:
+            cov = line_fit_covariance(parts[idx, 0], parts[idx, 1], self.rel_sd, self.n_rows)
+            self.obs_rel_var = self.rel_sd ** 2 / self.n_rows
         if self.space == "log":
             pos = np.maximum(parts[idx], 0.05 * parts[idx].sum(1, keepdims=True))
             y = np.log(pos)
@@ -477,7 +490,7 @@ class JointLambdaGP:
             lam = np.maximum(m.sum(1), 1e-6)
             var = cov[:, 0, 0] + cov[:, 1, 1] + 2 * cov[:, 0, 1]
         if self.include_noise:
-            var = var + (self.rel_sd * lam) ** 2 / self.n_rows
+            var = var + self.obs_rel_var * lam ** 2
         return np.log(lam)[:, None], (np.sqrt(np.maximum(var, 1e-18)) / lam)[:, None]
 
 
@@ -486,8 +499,8 @@ def _plain_gp(**kw):
     class Plain(HierGP):
         name = "ARD GP (amplifier one-hot)"
 
-        def fit(self, X, Y):
-            return super().fit({"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"]}, Y)
+        def fit(self, X, Y, y_var=None):
+            return super().fit({"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"]}, Y, y_var)
 
         def predict(self, X):
             return super().predict({"x": np.hstack([X["x"], X["onehot"]])})
@@ -545,23 +558,37 @@ class PhysicsStructured:
 
     def _lambda_inputs(self, X):
         """The joint-lambda GP's inputs: as given (hier), with the amplifier one-hot (plain), or x only (none)."""
+        extra = {"lambda_cov": X["lambda_cov"]} if X.get("lambda_cov") is not None else {}
         if self.kind == "hier":
             return X
         if self.kind == "plain":
-            return {"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"]}
-        return {"x": X["x"], "amp": X["amp"]}
+            return {"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"], **extra}
+        return {"x": X["x"], "amp": X.get("amp", np.zeros(len(X["x"]), int)), **extra}
+
+    def skips(self, X) -> np.ndarray | float:
+        """The image's number of skips N: per row from X["n_skips"] (real data: the image's NDCM) or ``n_skips``."""
+        n = X.get("n_skips")
+        if n is None:
+            return self.n_skips
+        n = np.asarray(n, float)
+        return np.where(np.isfinite(n) & (n > 0), n, self.n_skips)
 
     def physics_log_sigma_adu(self, X) -> np.ndarray:
         """1/2 log(a^2/N + b^2): the read noise after N skips, in ADU, measured on the trace (b = 0 if not use_floor)."""
         b2 = X["b"] ** 2 if self.use_floor else 0.0
-        return 0.5 * np.log(np.maximum(X["a"] ** 2 / self.n_skips + b2, 1e-30))
+        return 0.5 * np.log(np.maximum(X["a"] ** 2 / self.skips(X) + b2, 1e-30))
 
     def fit(self, X, Y, components=None):
+        """X["y_var"] (optional, (n, 3)): the labels' known variances in log units (WADERs' errors); the GPs then
+        weigh each image by its precision.  The residual's variance is var(log sigma_ADU) ~ var(log sigma_e) - var(log g)."""
         log_s, log_lam, log_g = Y[:, 0], Y[:, 1], Y[:, 2]
-        self.gain = make_gp(self.kind, **self.kw).fit(X, log_g)
+        yv = X.get("y_var")
+        v = (lambda t: None) if yv is None else (lambda t: np.asarray(yv)[:, t])
+        v_resid = None if yv is None else np.maximum(np.nan_to_num(np.asarray(yv)[:, 0] - np.asarray(yv)[:, 2]), 0.0)
+        self.gain = make_gp(self.kind, **self.kw).fit(X, log_g, v(2))
         # what the image sees that the trace physics does not (0 if the physics were complete)
         resid = log_s - (self.physics_log_sigma_adu(X) - log_g)
-        self.resid = make_gp(self.kind, **self.kw).fit(X, resid)
+        self.resid = make_gp(self.kind, **self.kw).fit(X, resid, v_resid)
         self.joint = self.lambda_model == "joint" and "lambda_parts" in X
         self.split = self.lambda_model == "split" and components is not None
         if self.joint:
@@ -570,7 +597,7 @@ class PhysicsStructured:
             self.dark = make_gp(self.kind, **self.kw).fit(X, components[:, 0])
             self.cic = make_gp(self.kind, **self.kw).fit(X, components[:, 1])
         else:
-            self.lam = make_gp(self.kind, **self.kw).fit(X, log_lam)
+            self.lam = make_gp(self.kind, **self.kw).fit(X, log_lam, v(1))
         return self
 
     def predict(self, X):

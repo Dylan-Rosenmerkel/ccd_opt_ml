@@ -121,7 +121,7 @@ def curve_tensor(curves: dict[str, np.ndarray], names: list[str] | None = None, 
     stacked = []
     for name in names:
         c = np.asarray(curves[name], float)
-        if log_frequency_spectra and "spectrum" in name:
+        if log_frequency_spectra and "spectrum" in name and "log frequency" not in name:   # already on a log axis
             c = log_frequency(c)
         if name in log_names:
             c = np.log(np.clip(c, 1e-30, None))

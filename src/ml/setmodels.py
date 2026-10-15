@@ -118,23 +118,24 @@ class SetStructured(st.PhysicsStructured):
         self.combiner, self.allan_ns = combiner, synthetic.ALLAN_N if allan_ns is None else np.asarray(allan_ns)
         self.name = f"A+B, sets combined: {combiner}"
 
-    def _fixed(self, sets, how):
+    def _fixed(self, sets, how, X=None):
         a, b = st.allan_fit(combine_sets(sets, how), self.allan_ns)
-        return 0.5 * np.log(np.maximum(a ** 2 / self.n_skips + b ** 2, 1e-30))
+        n = self.skips(X) if X is not None else self.n_skips
+        return 0.5 * np.log(np.maximum(a ** 2 / n + b ** 2, 1e-30))
 
     def physics_log_sigma_adu(self, X):
         if self.combiner != "learned":
-            return self._fixed(X["sets"], self.combiner)
-        return self.pool.predict(X["sets"], self._fixed(X["sets"], "median"))[0]
+            return self._fixed(X["sets"], self.combiner, X)
+        return self.pool.predict(X["sets"], self._fixed(X["sets"], "median", X))[0]
 
     def fit(self, X, Y, components=None):
         if self.combiner == "learned":
-            self.pool = SetPooling().fit(X["sets"], self._fixed(X["sets"], "median"), Y[:, 0] + Y[:, 2])
+            self.pool = SetPooling().fit(X["sets"], self._fixed(X["sets"], "median", X), Y[:, 0] + Y[:, 2])
         return super().fit(X, Y, components)
 
     def predict(self, X):
         mean, std = super().predict(X)
         if self.combiner == "learned":
-            _, s_pool = self.pool.predict(X["sets"], self._fixed(X["sets"], "median"))
+            _, s_pool = self.pool.predict(X["sets"], self._fixed(X["sets"], "median", X))
             std[:, 0] = np.sqrt(std[:, 0] ** 2 + s_pool ** 2)
         return mean, std
