@@ -35,3 +35,7 @@ docs/overleaf_*/*.log
 
 # Packet manifests written by make_manual_manifest.py (data-specific)
 manifests/
+
+# Level 1: regenerated test data and the notebook demo output
+lvl1/test_data/
+lvl1/demo/
