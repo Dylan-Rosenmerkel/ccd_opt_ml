@@ -55,3 +55,40 @@ amplifier term (it is a labeled model).
 
 * Nothing running. Open items unchanged from 2026-10-14 section 5.4 (voltage windows to confirm, `reviewed = false`;
   CCD-to-stage mapping; first real 1×1 500-skip packets).
+
+## 4. Level 1 (user, later on 2026-10-15)
+
+The user defined three levels: **lvl 1** = can noise parameters be predicted from the traces (packets taken by hand,
+training by hand); **lvl 2** = predict and suggest new parameters; **lvl 3** = predict and run new scans. Lvl 1 and 2
+must be properly prepared before lvl 3 is looked at. Everything **without amplifier labels**. The user's correction:
+the models learn how σe, λ, gain depend on the **trace**, so every amplifier's trace is a training example
+(100 packets = 400 examples); grouped CV by packet is kept for honest scores.
+
+### Done (pushed as I went)
+* **`daq_scripts/manual_packet.sh`** (906bb87): `PACKET_ID` (default `m<date>_<time>`, validated), traces named
+  `<PACKET_ID>_ref<set>` / `<PACKET_ID>_new<set>`, a packet record `$RECORD_DIR/<PACKET_ID>.json` (default
+  `~/packet_records`) written when queued (not in DRY_RUN); refuses an existing record. Tested with a stub `cdaq`.
+  `manual_packet_commands.txt` regenerated.
+* **`src/make_manual_manifest.py`**: record + run dir → manifest v3 subset; theta from the `.meta` files (readback);
+  requested changes checked (mismatch → status `check`; tested: a wrong VDD1 request was caught); image = first image
+  per board after the packet's last trace and before another packet's trace; `trace_matches_image`;
+  `--legacy-run DIR --board 101` groups older runs by identical settings (10-12 run → 4 packets).
+* **`src/image_rows.py`**: λ per row by ML with WADERs gain/σ fixed (active columns from the .meta geometry); weighted
+  line λ_r = CIC + DC x_r with iterated weights from the fitted line (row-error weighting biased CIC low, fixed: pulls
+  ~0 ± 1 on simulated images). Assumes FITS row 0 = first read; `[rows] reverse` in processing.toml otherwise.
+* **`src/process_packet.py`** (e93b21b): per-row λ after WADERs (failure → warning only); dataset rows gain
+  `label.sigma_err`, `dc_err`, `lambda_dark/cic` (+ errors, covariance, χ²), `image.*` geometry; `--packets-dir` skips
+  non-ok manifests with a message; then `ml/real_inputs.build_all`.
+* **`src/ml/real_inputs.py`**: `model_inputs/{features,curves,physics,sets,pretrain}.npz` (common part: ids, Y, Y_err,
+  label_ok, fake, theta; nothing fitted). Tested on the 10-12 legacy packets (16 examples, 85 features, 14 curves, 3 sets
+  per row, 96 unlabeled traces). `data.curve_tensor` no longer re-log-frequencies the already log-frequency spectrum.
+* **Models**: `HierGP.fit(..., y_var)` known label variances; `PhysicsStructured` takes `X["n_skips"]` per row and
+  `X["y_var"]` (residual var = var σe − var g); `JointLambdaGP` takes `X["lambda_cov"]` (real per-row fit covariance);
+  `DeepKernelGP(amp_term=False)`; `SetStructured` per-row skips.
+* **`lvl1/`** (8c54cfb): `train_lvl1.py` (11 models, all label-free; packet-grouped CV; error, bias, shape, rank,
+  coverage 68/95 raw and cross-conformal, factor, label error, for σe, λ AND gain; report.md/json, predictions.csv),
+  `make_test_data.py` (synthetic world v4 in the model_inputs format; allan = median over sets like real processing),
+  `README.md`, `make_walkthrough.py` → `lvl1_walkthrough.ipynb`. `lvl1/test_data/` and `lvl1/demo/` are gitignored.
+* Quick run on 100 synthetic packets (400 examples): trace_physics σe 35.5 % (gain unknown; rank 0.89); physics 5.5 %,
+  λ 4.9 %, gain 0.9 %; physics_joint λ 4.6 %; sets σe 5.1 %; ridge 11.5 %; gp 9.9 %; cnn 8.4 %; pretrained 8.0 %;
+  deep_kernel 8.9 % (σe; labels carry 1.5 / 3 / 0.8 % error).
