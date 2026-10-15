@@ -28,3 +28,7 @@ docs/*email*
 
 # Python environment for the ML models (requirements-ml.txt)
 .venv/
+
+# Compiled Overleaf output (rebuild from the .tex)
+docs/overleaf_*/*.pdf
+docs/overleaf_*/*.log
