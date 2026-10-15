@@ -208,3 +208,13 @@ See `docs/packet_design.md`.
 * **Config:** `configs/packet_recommended.toml`, 25 steps, ~11.5 min.
 * `configs/limits.toml`: the image-size windows were widened to the CCD size, so that NCOL 1000 and
   NCOLPRE 5300 are allowed.
+
+## 11. Packets taken by hand can be processed (added 2026-10-15)
+
+* `daq_scripts/manual_packet.sh`: `PACKET_ID` (default `m<date>_<time>`); traces `<PACKET_ID>_ref<set>` /
+  `<PACKET_ID>_new<set>`; a record `$RECORD_DIR/<PACKET_ID>.json` (default `~/packet_records`) written when queued.
+* `src/make_manual_manifest.py <record> --run-dir <raw files>` → manifest (theta from the .meta files, requested changes
+  checked, image = first image per board after the packet's last trace); `--legacy-run` for older runs.
+* `process_packet.py` then also fits λ row by row (dark current / CIC, `image_rows.py`) and writes
+  `model_inputs/*.npz` for every model family (`ml/real_inputs.py`). Level 1 training: `lvl1/train_lvl1.py`.
+

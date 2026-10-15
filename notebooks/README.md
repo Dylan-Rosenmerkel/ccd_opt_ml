@@ -16,6 +16,8 @@ it can be read without running it. Nothing here touches the DAQ hardware.
 | `ml_remaining_models.ipynb` | The remaining models: log-frequency spectra, pre-training (D), deep kernel (C), set models (E), several modules (G), trust region / constraints / multi-fidelity / ParEGO (F), joint dark + CIC fit, the real-data noise check, robustness over training scans (generator: `make_remaining_models_notebook.py`) | current (needs `.venv`) |
 | `ml_structured_models.ipynb` | The second-round models: physics-structured outputs (A), hierarchical GP (B), conformal error bars (H), decomposed optimizer (F); new module, scan design | current (needs `.venv`) |
 
+**Level 1** has its own walkthrough: `../lvl1/lvl1_walkthrough.ipynb` (a packet by hand → manifest → processing → per-model input files → training and testing every model without amplifier labels; generator `../lvl1/make_walkthrough.py`).
+
 A suggested reading order: comparison → take packet → process packet → trace features.
 
 ---

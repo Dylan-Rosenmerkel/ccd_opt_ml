@@ -120,9 +120,18 @@ Options:
 `lvl1/make_test_data.py` writes synthetic packets (the toy CCD world: image-only noise, per-row λ, intermittent pickup,
 damaged trace sets) in exactly the `model_inputs` format, with the label errors WADERs would give. They go to
 `lvl1/test_data/`, which is not in the repository; regenerate them with the command below. On 100 such packets (400
-examples), `--quick` gives:
-* trace physics alone: σe 36 % off in level, because the gain is unknown without labels, but it already ranks the settings well (0.89);
-* model A: σe 5.5 %, λ 4.9 % (labels 3 %), gain 0.9 %.
+examples), the full run gives these errors (labels carry 1.5 / 3 / 0.8 %):
+
+| model | σe | λ | gain |
+|---|---|---|---|
+| trace_physics (no learning) | 35.5 % (in level: the gain is unknown without labels; the settings' order is right, rank 0.89) | 30.4 % | 31.3 % |
+| **physics (A, default)** | **5.5 %** | **4.9 %** | **0.9 %** |
+| physics_joint | 5.5 % | 4.6 % | 0.9 % |
+| sets (E) | 5.1 % | 4.9 % | 0.9 % |
+| ridge / trees / gp / nn | 10.5–11.5 % | 4.4–21.4 % | 0.8–3.6 % |
+| cnn | 6.8 % | 9.3 % | 1.2 % |
+| pretrained (D) | 5.8 % | 11.6 % | 1.2 % |
+| deep_kernel (C) | 10.8 % | 5.0 % | 0.9 % |
 
 These numbers compare methods; they say nothing about the real CCD.
 

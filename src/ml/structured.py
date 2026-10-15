@@ -316,7 +316,9 @@ class HierGP:
                 K = self._K(torch, q, self.xt, self.xt, self.idt, self.idt) + (q["noise"].exp() ** 2 + 1e-6) * eye + known
                 L = torch.linalg.cholesky(K)
                 alpha = torch.cholesky_solve((yt - q["mu"])[:, None], L)
-            self.fits.append({"p": q, "L": L, "alpha": alpha, "ym": ym, "ys": ys})
+            # a NEW image's label has the typical known label variance too: added to the predictive variance
+            known_mean = float(np.mean(y_var[idx, t])) / ys ** 2 if y_var is not None else 0.0
+            self.fits.append({"p": q, "L": L, "alpha": alpha, "ym": ym, "ys": ys, "known": known_mean})
         return self
 
     def predict(self, X):
@@ -330,7 +332,7 @@ class HierGP:
                 Ks = self._K(torch, q, xs, self.xt, ids, self.idt)
                 m = q["mu"] + (Ks @ f["alpha"])[:, 0]
                 v = torch.linalg.solve_triangular(f["L"], Ks.T, upper=False)
-                var = self._prior_var(q) - (v * v).sum(0) + (q["noise"].exp() ** 2 if self.include_noise else 0.0)
+                var = self._prior_var(q) - (v * v).sum(0) + (q["noise"].exp() ** 2 + f.get("known", 0.0) if self.include_noise else 0.0)
                 means.append(m.numpy() * f["ys"] + f["ym"])
                 stds.append(np.sqrt(var.clamp_min(1e-12).numpy()) * f["ys"])
         return np.column_stack(means), np.column_stack(stds)

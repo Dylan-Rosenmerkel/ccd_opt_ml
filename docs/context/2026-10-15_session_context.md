@@ -92,3 +92,16 @@ the models learn how σe, λ, gain depend on the **trace**, so every amplifier's
 * Quick run on 100 synthetic packets (400 examples): trace_physics σe 35.5 % (gain unknown; rank 0.89); physics 5.5 %,
   λ 4.9 %, gain 0.9 %; physics_joint λ 4.6 %; sets σe 5.1 %; ridge 11.5 %; gp 9.9 %; cnn 8.4 %; pretrained 8.0 %;
   deep_kernel 8.9 % (σe; labels carry 1.5 / 3 / 0.8 % error).
+* Full (non-quick) run on the same 100 synthetic packets, σe / λ / gain error (labels 1.5 / 3 / 0.8 %):
+  trace_physics 35.5 / 30.4 / 31.3 % (σe rank 0.89); **physics 5.5 / 4.9 / 0.9**; physics_joint 5.5 / 4.6 / 0.9;
+  sets 5.1 / 4.9 / 0.9; ridge 11.5 / 11.8 / 0.8; trees 10.6 / 21.4 / 3.6; gp 11.0 / 4.4 / 0.8; nn 10.5 / 10.6 / 1.1;
+  cnn 6.8 / 9.3 / 1.2; pretrained 5.8 / 11.6 / 1.2; deep_kernel 10.8 / 5.0 / 0.9.
+* Fix after the notebook showed it: with known label variances the GP's predictive variance lacked the label noise of
+  a NEW image (gain coverage 0.43); `HierGP` now adds the mean known variance → coverage 0.71 / 0.75 / 0.71.
+* Notebook `lvl1/lvl1_walkthrough.ipynb` executed (10-12 legacy manifests and processing of 2 packets with
+  --skip-waders; row-λ demo; quick training; report tables; predicted-vs-true plots).
+
+### Still open for level 1
+* First real packets (1×1, 500 skips) taken with the new manual_packet.sh; check row order (DC > 0), label flags, ch2.
+* `models.GP` (sklearn, features family) does not use the label errors (only the physics models do).
+* Pass mark for level 1 to agree with the user (suggested in lvl1/README.md).
