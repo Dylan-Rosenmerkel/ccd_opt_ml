@@ -119,3 +119,16 @@ label-free 3.3 % after 2 packets in this run, 2.0 vs 2.2 % over 3 scans; 10: dir
 pre-training did not help in this run). Notable demos: 00 leakage (row split λ 10.4 % vs packet split 27.7 %); 04
 log-frequency (σe 10.1 → 4.8 % at 120 packets); 08 model A σe 3.0 % from 15 packets vs 20.6 % for a GP; 14 learned set
 combination 4.4 % vs best fixed rule 11.3 %.
+
+## 6. Model A+B (user: "what about A+B?" → "go ahead with both")
+
+* **Level 1** (cb1e2dc): `physics_hier` = `PhysicsStructured(kind="hier")` with module/amplifier ids built from board and channel,
+  a REFERENCE marked "(labels)" in every report; runs by default next to `physics`. Synthetic 100 packets: σe 5.9 % (labels)
+  vs 5.5 % (no labels), λ 4.9 / 4.9 %, gain 0.8 / 0.9 %.
+* **Tutorial** `notebooks/model_tutorials/09b_physics_plus_hierarchical.ipynb` (between 09 and 10; 09's "Next" points to it):
+  inside A+B, the gain GP's variance is 99.5 % amplifier offset, the correction and λ are shared; known amplifiers (1 module):
+  A+B ahead with few packets (30 packets: σe 2.2 vs 3.7 %, gain 1.0 vs 2.6 %), equal by 60 (gain still better 0.3 vs 0.9 %);
+  new module: 0 packets error dominated by ONE amplifier with an unusual gain (A+B 67 %, A 53 %; the other three within
+  3–7 % for both); A+B gives every new amplifier a wide ±31 % bar, A narrow ±9 % bars; after 2–5 packets A+B slightly
+  ahead in this run (1.8 vs 3.3 %, 1.9 vs 2.4 %). Conclusion written in the notebook: the price of no labels is mainly the gain
+  with few packets; whether it exists on the real CCD (gains differ ~2 % on module 101) is for level 1 to show.
