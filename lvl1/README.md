@@ -11,7 +11,8 @@ The project is staged in three levels:
 Level 1 is manual on purpose: packets are taken by hand, processed, and the models are trained and tested
 offline. Nothing here sends anything to the hardware.
 
-**No amplifier labels.** None of the level-1 models is told which amplifier it is looking at. A model sees an
+**No amplifier labels.** None of the level-1 models is told which amplifier it is looking at, except one reference
+(`physics_hier`, model A+B) that is there only to measure what labels would add. A model sees an
 amplifier's *own* traces (its trace and reference features or curves) and the settings. The board and channel are used
 only to group rows for testing and scoring.
 
@@ -77,6 +78,7 @@ training folds, so test packets never influence training.
 | `trace_physics` | no learning: the noise measured on the trace's Allan curve, divided by the training mean gain (the baseline: how far the trace alone gets) | physics |
 | `physics` | **A, the default**: trace physics plus a learned gain and a learned correction (GPs on settings + packet state + own features) | physics |
 | `physics_joint` | A with λ from the joint dark-current / CIC fit of the per-row λ | physics |
+| `physics_hier` | **A+B, a reference WITH labels**: A on hierarchical GPs told the module and amplifier; marked "(labels)" in the report. Comparing it with `physics` measures what amplifier labels add on the real CCD | physics |
 | `sets` | E: A with the 10 trace sets combined by a learned set network | sets |
 | `ridge`, `trees`, `gp`, `nn` | the first-round models on settings + own trace + own reference features | features |
 | `cnn` | 1D CNN on the trace and reference curves + settings | curves |
@@ -127,6 +129,7 @@ examples), the full run gives these errors (labels carry 1.5 / 3 / 0.8 %):
 | trace_physics (no learning) | 35.5 % (in level: the gain is unknown without labels; the settings' order is right, rank 0.89) | 30.4 % | 31.3 % |
 | **physics (A, default)** | **5.5 %** | **4.9 %** | **0.9 %** |
 | physics_joint | 5.5 % | 4.6 % | 0.9 % |
+| physics_hier (A+B, **with labels**) | 5.9 % | 4.9 % | 0.8 % |
 | sets (E) | 5.1 % | 4.9 % | 0.9 % |
 | ridge / trees / gp / nn | 10.5–11.5 % | 4.4–21.4 % | 0.8–3.6 % |
 | cnn | 6.8 % | 9.3 % | 1.2 % |

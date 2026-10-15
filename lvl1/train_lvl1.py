@@ -2,7 +2,9 @@
 train_lvl1.py -- LEVEL 1: can the image's noise parameters be predicted from the traces?  One command.
 
 Every model is trained and tested on the processed packets, WITHOUT amplifier labels: a model sees an amplifier's
-own traces (its trace and reference features or curves) and the settings, never which amplifier it is.  One
+own traces (its trace and reference features or curves) and the settings, never which amplifier it is.  The one
+exception is ``physics_hier`` (A+B), a REFERENCE that is told the module and amplifier: comparing it with ``physics``
+measures what amplifier labels add on the real CCD.  It is marked "(labels)" in every report.  One
 training example = one amplifier's traces in one packet, with that amplifier's labels from the image (a packet
 read by 4 amplifiers gives 4 examples).
 
@@ -31,6 +33,7 @@ Models (family file in brackets; see lvl1/README.md):
     trace_physics   [physics]   no learning: noise from the trace's Allan curve, the training mean gain
     physics         [physics]   A: trace physics + learned gain and correction (the default model)
     physics_joint   [physics]   A with the joint dark-current / CIC fit of lambda (needs per-row lambda)
+    physics_hier    [physics]   A+B, REFERENCE WITH LABELS: A on hierarchical GPs told the module and amplifier
     sets            [sets]      E: A with the trace sets combined by a learned set network
     ridge           [features]  Bayesian ridge on settings + own trace + own reference features
     trees           [features]  gradient-boosted trees, same inputs
@@ -62,8 +65,10 @@ from ml import models, real_inputs, structured as st  # noqa: E402
 from ml.evaluate import grouped_folds  # noqa: E402
 
 TARGETS = ("sigma_e", "lambda", "gain")
-ALL_MODELS = ("trace_physics", "physics", "physics_joint", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
-FAMILY = {"trace_physics": "physics", "physics": "physics", "physics_joint": "physics", "sets": "sets",
+ALL_MODELS = ("trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
+#: models told which module and amplifier they see (references only; see the module docstring)
+USES_LABELS = ("physics_hier",)
+FAMILY = {"trace_physics": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
           "ridge": "features", "trees": "features", "gp": "features", "nn": "features",
           "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves"}
 MAX_NAN_FRACTION = 0.2
@@ -130,6 +135,10 @@ class Runner:
         self.pretrainer = None
         d = files[next(iter(files))]
         self.Y, self.Y_err = d["Y"][rows], d["Y_err"][rows]
+        # integer module / amplifier ids (for the labelled reference only)
+        boards, keys = d["board"][rows], np.array([f"{b}_ch{c}" for b, c in zip(d["board"][rows], d["channel"][rows])])
+        self.module_id = np.unique(boards, return_inverse=True)[1]
+        self.amp_id = np.unique(keys, return_inverse=True)[1]
 
     #: arrays that are not one-per-example (names, block lengths)
     NOT_PER_ROW = ("allan_ns", "theta_names", "feature_names", "curve_names", "targets")
@@ -147,7 +156,9 @@ class Runner:
         xtr, xte, _ = prep_columns(xs[train], xs[test])
         a, b = st.allan_fit(np.nan_to_num(d["allan"], nan=np.nanmedian(d["allan"])), d["allan_ns"])
         def part(idx, x):
-            X = {"x": x, "a": a[idx], "b": b[idx], "n_skips": d["n_skips"][idx], "y_var": self.Y_err[idx] ** 2}
+            X = {"x": x, "a": a[idx], "b": b[idx], "n_skips": d["n_skips"][idx], "y_var": self.Y_err[idx] ** 2,
+                 # module and amplifier ids: used ONLY by the labelled reference physics_hier (kind "hier")
+                 "module": self.module_id[idx], "amp": self.amp_id[idx]}
             if "lambda_parts" in d:
                 X["lambda_parts"], X["lambda_cov"] = d["lambda_parts"][idx], d["lambda_cov"][idx]
             return X
@@ -177,6 +188,12 @@ class Runner:
 
     def physics_joint(self, train, test):
         return self.physics(train, test, joint=True)
+
+    def physics_hier(self, train, test):
+        """A+B: model A on hierarchical GPs with module and amplifier levels -- the labelled reference."""
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        return st.PhysicsStructured(kind="hier").fit(Xtr, self.Y[train]).predict(Xte)
 
     def sets(self, train, test):
         from ml import setmodels
@@ -318,10 +335,12 @@ def report_md(results: dict, info: dict) -> str:
             if "skipped" in res:
                 continue
             s = res["scores"][name]
-            lines.append(f"| {model} | {fmt(s['error'])} | {fmt(s['bias'])} | {fmt(s['shape'])} | {fmt(s['rank'], False)} | "
+            lines.append(f"| {model}{' (labels)' if model in USES_LABELS else ''} | {fmt(s['error'])} | {fmt(s['bias'])} | {fmt(s['shape'])} | {fmt(s['rank'], False)} | "
                          f"{fmt(s['coverage68'], False)} / {fmt(s['coverage95'], False)} | {fmt(s['calibrated_coverage68'], False)} / "
                          f"{fmt(s['calibrated_coverage95'], False)} | {fmt(s['factor68'], False)} | {fmt(s['label_error'])} |")
         lines.append("")
+    if any(m in USES_LABELS for m in results):
+        lines += ["(labels): a reference model told the module and amplifier; every other model sees only each amplifier's own traces.", ""]
     skipped = {m: r["skipped"] for m, r in results.items() if "skipped" in r}
     if skipped:
         lines += ["## Skipped", ""] + [f"* {m}: {why}" for m, why in skipped.items()] + [""]
@@ -391,7 +410,7 @@ def main():
         sc = scores(runner.Y, runner.Y_err, mean, std, amp, folds)
         results[name] = {"scores": sc, "seconds": time.time() - t0}
         preds[name] = (mean, std)
-        print(f"{name:14s} " + "  ".join(f"{t}: {100 * sc[t]['error']:5.1f} % (rank {fmt(sc[t]['rank'], False)}, cover {sc[t]['coverage68']:.2f})"
+        print(f"{name + (' (labels)' if name in USES_LABELS else ''):14s} " + "  ".join(f"{t}: {100 * sc[t]['error']:5.1f} % (rank {fmt(sc[t]['rank'], False)}, cover {sc[t]['coverage68']:.2f})"
                                           for t in TARGETS) + f"   {time.time() - t0:5.0f} s", flush=True)
     (out / "report.json").write_text(json.dumps({"info": info, "results": results}, indent=1))
     (out / "report.md").write_text(report_md(results, info))
