@@ -756,8 +756,9 @@ md(r"""
 **Reading the numbers:**
 * The probe shows what pre-training bought: the embedding knows the single-skip noise and, unlike a random encoder, part of the noise
   floor, without seeing a single label.
-* On labels, one training scan is noisy (differences of ~1 % are within the scatter). Over 5 scans in the project's test, pre-training
-  helped at 60 packets (σe 6.6 against 8.9 %) and no longer at 240.
+* On the labels, pre-training did **not** help in this run (σe 9.7 % against 7.5 % from scratch at 30 packets; equal at 60). One training
+  scan is noisy: over 5 scans in the project's test, pre-training helped at 60 packets (6.6 against 8.9 %) and no longer at 240. The
+  benefit is small and not guaranteed. On real data it has to earn its place against the CNN trained from scratch.
 
 ## When to use it
 
