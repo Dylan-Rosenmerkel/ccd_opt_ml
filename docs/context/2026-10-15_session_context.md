@@ -105,3 +105,17 @@ the models learn how σe, λ, gain depend on the **trace**, so every amplifier's
 * First real packets (1×1, 500 skips) taken with the new manual_packet.sh; check row order (DC > 0), label flags, ch2.
 * `models.GP` (sklearn, features family) does not use the label errors (only the physics models do).
 * Pass mark for level 1 to agree with the user (suggested in lvl1/README.md).
+
+## 5. Model tutorials (user: a folder of notebooks, one per model, simplest first, from the basics)
+
+`notebooks/model_tutorials/` (bb895e2, 82b0a02): 15 executed notebooks, same order and notation as the learning guide:
+00 foundations, 01 ridge, 02 trees, 03 networks, 04 CNN, 05 GP, 06 BO, 07 better BO (F), 08 A, 09 B (+ labels), 10 joint
+DC/CIC, 11 conformal (H), 12 pre-training (D), 13 deep kernel (C), 14 set models (E). Each: idea → equations with symbols →
+from-scratch version checked against our code → our code on the toy CCD world (no amplifier labels except the comparison
+in 09) → when to use it. Generator `make_tutorials.py` (+ `tutorials_part1.py`, `tutorials_part2.py`; `make_tutorials.py
+<names>` rebuilds only those, dropping their outputs), helpers `tutorial_utils.py` (`toy_scan`, `grouped_cv`, `report`),
+`README.md` index. Single-run numbers are stated honestly next to the multi-scan results (e.g. 09: labelled 1.8 vs
+label-free 3.3 % after 2 packets in this run, 2.0 vs 2.2 % over 3 scans; 10: direct λ ahead of joint in this run; 12:
+pre-training did not help in this run). Notable demos: 00 leakage (row split λ 10.4 % vs packet split 27.7 %); 04
+log-frequency (σe 10.1 → 4.8 % at 120 packets); 08 model A σe 3.0 % from 15 packets vs 20.6 % for a GP; 14 learned set
+combination 4.4 % vs best fixed rule 11.3 %.
