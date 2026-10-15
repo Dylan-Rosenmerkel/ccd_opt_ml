@@ -13,8 +13,18 @@
 # Usage (on the DAQ machine, ccd-cdaq environment active):
 #   DRY_RUN=1 bash manual_packet.sh     # print every command, send nothing  <- do this first
 #   bash manual_packet.sh               # check, show the plan, ask, then queue
+#   PACKET_ID=m0007 bash manual_packet.sh   # choose the packet's name (default: m<date>_<time>)
 #
 # Edit the SETTINGS block, nothing else.
+#
+# PROCESSING: every trace of the packet is named <PACKET_ID>_ref<set> / <PACKET_ID>_new<set> (cdaq appends
+# the geometry, channel, board and time), and a small RECORD of the packet (its name, the changes, the
+# trace and image settings) is written to $RECORD_DIR/<PACKET_ID>.json when the commands are queued.  After
+# the queue has run, on the analysis computer:
+#   python src/make_manual_manifest.py <record.json> --run-dir <directory with the raw files>
+#   python src/process_packet.py <the manifest it writes>
+# The manifest takes the settings of every trace and image from their .meta files (the values the boards
+# report), and the image is the first image of each board taken after the packet's last trace.
 #
 # Duration with the defaults: 18 flushes (~30 s each: 3 initial, one between trace sets, one after
 # the change, one at the end) = 9 min, 60 traces (~2 min), the img.toml image (16x1000x500,
@@ -29,6 +39,9 @@ PYTHON="${PYTHON:-python}"                      # or "pixi run python"
 IMAGE_TOML="image_params/tc1/img.toml"          # relative to CDAQ_DIR (16 x 1000 x 500, 1x1, prescan 5300)
 LEADER=101                                      # master board for the image
 POOL=acmpool
+PACKET_ID="${PACKET_ID:-m$(date +%Y%m%d_%H%M%S)}" # unique name of this packet: the prefix of all its traces
+RECORD_DIR="${RECORD_DIR:-$HOME/packet_records}" # where the packet record (JSON) is written
+SCAN_NAME="${SCAN_NAME:-manual}"                # free text: which scan / series this packet belongs to
 
 N_INITIAL_FLUSHES=3       # flushes before the first reference trace set
 N_REF_SETS=5              # reference trace sets (nominal parameters)
@@ -151,8 +164,43 @@ traces() {   # traces <prefix> <number of sets>: one trace per channel per set, 
 }
 nominal() { for pair in $BCF; do q "daq.read_config('${pair#*=}')" "${pair%%=*}"; done; }
 
+# ------------------------------ packet record --------------------------------
+# A JSON record of what this packet does, read by src/make_manual_manifest.py.  No numbers are parsed from
+# it later except the requested changes (compared with what the .meta files report).
+json_list() { local first=1 x; printf '['; for x in "$@"; do ((first)) || printf ', '; printf '"%s"' "$x"; first=0; done; printf ']'; }
+write_record() {
+  local file="$RECORD_DIR/$PACKET_ID.json"
+  if [[ ${DRY_RUN:-0} == 1 ]]; then echo "(dry run: the record would be written to $file)"; return; fi
+  mkdir -p "$RECORD_DIR"
+  if [[ -e $file ]]; then echo "ERROR: $file exists: choose another PACKET_ID"; exit 1; fi
+  {
+    printf '{\n'
+    printf '  "record_version": 1,\n'
+    printf '  "packet_id": "%s",\n' "$PACKET_ID"
+    printf '  "scan_name": "%s",\n' "$SCAN_NAME"
+    printf '  "queued_at": "%s",\n' "$(date +%Y-%m-%dT%H:%M:%S%z)"
+    printf '  "host": "%s",\n' "$(hostname)"
+    printf '  "script": "manual_packet.sh",\n'
+    printf '  "changes": %s,\n' "$(json_list "${CHANGES[@]}")"
+    printf '  "bcf": %s,\n' "$(json_list $BCF)"
+    printf '  "trace_prefix_ref": "%s_ref",\n' "$PACKET_ID"
+    printf '  "trace_prefix_new": "%s_new",\n' "$PACKET_ID"
+    printf '  "n_ref_sets": %d,\n' "$N_REF_SETS"
+    printf '  "n_sets": %d,\n' "$N_SETS"
+    printf '  "trace_channels": %s,\n' "$(json_list $TRACE_CHANNELS)"
+    printf '  "trace_args": "%s",\n' "${TRACE_ARGS//\'/}"
+    printf '  "flush_between": "%s",\n' "$FLUSH_BETWEEN"
+    printf '  "image_toml": "%s",\n' "$IMAGE_TOML"
+    printf '  "leader": %d\n' "$LEADER"
+    printf '}\n'
+  } > "$file"
+  echo "Packet record written: $file"
+}
+
 # --------------------------------- the plan ----------------------------------
+[[ $PACKET_ID =~ ^[A-Za-z0-9_-]+$ ]] || { echo "ERROR: PACKET_ID may only contain letters, digits, _ and -"; exit 1; }
 check_and_show || exit 1
+echo "Packet: $PACKET_ID   (traces ${PACKET_ID}_ref<set>, ${PACKET_ID}_new<set>; record in $RECORD_DIR)"
 echo "Traces: $N_REF_SETS reference + $N_SETS new sets x channels [$TRACE_CHANNELS], flush between: $FLUSH_BETWEEN"
 echo "Trace: $TRACE_ARGS"
 echo "Image: $IMAGE_TOML"
@@ -162,6 +210,8 @@ if [[ ${DRY_RUN:-0} != 1 ]]; then
   [[ $answer == [yY] ]] || { echo "nothing sent"; exit 0; }
 fi
 
+write_record
+
 # 0. start from the nominal configuration, standalone mode, external clock
 nominal
 q "daq.set_standalone()" "$POOL"
@@ -169,7 +219,7 @@ q "daq.use_external_clock()" "$POOL"          # set once per session; harmless i
 
 # 1. reference traces at nominal
 flushes "$N_INITIAL_FLUSHES"
-traces trace_ref "$N_REF_SETS"
+traces "${PACKET_ID}_ref" "$N_REF_SETS"
 
 # 2. change the parameters
 for change in "${CHANGES[@]}"; do
@@ -180,7 +230,7 @@ done
 flushes "$FLUSH_AFTER_CHANGE"
 
 # 3. traces at the new parameters
-traces trace_new "$N_SETS"
+traces "${PACKET_ID}_new" "$N_SETS"
 
 # 4. master/slave mode and the image (take_image.py queues the take_image call itself)
 q "daq.master($LEADER)" "$POOL"
@@ -200,4 +250,5 @@ if [[ ${DRY_RUN:-0} == 1 ]]; then
   echo "(dry run: nothing was sent)"
 else
   echo "All commands queued.  Watch them with: cdaq print queues   (and cdaq print logs)"
+  echo "Afterwards: python src/make_manual_manifest.py $RECORD_DIR/$PACKET_ID.json --run-dir <raw-file directory>"
 fi

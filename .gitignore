@@ -32,3 +32,6 @@ docs/*email*
 # Compiled Overleaf output (rebuild from the .tex)
 docs/overleaf_*/*.pdf
 docs/overleaf_*/*.log
+
+# Packet manifests written by make_manual_manifest.py (data-specific)
+manifests/
