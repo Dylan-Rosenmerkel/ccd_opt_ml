@@ -178,3 +178,15 @@ noise-scaled window, first columns, minimum zero-electron pixels per column.
   not generic electronics/clocking; tied to board 101 + PA03. 5800-image dips at its own start (weak evidence for a
   row-start effect).
 * Proposed tests: BOOLCLR 0; NCOLPRE 5000; (board swap if practical). Software trend removal remains the working fix.
+
+## 12. Survey of ~/Documents/JH1_Testing (user: "see if these data help"; "don't pay too much attention to DR03")
+
+`lvl1/drift_survey.py` (new) over all run folders; table `lvl1/real_image_checks/drift_survey_JH1_Testing_2026-10-16.csv`.
+* PA03 board 101 ch0 had the dip already on 2026-09-22/24 (500 skips, NCOLPRE 2800, EXPOSURE 1): −0.1..−0.25 ADU at the
+  first columns → present since September; at the readout start wherever that is (col 2800 then, 5300 now) → row-start
+  effect, not a CCD location.
+* AMT module 106 (other setup, same recipe NCOLPRE 2800, BOOLCLR 1, 500 skips): no dip (a flat +0.2 ADU active–overscan
+  step instead, different effect). With board 102's CCD-less channels: the recipe/electronics alone don't make it; it
+  belongs to PA03 + board 101.
+* Size: Sept −0.1..−0.25 (EXP 1, NCOLPRE 2800), Oct −0.3..−0.7 (EXP 10, NCOLPRE 5300); shrinks with skips but not 1/NDCM.
+* Proposed tests: EXPOSURE 0/1; NCOLPRE 2800; BOOLCLR 0.
