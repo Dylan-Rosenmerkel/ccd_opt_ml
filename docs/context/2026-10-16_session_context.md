@@ -150,3 +150,11 @@ Ran the old hand-JSON panaSKImg route on the same 3 board-101 images (raw and tr
   flag (σe halved, λ ~10x low); run_WADERs 0 of 18; header geometry; diagnostics (χ²/ndf, scaled errors, DC bias vs 0e-/1e-
   counts) flagged the problem; rehearsal 0-4 % vs 8-12 %. Limits: dead-channel test on 16 rows, quoted errors < repeat
   scatter on raw images, reference id_row_start 2, cannot fix an along-row drift (needs trend removal or NDCMPRE).
+
+## 9. Follow-up images 130 / 131 (user fixed H3_A_L in the .bcf files to 6.7; 131 also NDCMPRE = 5)
+
+* H3_A_L not the cause of the drift or transient. NDCMPRE = 5 removes the start-of-pixel transient (keep it, also for
+  traces). **The along-row drift is unchanged → the transient is NOT its cause (my earlier "likely cause" was wrong).**
+* Remaining candidate: analog FILTER (10-06: 85 = code 1, no drift; 10-12/10-16: 170 = code 2). Suggested test image with
+  the 10-06 filter setting. Software trend removal still works (χ²/ndf 1.2-2.1; 131 best 1.16-1.66).
+* ch3's raw DC bias vs 0e-/1e- counts: −0.3..−0.43 at H3_A_L 6.2, −0.09/−0.02 at 6.7.
