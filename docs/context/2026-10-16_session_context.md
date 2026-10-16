@@ -140,3 +140,13 @@ Yes (details in `lvl1/real_image_checks/2026-10-16_PA03_PQ04_16rows.md`, last se
   pocket pumping (PP_NCYCLES 50000, PP_SHIFT 3); readbacks/firmware normal; pixel [0,0] bad.
 * Single-skip noise from the saved skips (skips 10-499): board 101 ch0 5.8, ch1 5.8-6.0, ch3 6.4-6.8, ch2 6.8-9.0 ADU;
   board 102 4.5-5.1 ADU.
+
+## 8. User: "is this caused by the image or by the WADERs scripts? are my new scripts helpful?"
+
+Ran the old hand-JSON panaSKImg route on the same 3 board-101 images (raw and trend-removed). Answer given:
+* **Caused by the images** (measured on the pixels without fits; raw skips show the transient; both WADERs routes read σe
+  ~12 % high on raw images and agree after trend removal; scales with 1/NDCM).
+* **comm_scripts/run_WADERs is clearly helpful**: hand JSON locked the gain at ~2x (2e- peak as 1e-) in 4 of 18 fits with no
+  flag (σe halved, λ ~10x low); run_WADERs 0 of 18; header geometry; diagnostics (χ²/ndf, scaled errors, DC bias vs 0e-/1e-
+  counts) flagged the problem; rehearsal 0-4 % vs 8-12 %. Limits: dead-channel test on 16 rows, quoted errors < repeat
+  scatter on raw images, reference id_row_start 2, cannot fix an along-row drift (needs trend removal or NDCMPRE).
