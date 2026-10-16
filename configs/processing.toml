@@ -51,7 +51,20 @@ pysimdamicm_dir = "/Users/dylanrosenmerkel/Documents/Software/pysimdamicm"
 # ccd_cols = 100
 [waders.image_overrides]
 # (used only with runner = "panaSKImg"; for the planned 16 x 1000 x 500 image with NCOLPRE 5300:
-#  ccd_rows = 16, ccd_cols = 852, id_row_start = 0)
+#  ccd_rows = 16, ccd_cols = 852, id_row_start = 0 -- and ccd_cols = 652 when [drift] cuts 200 columns; run_WADERs
+#  reads the geometry from the (corrected) image header and needs nothing here)
+
+[drift]
+# The along-row baseline drift of board 101 / PA03 (lvl1/real_image_checks/2026-10-16_PA03_PQ04_16rows.md): the zero-electron
+# level starts ~1 ADU low at the start of every row's readout and recovers over a few hundred columns; the gain does not
+# change, the noise is raised in the first ~200 columns.  src/image_drift.py detects it (Gaussian fits of the zero-electron
+# peak per column block); if present, the first `cut` columns are removed and the slow remainder subtracted, and WADERs
+# and the per-row fit use that copy.  Images without a drift are used unchanged.  Labels record drift_corrected,
+# drift_cut and drift_warning (the drift differs between the row halves: the correction may not be trustworthy).
+enabled = true
+cut = 200                     # fixed for every packet (calibrated on the 2026-10-16 images); "auto" = per image (diagnostic)
+channels = [0, 1, 3]          # the channels that decide (ch2's zero peak is usually not resolved)
+width_tol = 0.05
 
 [rows]
 # lambda row by row (WADERs' gain and noise held fixed) and the straight line lambda_r = CIC + DC x_r through the

@@ -30,6 +30,8 @@ Steps (each is a function below; the walkthrough notebook runs them one by one)
     2. traces:  decode -> quality check -> regions -> tools -> .npz + features; then the
                 repeated trace sets are combined per (kind, board, channel)
     3. images:  decompress .fits.bz2 -> run panaSKImg -> read MEGAIN/MESIG/MEDC from the header
+    3b. drift:  the along-row baseline drift of each image (image_drift.py): if present, the first 200 columns are
+                cut and the slow remainder subtracted, and WADERs runs on that copy (labels record it)
     4. labels:  sigma_e = MESIG/MEGAIN, lambda = MEDC/MEGAIN, flags for fits stuck at a bound;
                 lambda row by row and its split into dark current and CIC (image_rows.py)
     5. group:   rebuild dataset.csv / dataset.jsonl from every result.json
@@ -91,6 +93,10 @@ class ProcessingConfig:
     waders_runner: str = "panaSKImg"       # "panaSKImg" (one JSON for every image) or "run_WADERs" (comm_scripts)
     run_waders_command: list[str] = field(default_factory=lambda: ["run_WADERs"])
     run_waders_args: list[str] = field(default_factory=lambda: ["--no-clusters"])
+    drift_enabled: bool = True             # along-row baseline drift: detect, cut, correct before WADERs (image_drift.py)
+    drift_cut: str = "200"                 # columns cut where a drift is found ("auto": per image, diagnostic only)
+    drift_channels: list[int] = field(default_factory=lambda: [0, 1, 3])   # channels that decide (the good ones of board 101)
+    drift_width_tol: float = 0.05
     rows_enabled: bool = True              # per-row lambda and the dark-current / CIC split (image_rows.py)
     rows_reverse: bool = False             # True if FITS row 0 is the LAST row read out
     model_inputs: bool = True              # also write the per-model input files (ml/real_inputs.py)
@@ -119,6 +125,10 @@ class ProcessingConfig:
             waders_runner=str(waders.get("runner", "panaSKImg")),
             run_waders_command=[str(resolve(c)) if "/" in str(c) else str(c) for c in waders.get("run_waders_command", ["run_WADERs"])],
             run_waders_args=list(waders.get("run_waders_args", ["--no-clusters"])),
+            drift_enabled=bool(data.get("drift", {}).get("enabled", True)),
+            drift_cut=str(data.get("drift", {}).get("cut", "200")),
+            drift_channels=[int(c) for c in data.get("drift", {}).get("channels", [0, 1, 3])],
+            drift_width_tol=float(data.get("drift", {}).get("width_tol", 0.05)),
             rows_enabled=bool(data.get("rows", {}).get("enabled", True)),
             rows_reverse=bool(data.get("rows", {}).get("reverse", False)),
             model_inputs=bool(data.get("model_inputs", {}).get("enabled", True)))
@@ -624,6 +634,23 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
             continue
         fits = decompress_fits(image["fits"], out / "fits")
         entry["fits"] = str(fits)
+        if cfg.drift_enabled:
+            # the along-row baseline drift (image_drift.py): if present, WADERs and the per-row fit use the corrected copy
+            # (first ``drift_cut`` columns removed, the slow remainder subtracted); without a drift the copy is unchanged
+            try:
+                from image_drift import correct_image
+                (out / "fits_drift").mkdir(parents=True, exist_ok=True)
+                drift = correct_image(fits, out / "fits_drift", cfg.drift_cut, cfg.drift_width_tol, 400, cfg.drift_channels)
+                entry["drift"] = {k: drift.get(k) for k in ("drift", "cut", "warning", "warning_channels", "output")}
+                entry["drift"]["channels"] = drift.get("channels")
+                if drift.get("drift"):
+                    entry["fits_original"] = str(fits)
+                    fits = Path(drift["output"])
+                    entry["fits"] = str(fits)
+                    if drift.get("warning"):
+                        result["warnings"].append(f"drift on board {image['board']}: {drift['warning']}")
+            except Exception as exc:                              # never lose the image over the drift step
+                result["warnings"].append(f"drift check failed on board {image['board']} (image used as is): {exc}")
         header = read_fits_primary(fits)
         entry["image_header"] = {k: header.get(k) for k in ("NROW", "NCOL", "NDCM", "NPBIN", "NSBIN", "EXPOSURE")}
         if not skip_waders and cfg.waders_runner == "run_WADERs":
@@ -646,11 +673,17 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
             try:
                 from image_rows import image_rows
                 # geometry for the active columns: the FITS header, overridden by the .meta where both have it
-                rows = image_rows(fits, entry["labels"], {**header, **meta}, reverse=cfg.rows_reverse)
+                # geometry: the image's own header wins (a drift-corrected copy has NCOLPRE / NCOL adjusted for the cut)
+                rows = image_rows(fits, entry["labels"], {**meta, **header}, reverse=cfg.rows_reverse)
                 for lab in entry["labels"]:
                     lab.update(rows.get(lab["channel"], {}))
             except Exception as exc:                              # never lose the labels over the row fit
                 result["warnings"].append(f"per-row lambda failed on board {image['board']}: {exc}")
+        if entry.get("labels") and entry.get("drift"):
+            d = entry["drift"]
+            for lab in entry["labels"]:
+                lab.update(drift_corrected=bool(d.get("drift")), drift_cut=d.get("cut") if d.get("drift") else 0,
+                           drift_warning=lab["channel"] in (d.get("warning_channels") or []))
         images.append(entry)
 
     labels = {"waders_version": waders_version(cfg) if not skip_waders else None,
@@ -703,7 +736,7 @@ def dataset_rows(result: dict, manifest: dict) -> list[dict[str, Any]]:
             for key in ("gain_adu_per_e", "gain_err", "sigma_e", "sigma_e_err", "lambda_e_per_bin",
                         "lambda_err", "sigma_adu", "sigma_err", "dc_adu", "dc_err", "mu_adu", "included_fraction",
                         "lambda_dark", "lambda_cic", "lambda_dark_err", "lambda_cic_err", "lambda_dark_cic_cov",
-                        "rows_chi2_dof", "n_rows_fit"):
+                        "rows_chi2_dof", "n_rows_fit", "drift_corrected", "drift_cut", "drift_warning"):
                 row[f"label.{key}"] = label.get(key)
             for key, value in (image.get("image_header") or {}).items():
                 row[f"image.{key}"] = value

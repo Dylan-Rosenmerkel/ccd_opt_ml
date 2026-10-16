@@ -227,3 +227,10 @@ See `docs/packet_design.md`.
 * `lvl1/packet_plan/PLAN.md`: 41 planned packets (session A timing only, can be taken now).
 * Processing labels now come from comm_scripts' `run_WADERs` by default (`configs/processing.toml [waders] runner`),
   with `--autoconfig-args=--keep-dead`; see `lvl1/README.md` and `lvl1/rehearsal_report/REHEARSAL.md`.
+
+## 13. Drift step in processing (added 2026-10-16)
+
+`process_packet.py` checks every image for the along-row baseline drift (`src/image_drift.py`, `[drift]` in
+configs/processing.toml): if found, the first 200 columns are cut and the slow remainder subtracted before WADERs and the
+per-row fit; labels record drift_corrected / drift_cut / drift_warning. Corrected copies are in `<packet>/fits_drift/`.
+

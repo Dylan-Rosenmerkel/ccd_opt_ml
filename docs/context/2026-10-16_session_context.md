@@ -224,3 +224,16 @@ wait). Recommendation: acquisition fix if found; else cut 200 columns (physical)
   row; recovers per pixel read; a question for the board-101 front-end expert.
 * drift_correct.py: now works without overscan (row-end reference); finds and treats the drift in all tests.
 * Basis for the user's decision: no setting removes it → cut 200 + slow remainder (drift_correct.py); keep BOOLCLR 1.
+
+## 16. User: "add the drift correction to process_packet"
+
+* `lvl1/drift_correct.py` moved to **`src/image_drift.py`** (git mv; lvl1/drift_correct.py is now a thin CLI wrapper);
+  `correct_image` returns the output path and `warning_channels`.
+* `process_packet.py`: after decompressing an image, if `[drift] enabled`, `correct_image(..., cut "200", channels [0,1,3])`
+  writes `<packet>/fits_drift/<image>.fits`; if a drift is found, WADERs and image_rows use it (image_rows now takes the
+  image header over the .meta, so the adjusted NCOLPRE/NCOL count); any failure → warning, image used as is. Labels get
+  drift_corrected / drift_cut / drift_warning (also in dataset.csv). Config `[drift]` added (enabled, cut 200, channels,
+  width_tol); panaSKImg-route overrides note ccd_cols 652 with the cut.
+* Tests: real images 130/131 as image-only manifests → 4/4 labels without flags each (raw route had chi2>3 flags), σe
+  0.152-0.158 (ch0/1), 0.20 (ch3), cut 200, warning on 131 ch3 recorded. Simulated 3-packet rehearsal → drift_corrected
+  False everywhere, labels as before (σe +2.0 %, λ +4.2 %, gain +0.2 % median).

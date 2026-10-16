@@ -79,6 +79,25 @@ with the planned geometry set (table below).
 `--autoconfig-args=--keep-dead` is passed because `run_WADERs`' dead-channel test needs charged pixels that a 16-row image
 with no exposure may not have. In the rehearsal it dropped a working channel.
 
+## The along-row drift step (`configs/processing.toml`, `[drift]`; `src/image_drift.py`)
+
+Board 101 / PA03 images have a baseline drift at the start of every row's readout: the zero-electron level starts ~1 ADU
+low and recovers over a few hundred columns. The gain is unchanged, but the noise is raised in the first ~200 columns.
+None of the tested settings removes it (exposure, prescan length, register clear: see
+[`real_image_checks/2026-10-16_PA03_PQ04_16rows.md`](real_image_checks/2026-10-16_PA03_PQ04_16rows.md)).
+
+`process_packet.py` therefore checks every image (Gaussian fits of the zero-electron peak per column block). If a drift
+is found:
+* the **first 200 columns are cut**, the same for every packet;
+* the slow remainder is subtracted;
+* WADERs and the per-row λ fit use that corrected copy.
+
+Images without a drift are used unchanged. Every label records `drift_corrected`, `drift_cut` and `drift_warning` (the
+drift differs between the first and second half of the rows, so the correction may be less reliable; recorded, not
+flagged). On the real 16-row images this gives fits with χ²/ndf ≈ 1 and σe labels that repeat to 0.6–2 %.
+
+The standalone tool is `python src/image_drift.py <images> --out <dir>` (or `lvl1/drift_correct.py`).
+
 ## Rehearsal: the whole chain on simulated packets of the planned geometry
 
 `lvl1/rehearse_lvl1.py --out <dir>` simulates hand-taken packets and runs every step for both WADERs routes:
