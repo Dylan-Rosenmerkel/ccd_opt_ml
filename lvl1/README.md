@@ -25,9 +25,11 @@ than they are.
 ## The steps
 
 ```bash
-# 1. take a packet by hand (on the DAQ machine); edit the SETTINGS block first
-DRY_RUN=1 PACKET_ID=m0001 bash daq_scripts/manual_packet.sh     # check, send nothing
-PACKET_ID=m0001 bash daq_scripts/manual_packet.sh               # queue it; writes ~/packet_records/m0001.json
+# 1. take a packet by hand (on the DAQ machine): a planned packet (lvl1/packet_plan/PLAN.md) ...
+DRY_RUN=1 PACKET_ID=L1_02 CHANGES_FILE=lvl1/packet_plan/L1_02.txt bash daq_scripts/manual_packet.sh   # check, send nothing
+PACKET_ID=L1_02 CHANGES_FILE=lvl1/packet_plan/L1_02.txt bash daq_scripts/manual_packet.sh             # queue it
+#    ... or your own changes in the SETTINGS block:  PACKET_ID=m0001 bash daq_scripts/manual_packet.sh
+#    (each queued packet writes its record, ~/packet_records/<PACKET_ID>.json: copy it with the data)
 
 # 2. (analysis computer) the packet's manifest, from its record and the raw files
 python src/make_manual_manifest.py ~/packet_records/m0001.json --run-dir <raw-file directory> --out manifests
@@ -42,6 +44,62 @@ cd .. && .venv/bin/python lvl1/train_lvl1.py --inputs processed/model_inputs
 
 The walkthrough notebook [`lvl1_walkthrough.ipynb`](lvl1_walkthrough.ipynb) goes through every step, with the 10-12 packet
 tests as a real-data example and synthetic packets for the training (real labelled packets do not exist yet).
+
+## The packet plan (`lvl1/packet_plan/`)
+
+`lvl1/make_packet_plan.py` writes [`packet_plan/PLAN.md`](packet_plan/PLAN.md): **41 packets in three sessions (~11 h)**,
+each a ready changes file `L1_NN.txt`.
+
+| Session | Packets | What changes | Status |
+|---|---|---|---|
+| A | 13 (~4 h) | timing only: delayInt 300–3000, the horizontal clock hold, the reset hold; nominal packets at the start, middle and end | **can be taken now** |
+| B | ~17 | one voltage group at a time (VDD, VR, RG high/low, SW low, H lows, V lows, TG, VSUB), one `max_step` either way | provisional: the voltage windows are placeholders (`reviewed = false`) |
+| C | 11 | joint changes (a Latin hypercube in the same box) and a final nominal | provisional, as B |
+
+Rules:
+* every configuration passes `ccd_limits` (windows, the ACM manual's hardware ranges, the group's voltage rules);
+* every voltage stays within one `max_step` of nominal, so no ramp is needed going there and back;
+* changes go to board 101 only;
+* both readout stages' pins move together, so all four amplifiers see each change.
+
+Every file also passes `manual_packet.sh`'s own dry-run checks. `manual_packet.sh` now reads `CHANGES_FILE` and knows the
+timing parameters, checked against the `limits.toml` timing windows (whole clock cycles only).
+
+## The WADERs route (`configs/processing.toml`, `[waders] runner`)
+
+Labels come from **`run_WADERs`** (the `comm_scripts` repository) by default. It:
+* builds each CCD's panaSKImg configuration from the image itself: geometry from the header, gain, noise, pedestal method;
+* fits only the Poisson-like 0e⁻/1e⁻ peaks.
+
+`process_packet.py` reads its `fit_quality.csv`.
+
+The other route, one hand-written JSON for every image (`runner = "panaSKImg"`), did much worse in the rehearsal, even
+with the planned geometry set (table below).
+
+`--autoconfig-args=--keep-dead` is passed because `run_WADERs`' dead-channel test needs charged pixels that a 16-row image
+with no exposure may not have. In the rehearsal it dropped a working channel.
+
+## Rehearsal: the whole chain on simulated packets of the planned geometry
+
+`lvl1/rehearse_lvl1.py --out <dir>` simulates hand-taken packets and runs every step for both WADERs routes:
+* the records, traces, and 16×1000×500 images with a known truth (`simulate_manual_run.py`);
+* `make_manual_manifest.py`;
+* `process_packet.py`;
+* the labels against the truth (`check_rehearsal.py`);
+* `train_lvl1.py`.
+
+The result is in [`rehearsal/REHEARSAL.md`](rehearsal/REHEARSAL.md) (with the per-label tables `4_check_*.md` and the truth `truth.json`). Median label error against the truth (6 packets, 18 labels):
+
+| | σe | λ | gain |
+|---|---|---|---|
+| `run_WADERs` (default) | +1.6 % | +4 % | 0 % |
+| one JSON, geometry set | −8 % | −12 % | +11 % |
+
+**What the rehearsal showed:**
+* the noisy amplifier (ch2) is correctly left unfitted;
+* the quoted σe errors are sometimes too small, so they should not be trusted below ~3 %;
+* at λ ≈ 0.02–0.03 e⁻/pixel, the 16 rows give dark current and CIC only to ~20–40 % each (with honest error bars), while the
+  total λ is fine.
 
 ## What each step writes
 
@@ -143,8 +201,12 @@ These numbers compare methods; they say nothing about the real CCD.
 .venv/bin/python lvl1/train_lvl1.py --inputs lvl1/test_data/model_inputs --quick
 ```
 
-## To check on the first real packets
+## Before and at the first real packet
 
+* **On the DAQ machine:** run a planned packet with `DRY_RUN=1` first. Check that cdaq names the files `<PACKET_ID>_ref1_…`
+  and that `~/packet_records` (or `RECORD_DIR`) is written and copied with the data.
+* **`run_WADERs`** must be reachable from the processing computer: the path is set in `configs/processing.toml`, and it
+  finds the `damic` conda environment itself.
 * **Manifest:** `make_manual_manifest.py` reports status `ok`, every requested change arrived, and `trace_matches_image` is true (same NDCM and binning).
 * **Labels:** WADERs labels without flags for the amplifiers used.
 * **Row order:** the per-row dark current (`label.lambda_dark`) is positive. If it is negative on every image, FITS row 0 is the last row read: set `[rows] reverse = true` in `configs/processing.toml`.

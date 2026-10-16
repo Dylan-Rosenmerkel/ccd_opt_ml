@@ -218,3 +218,12 @@ See `docs/packet_design.md`.
 * `process_packet.py` then also fits λ row by row (dark current / CIC, `image_rows.py`) and writes
   `model_inputs/*.npz` for every model family (`ml/real_inputs.py`). Level 1 training: `lvl1/train_lvl1.py`.
 
+
+## 12. Planned packets and timing parameters (added 2026-10-16)
+
+* `manual_packet.sh`: `CHANGES_FILE=<file>` reads the changes from a file (`lvl1/packet_plan/L1_NN.txt`); timing
+  parameters (delay_V*, delay_H*, delayInt, delayRG*/SW*/OG*/DG*) are known names with their reference values, checked
+  against the limits.toml timing windows, whole cycles only. Record field `changes_file`.
+* `lvl1/packet_plan/PLAN.md`: 41 planned packets (session A timing only, can be taken now).
+* Processing labels now come from comm_scripts' `run_WADERs` by default (`configs/processing.toml [waders] runner`),
+  with `--autoconfig-args=--keep-dead`; see `lvl1/README.md` and `lvl1/rehearsal/REHEARSAL.md`.

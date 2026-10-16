@@ -93,8 +93,9 @@ def main():
         processed = out / f"processed_{route}"
         rc, text = sh([PY, "-W", "ignore", "lvl1/check_rehearsal.py", processed, out / "truth.json",
                        "--out", out / f"4_check_{route}.md"], log=out / f"4_check_{route}.log")
-        summary = text[text.find("labels ("):] if "labels (" in text else text
-        report += ["Labels against the truth:", "", summary.split("\n", 1)[0], "", summary.split("\n", 1)[1].strip() if "\n" in summary else "", ""]
+        lines = text.splitlines()
+        start = next((i for i, l in enumerate(lines) if " labels (" in l), 0)
+        report += ["Labels against the truth (`check_rehearsal.py`; full table in " + f"`4_check_{route}.md`):", ""] + lines[start:] + [""]
         rc, text = sh([PY, "-W", "ignore", "lvl1/train_lvl1.py", "--inputs", processed / "model_inputs", "--quick",
                        "--folds", "3", "--models", "trace_physics", "physics", "physics_joint", "ridge", "gp",
                        "--out", out / f"5_train_{route}"], log=out / f"5_train_{route}.log")

@@ -18,6 +18,19 @@ save_raw = true               # keep every decoded sample (values + flags) in a 
 # The features (src/trace_features.py) always use the usable pixels (no row-start or charged pixels).
 
 [waders]
+# WHICH ROUTE (2026-10-16, after the level-1 rehearsal, lvl1/REHEARSAL.md):
+#   runner = "run_WADERs"  comm_scripts' run_WADERs (~/Documents/Software/comm_scripts): builds the panaSKImg configuration
+#                          per CCD from the image itself (geometry from the header: ccd_cols = PHYSCOL - NCOLPRE + PRESCAN;
+#                          gain, noise, pedestal method) and fits only the Poisson-like 0e-/1e- peaks.  On simulated
+#                          16 x 1000 x 500 images: sigma_e +1.6 %, lambda +4 %, gain 0 % (median; 18 labels).  DEFAULT.
+#                          --keep-dead: its dead-channel test needs charged pixels that a 16-row image with no exposure
+#                          may not have (it dropped a working channel in the rehearsal); all four channels are connected.
+#   runner = "panaSKImg"   one JSON for every image (json below + image_overrides).  With the planned image's geometry
+#                          (ccd_rows 16, ccd_cols 852, id_row_start 0): sigma_e -8 %, lambda -12 %, gain +11 % in the
+#                          same rehearsal, so it is kept only as an alternative.
+runner = "run_WADERs"
+run_waders_command = ["/Users/dylanrosenmerkel/Documents/Software/comm_scripts/bin/run_WADERs"]
+run_waders_args = ["--no-clusters", "--autoconfig-args=--keep-dead"]
 # How to start panaSKImg.  On this laptop it lives in the conda environment "damic" ("conda run"
 # sets up ROOT's environment; importing ROOT without it crashes); on the DAQ machine it may
 # simply be ["panaSKImg"].
@@ -37,6 +50,8 @@ pysimdamicm_dir = "/Users/dylanrosenmerkel/Documents/Software/pysimdamicm"
 # ccd_rows = 100
 # ccd_cols = 100
 [waders.image_overrides]
+# (used only with runner = "panaSKImg"; for the planned 16 x 1000 x 500 image with NCOLPRE 5300:
+#  ccd_rows = 16, ccd_cols = 852, id_row_start = 0)
 
 [rows]
 # lambda row by row (WADERs' gain and noise held fixed) and the straight line lambda_r = CIC + DC x_r through the

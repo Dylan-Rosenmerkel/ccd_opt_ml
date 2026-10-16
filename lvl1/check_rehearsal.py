@@ -79,7 +79,10 @@ def main():
     text = summary(res)
     print("\n" + text)
     if args.out:
-        Path(args.out).write_text(text + "\n\n" + res.round(4).to_markdown(index=False) + "\n")
+        table = res.round(4).fillna("")
+        md = ["| " + " | ".join(table.columns) + " |", "|" + "---|" * len(table.columns)]
+        md += ["| " + " | ".join(str(v) for v in row) + " |" for row in table.itertuples(index=False)]
+        Path(args.out).write_text(text + "\n\n" + "\n".join(md) + "\n")
     ok = res["flags"].fillna("") == ""
     pulls = res.loc[ok, [f"{n} pull" for n in ("sigma_e", "lambda", "gain")]].abs()
     sys.exit(1 if (pulls > 5).any().any() else 0)
