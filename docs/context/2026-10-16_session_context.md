@@ -200,3 +200,15 @@ the noise is +30 % in the first 25 columns (+12 % to col 100) — not removable 
 without any subtraction: χ²/ndf 0.8–1.3, σe 0.163/0.167/0.206 e- with 1.0–2.6 % repeat scatter (best); cut + trend
 0.156/0.161/0.200 (residual slow offset ~4 % on σe). λ depends on the columns used (later columns higher: serial-register
 wait). Recommendation: acquisition fix if found; else cut 200 columns (physical), keep the cut fixed for all packets.
+
+## 14. Drift tool + trace consequences (user: write something that detects and corrects the drift as physically as possible; how does it affect the packet / trace parameters?) — user is taking the test images meanwhile
+
+* `lvl1/drift_correct.py` (standalone, not in process_packet): Gaussian zero-peak fits per column block → detect (p<1e-6,
+  range > 0.1 width) → FIXED cut 200 columns (calibrated on 5 images: width excess +15-18 % cols 0-24, +5-10 % to ~175,
+  within ±3 % from 200) → subtract the slow remainder (2 exponentials + constant, spline fallback) → check row halves on
+  kept columns (warning/DRIFTWRN) → header keywords, NCOLPRE/NCOL adjusted. On 5 images: χ²/ndf 0.65-1.15, σe 0.155/
+  0.161/0.200 (0.6-2 %). Drift-free sims untouched; 127 flagged.
+* Traces (10-12, 20x20): first pixel's skip noise 1.1-1.4x (NCOLPRE 0) vs 1.8-2.6x (NCOLPRE 185); second 1.0 vs 1.04-1.18 →
+  disturbance grows with the dumped prescan (strong support for the dump hypothesis). trace_features drops pixel 0 only.
+* Trace recommendations (pending the tests): NDCMPRE 5 in traces if images use it; NCOL 10 with the first two pixels per row
+  left out; keep the trace's own dump small; match BOOLCLR if it matters.
