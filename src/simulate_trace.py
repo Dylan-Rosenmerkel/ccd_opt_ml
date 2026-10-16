@@ -101,12 +101,13 @@ def _events(p: dict) -> list[tuple]:
 
 
 def simulate_trace(stem: str | Path, seed: int = 0, charge_per_pixel: float = 5.0,
-                   charged_pixels: tuple = (), channel: int = 0, **params) -> Path:
+                   charged_pixels: tuple = (), channel: int = 0, noise_sd: float = 53.0, **params) -> Path:
     """
     Write ``<stem>.RJ45ADCDATA<channel>`` and ``<stem>.meta``; return the data file path.
 
-    ``params`` override ``DEFAULTS`` (geometry and sequencer delays).  ``charge_per_pixel`` is the
-    mean charge (electrons) of every pixel; pixels in ``charged_pixels`` get 15,000 electrons.
+    ``params`` override ``DEFAULTS`` (geometry and sequencer delays); any other key (e.g. ACMID, DATEini,
+    voltages) is copied into the .meta.  ``charge_per_pixel`` is the mean charge (electrons) of every pixel;
+    pixels in ``charged_pixels`` get 15,000 electrons.  ``noise_sd``: the white noise per ADC sample (ADU).
     """
     p = {**DEFAULTS, **params}
     rng = np.random.default_rng(seed)
@@ -169,13 +170,13 @@ def simulate_trace(stem: str | Path, seed: int = 0, charge_per_pixel: float = 5.
         elif kind in ("drain", "idle"):
             values[i0:i1] = level
         if kind in ("ped", "sig"):
-            noise = rng.normal(0, 53, n)
+            noise = rng.normal(0, noise_sd, n)
             values[i0:i1] += noise
             window = np.round(values[i0:i1]).astype(np.int64)
             header = (0x5 << 28) | ((((0x80 if kind == "sig" else 0) | (info["pixel"] & 0xF)) & 0xFF) << 20) | (n & 0xFFFFF)
             l1.append((i1, header, int(window.sum())))
         else:
-            values[i0:i1] += rng.normal(0, 53, n)
+            values[i0:i1] += rng.normal(0, noise_sd, n)
 
     adc = np.clip(np.round(values), -2**19, 2**19 - 1).astype(np.int64)
     raw = ((0x2 << 28) | ((flags & 0xFF) << 20) | (adc & 0xFFFFF)).astype(np.uint32)

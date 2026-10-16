@@ -88,6 +88,9 @@ class ProcessingConfig:
     waders_timeout_s: float = 1800
     pysimdamicm_dir: Path | None = None
     image_overrides: dict[str, Any] = field(default_factory=dict)
+    waders_runner: str = "panaSKImg"       # "panaSKImg" (one JSON for every image) or "run_WADERs" (comm_scripts)
+    run_waders_command: list[str] = field(default_factory=lambda: ["run_WADERs"])
+    run_waders_args: list[str] = field(default_factory=lambda: ["--no-clusters"])
     rows_enabled: bool = True              # per-row lambda and the dark-current / CIC split (image_rows.py)
     rows_reverse: bool = False             # True if FITS row 0 is the LAST row read out
     model_inputs: bool = True              # also write the per-model input files (ml/real_inputs.py)
@@ -113,6 +116,9 @@ class ProcessingConfig:
             waders_timeout_s=float(waders.get("timeout_s", 1800)),
             pysimdamicm_dir=resolve(waders["pysimdamicm_dir"]) if waders.get("pysimdamicm_dir") else None,
             image_overrides=dict(waders.get("image_overrides", {})),
+            waders_runner=str(waders.get("runner", "panaSKImg")),
+            run_waders_command=[str(resolve(c)) if "/" in str(c) else str(c) for c in waders.get("run_waders_command", ["run_WADERs"])],
+            run_waders_args=list(waders.get("run_waders_args", ["--no-clusters"])),
             rows_enabled=bool(data.get("rows", {}).get("enabled", True)),
             rows_reverse=bool(data.get("rows", {}).get("reverse", False)),
             model_inputs=bool(data.get("model_inputs", {}).get("enabled", True)))
@@ -447,6 +453,64 @@ def run_waders(fits_path: Path, out_dir: Path, cfg: ProcessingConfig) -> dict[st
             "json": str(json_path), "json_sha1": _sha1(json_path)}
 
 
+def run_run_waders(fits_path: Path, out_dir: Path, cfg: ProcessingConfig) -> dict[str, Any]:
+    """
+    Run comm_scripts' ``run_WADERs`` on one decompressed image (runner = "run_WADERs").  It builds the panaSKImg
+    configuration per CCD from the image itself (geometry from the header, gain, noise, pedestal method, fitting only
+    the Poisson-like 0e-/1e- peaks) and writes fit_quality.csv with the fit results and their errors (scaled by
+    sqrt(chi2/ndf)).  The command, log, return code and duration are saved, as for panaSKImg.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    command = [*cfg.run_waders_command, str(fits_path), "-o", str(out_dir), *cfg.run_waders_args]
+    (out_dir / "command.txt").write_text(" ".join(command) + "\n")
+    started = time.monotonic()
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=cfg.waders_timeout_s)
+        returncode, log = done.returncode, done.stdout + "\n--- stderr ---\n" + done.stderr
+    except subprocess.TimeoutExpired as err:
+        returncode, log = -1, f"timed out after {cfg.waders_timeout_s} s\n{err.stdout or ''}"
+    except OSError as err:
+        returncode, log = -2, f"could not start {command[0]}: {err}"
+    (out_dir / "log.txt").write_text(log)
+    csvs = sorted(out_dir.glob("**/fit_quality.csv"))
+    return {"runner": "run_WADERs", "command": command, "returncode": returncode, "seconds": round(time.monotonic() - started, 1),
+            "log": str(out_dir / "log.txt"), "output": str(csvs[0]) if csvs else None}
+
+
+def labels_from_run_waders(csv_path: Path, image_meta: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """
+    The labels of every channel from run_WADERs' fit_quality.csv (one row per CCD = ACM channel; EXT<n> = channel
+    n-1), in the same form as ``extract_labels``.  The errors are the scaled ones (x sqrt(chi2/ndf)).  Flags: a channel
+    run_WADERs did not fit (flooded or unresolved electron peaks), an error larger than half the value, or a fit with
+    chi2/ndf > 3.
+    """
+    import csv
+    rows = {r["ext"]: r for r in csv.DictReader(open(csv_path))}
+    labels = []
+    for ext in range(1, 5):
+        row: dict[str, Any] = {"ext": ext, "channel": ext - 1, "flags": [], "labels_from": "run_WADERs"}
+        if image_meta:
+            row["amplifier"] = image_meta.get(f"ch{ext - 1}")
+        r = rows.get(f"EXT{ext}")
+        if r is None:
+            row["flags"].append("not fitted by run_WADERs (flooded or unresolved peaks)")
+            labels.append(row)
+            continue
+        f = {k: (float(v) if v not in ("", "None", None) else float("nan")) for k, v in r.items() if k not in ("image", "ext", "gain_held")}
+        g, eg = f["gain"], f["gain_err_s"]
+        row.update(gain_adu_per_e=g, gain_err=eg, sigma_e=f["noise"], sigma_e_err=f["noise_err_s"],
+                   lambda_e_per_bin=f["dc"], lambda_err=f["dc_err_s"], sigma_adu=f["noise"] * g,
+                   sigma_err=f["noise_err_s"] * g, dc_adu=f["dc"] * g, dc_err=f["dc_err_s"] * g, mu_adu=f.get("mu"),
+                   chi2ndf=f.get("chi2ndf"), dc_bias=f.get("dc_bias"), gain_held=str(r.get("gain_held")) == "True")
+        for name, value, err in (("gain", g, eg), ("sigma_e", f["noise"], f["noise_err_s"]), ("lambda", f["dc"], f["dc_err_s"])):
+            if not (value > 0) or not (err == err) or err > 0.5 * abs(value):
+                row["flags"].append(f"{name} = {value:.3g} +/- {err:.2g} is not constrained")
+        if f.get("chi2ndf", 0) > 3:
+            row["flags"].append(f"chi2/ndf = {f['chi2ndf']:.1f} > 3: the fit model does not describe the image")
+        labels.append(row)
+    return labels
+
+
 def _sha1(path: Path) -> str:
     import hashlib
     return hashlib.sha1(Path(path).read_bytes()).hexdigest()[:12]
@@ -562,21 +626,31 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
         entry["fits"] = str(fits)
         header = read_fits_primary(fits)
         entry["image_header"] = {k: header.get(k) for k in ("NROW", "NCOL", "NDCM", "NPBIN", "NSBIN", "EXPOSURE")}
-        if not skip_waders:
+        if not skip_waders and cfg.waders_runner == "run_WADERs":
+            run = run_run_waders(fits, out / "waders" / f"acm{image['board']}", cfg)
+            entry["waders"] = run
+            if run["output"]:
+                entry["labels"] = labels_from_run_waders(Path(run["output"]), meta)
+                if run["returncode"] != 0:
+                    result["warnings"].append(f"run_WADERs returned {run['returncode']} on board {image['board']}; see {run['log']}")
+            else:
+                entry["error"] = f"run_WADERs wrote no fit_quality.csv (return code {run['returncode']}); see {run['log']}"
+        elif not skip_waders:
             run = run_waders(fits, out / "waders" / f"acm{image['board']}", cfg)
             entry["waders"] = run
             if run["returncode"] == 0 and run["output"]:
                 entry["labels"] = extract_labels(read_fits_primary(Path(run["output"])), bounds, meta)
-                if cfg.rows_enabled:
-                    try:
-                        from image_rows import image_rows
-                        rows = image_rows(fits, entry["labels"], meta, reverse=cfg.rows_reverse)
-                        for lab in entry["labels"]:
-                            lab.update(rows.get(lab["channel"], {}))
-                    except Exception as exc:                      # never lose the labels over the row fit
-                        result["warnings"].append(f"per-row lambda failed on board {image['board']}: {exc}")
             else:
                 entry["error"] = f"panaSKImg failed (return code {run['returncode']}); see {run['log']}"
+        if entry.get("labels") and cfg.rows_enabled:
+            try:
+                from image_rows import image_rows
+                # geometry for the active columns: the FITS header, overridden by the .meta where both have it
+                rows = image_rows(fits, entry["labels"], {**header, **meta}, reverse=cfg.rows_reverse)
+                for lab in entry["labels"]:
+                    lab.update(rows.get(lab["channel"], {}))
+            except Exception as exc:                              # never lose the labels over the row fit
+                result["warnings"].append(f"per-row lambda failed on board {image['board']}: {exc}")
         images.append(entry)
 
     labels = {"waders_version": waders_version(cfg) if not skip_waders else None,
