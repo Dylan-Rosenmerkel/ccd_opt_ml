@@ -123,3 +123,20 @@ Verdict given to the user: the images are sufficient for training (label precisi
 σe ≲ 1-3 %, gain ≲ 1 %, λ 2-6 %; session A changes σe by tens of %), **provided the along-row trend is removed before
 WADERs** (otherwise σe labels carry a ~12 % offset and 4-6 % scatter that no trace measures). Proposed (not yet done,
 awaiting the user): a `baseline_trend` step in process_packet before WADERs and the per-row fit; tell comm_scripts.
+
+## 7. User: "is there anything in the header/bcf/config that tells you something is wrong?"
+
+Yes (details in `lvl1/real_image_checks/2026-10-16_PA03_PQ04_16rows.md`, last section):
+* **H3_A_L = 6.2 V** in the loaded configuration of BOTH boards (bcf hashes 478f… / f008…; 478f… is a 10-12 test
+  configuration) — the nominal .bcf files on the DAQ probably still hold a 10-12 change; our nominal (limits.toml,
+  manual_packet.sh, packet plan) says 6.7 V. To confirm with the user.
+* **Start-of-pixel transient on board 101** (from `mb_L1_*.pkl.bz2` = raw skips of 15 pixels per channel, shape 15 x 500;
+  `mb_L0` empty): skip 0 ≈ +290 ADU, ringing over ~5 skips; adds 0.35-0.53 ADU to each 500-skip average; board 102
+  has none. Same size as the along-row trend; 3000-skip 10-06 image shows the trend ~5x weaker (1/NDCM dilution). Likely
+  cause of the trend (not proven: the 15 pixels' row position is unknown). Fix candidate at acquisition: **NDCMPRE**
+  (sequencer `FakeCDS` = clocking without sampling before the real skips; currently 0 in images and traces; limits
+  0-10). Suggested test: one image with NDCMPRE = 10, one with H3_A_L = 6.7.
+* EXPOSURE 10 s; board 101 missing its first image (run_ACM101.dat); sequencer differs from 10-12 only in geometry and
+  pocket pumping (PP_NCYCLES 50000, PP_SHIFT 3); readbacks/firmware normal; pixel [0,0] bad.
+* Single-skip noise from the saved skips (skips 10-499): board 101 ch0 5.8, ch1 5.8-6.0, ch3 6.4-6.8, ch2 6.8-9.0 ADU;
+  board 102 4.5-5.1 ADU.
