@@ -190,3 +190,13 @@ noise-scaled window, first columns, minimum zero-electron pixels per column.
   belongs to PA03 + board 101.
 * Size: Sept −0.1..−0.25 (EXP 1, NCOLPRE 2800), Oct −0.3..−0.7 (EXP 10, NCOLPRE 5300); shrinks with skips but not 1/NDCM.
 * Proposed tests: EXPOSURE 0/1; NCOLPRE 2800; BOOLCLR 0.
+
+## 13. User: "I am concerned that this software drift fix is unphysical"
+
+Tests (5 board-101 images, two-Gaussian fits per column block): the gain (1e- − 0e- spacing) is constant along the row →
+the drift is a rigid baseline shift (so a baseline subtraction is legitimate in principle). But: the shift at the row start
+is −0.9..−1.0 ADU (my ±0.6 ADU window clipped it to −0.45: under-corrected), −0.1..−0.15 ADU even at the row end, and
+the noise is +30 % in the first 25 columns (+12 % to col 100) — not removable by an offset. **Cutting the first 200 columns**
+without any subtraction: χ²/ndf 0.8–1.3, σe 0.163/0.167/0.206 e- with 1.0–2.6 % repeat scatter (best); cut + trend
+0.156/0.161/0.200 (residual slow offset ~4 % on σe). λ depends on the columns used (later columns higher: serial-register
+wait). Recommendation: acquisition fix if found; else cut 200 columns (physical), keep the cut fixed for all packets.
