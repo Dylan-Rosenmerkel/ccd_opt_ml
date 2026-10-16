@@ -93,3 +93,33 @@ Found and fixed / decided:
 * Copy `~/packet_records` with the data after each session.
 * The first real packet decides: cdaq file naming with the PACKET_ID prefix, run_WADERs on the real 16-row image, row
   order (DC > 0).
+
+## 6. First real 16-row images (user: "use these images to check how WADERs performs and if they will be sufficient")
+
+Data: `data/2026-10-16-PA03_PQ04_16rows` — 16 x 1000 x 500, 1x1, NCOLPRE 5300, **EXPOSURE 10 s** (not 0), all at
+nominal, ~6 min apart (4:57 readout each); board 101: 3 images (its first image of the series is missing; run_ACM101.dat
+lists 3), board 102: 4. No traces. `var_*` files hold negative values (unit unclear; not used). Check script:
+`lvl1/check_real_images.py`; report: `lvl1/real_image_checks/2026-10-16_PA03_PQ04_16rows.md`.
+
+Findings:
+* **Row order confirmed**: λ rises from the first to the last rows on every channel (ch0 0.077 → 0.170 e-/pix) → FITS
+  row 0 = first read; `[rows] reverse = false` is right. DC and CIC (intercept, incl. the 10 s exposure) are each
+  ~0.06-0.09 e-/pix, formally ±0.005, but the DC repeats only to ~20 % (e.g. ch0 0.066/0.063/0.091).
+* **Along-row baseline trend**: the active region starts 0.33-0.45 ADU below the row's overscan pedestal and recovers
+  over the row (to −0.05), the same in every image and in ch0/1/3 (smaller in ch2). Probably the baseline recovering after
+  the fast skip of the 5300 prescan columns. A per-row pedestal leaves it in: the 0e- peak is 15-25 % wider than the
+  overscan noise, chi2/ndf 2.4-5.1, and run_WADERs' sigma_e is ~12 % high (0.190 vs 0.166 e- for ch0) and scatters 4-6 %
+  between repeats (quoted 1.7 %); EXT4's DC disagreed with the 0e-/1e- counts by −0.3 to −0.4.
+* **Removing the trend** (per column, median of the 0e- pixels over the 16 rows, smoothed over 25 columns, overscan
+  untouched) before run_WADERs: chi2/ndf 1.2-2.1 (one 3.5), sigma_e repeat scatter ch1 0.7 %, ch3 0.5 %, ch0 2.9 %;
+  gain 0.1-1.3 %; λ 1.6-5.9 %; DC bias ~0. Labels: σe ch0 0.166, ch1 0.171, ch3 0.214, ch2 0.251 e-; gain ch0 ~1.34,
+  ch1 1.33, ch3 1.276; λ 0.13-0.22 e-/pix (10 s exposure + readout).
+* **ch2** (CCD_A): peaks resolved in 1 of 3 images only → ~3 usable amplifiers per packet (100 packets ≈ 300 examples).
+* **Dead-channel test**: without --keep-dead, run_WADERs kept ch0/1/3 in the raw images but dropped two working channels
+  of one image after the trend correction (it relies on muon pixels > ~5 e-, rare in 16 rows) → keep --keep-dead.
+  Board 102: EXT1/EXT4 correctly dead, EXT3 flooded (λ ~1.7) — not usable, as known.
+
+Verdict given to the user: the images are sufficient for training (label precision after the trend correction:
+σe ≲ 1-3 %, gain ≲ 1 %, λ 2-6 %; session A changes σe by tens of %), **provided the along-row trend is removed before
+WADERs** (otherwise σe labels carry a ~12 % offset and 4-6 % scatter that no trace measures). Proposed (not yet done,
+awaiting the user): a `baseline_trend` step in process_packet before WADERs and the per-row fit; tell comm_scripts.

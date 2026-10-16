@@ -201,6 +201,17 @@ These numbers compare methods; they say nothing about the real CCD.
 .venv/bin/python lvl1/train_lvl1.py --inputs lvl1/test_data/model_inputs --quick
 ```
 
+## First real images (2026-10-16, `lvl1/check_real_images.py`)
+
+The first 16 × 1000 × 500 images (3 repeats at nominal on board 101, EXPOSURE 10 s) are summarised in
+[`real_image_checks/2026-10-16_PA03_PQ04_16rows.md`](real_image_checks/2026-10-16_PA03_PQ04_16rows.md).
+
+* **Row order:** λ grows with the row, so FITS row 0 is the first row read (no `reverse` needed).
+* **Along-row baseline:** the active region starts ~0.4 ADU below the overscan and recovers along each row. Removing this
+  trend before `run_WADERs` brings χ²/ndf from 2.4–5.1 to 1.2–2.1, removes a ~12 % σe offset, and makes the σe labels
+  repeat to 0.5–3 % (instead of 4–6 %).
+* **Amplifiers:** ch2 is fitted in only 1 of 3 images, so expect about 3 usable amplifiers per packet.
+
 ## Before and at the first real packet
 
 * **On the DAQ machine:** run a planned packet with `DRY_RUN=1` first. Check that cdaq names the files `<PACKET_ID>_ref1_…`
