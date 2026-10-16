@@ -166,3 +166,15 @@ Explained `column_trend` (per-row overscan pedestal, zero-electron pixels within
 simulated (labels vs truth unchanged: σe +1.6 → +1.5 %, λ RMS 10.0 → 8.6 %, gain 0.0 → 0.2 %, χ²/ndf 0.92 → 0.96;
 removes 0.02-0.04 ADU rms) and real 10-06 (0.02-0.07 ADU rms; up to 0.5 ADU only in columns 0-2). To fix before adopting:
 noise-scaled window, first columns, minimum zero-electron pixels per column.
+
+## 11. User: what causes the drift and can it be fixed? (skip-noise run, ~/Documents/JH1_Testing/2026-10-14-PA03_PQ04_Skip_Noise)
+
+* **Correction of my earlier claims**: "10-06 has no drift" and "10-06 had FILTER 85" were WRONG (FILTER 85 came from a
+  different 10-06 file, the L1 image 161012_2; the 10-06 avg image 132140_1 has FILTER 170 and an unresolved zero peak,
+  σ_ovs ~1.8 ADU, so it cannot show the drift). No evidence about the filter.
+* Skip-noise run (all FILTER 170, H3_A_L 6.2, NCOLPRE 5300/5800, BOOLCLR 1): drift present since at least 10-14 at 100,
+  500, 1000, 2000, 5000 skips (where the zero peak is resolved), 0.2–0.7 ADU; recovers over ~300–800 COLUMNS regardless of
+  skips (so per pixel read, not per second); same in first and last rows; board 102 channels WITHOUT a CCD show none →
+  not generic electronics/clocking; tied to board 101 + PA03. 5800-image dips at its own start (weak evidence for a
+  row-start effect).
+* Proposed tests: BOOLCLR 0; NCOLPRE 5000; (board swap if practical). Software trend removal remains the working fix.
