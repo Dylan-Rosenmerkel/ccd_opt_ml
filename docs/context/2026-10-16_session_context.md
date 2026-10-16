@@ -158,3 +158,11 @@ Ran the old hand-JSON panaSKImg route on the same 3 board-101 images (raw and tr
 * Remaining candidate: analog FILTER (10-06: 85 = code 1, no drift; 10-12/10-16: 170 = code 2). Suggested test image with
   the 10-06 filter setting. Software trend removal still works (χ²/ndf 1.2-2.1; 131 best 1.16-1.66).
 * ch3's raw DC bias vs 0e-/1e- counts: −0.3..−0.43 at H3_A_L 6.2, −0.09/−0.02 at 6.7.
+
+## 10. User: what does the drift removal do, and how does it affect images without the effect?
+
+Explained `column_trend` (per-row overscan pedestal, zero-electron pixels within ±0.6 ADU, per-column median over rows,
+25-column running median, overscan untouched, one curve subtracted from every row). Tested on drift-free images: 6
+simulated (labels vs truth unchanged: σe +1.6 → +1.5 %, λ RMS 10.0 → 8.6 %, gain 0.0 → 0.2 %, χ²/ndf 0.92 → 0.96;
+removes 0.02-0.04 ADU rms) and real 10-06 (0.02-0.07 ADU rms; up to 0.5 ADU only in columns 0-2). To fix before adopting:
+noise-scaled window, first columns, minimum zero-electron pixels per column.
