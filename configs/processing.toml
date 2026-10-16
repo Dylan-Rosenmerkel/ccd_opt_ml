@@ -18,7 +18,7 @@ save_raw = true               # keep every decoded sample (values + flags) in a 
 # The features (src/trace_features.py) always use the usable pixels (no row-start or charged pixels).
 
 [waders]
-# WHICH ROUTE (2026-10-16, after the level-1 rehearsal, lvl1/REHEARSAL.md):
+# WHICH ROUTE (2026-10-16, after the level-1 rehearsal, lvl1/rehearsal_report/REHEARSAL.md):
 #   runner = "run_WADERs"  comm_scripts' run_WADERs (~/Documents/Software/comm_scripts): builds the panaSKImg configuration
 #                          per CCD from the image itself (geometry from the header: ccd_cols = PHYSCOL - NCOLPRE + PRESCAN;
 #                          gain, noise, pedestal method) and fits only the Poisson-like 0e-/1e- peaks.  On simulated

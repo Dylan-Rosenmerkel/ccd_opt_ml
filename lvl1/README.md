@@ -88,7 +88,7 @@ with no exposure may not have. In the rehearsal it dropped a working channel.
 * the labels against the truth (`check_rehearsal.py`);
 * `train_lvl1.py`.
 
-The result is in [`rehearsal/REHEARSAL.md`](rehearsal/REHEARSAL.md) (with the per-label tables `4_check_*.md` and the truth `truth.json`). Median label error against the truth (6 packets, 18 labels):
+The result is in [`rehearsal_report/REHEARSAL.md`](rehearsal_report/REHEARSAL.md) (with the per-label tables `4_check_*.md` and the truth `truth.json`). Median label error against the truth (6 packets, 18 labels):
 
 | | σe | λ | gain |
 |---|---|---|---|

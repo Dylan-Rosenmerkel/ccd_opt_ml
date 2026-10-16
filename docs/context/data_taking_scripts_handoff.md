@@ -226,4 +226,4 @@ See `docs/packet_design.md`.
   against the limits.toml timing windows, whole cycles only. Record field `changes_file`.
 * `lvl1/packet_plan/PLAN.md`: 41 planned packets (session A timing only, can be taken now).
 * Processing labels now come from comm_scripts' `run_WADERs` by default (`configs/processing.toml [waders] runner`),
-  with `--autoconfig-args=--keep-dead`; see `lvl1/README.md` and `lvl1/rehearsal/REHEARSAL.md`.
+  with `--autoconfig-args=--keep-dead`; see `lvl1/README.md` and `lvl1/rehearsal_report/REHEARSAL.md`.
