@@ -10,7 +10,8 @@ What is known about the drift (lvl1/real_image_checks/2026-10-16_PA03_PQ04_16row
   subtraction can repair that, so those columns are CUT, not corrected.
 
 The method, per channel:
-1. per row, subtract the overscan median (as WADERs does);
+1. per row, subtract the overscan median (as WADERs does); an image without an overscan (a readout window inside the CCD)
+   uses the zero-electron level of the last quarter of each row instead;
 2. in column blocks (fine at the start, coarser later), fit a Gaussian to the zero-electron peak: its position
    (offset) and width, with errors -- no fixed window, so a shifted peak is followed, not clipped;
 3. DRIFT DETECTED if the offsets are inconsistent with a constant (chi2 of a flat line, p < 1e-6) AND the full range of
@@ -105,9 +106,15 @@ def profile(act: np.ndarray, s_guess: float, edges: np.ndarray) -> dict:
 
 
 def analyse_channel(d: np.ndarray, na: int, width_tol: float) -> dict:
-    ovs = d[:, na + 8:]
-    ped = np.median(ovs, 1)
-    s_ovs = float(np.median(1.4826 * np.median(np.abs(ovs - np.median(ovs, 1, keepdims=True)), 1)))
+    if d.shape[1] - na > 20:                                     # per-row pedestal from the overscan (as WADERs)
+        ovs = d[:, na + 8:]
+        ped = np.median(ovs, 1)
+        s_ovs = float(np.median(1.4826 * np.median(np.abs(ovs - np.median(ovs, 1, keepdims=True)), 1)))
+    else:                                                        # no overscan (a window inside the CCD): the end of the row
+        tail = d[:, int(0.75 * na):na]
+        s_ovs = float(np.median(1.4826 * np.median(np.abs(tail - np.median(tail, 1, keepdims=True)), 1)))
+        s_ovs = min(s_ovs, 0.5)
+        ped = np.array([zero_peak(r, s_ovs)[0] for r in tail])
     act = d[:, :na] - ped[:, None]
     edges = block_edges(na)
     pr = profile(act, s_ovs, edges)

@@ -212,3 +212,15 @@ wait). Recommendation: acquisition fix if found; else cut 200 columns (physical)
   disturbance grows with the dumped prescan (strong support for the dump hypothesis). trace_features drops pixel 0 only.
 * Trace recommendations (pending the tests): NDCMPRE 5 in traces if images use it; NCOL 10 with the first two pixels per row
   left out; keep the trace's own dump small; match BOOLCLR if it matters.
+
+## 15. Acquisition test images 132-135 (user: "check them, some may not have been taken correctly")
+
+* Taken: 132 EXP 0, 133 EXP 1, 134 NCOLPRE 2800 (EXP 1), 135 BOOLCLR 0 (EXP 1); all NDCMPRE 0 (5 was suggested; harmless);
+  132-134 without .meta/raw locally (header has the settings); board 102 images 51/53 missing/aborted (boards out of step);
+  **134 has no overscan** (NCOLPRE 2800 with NCOL 1000 is a window inside the CCD — my test suggestion omitted widening NCOL).
+* Compared against each row's end: exposure 0/1/10 → same drift; NCOLPRE 2800 vs 5300 → same drift (dumped-charge
+  explanation unlikely, or saturating); BOOLCLR 0 → dip ~25 % smaller but noise raised to col ~400 (not a fix).
+* Remaining picture: row-start disturbance of PA03 + board 101 output chain after the fast horizontal clocking before each
+  row; recovers per pixel read; a question for the board-101 front-end expert.
+* drift_correct.py: now works without overscan (row-end reference); finds and treats the drift in all tests.
+* Basis for the user's decision: no setting removes it → cut 200 + slow remainder (drift_correct.py); keep BOOLCLR 1.
