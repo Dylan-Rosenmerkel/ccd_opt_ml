@@ -14,6 +14,9 @@
 #   DRY_RUN=1 bash manual_packet.sh     # print every command, send nothing  <- do this first
 #   bash manual_packet.sh               # check, show the plan, ask, then queue
 #   PACKET_ID=m0007 bash manual_packet.sh   # choose the packet's name (default: m<date>_<time>)
+#   PACKET_ID=L1_07 CHANGES_FILE=lvl1/packet_plan/L1_07.txt bash manual_packet.sh
+#                                           # take the changes from a file (one NAME=VALUE or acm101:NAME=VALUE per
+#                                           # line, # comments allowed) instead of the CHANGES block below
 #
 # Edit the SETTINGS block, nothing else.
 #
@@ -70,6 +73,17 @@ CHANGES=(
   "H3_B_L=6.0"
 )
 
+# CHANGES_FILE (optional): read the changes from a file instead (the planned packets of lvl1/packet_plan/).
+if [[ -n ${CHANGES_FILE:-} ]]; then
+  [[ -r $CHANGES_FILE ]] || { echo "ERROR: CHANGES_FILE $CHANGES_FILE cannot be read"; exit 1; }
+  CHANGES=()
+  while IFS= read -r line || [[ -n $line ]]; do
+    line=${line%%#*}; line=$(echo $line)          # strip comments and spaces
+    [[ -n $line ]] && CHANGES+=("$line")
+  done < "$CHANGES_FILE"
+  [[ ${#CHANGES[@]} -gt 0 ]] || { echo "ERROR: no changes in $CHANGES_FILE"; exit 1; }
+fi
+
 # Nominal configuration files, read at the start and at the end:  board=file
 BCF="acm101=module_PA03.bcf acm102=ccd_PQ04.bcf"
 # -----------------------------------------------------------------------------
@@ -85,7 +99,10 @@ H1_A_H 9.5  H1_A_L 6.7  H1_B_H 9.5  H1_B_L 6.5  H2_C_H 9.0  H2_C_L 6.7
 H3_A_H 9.5  H3_A_L 6.7  H3_B_H 9.5  H3_B_L 6.5
 SW_1_H 1.0  SW_1_L -6.0  OG_1_H 0.0  OG_1_L -6.0  RG_1_H 9.0  RG_1_L 3.0  DG_1_H 0.0  DG_1_L -5.0
 SW_2_H 1.0  SW_2_L -6.0  OG_2_H 0.0  OG_2_L -6.0  RG_2_H 9.0  RG_2_L 3.0  DG_2_H 0.0  DG_2_L -5.0
+delay_Va 6000  delay_Vb 6000  delay_Ha 1800  delay_Hb 1800  delay_Hc 1800  delayInt 1000
+delayRGL 27  delayRGH 800  delaySWH 30  delaySWL 350  delayOGL 48  delayOGH 3  delayDGL 27  delayDGH 47
 "
+# (the timing values are those of reference_v5_pumping.seq, in 10 ns clock cycles; whole numbers only)
 
 # --------------------------------- checks ------------------------------------
 # 1. every changed name is a known parameter (catches typos: an unknown key would be sent as is)
@@ -109,6 +126,9 @@ check_and_show() {
       ok = (op == ">") ? (x > y) : (op == ">=") ? (x >= y) : (op == "<") ? (x < y) : (x <= y)
       if (!ok) { print "ERROR: " a " = " new[a] " must be " op " " b " = " new[b]; bad = 1 }
     }
+    function trange(k, lo, hi) {
+      if (new[k] + 0 < lo || new[k] + 0 > hi) { print "ERROR: " k " = " new[k] " outside the timing window [" lo ", " hi "] cycles"; bad = 1 }
+    }
     function range(k, lo, hi) {
       if ((k in new) && (new[k] + 0 < lo || new[k] + 0 > hi)) { print "ERROR: " k " = " new[k] " outside the hardware range [" lo ", " hi "] V"; bad = 1 }
     }
@@ -120,6 +140,7 @@ check_and_show() {
       name = substr(spec, 1, index(spec, "=") - 1); value = substr(spec, index(spec, "=") + 1)
       if (!(name in nom)) { print "ERROR: unknown parameter \"" name "\" in \"" $0 "\""; bad = 1; next }
       if (value !~ /^-?[0-9]+(\.[0-9]+)?$/) { print "ERROR: \"" value "\" is not a number in \"" $0 "\""; bad = 1; next }
+      if (name ~ /^delay/ && value !~ /^[0-9]+$/) { print "ERROR: timing " name " must be a whole number of clock cycles: \"" $0 "\""; bad = 1; next }
       new[name] = value
       line[++m] = sprintf("  %-10s %8s -> %-8s (%s)", name, nom[name], value, target) }
     END { for (h in new) if (h ~ /_H$/) { l = substr(h, 1, length(h) - 1) "L"
@@ -133,6 +154,11 @@ check_and_show() {
             range("VR" i, -13.8, -2); range("VDD" i, -27.9, -6); range("VDRAIN" i, -27.9, -6)
           }
           range("VSUB", 6.7, 88.3)
+          # timing windows of configs/limits.toml (10 ns cycles)
+          for (k in new) {
+            if (k ~ /^delay_V/) trange(k, 1000, 20000); if (k ~ /^delay_H/) trange(k, 200, 6000)
+            if (k == "delayInt") trange(k, 50, 20000);  if (k ~ /^delay(RG|SW|OG|DG)/) trange(k, 1, 10000)
+          }
           for (k in new) {
             if (k ~ /^(V[123]|H[123]|TG|SW|OG|RG|DG)_[A-C12]_[HL]$/) range(k, -10, 10)
             if (k ~ /^V[123]_[A-C]_L$/) for (t in new) if (t ~ /^TG_/) rule(k, ">", t)
@@ -182,6 +208,7 @@ write_record() {
     printf '  "host": "%s",\n' "$(hostname)"
     printf '  "script": "manual_packet.sh",\n'
     printf '  "changes": %s,\n' "$(json_list "${CHANGES[@]}")"
+    printf '  "changes_file": "%s",\n' "${CHANGES_FILE:-}"
     printf '  "bcf": %s,\n' "$(json_list $BCF)"
     printf '  "trace_prefix_ref": "%s_ref",\n' "$PACKET_ID"
     printf '  "trace_prefix_new": "%s_new",\n' "$PACKET_ID"

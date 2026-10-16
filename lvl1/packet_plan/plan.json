@@ -1,0 +1,577 @@
+{
+ "reviewed_limits": false,
+ "packets": [
+  {
+   "session": "A",
+   "purpose": "nominal (reference packet: repeatability and label noise)",
+   "changes": {},
+   "minutes": 16.0,
+   "packet_id": "L1_01"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 300",
+   "changes": {
+    "delayInt": 300
+   },
+   "minutes": 13.1,
+   "packet_id": "L1_02"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 500",
+   "changes": {
+    "delayInt": 500
+   },
+   "minutes": 13.9,
+   "packet_id": "L1_03"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 700",
+   "changes": {
+    "delayInt": 700
+   },
+   "minutes": 14.7,
+   "packet_id": "L1_04"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 1500",
+   "changes": {
+    "delayInt": 1500
+   },
+   "minutes": 18.1,
+   "packet_id": "L1_05"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 2000",
+   "changes": {
+    "delayInt": 2000
+   },
+   "minutes": 20.2,
+   "packet_id": "L1_06"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 3000",
+   "changes": {
+    "delayInt": 3000
+   },
+   "minutes": 24.3,
+   "packet_id": "L1_07"
+  },
+  {
+   "session": "A",
+   "purpose": "nominal again (drift since the first)",
+   "changes": {},
+   "minutes": 16.0,
+   "packet_id": "L1_08"
+  },
+  {
+   "session": "A",
+   "purpose": "delay_Ha/Hb/Hc = 900",
+   "changes": {
+    "delay_Ha": 900,
+    "delay_Hb": 900,
+    "delay_Hc": 900
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_09"
+  },
+  {
+   "session": "A",
+   "purpose": "delay_Ha/Hb/Hc = 3600",
+   "changes": {
+    "delay_Ha": 3600,
+    "delay_Hb": 3600,
+    "delay_Hc": 3600
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_10"
+  },
+  {
+   "session": "A",
+   "purpose": "delayRGH = 400",
+   "changes": {
+    "delayRGH": 400
+   },
+   "minutes": 15.2,
+   "packet_id": "L1_11"
+  },
+  {
+   "session": "A",
+   "purpose": "delayRGH = 1600",
+   "changes": {
+    "delayRGH": 1600
+   },
+   "minutes": 17.7,
+   "packet_id": "L1_12"
+  },
+  {
+   "session": "A",
+   "purpose": "nominal again (end of session A)",
+   "changes": {},
+   "minutes": 16.0,
+   "packet_id": "L1_13"
+  },
+  {
+   "session": "B",
+   "purpose": "VDD -1 V",
+   "changes": {
+    "VDD1": -20.0,
+    "VDD2": -20.0
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_14"
+  },
+  {
+   "session": "B",
+   "purpose": "VDD +1 V",
+   "changes": {
+    "VDD1": -18.0,
+    "VDD2": -18.0
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_15"
+  },
+  {
+   "session": "B",
+   "purpose": "VR -0.5 V",
+   "changes": {
+    "VR1": -3.5,
+    "VR2": -3.5
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_16"
+  },
+  {
+   "session": "B",
+   "purpose": "VR +0.5 V",
+   "changes": {
+    "VR1": -2.5,
+    "VR2": -2.5
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_17"
+  },
+  {
+   "session": "B",
+   "purpose": "RG_H -0.5 V",
+   "changes": {
+    "RG_1_H": 8.5,
+    "RG_2_H": 8.5
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_18"
+  },
+  {
+   "session": "B",
+   "purpose": "RG_H +0.5 V",
+   "changes": {
+    "RG_1_H": 9.5,
+    "RG_2_H": 9.5
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_19"
+  },
+  {
+   "session": "B",
+   "purpose": "RG_L -0.5 V",
+   "changes": {
+    "RG_1_L": 2.5,
+    "RG_2_L": 2.5
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_20"
+  },
+  {
+   "session": "B",
+   "purpose": "RG_L +0.5 V",
+   "changes": {
+    "RG_1_L": 3.5,
+    "RG_2_L": 3.5
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_21"
+  },
+  {
+   "session": "B",
+   "purpose": "SW_L -0.5 V",
+   "changes": {
+    "SW_1_L": -6.5,
+    "SW_2_L": -6.5
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_22"
+  },
+  {
+   "session": "B",
+   "purpose": "H_low -0.5 V",
+   "changes": {
+    "H1_A_L": 6.2,
+    "H1_B_L": 6.0,
+    "H2_C_L": 6.2,
+    "H3_A_L": 6.2,
+    "H3_B_L": 6.0
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_23"
+  },
+  {
+   "session": "B",
+   "purpose": "H_low +0.5 V",
+   "changes": {
+    "H1_A_L": 7.2,
+    "H1_B_L": 7.0,
+    "H2_C_L": 7.2,
+    "H3_A_L": 7.2,
+    "H3_B_L": 7.0
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_24"
+  },
+  {
+   "session": "B",
+   "purpose": "V_low +0.5 V",
+   "changes": {
+    "V1_A_L": 8.4,
+    "V1_B_L": 8.2,
+    "V2_C_L": 8.4,
+    "V3_A_L": 8.4,
+    "V3_B_L": 8.2
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_25"
+  },
+  {
+   "session": "B",
+   "purpose": "TG -0.25 V",
+   "changes": {
+    "TG_A_H": 7.15,
+    "TG_A_L": 7.15,
+    "TG_B_H": 7.15,
+    "TG_B_L": 7.15
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_26"
+  },
+  {
+   "session": "B",
+   "purpose": "TG +0.25 V",
+   "changes": {
+    "TG_A_H": 7.65,
+    "TG_A_L": 7.65,
+    "TG_B_H": 7.65,
+    "TG_B_L": 7.65
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_27"
+  },
+  {
+   "session": "B",
+   "purpose": "VSUB -5 V",
+   "changes": {
+    "VSUB": 40.0
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_28"
+  },
+  {
+   "session": "B",
+   "purpose": "VSUB +5 V",
+   "changes": {
+    "VSUB": 50.0
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_29"
+  },
+  {
+   "session": "B",
+   "purpose": "nominal again (end of session B)",
+   "changes": {},
+   "minutes": 16.0,
+   "packet_id": "L1_30"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 1040,
+    "delay_Ha": 1370,
+    "delay_Hb": 1370,
+    "delay_Hc": 1370,
+    "VDD1": -19.81,
+    "VDD2": -19.81,
+    "VR1": -3.25,
+    "VR2": -3.25,
+    "H1_A_L": 6.89,
+    "H1_B_L": 6.69,
+    "H2_C_L": 6.89,
+    "H3_A_L": 6.89,
+    "H3_B_L": 6.69,
+    "VSUB": 49.34,
+    "RG_1_H": 8.76,
+    "RG_2_H": 8.76
+   },
+   "minutes": 16.2,
+   "packet_id": "L1_31"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 940,
+    "delay_Ha": 1840,
+    "delay_Hb": 1840,
+    "delay_Hc": 1840,
+    "VDD1": -19.61,
+    "VDD2": -19.61,
+    "VR1": -2.98,
+    "VR2": -2.98,
+    "H1_A_L": 6.68,
+    "H1_B_L": 6.48,
+    "H2_C_L": 6.68,
+    "H3_A_L": 6.68,
+    "H3_B_L": 6.48,
+    "VSUB": 43.43,
+    "RG_1_H": 9.46,
+    "RG_2_H": 9.46
+   },
+   "minutes": 15.7,
+   "packet_id": "L1_32"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 720,
+    "delay_Ha": 2390,
+    "delay_Hb": 2390,
+    "delay_Hc": 2390,
+    "VDD1": -19.0,
+    "VDD2": -19.0,
+    "VR1": -2.52,
+    "VR2": -2.52,
+    "H1_A_L": 6.34,
+    "H1_B_L": 6.14,
+    "H2_C_L": 6.34,
+    "H3_A_L": 6.34,
+    "H3_B_L": 6.14,
+    "VSUB": 45.97,
+    "RG_1_H": 8.68,
+    "RG_2_H": 8.68
+   },
+   "minutes": 14.8,
+   "packet_id": "L1_33"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 1840,
+    "delay_Ha": 3270,
+    "delay_Hb": 3270,
+    "delay_Hc": 3270,
+    "VDD1": -19.03,
+    "VDD2": -19.03,
+    "VR1": -3.31,
+    "VR2": -3.31,
+    "H1_A_L": 6.44,
+    "H1_B_L": 6.24,
+    "H2_C_L": 6.44,
+    "H3_A_L": 6.44,
+    "H3_B_L": 6.24,
+    "VSUB": 48.56,
+    "RG_1_H": 9.16,
+    "RG_2_H": 9.16
+   },
+   "minutes": 19.5,
+   "packet_id": "L1_34"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 1470,
+    "delay_Ha": 3440,
+    "delay_Hb": 3440,
+    "delay_Hc": 3440,
+    "VDD1": -19.2,
+    "VDD2": -19.2,
+    "VR1": -2.87,
+    "VR2": -2.87,
+    "H1_A_L": 6.58,
+    "H1_B_L": 6.38,
+    "H2_C_L": 6.58,
+    "H3_A_L": 6.58,
+    "H3_B_L": 6.38,
+    "VSUB": 41.26,
+    "RG_1_H": 8.93,
+    "RG_2_H": 8.93
+   },
+   "minutes": 18.0,
+   "packet_id": "L1_35"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 560,
+    "delay_Ha": 2990,
+    "delay_Hb": 2990,
+    "delay_Hc": 2990,
+    "VDD1": -18.01,
+    "VDD2": -18.01,
+    "VR1": -3.05,
+    "VR2": -3.05,
+    "H1_A_L": 6.24,
+    "H1_B_L": 6.04,
+    "H2_C_L": 6.24,
+    "H3_A_L": 6.24,
+    "H3_B_L": 6.04,
+    "VSUB": 44.24,
+    "RG_1_H": 9.34,
+    "RG_2_H": 9.34
+   },
+   "minutes": 14.2,
+   "packet_id": "L1_36"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 1640,
+    "delay_Ha": 2170,
+    "delay_Hb": 2170,
+    "delay_Hc": 2170,
+    "VDD1": -19.57,
+    "VDD2": -19.57,
+    "VR1": -3.46,
+    "VR2": -3.46,
+    "H1_A_L": 6.43,
+    "H1_B_L": 6.23,
+    "H2_C_L": 6.43,
+    "H3_A_L": 6.43,
+    "H3_B_L": 6.23,
+    "VSUB": 46.89,
+    "RG_1_H": 8.58,
+    "RG_2_H": 8.58
+   },
+   "minutes": 18.7,
+   "packet_id": "L1_37"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 1250,
+    "delay_Ha": 1150,
+    "delay_Hb": 1150,
+    "delay_Hc": 1150,
+    "VDD1": -18.21,
+    "VDD2": -18.21,
+    "VR1": -3.11,
+    "VR2": -3.11,
+    "H1_A_L": 6.77,
+    "H1_B_L": 6.57,
+    "H2_C_L": 6.77,
+    "H3_A_L": 6.77,
+    "H3_B_L": 6.57,
+    "VSUB": 40.23,
+    "RG_1_H": 8.86,
+    "RG_2_H": 8.86
+   },
+   "minutes": 17.0,
+   "packet_id": "L1_38"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 1390,
+    "delay_Ha": 1470,
+    "delay_Hb": 1470,
+    "delay_Hc": 1470,
+    "VDD1": -18.42,
+    "VDD2": -18.42,
+    "VR1": -2.8,
+    "VR2": -2.8,
+    "H1_A_L": 6.99,
+    "H1_B_L": 6.79,
+    "H2_C_L": 6.99,
+    "H3_A_L": 6.99,
+    "H3_B_L": 6.79,
+    "VSUB": 47.12,
+    "RG_1_H": 9.1,
+    "RG_2_H": 9.1
+   },
+   "minutes": 17.6,
+   "packet_id": "L1_39"
+  },
+  {
+   "session": "C",
+   "purpose": "joint change (Latin hypercube)",
+   "changes": {
+    "delayInt": 1920,
+    "delay_Ha": 2720,
+    "delay_Hb": 2720,
+    "delay_Hc": 2720,
+    "VDD1": -18.64,
+    "VDD2": -18.64,
+    "VR1": -2.63,
+    "VR2": -2.63,
+    "H1_A_L": 6.61,
+    "H1_B_L": 6.41,
+    "H2_C_L": 6.61,
+    "H3_A_L": 6.61,
+    "H3_B_L": 6.41,
+    "VSUB": 42.29,
+    "RG_1_H": 9.24,
+    "RG_2_H": 9.24
+   },
+   "minutes": 19.8,
+   "packet_id": "L1_40"
+  },
+  {
+   "session": "C",
+   "purpose": "nominal again (end of the plan)",
+   "changes": {},
+   "minutes": 16.0,
+   "packet_id": "L1_41"
+  }
+ ],
+ "refused": [
+  {
+   "session": "B",
+   "purpose": "SW_L +0.5 V",
+   "changes": {
+    "SW_1_L": -5.5,
+    "SW_2_L": -5.5
+   },
+   "why": [
+    "OG_1_L=-6.0 must be at or above SW_1_L=-5.5",
+    "OG_2_L=-6.0 must be at or above SW_2_L=-5.5"
+   ]
+  },
+  {
+   "session": "B",
+   "purpose": "V_low -0.5 V",
+   "changes": {
+    "V1_A_L": 7.4,
+    "V1_B_L": 7.2,
+    "V2_C_L": 7.4,
+    "V3_A_L": 7.4,
+    "V3_B_L": 7.2
+   },
+   "why": [
+    "V1_A_L=7.4 must be above every TG level (TG_A_H=7.4)",
+    "V1_B_L=7.2 must be above every TG level (TG_A_H=7.4)",
+    "V2_C_L=7.4 must be above every TG level (TG_A_H=7.4)",
+    "V3_A_L=7.4 must be above every TG level (TG_A_H=7.4)",
+    "V3_B_L=7.2 must be above every TG level (TG_A_H=7.4)"
+   ]
+  }
+ ]
+}
