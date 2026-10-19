@@ -184,9 +184,15 @@ def _device(prefer_gpu: bool):
 class _MeanVarHead:
     """Mixin: train an ensemble of networks that output (mean, log variance) with the Gaussian NLL."""
 
+    #: standardized inputs are clipped to +-INPUT_CLIP (a point that hardly varied among few training rows must not
+    #: become a huge input); a mean beyond the training labels' range by more than OUTPUT_MARGIN training sd is pulled
+    #: back to that edge and the distance added to its sd (with very few rows a network can extrapolate wildly)
+    INPUT_CLIP, OUTPUT_MARGIN = 10.0, 3.0
+
     def _train_one(self, net, inputs, Y, seed):
         torch = _torch()
         torch.manual_seed(seed)
+        self._y_range = (np.nanmin(Y, 0), np.nanmax(Y, 0))          # standardized training labels
         n = len(Y)
         rng = np.random.default_rng(seed)
         val = rng.random(n) < self.val_fraction                    # internal early-stopping split
@@ -234,6 +240,11 @@ class _MeanVarHead:
         means, variances = np.array(means), np.array(variances)
         mean = means.mean(0)
         var = variances.mean(0) + means.var(0)                       # aleatoric + disagreement
+        if getattr(self, "_y_range", None) is not None:
+            lo, hi = self._y_range[0] - self.OUTPUT_MARGIN, self._y_range[1] + self.OUTPUT_MARGIN
+            clipped = np.clip(mean, lo, hi)
+            var = var + (mean - clipped) ** 2
+            mean = clipped
         return mean * self.sy.sd + self.sy.mean, np.sqrt(var) * self.sy.sd
 
 
@@ -269,14 +280,14 @@ class MLPEnsemble(_MeanVarHead):
     def fit(self, X, Y):
         torch = _torch()
         self.sx, self.sy = _Scaler().fit(X), _Scaler().fit(Y)
-        x = torch.tensor(self.sx(X), dtype=torch.float32)
+        x = torch.tensor(np.clip(self.sx(X), -self.INPUT_CLIP, self.INPUT_CLIP), dtype=torch.float32)
         y = self.sy(Y)
         self.nets = [self._train_one(self._net(X.shape[1], Y.shape[1]), [x, None], y, seed) for seed in range(self.n_models)]
         return self
 
     def predict(self, X):
         torch = _torch()
-        return self._ensemble_predict([torch.tensor(self.sx(X), dtype=torch.float32), None])
+        return self._ensemble_predict([torch.tensor(np.clip(self.sx(X), -self.INPUT_CLIP, self.INPUT_CLIP), dtype=torch.float32), None])
 
 
 class CurveCNN(_MeanVarHead):
@@ -327,8 +338,9 @@ class CurveCNN(_MeanVarHead):
             self.c_sd = c.std(axis=0, keepdims=True)
             self.c_sd[self.c_sd == 0] = 1.0
             self.sx = _Scaler().fit(X["scalars"]) if X.get("scalars") is not None else None
-        ct = torch.tensor((c - self.c_mean) / self.c_sd, dtype=torch.float32, device=self.device)
-        xt = (torch.tensor(self.sx(X["scalars"]), dtype=torch.float32, device=self.device)
+        k = self.INPUT_CLIP
+        ct = torch.tensor(np.clip((c - self.c_mean) / self.c_sd, -k, k), dtype=torch.float32, device=self.device)
+        xt = (torch.tensor(np.clip(self.sx(X["scalars"]), -k, k), dtype=torch.float32, device=self.device)
               if self.sx is not None else None)
         return ct, xt
 

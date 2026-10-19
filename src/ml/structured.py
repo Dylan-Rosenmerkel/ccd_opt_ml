@@ -265,13 +265,17 @@ class HierGP:
         return {lvl: torch.as_tensor(np.asarray(X[lvl])[sel]) for lvl in self.levels}
 
     # fit / predict --------------------------------------------------------------
-    def fit(self, X, Y, y_var=None):
+    def fit(self, X, Y, y_var=None, extra_var=None):
         """``y_var`` (n, T) or (n,): the KNOWN variance of each label (e.g. WADERs' error, in log units), added to
-        the kernel's diagonal on top of the learned noise; None: the learned noise only."""
+        the kernel's diagonal on top of the learned noise; None: the learned noise only.
+        ``extra_var`` (n, T) or (n,): a variance added to the diagonal of some rows only to DOWN-WEIGHT them (outliers);
+        unlike ``y_var`` it is not part of a new label's expected error."""
         torch = _torch()
         Y = np.atleast_2d(np.asarray(Y, float).T).T
         if y_var is not None:
             y_var = np.nan_to_num(np.atleast_2d(np.asarray(y_var, float).T).T, nan=0.0)
+        if extra_var is not None:
+            extra_var = np.nan_to_num(np.atleast_2d(np.asarray(extra_var, float).T).T, nan=0.0)
         idx = self._subset(len(Y), np.asarray(X.get("amp", np.zeros(len(Y)))))
         self.sx = _Scaler().fit(X["x"][idx])
         self.xt = torch.tensor(self.sx(X["x"][idx]), dtype=torch.float64)
@@ -282,7 +286,9 @@ class HierGP:
             y = Y[idx, t]
             ym, ys = y.mean(), y.std() if y.std() > 0 else 1.0
             yt = torch.tensor((y - ym) / ys, dtype=torch.float64)
-            known = torch.diag(torch.tensor(y_var[idx, t] / ys ** 2 if y_var is not None else np.zeros(n), dtype=torch.float64))
+            known = torch.diag(torch.tensor(((y_var[idx, t] if y_var is not None else 0.0) +
+                                             (extra_var[idx, t] if extra_var is not None else 0.0)) / ys ** 2 * np.ones(n),
+                                            dtype=torch.float64))
             p = {"ls": torch.full((d,), np.log(np.sqrt(d)), dtype=torch.float64),
                  "s": torch.tensor(np.log(0.7), dtype=torch.float64),
                  "noise": torch.tensor(np.log(0.1), dtype=torch.float64),
@@ -501,12 +507,22 @@ def _plain_gp(**kw):
     class Plain(HierGP):
         name = "ARD GP (amplifier one-hot)"
 
-        def fit(self, X, Y, y_var=None):
-            return super().fit({"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"]}, Y, y_var)
+        def fit(self, X, Y, y_var=None, extra_var=None):
+            return super().fit({"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"]}, Y, y_var, extra_var)
 
         def predict(self, X):
             return super().predict({"x": np.hstack([X["x"], X["onehot"]])})
     return Plain(levels=(), **kw)
+
+
+def robust_outliers(r: np.ndarray, z: float | None, min_sd: float = 0.01) -> np.ndarray:
+    """Rows of ``r`` more than ``z`` robust standard deviations (1.4826 MAD, at least ``min_sd``) from the median."""
+    r = np.asarray(r, float)
+    if z is None or len(r) < 8:
+        return np.zeros(len(r), bool)
+    med = np.median(r)
+    sd = max(1.4826 * np.median(np.abs(r - med)), min_sd)
+    return np.abs(r - med) > z * sd
 
 
 def make_gp(kind: str, **kw):
@@ -549,12 +565,13 @@ class PhysicsStructured:
     """
 
     def __init__(self, kind: str = "none", n_skips: int = 500, use_components: bool = False, use_floor: bool = True,
-                 lambda_model: str | None = None, **kw):
+                 lambda_model: str | None = None, outlier_z: float | None = 4.0, **kw):
         """kind: "none" (default: no amplifier identity; give the amplifier's own features through StructuredPrep),
         "hier" (A+B: amplifier and module levels) or "plain" (ordinary GP + amplifier one-hot).
         lambda_model: "direct" (a GP on log lambda), "split" (two separate GPs on log DC, log CIC) or "joint"
         (JointLambdaGP on the per-row line fits); default: "split" if use_components else "direct"."""
         self.kind, self.n_skips, self.use_components, self.use_floor, self.kw = kind, n_skips, use_components, use_floor, kw
+        self.outlier_z = outlier_z      # residuals beyond this many robust sd are down-weighted (None: never)
         self.lambda_model = lambda_model or ("split" if use_components else "direct")
         self.name = ("A+B" if kind == "hier" else "A") + ": physics-structured"
 
@@ -590,7 +607,12 @@ class PhysicsStructured:
         self.gain = make_gp(self.kind, **self.kw).fit(X, log_g, v(2))
         # what the image sees that the trace physics does not (0 if the physics were complete)
         resid = log_s - (self.physics_log_sigma_adu(X) - log_g)
-        self.resid = make_gp(self.kind, **self.kw).fit(X, resid, v_resid)
+        # a packet whose traces mislead the physics (e.g. most of its trace sets damaged) has a residual far from all
+        # others; fitted as is, it bends the correction for every packet with similar traces.  Such rows get an extra
+        # variance of their own deviation squared, so each counts as about one ordinary point.
+        self.outliers = robust_outliers(resid, self.outlier_z)
+        extra = np.where(self.outliers, (resid - np.median(resid)) ** 2, 0.0) if self.outliers.any() else None
+        self.resid = make_gp(self.kind, **self.kw).fit(X, resid, v_resid, extra)
         self.joint = self.lambda_model == "joint" and "lambda_parts" in X
         self.split = self.lambda_model == "split" and components is not None
         if self.joint:

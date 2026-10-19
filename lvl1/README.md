@@ -152,6 +152,8 @@ training folds, so test packets never influence training.
 
 | Name | What | Family file |
 |---|---|---|
+| `mean` | **baseline**: always the training mean of each target (its error bar: the training spread) | features |
+| `settings` | **baseline**: a GP on the settings alone, no trace and no amplifier label | features |
 | `trace_physics` | no learning: the noise measured on the trace's Allan curve, divided by the training mean gain (the baseline: how far the trace alone gets) | physics |
 | `physics` | **A, the default**: trace physics plus a learned gain and a learned correction (GPs on settings + packet state + own features) | physics |
 | `physics_joint` | A with λ from the joint dark-current / CIC fit of the per-row λ | physics |
@@ -161,6 +163,22 @@ training folds, so test packets never influence training.
 | `cnn` | 1D CNN on the trace and reference curves + settings | curves |
 | `pretrained` | D: the CNN with its encoder pre-trained on every unlabeled trace, then fine-tuned | curves + pretrain |
 | `deep_kernel` | C: a GP on the pre-trained encoder's embedding (frozen; no amplifier term) | curves + pretrain |
+
+**Baselines.** A model is only useful if it beats `mean`; the report's **vs mean** column is each model's error divided
+by `mean`'s (below 1: it learned something). `settings` answers the level-1 question directly: a trace model that does
+not beat it has not shown that the traces help.
+
+**Safeguards for small data** (2026-10-19):
+
+* `physics` (and every model built on it: `physics_joint`, `physics_hier`, `sets`): a training packet whose residual
+  (image noise − trace physics) lies more than 4 robust standard deviations from the others is down-weighted in the
+  learned correction (it counts as about one ordinary point). Without this, one packet with mostly damaged trace sets
+  bent the correction for every packet with similar traces (41 synthetic packets: σe error 18.5 % → 15.0 %; the
+  remaining error is that one packet itself, which no model reading the mean trace curve can predict; `sets` gets it
+  to 13 %).
+* `cnn`, `pretrained`, `nn`, and the set network: standardized inputs are clipped to ±10, and a prediction more than 3
+  training standard deviations beyond the training labels is pulled back to that edge, with the distance added to
+  its error bar. With 6 packets the CNN had predicted σe 1300 % off; now 12 %. On 100 packets nothing changes.
 
 Options:
 
@@ -181,6 +199,7 @@ Options:
 | Score | Meaning | Good |
 |---|---|---|
 | error | RMS of log(predicted/true): the typical relative error | close to the label error |
+| vs mean | error ÷ the `mean` baseline's error | well below 1 |
 | bias | mean of log(predicted/true) | ≈ 0 |
 | shape | error after removing each amplifier's own mean error: is the dependence on the traces right? | ≈ error, or below |
 | rank | Spearman correlation of predicted and true within each amplifier: is the order right? | > 0.9 |
@@ -190,7 +209,8 @@ Options:
 | label error | median error of the labels (WADERs) | — (no model can be judged below it) |
 
 **A suggested pass mark for level 1** (to agree on):
-* the best label-free model predicts σe on held-out packets within about twice the label error;
+* the best label-free model predicts σe on held-out packets within about twice the label error, and clearly beats
+  both baselines (`mean`, `settings`);
 * within each amplifier it ranks σe correctly (rank > 0.9);
 * its calibrated error bars cover 68 % / 95 % of the truths.
 

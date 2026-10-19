@@ -216,8 +216,9 @@ class PretrainedCNN(CurveCNN):
         torch = _torch()
         if fit:
             self.sx = _Scaler().fit(X["scalars"]) if X.get("scalars") is not None else None
-        ct = torch.tensor(self.pre.standardize(X["curves"]), dtype=torch.float32, device=self.device)
-        xt = (torch.tensor(self.sx(X["scalars"]), dtype=torch.float32, device=self.device) if self.sx is not None else None)
+        k = self.INPUT_CLIP
+        ct = torch.tensor(np.clip(self.pre.standardize(X["curves"]), -k, k), dtype=torch.float32, device=self.device)
+        xt = (torch.tensor(np.clip(self.sx(X["scalars"]), -k, k), dtype=torch.float32, device=self.device) if self.sx is not None else None)
         return ct, xt
 
 

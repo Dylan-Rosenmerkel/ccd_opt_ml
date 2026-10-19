@@ -29,6 +29,10 @@ The amplifier and board are used ONLY to group rows for these scores, never as m
     python lvl1/train_lvl1.py --inputs <processed>/model_inputs [--models physics gp cnn ...] [--board 101]
                               [--folds 5] [--out DIR] [--quick]
 
+Baselines (no trace at all; a model is only useful if it beats them):
+    mean            [features]  the training mean of each target, with the training spread as its error bar
+    settings        [features]  Gaussian process on the settings alone (no trace, no amplifier label)
+
 Models (family file in brackets; see lvl1/README.md):
     trace_physics   [physics]   no learning: noise from the trace's Allan curve, the training mean gain
     physics         [physics]   A: trace physics + learned gain and correction (the default model)
@@ -65,10 +69,12 @@ from ml import models, real_inputs, structured as st  # noqa: E402
 from ml.evaluate import grouped_folds  # noqa: E402
 
 TARGETS = ("sigma_e", "lambda", "gain")
-ALL_MODELS = ("trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
+ALL_MODELS = ("mean", "settings", "trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
+#: baselines that see no trace: every report compares the models with them
+BASELINES = ("mean", "settings")
 #: models told which module and amplifier they see (references only; see the module docstring)
 USES_LABELS = ("physics_hier",)
-FAMILY = {"trace_physics": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
+FAMILY = {"mean": "features", "settings": "features", "trace_physics": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
           "ridge": "features", "trees": "features", "gp": "features", "nn": "features",
           "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves"}
 MAX_NAN_FRACTION = 0.2
@@ -206,6 +212,18 @@ class Runner:
         model = setmodels.SetStructured(combiner="learned", kind="none", allan_ns=ds["allan_ns"])
         return model.fit(Xtr, self.Y[train]).predict(Xte)
 
+    # -- the baselines (no trace) ----------------------------------------------------
+    def mean(self, train, test):
+        Y = self.Y[train]
+        return np.tile(Y.mean(0), (len(test), 1)), np.tile(Y.std(0, ddof=1), (len(test), 1))
+
+    def settings(self, train, test):
+        th = self.f("features")["theta"]
+        xtr, xte, keep = prep_columns(th[train], th[test])
+        if not keep.any():                      # every training packet at the same settings: nothing to learn
+            return self.mean(train, test)
+        return models.GP(max_iter=60 if self.quick else 150).fit(xtr, self.Y[train]).predict(xte)
+
     # -- the features family --------------------------------------------------------
     def _features(self, train, test):
         d = self.f("features")
@@ -324,18 +342,31 @@ def fmt(v, pct=True):
     return f"{100 * v:.1f} %" if pct else f"{v:.2f}"
 
 
+def vs_mean(results: dict, model: str, target: str) -> float | None:
+    """The model's error divided by the mean baseline's (None if the baseline was not run)."""
+    base = results.get("mean", {}).get("scores", {}).get(target)
+    if not base or not base["error"] or "scores" not in results.get(model, {}):
+        return None
+    return results[model]["scores"][target]["error"] / base["error"]
+
+
 def report_md(results: dict, info: dict) -> str:
     lines = [f"# Level 1 results ({info['date']})", "",
              f"Inputs: `{info['inputs']}`; boards {info['boards']}; {info['n_rows']} examples from {info['n_packets']} packets; "
              f"{info['n_folds']}-fold cross-validation grouped by packet.  No amplifier labels are model inputs.", ""]
+    if "mean" in results and "scores" in results["mean"]:
+        lines += ["**vs mean** is a model's error divided by that of the `mean` baseline (always predicting the training average): "
+                  "below 1 the model has learned something; near 1 it has not, however small its error looks.  `settings` uses "
+                  "the settings alone: a trace model that does not beat it has not shown that the traces help.", ""]
     for name in TARGETS:
-        lines += [f"## {name}", "", "| model | error | bias | shape | rank | cover 68 / 95 | calibrated 68 / 95 | factor | label error |",
-                  "|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"## {name}", "", "| model | error | vs mean | bias | shape | rank | cover 68 / 95 | calibrated 68 / 95 | factor | label error |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
         for model, res in results.items():
             if "skipped" in res:
                 continue
             s = res["scores"][name]
-            lines.append(f"| {model}{' (labels)' if model in USES_LABELS else ''} | {fmt(s['error'])} | {fmt(s['bias'])} | {fmt(s['shape'])} | {fmt(s['rank'], False)} | "
+            tag = " (labels)" if model in USES_LABELS else " (baseline)" if model in BASELINES else ""
+            lines.append(f"| {model}{tag} | {fmt(s['error'])} | {fmt(vs_mean(results, model, name), False)} | {fmt(s['bias'])} | {fmt(s['shape'])} | {fmt(s['rank'], False)} | "
                          f"{fmt(s['coverage68'], False)} / {fmt(s['coverage95'], False)} | {fmt(s['calibrated_coverage68'], False)} / "
                          f"{fmt(s['calibrated_coverage95'], False)} | {fmt(s['factor68'], False)} | {fmt(s['label_error'])} |")
         lines.append("")
@@ -410,7 +441,8 @@ def main():
         sc = scores(runner.Y, runner.Y_err, mean, std, amp, folds)
         results[name] = {"scores": sc, "seconds": time.time() - t0}
         preds[name] = (mean, std)
-        print(f"{name + (' (labels)' if name in USES_LABELS else ''):14s} " + "  ".join(f"{t}: {100 * sc[t]['error']:5.1f} % (rank {fmt(sc[t]['rank'], False)}, cover {sc[t]['coverage68']:.2f})"
+        ratio = lambda t: f", {vs_mean(results, name, t):.2f}x mean" if name != "mean" and vs_mean(results, name, t) is not None else ""
+        print(f"{name + (' (labels)' if name in USES_LABELS else ''):14s} " + "  ".join(f"{t}: {100 * sc[t]['error']:5.1f} % (rank {fmt(sc[t]['rank'], False)}, cover {sc[t]['coverage68']:.2f}{ratio(t)})"
                                           for t in TARGETS) + f"   {time.time() - t0:5.0f} s", flush=True)
     (out / "report.json").write_text(json.dumps({"info": info, "results": results}, indent=1))
     (out / "report.md").write_text(report_md(results, info))
