@@ -66,9 +66,17 @@ Synthetic numbers compare methods only. The networks and deep_kernel are weak at
 
 ## 3. Literature search
 
-A background agent is surveying newer models (tabular foundation models, time-series encoders, neural processes,
-simulation-based inference, uncertainty methods, safe/multi-fidelity BO, prior CCD/detector ML work); report to
-`docs/literature/ml_models_literature_review.md`.
+`docs/literature/ml_models_literature_review.md` (written by a search agent; citations spot-checked: arXiv:2509.21661
+Cuevas-Zepeda et al., BO for sensor characterization on a low-noise CCD, and arXiv:2606.01427 Johnson et al., GPs often
+beat TabPFN on scarce data, both confirmed; items the agent could not confirm are marked [unverified]). Shortlist:
+1. TabPFN v2/2.5 (+TabICLv2) as a regressor and inside model A; compare at 13/40/100 packets (gated weights: pin version);
+2. packet-aware conformal calibration (packet weights / one row per packet, bins of predicted sigma, worst-amplifier coverage);
+3. SAAS / dimension-scaled length-scale priors for the GPs (also the level-2 surrogate);
+4. trace-representation bake-off: MiniRocket vs frozen MOMENT/Mantis vs our encoder (needs raw skip sequences in model_inputs);
+5. multi-output GP over settings with the trace noise as a cheap extra task (bridge to level 2).
+Level 2: settings -> trace -> image as a "function network" BO with partial evaluations (Buathong et al. 2024),
+step-limited safe BO (Kirschner et al. 2022), conformal is optimistic under BO feedback (Fannjiang et al. 2022).
+No published work predicting image noise from readout traces was found.
 
 ## 4. Still open
 
