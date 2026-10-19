@@ -527,11 +527,15 @@ def robust_outliers(r: np.ndarray, z: float | None, min_sd: float = 0.01) -> np.
 
 def make_gp(kind: str, **kw):
     """'hier': amplifier/module levels (B); 'plain': ordinary GP + amplifier one-hot; 'none': no amplifier
-    information at all (x only: an amplifier-agnostic model)."""
+    information at all (x only: an amplifier-agnostic model); 'dim' / 'saas': BoTorch GPs with a dimension-scaled
+    or sparsity (SAAS) length-scale prior (bogp.py), x only."""
     if kind == "hier":
         return HierGP(**kw)
     if kind == "none":
         return HierGP(levels=(), **kw)
+    if kind in ("dim", "saas"):                 # BoTorch GPs with high-dimension priors (bogp.py); no amplifier information
+        from .bogp import BoTorchGP
+        return BoTorchGP(kind, **kw)
     return _plain_gp(**kw)
 
 
@@ -565,13 +569,16 @@ class PhysicsStructured:
     """
 
     def __init__(self, kind: str = "none", n_skips: int = 500, use_components: bool = False, use_floor: bool = True,
-                 lambda_model: str | None = None, outlier_z: float | None = 4.0, **kw):
+                 lambda_model: str | None = None, outlier_z: float | None = 4.0, lambda_kind: str | None = None,
+                 lambda_kw: dict | None = None, **kw):
         """kind: "none" (default: no amplifier identity; give the amplifier's own features through StructuredPrep),
         "hier" (A+B: amplifier and module levels) or "plain" (ordinary GP + amplifier one-hot).
         lambda_model: "direct" (a GP on log lambda), "split" (two separate GPs on log DC, log CIC) or "joint"
         (JointLambdaGP on the per-row line fits); default: "split" if use_components else "direct"."""
         self.kind, self.n_skips, self.use_components, self.use_floor, self.kw = kind, n_skips, use_components, use_floor, kw
         self.outlier_z = outlier_z      # residuals beyond this many robust sd are down-weighted (None: never)
+        # the GP kind of the direct lambda model alone (e.g. "saas"); None: the same as the others
+        self.lambda_kind, self.lambda_kw = lambda_kind or kind, lambda_kw if lambda_kw is not None else kw
         self.lambda_model = lambda_model or ("split" if use_components else "direct")
         self.name = ("A+B" if kind == "hier" else "A") + ": physics-structured"
 
@@ -621,7 +628,7 @@ class PhysicsStructured:
             self.dark = make_gp(self.kind, **self.kw).fit(X, components[:, 0])
             self.cic = make_gp(self.kind, **self.kw).fit(X, components[:, 1])
         else:
-            self.lam = make_gp(self.kind, **self.kw).fit(X, log_lam, v(1))
+            self.lam = make_gp(self.lambda_kind, **self.lambda_kw).fit(X, log_lam, v(1))
         return self
 
     def predict(self, X):

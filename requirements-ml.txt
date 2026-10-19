@@ -11,3 +11,4 @@ torch             # neural networks on the trace curves (1D CNN), deep ensembles
 nbformat          # running the notebooks from the command line
 nbclient
 ipykernel
+botorch[fully_bayesian]   # GPs with high-dimension length-scale priors (src/ml/bogp.py: gp_dim, gp_saas, physics_dim, physics_saas)

@@ -78,7 +78,36 @@ Level 2: settings -> trace -> image as a "function network" BO with partial eval
 step-limited safe BO (Kirschner et al. 2022), conformal is optimistic under BO feedback (Fannjiang et al. 2022).
 No published work predicting image noise from readout traces was found.
 
-## 4. Still open
+## 4. GP priors for many inputs / few points (literature item 3)
+
+`src/ml/bogp.py` (`BoTorchGP`, BoTorch 0.18.1 + JAX/NumPyro, added to requirements-ml.txt): kind "dim" = SingleTaskGP
+with the Hvarfner et al. 2024 prior (verified in the installed source: LogNormal(sqrt2 + log(d)/2, sqrt3), RBF);
+kind "saas" = SaasFullyBayesianSingleTaskGP, NUTS 256/128/16 (quick 96/48/8). Inputs Normalize'd to the unit cube,
+targets standardized, outlier rows (extra_var > 0) dropped. `make_gp` kinds "dim"/"saas"; `PhysicsStructured(lambda_kind=)`
+swaps only the direct lambda GP. train_lvl1 extra models (not default): gp_dim, gp_saas, physics_dim, physics_saas,
+physics_saas_lambda. Note: HierGP (physics) already had a weak dimension-scaled prior (log-normal at sqrt d, sd 3).
+
+Full training, synthetic, 3 datasets each at 13 and 41 packets (seeds 0-2) + the 100-packet set; error % σe / λ / gain:
+
+| model | 13 packets | 41 packets | 100 packets |
+|---|---|---|---|
+| gp (now) | 8.9 / 20.4 / 1.3 | 7.9 / 7.4 / 0.9 | 11.0 / 4.4 / 0.8 |
+| gp_dim | 8.7 / 20.7 / 1.3 | 8.0 / 18.3 / 1.0 | 14.4 / 5.0 / 0.9 |
+| gp_saas | 10.7 / 23.2 / 1.2 | 8.8 / 12.3 / 0.8 | 10.8 / 6.2 / 0.8 |
+| physics (now) | 4.1 / 19.1 / 1.3 | 9.1 / 10.9 / 0.9 | 5.3 / 4.9 / 0.9 |
+| physics_dim | 4.4 / 15.3 / 1.8 | 9.1 / 9.3 / 1.0 | 5.6 / 4.4 / 0.9 |
+| physics_saas | 4.6 / 13.5 / 1.7 | 9.1 / 7.3 / 1.0 | 5.3 / 3.9 / 0.8 |
+| physics_saas_lambda | 4.1 / 13.5 / 1.3 | 9.1 / 7.3 / 0.9 | – |
+| physics_joint | 4.1 / 17.3 / 1.3 | 9.1 / 5.2 / 0.9 | (quick: 5.3 / 4.6 / 0.9) |
+
+Conclusions: neither prior improves the features GP (gp_dim clearly worse on λ at 41 and σe at 100); their raw error
+bars are better calibrated at 13 packets (factor 1-2 instead of 3), which conformal calibration fixes anyway. Inside the
+physics model only λ gains (SAAS: 19→13.5, 11→7.3, 4.9→3.9 %); σe unchanged, gain slightly worse when all GPs are
+SAAS → SAAS for λ only (physics_saas_lambda) keeps σe and gain identical. physics_joint is better at 41 packets
+(5.2 %). Cost: SAAS λ ~1-2 min per fold alone (much longer when 7 runs share the CPU). Not tried: SAAS inside the joint
+dark-current/CIC fit (JointLambdaGP), the natural combination.
+
+## 5. Still open
 
 * Trace-settings decision (above); then the row-start pixel exclusion as a setting to match it.
 * Flag test packets whose traces are unusual (e.g. floor-dominated physics term) and widen their error bars.

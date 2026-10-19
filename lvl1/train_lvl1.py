@@ -46,6 +46,13 @@ Models (family file in brackets; see lvl1/README.md):
     cnn             [curves]    1D CNN on the trace and reference curves + settings
     pretrained      [curves + pretrain]  D: CNN whose encoder was pre-trained on every unlabeled trace, fine-tuned
     deep_kernel     [curves + pretrain]  C: GP on the pre-trained encoder's embedding (frozen), no amplifier term
+
+GP-prior variants (not run by default; the literature review's item 3, src/ml/bogp.py):
+    gp_dim          [features]  gp with BoTorch's dimension-scaled length-scale prior (Hvarfner et al. 2024)
+    gp_saas         [features]  gp as a SAAS GP (sparsity prior, NUTS sampling; Eriksson & Jankowiak 2021)
+    physics_dim     [physics]   physics (A) with its GPs replaced by the dimension-scaled-prior GP
+    physics_saas    [physics]   physics (A) with its GPs replaced by SAAS GPs
+    physics_saas_lambda [physics]  physics (A) with only its lambda GP replaced by a SAAS GP
 """
 
 from __future__ import annotations
@@ -70,13 +77,16 @@ from ml.evaluate import grouped_folds  # noqa: E402
 
 TARGETS = ("sigma_e", "lambda", "gain")
 ALL_MODELS = ("mean", "settings", "trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
+#: GP-prior variants: run only when named in --models
+EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_saas_lambda")
 #: baselines that see no trace: every report compares the models with them
 BASELINES = ("mean", "settings")
 #: models told which module and amplifier they see (references only; see the module docstring)
 USES_LABELS = ("physics_hier",)
 FAMILY = {"mean": "features", "settings": "features", "trace_physics": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
           "ridge": "features", "trees": "features", "gp": "features", "nn": "features",
-          "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves"}
+          "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves",
+          "gp_dim": "features", "gp_saas": "features", "physics_dim": "physics", "physics_saas": "physics", "physics_saas_lambda": "physics"}
 MAX_NAN_FRACTION = 0.2
 
 
@@ -192,6 +202,24 @@ class Runner:
             model = st.PhysicsStructured()
         return model.fit(Xtr, self.Y[train]).predict(Xte)
 
+    def _saas_kw(self):
+        return dict(warmup=96, num_samples=48, thinning=8) if self.quick else dict(warmup=256, num_samples=128, thinning=16)
+
+    def physics_dim(self, train, test):
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        return st.PhysicsStructured(kind="dim").fit(Xtr, self.Y[train]).predict(Xte)
+
+    def physics_saas(self, train, test):
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        return st.PhysicsStructured(kind="saas", **self._saas_kw()).fit(Xtr, self.Y[train]).predict(Xte)
+
+    def physics_saas_lambda(self, train, test):
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        return st.PhysicsStructured(lambda_kind="saas", lambda_kw=self._saas_kw()).fit(Xtr, self.Y[train]).predict(Xte)
+
     def physics_joint(self, train, test):
         return self.physics(train, test, joint=True)
 
@@ -242,6 +270,16 @@ class Runner:
     def gp(self, train, test):
         xtr, xte = self._features(train, test)
         return models.GP(max_iter=60 if self.quick else 150).fit(xtr, self.Y[train]).predict(xte)
+
+    def gp_dim(self, train, test):
+        from ml.bogp import BoTorchGP
+        xtr, xte = self._features(train, test)
+        return BoTorchGP("dim").fit(xtr, self.Y[train]).predict(xte)
+
+    def gp_saas(self, train, test):
+        from ml.bogp import BoTorchGP
+        xtr, xte = self._features(train, test)
+        return BoTorchGP("saas", **self._saas_kw()).fit(xtr, self.Y[train]).predict(xte)
 
     def nn(self, train, test):
         xtr, xte = self._features(train, test)
@@ -386,7 +424,7 @@ def report_md(results: dict, info: dict) -> str:
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--inputs", required=True, help="the model_inputs directory written by process_packet.py")
-    parser.add_argument("--models", nargs="*", default=list(ALL_MODELS), choices=ALL_MODELS)
+    parser.add_argument("--models", nargs="*", default=list(ALL_MODELS), choices=ALL_MODELS + EXTRA_MODELS)
     parser.add_argument("--board", type=int, nargs="*", default=[101], help="boards whose amplifiers are used (default 101)")
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--include-flagged", action="store_true", help="also use labels that WADERs flagged")
