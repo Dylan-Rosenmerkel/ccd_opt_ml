@@ -155,14 +155,34 @@ training folds, so test packets never influence training.
 | `mean` | **baseline**: always the training mean of each target (its error bar: the training spread) | features |
 | `settings` | **baseline**: a GP on the settings alone, no trace and no amplifier label | features |
 | `trace_physics` | no learning: the noise measured on the trace's Allan curve, divided by the training mean gain (the baseline: how far the trace alone gets) | physics |
-| `physics` | **A, the default**: trace physics plus a learned gain and a learned correction (GPs on settings + packet state + own features) | physics |
-| `physics_joint` | A with λ from the joint dark-current / CIC fit of the per-row λ | physics |
+| `physics` | **A, the default**: trace physics plus a learned gain and a learned correction (GPs on settings + packet state + own features); λ by a SAAS GP (since 2026-10-19) | physics |
+| `physics_joint` | A with λ from the joint dark-current / CIC fit of the per-row λ, with the SAAS sparsity prior on its length scales (since 2026-10-20) | physics |
 | `physics_hier` | **A+B, a reference WITH labels**: A on hierarchical GPs told the module and amplifier; marked "(labels)" in the report. Comparing it with `physics` measures what amplifier labels add on the real CCD | physics |
 | `sets` | E: A with the 10 trace sets combined by a learned set network | sets |
 | `ridge`, `trees`, `gp`, `nn` | the first-round models on settings + own trace + own reference features | features |
 | `cnn` | 1D CNN on the trace and reference curves + settings | curves |
 | `pretrained` | D: the CNN with its encoder pre-trained on every unlabeled trace, then fine-tuned | curves + pretrain |
 | `deep_kernel` | C: a GP on the pre-trained encoder's embedding (frozen; no amplifier term) | curves + pretrain |
+
+**GP priors (2026-10-19/20, `src/ml/bogp.py`, BoTorch).** With ~60-320 inputs and at most a few hundred examples, a GP
+that fits one length scale per input freely has more knobs than data. The SAAS prior (Eriksson & Jankowiak 2021)
+switches inputs off unless the data need them. On synthetic data it helps λ only, so it is used for λ only:
+
+| λ error (synthetic) | 13 packets | 41 packets | 100 packets |
+|---|---|---|---|
+| `physics` before (`physics_gp_lambda`) | 19.1 % | 10.9 % | 4.9 % |
+| `physics` now (λ by a SAAS GP, short NUTS chains; ~1 min per run at 100 packets) | 15.1 % | 7.4 % | 3.9 % |
+| λ by a SAAS GP, full NUTS chains (`physics_saasfull_lambda`; 19 min at 100 packets) | 13.5 % | 7.3 % | 3.9 % |
+| λ by our GP with the SAAS prior fitted by MAP (`physics_saasmap_lambda`; seconds) | 14.8 % | 9.7 % | 5.0 % |
+| `physics_joint` before (`physics_joint_weak`) | 17.3 % | 5.2 % | 4.6 % |
+| `physics_joint` now (SAAS prior, MAP) | 16.9 % | 4.6 % | 4.4 % |
+| `physics_joint_select` (joint model on the inputs a SAAS GP picks) | 16.0 % | 5.5 % | 3.5 % |
+
+(3 datasets each at 13 and 41 packets, 1 at 100.) σe and gain are unchanged. Neither SAAS nor the dimension-scaled prior
+(`gp_dim`) improved the features GP (`gp`). Extra models for these comparisons, run only when named in `--models`:
+`gp_dim`, `gp_saas`, `physics_dim`, `physics_saas`, `physics_gp_lambda`, `physics_joint_weak`, `physics_joint_select`,
+`physics_saasmap_lambda`, `physics_saasfull_lambda`. Run times: `physics` 75 s and `physics_joint` 11 s for 5 folds
+at 100 packets on this Mac.
 
 **Baselines.** A model is only useful if it beats `mean`; the report's **vs mean** column is each model's error divided
 by `mean`'s (below 1: it learned something). `settings` answers the level-1 question directly: a trace model that does

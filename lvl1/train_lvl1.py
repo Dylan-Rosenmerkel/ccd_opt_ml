@@ -35,8 +35,8 @@ Baselines (no trace at all; a model is only useful if it beats them):
 
 Models (family file in brackets; see lvl1/README.md):
     trace_physics   [physics]   no learning: noise from the trace's Allan curve, the training mean gain
-    physics         [physics]   A: trace physics + learned gain and correction (the default model)
-    physics_joint   [physics]   A with the joint dark-current / CIC fit of lambda (needs per-row lambda)
+    physics         [physics]   A: trace physics + learned gain and correction (the default model); lambda by a SAAS GP
+    physics_joint   [physics]   A with the joint dark-current / CIC fit of lambda (needs per-row lambda); SAAS prior
     physics_hier    [physics]   A+B, REFERENCE WITH LABELS: A on hierarchical GPs told the module and amplifier
     sets            [sets]      E: A with the trace sets combined by a learned set network
     ridge           [features]  Bayesian ridge on settings + own trace + own reference features
@@ -52,7 +52,11 @@ GP-prior variants (not run by default; the literature review's item 3, src/ml/bo
     gp_saas         [features]  gp as a SAAS GP (sparsity prior, NUTS sampling; Eriksson & Jankowiak 2021)
     physics_dim     [physics]   physics (A) with its GPs replaced by the dimension-scaled-prior GP
     physics_saas    [physics]   physics (A) with its GPs replaced by SAAS GPs
-    physics_saas_lambda [physics]  physics (A) with only its lambda GP replaced by a SAAS GP
+    physics_gp_lambda [physics]  physics (A) as before 2026-10-19 (lambda by the same GP as gain and correction)
+    physics_joint_weak   [physics]  physics_joint before 2026-10-20 (weak length-scale prior instead of SAAS)
+    physics_joint_select [physics]  physics_joint on the inputs a SAAS GP (NUTS) on log lambda finds relevant
+    physics_saasmap_lambda  [physics]  physics with lambda by our GP with the SAAS prior fitted by MAP (fast, weaker)
+    physics_saasfull_lambda [physics]  physics with lambda by the SAAS GP with full-length NUTS chains (slow)
 """
 
 from __future__ import annotations
@@ -78,7 +82,7 @@ from ml.evaluate import grouped_folds  # noqa: E402
 TARGETS = ("sigma_e", "lambda", "gain")
 ALL_MODELS = ("mean", "settings", "trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
 #: GP-prior variants: run only when named in --models
-EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_saas_lambda")
+EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_gp_lambda", "physics_joint_weak", "physics_joint_select", "physics_saasmap_lambda", "physics_saasfull_lambda")
 #: baselines that see no trace: every report compares the models with them
 BASELINES = ("mean", "settings")
 #: models told which module and amplifier they see (references only; see the module docstring)
@@ -86,8 +90,12 @@ USES_LABELS = ("physics_hier",)
 FAMILY = {"mean": "features", "settings": "features", "trace_physics": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
           "ridge": "features", "trees": "features", "gp": "features", "nn": "features",
           "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves",
-          "gp_dim": "features", "gp_saas": "features", "physics_dim": "physics", "physics_saas": "physics", "physics_saas_lambda": "physics"}
+          "gp_dim": "features", "gp_saas": "features", "physics_dim": "physics", "physics_saas": "physics", "physics_gp_lambda": "physics",
+          "physics_joint_weak": "physics", "physics_joint_select": "physics",
+          "physics_saasmap_lambda": "physics", "physics_saasfull_lambda": "physics"}
 MAX_NAN_FRACTION = 0.2
+#: NUTS settings of the SAAS GP that fits lambda in ``physics`` (short chains: almost all of the full chains' gain)
+SAAS_LAMBDA_KW = dict(warmup=96, num_samples=48, thinning=8)
 
 
 # --------------------------------------------------------------------------- #
@@ -190,17 +198,38 @@ class Runner:
                              np.full(len(test), self.Y[train, 2].std())])
         return m, s
 
-    def physics(self, train, test, joint=False):
+    def physics(self, train, test, joint=False, **joint_kw):
         d = self.f("physics")
         Xtr, Xte = self._physics_X(d, train, test)
         if joint:
             # (a part fitted at or below zero is fine: the joint fit clips it at 5 % of lambda, in log space)
             if "lambda_parts" not in Xtr or not (np.isfinite(Xtr["lambda_parts"]).all() and (Xtr["lambda_parts"].sum(1) > 0).all()):
                 raise SkipModel("no per-row lambda (dark current / CIC) for every training row")
-            model = st.PhysicsStructured(lambda_model="joint")
+            model = st.PhysicsStructured(lambda_model="joint", lambda_kw=self._saas_kw(), **joint_kw)
         else:
-            model = st.PhysicsStructured()
+            # lambda by a SAAS GP (sparsity prior, sampled with short NUTS chains): on synthetic data 19 -> 15 %,
+            # 11 -> 7.4 %, 4.9 -> 3.9 % at 13 / 41 / 100 packets, sigma_e and gain unchanged, ~1 min per run at 100
+            # packets (full chains: 13.5 / 7.3 / 3.9 % but 19 min; 2026-10-20; physics_gp_lambda is the previous version)
+            model = st.PhysicsStructured(lambda_kind="saas", lambda_kw=SAAS_LAMBDA_KW)
         return model.fit(Xtr, self.Y[train]).predict(Xte)
+
+    def physics_saasmap_lambda(self, train, test):
+        """physics with lambda by our GP with the SAAS prior fitted by MAP (no sampling: as fast as physics_gp_lambda)."""
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        return st.PhysicsStructured(lambda_kind="none", lambda_kw={"ls_prior": "saas"}).fit(Xtr, self.Y[train]).predict(Xte)
+
+    def physics_saasfull_lambda(self, train, test):
+        """physics with lambda by the SAAS GP sampled with full-length NUTS chains (slow: ~20x the default)."""
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        return st.PhysicsStructured(lambda_kind="saas", lambda_kw=dict(warmup=256, num_samples=128, thinning=16)).fit(Xtr, self.Y[train]).predict(Xte)
+
+    def physics_gp_lambda(self, train, test):
+        """physics before 2026-10-19: lambda by the same GP as the gain and the correction."""
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        return st.PhysicsStructured().fit(Xtr, self.Y[train]).predict(Xte)
 
     def _saas_kw(self):
         return dict(warmup=96, num_samples=48, thinning=8) if self.quick else dict(warmup=256, num_samples=128, thinning=16)
@@ -215,13 +244,17 @@ class Runner:
         Xtr, Xte = self._physics_X(d, train, test)
         return st.PhysicsStructured(kind="saas", **self._saas_kw()).fit(Xtr, self.Y[train]).predict(Xte)
 
-    def physics_saas_lambda(self, train, test):
-        d = self.f("physics")
-        Xtr, Xte = self._physics_X(d, train, test)
-        return st.PhysicsStructured(lambda_kind="saas", lambda_kw=self._saas_kw()).fit(Xtr, self.Y[train]).predict(Xte)
-
     def physics_joint(self, train, test):
+        # the SAAS sparsity prior (MAP) on the joint model's length scales: lambda 17.3 -> 16.9 %, 5.2 -> 4.6 %,
+        # 4.6 -> 4.4 % at 13 / 41 / 100 synthetic packets, at no extra cost (2026-10-20; physics_joint_weak: before)
+        return self.physics(train, test, joint=True, joint_prior="saas")
+
+    def physics_joint_weak(self, train, test):
+        """physics_joint before 2026-10-20: the weak log-normal length-scale prior."""
         return self.physics(train, test, joint=True)
+
+    def physics_joint_select(self, train, test):
+        return self.physics(train, test, joint=True, joint_select=0.1)
 
     def physics_hier(self, train, test):
         """A+B: model A on hierarchical GPs with module and amplifier levels -- the labelled reference."""

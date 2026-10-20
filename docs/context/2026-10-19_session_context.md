@@ -107,6 +107,31 @@ SAAS → SAAS for λ only (physics_saas_lambda) keeps σe and gain identical. ph
 (5.2 %). Cost: SAAS λ ~1-2 min per fold alone (much longer when 7 runs share the CPU). Not tried: SAAS inside the joint
 dark-current/CIC fit (JointLambdaGP), the natural combination.
 
+### 4b. Decision (2026-10-20): SAAS for lambda, as default
+
+User approved making SAAS-for-lambda the default and trying SAAS inside physics_joint.
+
+* `ls_penalty()` in structured.py: "weak" (as before) or "saas" (SAAS prior for MAP fitting: tau ~ HalfCauchy(0.1),
+  1/l^2 ~ HalfCauchy(tau), Jacobians included); used by `HierGP(ls_prior=)` and `JointLambdaGP(ls_prior=)`.
+* `PhysicsStructured(joint_prior=, joint_select=)`: SAAS prior inside the joint model, or the joint model on the inputs a
+  NUTS SAAS GP on log lambda finds relevant (relevance >= 0.1 x max; on a 41-packet set it kept 5 of 61 inputs, gap
+  0.17 -> 0.04).
+
+λ error, synthetic (3 datasets at 13 and 41 packets, 1 at 100); σe and gain identical in all; times alone on this Mac,
+5 folds at 100 packets:
+
+| λ fitted by | 13 | 41 | 100 | time |
+|---|---|---|---|---|
+| old GP (`physics_gp_lambda`) | 19.1 | 10.9 | 4.9 | 6 s |
+| SAAS, full NUTS 256/128/16 (`physics_saasfull_lambda`) | 13.5 | 7.3 | 3.9 | 1143 s |
+| **SAAS, short NUTS 96/48/8 (`physics`, default)** | 15.1 | 7.4 | 3.9 | 75 s |
+| our GP + SAAS prior by MAP (`physics_saasmap_lambda`) | 14.8 | 9.7 | 5.0 | 9 s |
+| joint, weak prior (`physics_joint_weak`) | 17.3 | 5.2 | 4.6 | 12 s |
+| **joint, SAAS prior by MAP (`physics_joint`, default)** | 16.9 | 4.6 | 4.4 | 11 s |
+| joint on SAAS-selected inputs (`physics_joint_select`) | 16.0 | 5.5 | 3.5 | very slow |
+
+Run times measured with 7 jobs in parallel were up to 10x too long (JAX and torch each use all cores): time alone.
+
 ## 5. Still open
 
 * Trace-settings decision (above); then the row-start pixel exclusion as a setting to match it.

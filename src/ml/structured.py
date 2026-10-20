@@ -212,6 +212,25 @@ def _torch():
     return torch
 
 
+def ls_penalty(p, d, prior: str = "weak"):
+    """
+    Minus the log prior of a GP's length scales p["ls"] (log length scales, d inputs), with the Jacobians.
+
+    "weak": log l ~ Normal(log sqrt(d), 3), only against extreme values.
+    "saas": the SAAS sparsity prior (Eriksson & Jankowiak 2021), for MAP fitting: a global scale tau ~ HalfCauchy(0.1)
+            (p["ltau"] = log tau) and every inverse squared length scale 1/l^2 ~ HalfCauchy(tau): inputs are switched off
+            (long length scale) unless the data need them.
+    """
+    if prior != "saas":
+        return 0.5 * ((p["ls"] - np.log(np.sqrt(d))) ** 2).sum() / 9
+    torch = _torch()
+    tau = p["ltau"].exp()
+    rho = (-2 * p["ls"]).exp()                                       # inverse squared length scales
+    log_p = (-torch.log(tau) - torch.log1p((rho / tau) ** 2) + torch.log(rho)).sum()   # HalfCauchy(rho; tau), d rho/d ls
+    log_p = log_p - torch.log1p((tau / 0.1) ** 2) + p["ltau"]                         # HalfCauchy(tau; 0.1), d tau/d log tau
+    return -log_p
+
+
 class HierGP:
     """
     Exact GP with the hierarchical kernel of the module docstring (one GP per target column).
@@ -225,8 +244,10 @@ class HierGP:
     name = "hierarchical GP"
 
     def __init__(self, levels: tuple[str, ...] = ("module", "amp"), max_points: int = 1200, iters: int = 120,
-                 seed: int = 0, include_noise: bool = True):
+                 seed: int = 0, include_noise: bool = True, ls_prior: str = "weak"):
+        """ls_prior: "weak" or "saas" (see ``ls_penalty``)."""
         self.levels, self.max_points, self.iters, self.seed = tuple(levels), max_points, iters, seed
+        self.ls_prior = ls_prior
         self.include_noise = include_noise
 
     # kernel pieces ------------------------------------------------------------
@@ -293,6 +314,8 @@ class HierGP:
                  "s": torch.tensor(np.log(0.7), dtype=torch.float64),
                  "noise": torch.tensor(np.log(0.1), dtype=torch.float64),
                  "mu": torch.tensor(0.0, dtype=torch.float64)}
+            if self.ls_prior == "saas":
+                p["ltau"] = torch.tensor(np.log(0.1), dtype=torch.float64)
             for lvl in self.levels:
                 p[f"c_{lvl}"] = torch.tensor(np.log(0.5), dtype=torch.float64)
                 p[f"s_{lvl}"] = torch.tensor(np.log(0.2), dtype=torch.float64)
@@ -309,7 +332,7 @@ class HierGP:
                 r = (yt - q["mu"])[:, None]
                 alpha = torch.cholesky_solve(r, L)
                 loss = 0.5 * (r * alpha).sum() + torch.log(torch.diagonal(L)).sum()
-                loss = loss + 0.5 * ((q["ls"] - np.log(np.sqrt(d))) ** 2).sum() / 9  # weak prior: no extreme length scales
+                loss = loss + ls_penalty(q, d, self.ls_prior)                    # prior on the length scales
                 loss.backward()
                 return loss
 
@@ -374,7 +397,11 @@ class JointLambdaGP:
     name = "joint dark + CIC GP"
 
     def __init__(self, levels=("module", "amp"), max_points: int = 600, iters: int = 120, rel_sd: float = 0.12,
-                 n_rows: int = 16, seed: int = 0, include_noise: bool = True, space: str = "log"):
+                 n_rows: int = 16, seed: int = 0, include_noise: bool = True, space: str = "log", ls_prior: str = "weak"):
+        """ls_prior: "weak" (log-normal around sqrt(d), sd 3, as HierGP) or "saas" (the SAAS sparsity prior, fitted by
+        MAP: per output a global scale tau ~ HalfCauchy(0.1) and every inverse squared length scale 1/l^2 ~
+        HalfCauchy(tau), so inputs are switched off unless the data need them; Eriksson & Jankowiak 2021)."""
+        self.ls_prior = ls_prior
         self.levels, self.max_points, self.iters, self.rel_sd, self.n_rows = tuple(levels), max_points, iters, rel_sd, n_rows
         self.space = space
         self.seed, self.include_noise = seed, include_noise
@@ -419,6 +446,8 @@ class JointLambdaGP:
             unit = 1.0 if self.space == "log" else mean                  # amplitudes relative to the output's size
             p = {"ls": torch.full((d,), np.log(np.sqrt(d)), dtype=torch.float64), "s": torch.tensor(np.log(0.3 * unit), dtype=torch.float64),
                  "nug": torch.tensor(np.log(0.02 * unit), dtype=torch.float64), "mu": torch.tensor(mean, dtype=torch.float64)}
+            if self.ls_prior == "saas":
+                p["ltau"] = torch.tensor(np.log(0.1), dtype=torch.float64)
             for lvl in self.levels:
                 p[f"c_{lvl}"] = torch.tensor(np.log(0.1 * unit), dtype=torch.float64)
                 p[f"s_{lvl}"] = torch.tensor(np.log(0.05 * unit), dtype=torch.float64)
@@ -447,7 +476,7 @@ class JointLambdaGP:
             L = torch.linalg.cholesky(build(ps))
             r = (yt - mean_vec(ps))[:, None]
             loss = 0.5 * (r * torch.cholesky_solve(r, L)).sum() + torch.log(torch.diagonal(L)).sum()
-            loss = loss + sum(0.5 * ((ps_["ls"] - np.log(np.sqrt(d))) ** 2).sum() / 9 for ps_ in ps)
+            loss = loss + sum(self._ls_penalty(ps_, d) for ps_ in ps)
             loss.backward()
             return loss
 
@@ -460,6 +489,9 @@ class JointLambdaGP:
             self.L = torch.linalg.cholesky(build(self.q))
             self.alpha = torch.cholesky_solve((yt - mean_vec(self.q))[:, None], self.L)
         return self
+
+    def _ls_penalty(self, p, d):
+        return ls_penalty(p, d, self.ls_prior)
 
     def predict_parts(self, X):
         """Posterior means (n, 2) of (DC, CIC) -- in e-/pixel, or their logs if space == "log" -- and covariance (n, 2, 2)."""
@@ -570,7 +602,7 @@ class PhysicsStructured:
 
     def __init__(self, kind: str = "none", n_skips: int = 500, use_components: bool = False, use_floor: bool = True,
                  lambda_model: str | None = None, outlier_z: float | None = 4.0, lambda_kind: str | None = None,
-                 lambda_kw: dict | None = None, **kw):
+                 lambda_kw: dict | None = None, joint_prior: str = "weak", joint_select: float | None = None, **kw):
         """kind: "none" (default: no amplifier identity; give the amplifier's own features through StructuredPrep),
         "hier" (A+B: amplifier and module levels) or "plain" (ordinary GP + amplifier one-hot).
         lambda_model: "direct" (a GP on log lambda), "split" (two separate GPs on log DC, log CIC) or "joint"
@@ -579,6 +611,10 @@ class PhysicsStructured:
         self.outlier_z = outlier_z      # residuals beyond this many robust sd are down-weighted (None: never)
         # the GP kind of the direct lambda model alone (e.g. "saas"); None: the same as the others
         self.lambda_kind, self.lambda_kw = lambda_kind or kind, lambda_kw if lambda_kw is not None else kw
+        # the joint dark-current / CIC model: its length-scale prior ("weak" or "saas", JointLambdaGP.ls_prior), and
+        # joint_select: if set, a SAAS GP (NUTS, lambda_kw) on log lambda first picks the inputs whose relevance is at
+        # least this fraction of the largest, and the joint model sees only those
+        self.joint_prior, self.joint_select = joint_prior, joint_select
         self.lambda_model = lambda_model or ("split" if use_components else "direct")
         self.name = ("A+B" if kind == "hier" else "A") + ": physics-structured"
 
@@ -590,6 +626,13 @@ class PhysicsStructured:
         if self.kind == "plain":
             return {"x": np.hstack([X["x"], X["onehot"]]), "amp": X["amp"], **extra}
         return {"x": X["x"], "amp": X.get("amp", np.zeros(len(X["x"]), int)), **extra}
+
+    def _joint_inputs(self, X):
+        """_lambda_inputs, restricted to the SAAS-selected columns if joint_select was used."""
+        Z = self._lambda_inputs(X)
+        if getattr(self, "lam_cols", None) is not None:
+            Z = {**Z, "x": Z["x"][:, self.lam_cols]}
+        return Z
 
     def skips(self, X) -> np.ndarray | float:
         """The image's number of skips N: per row from X["n_skips"] (real data: the image's NDCM) or ``n_skips``."""
@@ -623,7 +666,14 @@ class PhysicsStructured:
         self.joint = self.lambda_model == "joint" and "lambda_parts" in X
         self.split = self.lambda_model == "split" and components is not None
         if self.joint:
-            self.lam = JointLambdaGP(levels=("module", "amp") if self.kind == "hier" else ()).fit(self._lambda_inputs(X), X["lambda_parts"])
+            self.lam_cols = None
+            if self.joint_select is not None:
+                from .bogp import BoTorchGP
+                sel = BoTorchGP("saas", **self.lambda_kw).fit(X, log_lam)
+                rel = sel.relevance(0)
+                self.lam_cols = np.flatnonzero(rel >= self.joint_select * rel.max())
+            self.lam = JointLambdaGP(levels=("module", "amp") if self.kind == "hier" else (), ls_prior=self.joint_prior).fit(
+                self._joint_inputs(X), X["lambda_parts"])
         elif self.split:
             self.dark = make_gp(self.kind, **self.kw).fit(X, components[:, 0])
             self.cic = make_gp(self.kind, **self.kw).fit(X, components[:, 1])
@@ -637,7 +687,7 @@ class PhysicsStructured:
         m_s = self.physics_log_sigma_adu(X) - mg[:, 0] + mr[:, 0]
         s_s = np.sqrt(sg[:, 0] ** 2 + sr[:, 0] ** 2)
         if self.joint:
-            ml, sl = self.lam.predict(self._lambda_inputs(X))
+            ml, sl = self.lam.predict(self._joint_inputs(X))
             m_l, s_l = ml[:, 0], sl[:, 0]
         elif self.split:
             (md, sd), (mc, sc) = self.dark.predict(X), self.cic.predict(X)
