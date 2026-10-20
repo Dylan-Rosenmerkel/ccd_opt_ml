@@ -5,7 +5,7 @@ make_model_summary.py -- the one-page PDF "Level-1 models at a glance" (docs/mod
 
 Laid out with PyMuPDF's Story (HTML + CSS -> PDF).  The numbers are the synthetic results at 41 packets
 (docs/slides/data/model_errors_41packets.csv, mean of 3 datasets) and the GP-prior comparison of
-docs/context/2026-10-19_session_context.md (section 4b).
+docs/context/2026-10-19_session_context.md (section 4b).  Only the title and the table: every model and what it does.
 """
 from pathlib import Path
 
@@ -23,70 +23,81 @@ def e(m: str) -> str:
 
 
 ROWS = [
-    ("Baselines", None),
-    ("mean", "nothing", "Always predicts the training average. Any useful model must beat it.", "mean"),
-    ("settings", "settings only", "Gaussian process on the settings, no trace. A trace model that cannot beat it has not shown the traces help.", "settings"),
-    ("Standard regressors (settings + 85 trace numbers of the amplifier's own and reference traces)", None),
-    ("ridge", "85 numbers", "Bayesian linear fit with an error bar; simple and hard to fool.", "ridge"),
-    ("trees", "85 numbers", "Gradient-boosted decision trees: thresholds and kinks.", "trees"),
-    ("gp", "85 numbers", "Gaussian process: smooth prediction from similar examples, with an honest error bar.", "gp"),
-    ("nn", "85 numbers", "Small ensemble of neural networks; their disagreement is the error bar.", "nn"),
-    ("Physics-based (the main models)", None),
-    ("trace_physics", "Allan curve", "No learning: fits σ(N)<sup>2</sup> = a<sup>2</sup>/N + b<sup>2</sup> to the trace's Allan deviation to predict the noise of the image's N = 500-skip average; gain = training mean.", "trace_physics"),
-    ("physics (A), default", "Allan curve + numbers", "trace_physics + GPs that learn the gain and a correction for what the trace physics misses (outlier packets down-weighted). λ by a <b>SAAS GP</b>.", "physics"),
-    ("physics_joint", "as A + λ per row", "As A, but λ = dark current + CIC fitted jointly from the image's row-by-row λ (GP with the SAAS prior).", "physics_joint"),
-    ("sets (E)", "each trace set", "As A, but looks at every repeated trace set and learns which to trust: robust to damaged sets.", "sets"),
-    ("Networks that learn their own features (the 14 curves)", None),
-    ("cnn", "14 curves", "1D convolutional network on the curves (Allan deviation, spectra, waveform shapes).", "cnn"),
-    ("pretrained (D)", "14 curves", "The CNN, first pre-trained on unlabelled traces (reference traces need no image), then fine-tuned.", "pretrained"),
-    ("deep_kernel (C)", "14 curves", "Gaussian process on the pre-trained network's summary of the curves: proper error bars.", "deep_kernel"),
+    ("Baselines: no trace at all", None),
+    ("mean", "nothing",
+     "Predicts the average of the training labels for every example, with the training spread as its error bar. Any model worth "
+     "using must beat it; the report's “vs mean” score divides every model's error by this one.", "mean"),
+    ("settings", "settings only",
+     "A Gaussian process on the operating settings alone: no trace and no amplifier label. It measures how much the settings explain "
+     "by themselves; a trace model that cannot beat it has not shown that the traces add anything.", "settings"),
+    ("Standard regressors: the settings + the 85 hand-made trace numbers (own traces and the nominal reference traces)", None),
+    ("ridge", "85 numbers",
+     "Bayesian linear regression: a weighted sum of the inputs, with a prior that keeps the weights small, and an error bar. Simple, fast "
+     "and hard to fool; a sanity check on the fancier models.", "ridge"),
+    ("trees", "85 numbers",
+     "Gradient-boosted decision trees: a few hundred small if-then trees, each fitting what the previous ones got wrong; the error bar comes "
+     "from extra fits of the 16 % and 84 % quantiles. Handles thresholds and kinks and ignores useless inputs, but cannot extrapolate.", "trees"),
+    ("gp", "85 numbers",
+     "Gaussian process: predicts from the training examples whose inputs are most similar, with one fitted length scale per input "
+     "(how much that input matters). Smooth predictions with honest error bars, which level 2 needs; can over-fit with many inputs and few examples.", "gp"),
+    ("nn", "85 numbers",
+     "An ensemble of small neural networks (two hidden layers of 64); each outputs a value and an error bar, and their disagreement is added "
+     "to the uncertainty. Flexible, but needs more data than the first packets will give.", "nn"),
+    ("Physics-based: the main models", None),
+    ("trace_physics", "Allan curve",
+     "No learning. Fits σ(N)<sup>2</sup> = a<sup>2</sup>/N + b<sup>2</sup> to the trace's Allan deviation (a = noise of one skip, b = noise floor) "
+     "and evaluates it at the image's N = 500 skips; divides by the average training gain. Shows how far pure physics gets.", "trace_physics"),
+    ("physics (A), the default", "Allan curve + settings + numbers",
+     "Starts from trace_physics and adds Gaussian processes that learn the gain and a correction for what the trace physics misses "
+     "(e.g. noise only the image sees). Training packets far off the rest are down-weighted, so one bad packet cannot bend the correction. "
+     "λ comes from a SAAS GP, a Gaussian process whose prior switches off inputs the data do not need.", "physics"),
+    ("physics_joint", "as A + λ row by row",
+     "As A, but λ is built from the image's row-by-row dark charge: dark current and clock-induced charge (CIC) are fitted together by one "
+     "two-output Gaussian process that knows their correlated errors (SAAS prior). Best λ so far.", "physics_joint"),
+    ("sets (E)", "each trace set",
+     "As A, but instead of averaging the repeated trace sets first, a small network reads every set's Allan curve and learns how much to "
+     "trust each (attention). Robust to damaged sets and intermittent pickup. Best σe so far.", "sets"),
+    ("Networks that learn their own features from the 14 trace curves", None),
+    ("cnn", "14 curves + settings",
+     "A 1D convolutional network that reads the curves directly (Allan deviation, spectra, autocorrelation, waveform shapes) and learns "
+     "its own features; an ensemble gives the error bar. Can find effects the hand-made numbers miss, given enough data.", "cnn"),
+    ("pretrained (D)", "14 curves + settings",
+     "The same kind of network, first pre-trained on unlabelled traces (reference traces need no image) with self-made tasks: fill in "
+     "masked parts of the curves, predict the settings from the curves, and a contrastive task. Then fine-tuned on the labelled packets.", "pretrained"),
+    ("deep_kernel (C)", "pre-trained summary + settings",
+     "A Gaussian process that measures similarity on the pre-trained network's summary of the curves (kept fixed) plus the settings: "
+     "learned features with Gaussian-process error bars.", "deep_kernel"),
     ("Reference only", None),
-    ("physics_hier (A+B)", "as A + amplifier", "A told the module and amplifier (hierarchical GPs): measures what amplifier labels would add.", "physics_hier"),
+    ("physics_hier (A+B)", "as A + told the amplifier",
+     "Model A on hierarchical Gaussian processes told the module and amplifier: shared trends plus per-amplifier offsets. Not a candidate: "
+     "comparing it with A measures what amplifier labels would add.", "physics_hier"),
 ]
 
 
 def table() -> str:
-    out = ['<table><tr><th width="22%">Model <i>(looks at)</i></th><th width="58%">What it does</th>'
-           '<th width="20%">σe / λ / gain error [%]</th></tr>']
+    out = ['<table><tr><th width="20%">Model <i>(looks at)</i></th><th width="65%">What it does</th>'
+           '<th width="15%">σe/λ/gain error [%]</th></tr>']
     for row in ROWS:
         if row[1] is None:
             out.append(f'<tr><td colspan="3" class="grp">{row[0]}</td></tr>')
         else:
             name, looks, what, key = row
-            out.append(f"<tr><td><b>{name}</b> <i>({looks})</i></td><td>{what}</td><td class='num'>{e(key)}</td></tr>")
+            out.append(f"<tr><td><b>{name}</b><br/><i>{looks}</i></td><td>{what}</td><td class='num'>{e(key)}</td></tr>")
     out.append("</table>")
     return "".join(out)
 
 
 HTML = f"""
 <h1>Level-1 models at a glance</h1>
-<p class="sub">ccd_opt_ml · module PA03, board 101 · October 2026</p>
-<p><b>Task.</b> From an amplifier's short readout trace (and the settings) predict what a WADERs fit of the image will give:
-read noise <b>σe</b>, dark charge <b>λ</b> and <b>gain</b>. One packet = 4 amplifiers = 4 examples. No model is told which amplifier it sees
-(except the reference). <b>Testing:</b> 5-fold cross-validation <i>grouped by packet</i> (a packet's 4 amplifiers are always held out together);
-scores: error (typical % off), error ÷ that of guessing the average, rank within an amplifier, calibrated coverage of the error bars.
-Error column: synthetic packets (toy CCD world), 41 packets, mean of 3 datasets; it compares methods, not the real CCD.</p>
+<p class="sub">ccd_opt_ml · each model predicts an amplifier's read noise σe, dark charge λ and gain from its trace (no amplifier labels,
+except the reference). Last column: typical error on synthetic packets (toy CCD world), 41 packets, mean of 3 datasets, packet-grouped
+5-fold cross-validation; it compares methods, not the real CCD.</p>
 {table()}
-<h2>What is a SAAS GP?</h2>
-<p><b>Gaussian process (GP).</b> Predicts a value at new settings as a weighted average of the training examples, weighted by how similar
-their inputs are, and returns an error bar. Similarity is the kernel k(x, x′) = s<sup>2</sup> exp(−½ Σ<sub>i</sub> (x<sub>i</sub> − x′<sub>i</sub>)<sup>2</sup> / ℓ<sub>i</sub><sup>2</sup>),
-with one <b>length scale ℓ<sub>i</sub></b> per input: a short ℓ<sub>i</sub> means the input matters, a long one that it is ignored.</p>
-<p><b>The problem.</b> Our GPs see 60–320 inputs but only 40–400 examples. Fitting every ℓ<sub>i</sub> freely gives more knobs than data:
-the GP latches onto chance patterns.</p>
-<p><b>SAAS</b> (sparse axis-aligned subspace; Eriksson &amp; Jankowiak, UAI 2021, arXiv:2103.00349) puts a <b>sparsity prior</b> on the
-inverse squared length scales: ρ<sub>i</sub> = 1/ℓ<sub>i</sub><sup>2</sup> ~ HalfCauchy(τ), with a global scale τ ~ HalfCauchy(0.1).
-Most ρ<sub>i</sub> are pulled to ~0 (input switched off); the heavy tail lets the few inputs the data really need stay on.
-Instead of one best fit, the hyperparameters are <b>sampled</b> (NUTS, Markov chain Monte Carlo) and the predictions averaged, so the
-error bar includes the uncertainty about which inputs matter. A by-product: the inputs it keeps are a feature-relevance ranking.</p>
-<p><b>In this project</b> (src/ml/bogp.py, BoTorch <i>SaasFullyBayesianSingleTaskGP</i>): <b>physics</b> fits λ with a SAAS GP (short chains:
-96 warm-up / 48 samples, ~75 s per run at 100 packets); <b>physics_joint</b> uses the same prior fitted by maximum a posteriori (no sampling, no extra time).
-Synthetic λ error at 13 / 41 / 100 packets: physics 19.1 → 15.1, 10.9 → 7.4, 4.9 → 3.9 %; physics_joint 17.3 → 16.9, 5.2 → 4.6, 4.6 → 4.4 %.
-σe and gain unchanged. Not adopted: SAAS or the dimension-scaled prior for the plain <i>gp</i> (no gain there).</p>
 """
 
 CSS = """
 * { font-family: sans-serif; }
-body { font-size: 8.8pt; line-height: 1.2; color: #111; }
+body { font-size: 8.8pt; line-height: 1.22; color: #111; }
 h1 { font-size: 15pt; margin: 0 0 1pt 0; }
 h2 { font-size: 11pt; margin: 7pt 0 2pt 0; border-bottom: 1px solid #111; }
 p { margin: 0 0 4pt 0; text-align: justify; }
@@ -104,7 +115,7 @@ def main():
     story = pymupdf.Story(html=HTML, user_css=CSS)
     writer = pymupdf.DocumentWriter(str(out))
     page = pymupdf.paper_rect("letter")
-    where = page + (36, 32, -36, -32)
+    where = page + (32, 28, -32, -28)
     pages = 0
     more = True
     while more:
