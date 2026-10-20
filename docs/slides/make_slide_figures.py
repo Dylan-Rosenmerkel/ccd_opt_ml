@@ -552,9 +552,40 @@ def m_cv():
     plt.close(fig)
 
 
+def h_pca():
+    """All usable trace numbers at once: principal components of the 59 traces (each amplifier relative to its own reference)."""
+    df = pd.read_csv(DATA / "oct12_trace_features.csv")
+    feats = [c for c in df.columns if c not in ("file", "channel", "group", "NCOLPRE", "repeat") and "row-start" not in c]
+    X = df[feats]
+    X = X.loc[:, X.notna().mean() > 0.95]
+    X = X.fillna(X.median())
+    for ch in range(4):                                   # remove each amplifier's own level: its reference mean
+        m = df.channel == ch
+        X.loc[m] = X.loc[m] - X.loc[m & (df.group == "reference")].mean()
+    sd = X.std(ddof=1).replace(0, np.nan)
+    Z = (X / sd).dropna(axis=1)
+    Z = Z - Z.mean()
+    U, S, Vt = np.linalg.svd(Z.values, full_matrices=False)
+    ev = S ** 2 / np.sum(S ** 2)
+    pc = Z.values @ Vt[:2].T
+    fig, ax = plt.subplots(figsize=(7.2, 6.2))
+    markers = ["o", "s", "^", "D"]
+    for g in GROUPS:
+        for ch in range(4):
+            m = ((df.group == g) & (df.channel == ch)).values
+            ax.plot(pc[m, 0], pc[m, 1], markers[ch], ms=9, color=GROUP_COLORS[g], mfc=GROUP_COLORS[g] if g != "reference" else "white",
+                    mew=1.6, label=g if ch == 0 else None)
+    ax.set_xlabel(f"PC1 ({100 * ev[0]:.0f} % of the variation)")
+    ax.set_ylabel(f"PC2 ({100 * ev[1]:.0f} %)")
+    ax.set_title(f"All {Z.shape[1]} numbers at once (PCA)")
+    ax.legend(frameon=False, fontsize=11, loc="best")
+    fig.savefig(OUT / "h_pca.png")
+    plt.close(fig)
+
+
 FIGURES = {f.__name__: f for f in (s1_pipeline, s1_levels, s2_drift_profile, s2_chi2, s3_runwaders_flow, s3_label_error,
                                    s3_fit_quality_table, s4_model_ladder, s4_model_errors, s4_saas, s5_timeline, gc_figures,
-                                   t_trace_anatomy, t_trace_noise, p_processing, m_cv, h_shapes, h_separation)}
+                                   t_trace_anatomy, t_trace_noise, p_processing, m_cv, h_shapes, h_separation, h_pca)}
 
 
 def main():
