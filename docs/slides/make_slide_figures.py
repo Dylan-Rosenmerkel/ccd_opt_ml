@@ -457,6 +457,71 @@ def p_processing():
     plt.close(fig)
 
 
+# --------------------------------------------------------------------------- hand-made numbers (2026-10-12 tests)
+OCT12 = ROOT / "data" / "2026-10-12-PA03_PQ04_Packet_Tests"
+GROUPS = ["reference", "VDD −20.5 V", "V low rails + TG", "all H low rails", "H3_A_L only"]
+GROUP_COLORS = {"reference": "#4a5568", "VDD −20.5 V": "#dd6b20", "V low rails + TG": "#2f855a",
+                "all H low rails": "#c53030", "H3_A_L only": "#6b46c1"}
+
+
+def _oct12_trace(group: str, channel: int):
+    """The first usable trace of a group and amplifier (docs/slides/data/oct12_trace_features.csv lists them)."""
+    import json
+    from decode_trace import decode_trace
+    from trace_regions import split_regions
+    df = pd.read_csv(DATA / "oct12_trace_features.csv")
+    stem = df[(df.group == group) & (df.channel == channel)].sort_values("repeat")["file"].iloc[0]
+    meta = json.loads((OCT12 / f"{stem}.meta").read_text())
+    t = decode_trace(OCT12 / f"{stem}.RJ45ADCDATA{channel}")
+    return t, split_regions(t, meta), meta
+
+
+def h_shapes():
+    """Where two hand-made numbers come from: the mean horizontal and vertical transfer, reference vs changed rails."""
+    from trace_features import trace_features
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5.2))
+    for ax, curve, changed, label, title in (
+            (axes[0], "horizontal: mean shape", "all H low rails", "horizontal: minimum", "Horizontal transfer (mean of 19)"),
+            (axes[1], "vertical: mean shape", "V low rails + TG", "vertical: minimum", "Vertical transfer (mean of 18)")):
+        for g in ("reference", changed):
+            t, r, meta = _oct12_trace(g, 0)
+            f = trace_features(t, meta=meta, regions=r)
+            y = np.asarray(f.curves[curve], float)
+            x = np.arange(len(y)) / 15.0
+            k = int(np.nanargmin(y))
+            ax.plot(x, y, color=GROUP_COLORS[g], lw=2.2, label=f"{g}: minimum {y[k]:,.0f} ADU".replace(",", " "))
+            ax.plot(x[k], y[k], "v", color=GROUP_COLORS[g], ms=13)
+        ax.set_title(title)
+        ax.set_xlabel("time in the transfer [µs]")
+        ax.set_ylabel("ADC, baseline removed [ADU]")
+        ax.legend(frameon=False, fontsize=13, loc="lower center", bbox_to_anchor=(0.5, -0.42))
+    fig.subplots_adjust(wspace=0.3)
+    fig.savefig(OUT / "h_shapes.png")
+    plt.close(fig)
+
+
+def h_separation():
+    """Three hand-made numbers per trace, in % of each amplifier's reference: settings changes vs repeat scatter."""
+    df = pd.read_csv(DATA / "oct12_trace_features.csv")
+    panels = [("horizontal: minimum", "H-transfer minimum"), ("vertical: minimum", "V-transfer minimum"),
+              ("slow: H-transfer peak-to-peak (ADU)", "H-transfer peak-to-peak"), ("skip: CDS rms (detrended)", "noise per skip (CDS rms)")]
+    fig, axes = plt.subplots(1, 4, figsize=(17, 5.4), sharey=False)
+    markers = ["o", "s", "^", "D"]
+    for ax, (f, name) in zip(axes, panels):
+        for ch in range(4):
+            ref = df[(df.group == "reference") & (df.channel == ch)][f].mean()
+            for i, g in enumerate(GROUPS):
+                v = df[(df.group == g) & (df.channel == ch)][f]
+                ax.plot(np.full(len(v), i) + (ch - 1.5) * 0.12, 100 * (v - ref) / abs(ref), markers[ch], ms=7,
+                        color=GROUP_COLORS[g], mfc=GROUP_COLORS[g] if g != "reference" else "white", label=f"ch{ch}" if i == 0 else None)
+        ax.axhline(0, color="#999999", lw=1)
+        ax.set_xticks(range(len(GROUPS)), ["ref.", "VDD", "V\nrails", "H\nrails", "H3\nonly"], fontsize=13)
+        ax.set_title(name, fontsize=15)
+        ax.set_ylabel("change from reference [%]" if f == panels[0][0] else "")
+    axes[0].legend(frameon=False, fontsize=11, loc="lower left", title="amplifier", title_fontsize=11)
+    fig.savefig(OUT / "h_separation.png")
+    plt.close(fig)
+
 def m_cv():
     n_pk, n_amp = 12, 4
     rng = np.random.default_rng(3)
@@ -489,7 +554,7 @@ def m_cv():
 
 FIGURES = {f.__name__: f for f in (s1_pipeline, s1_levels, s2_drift_profile, s2_chi2, s3_runwaders_flow, s3_label_error,
                                    s3_fit_quality_table, s4_model_ladder, s4_model_errors, s4_saas, s5_timeline, gc_figures,
-                                   t_trace_anatomy, t_trace_noise, p_processing, m_cv)}
+                                   t_trace_anatomy, t_trace_noise, p_processing, m_cv, h_shapes, h_separation)}
 
 
 def main():
