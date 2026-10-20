@@ -1,5 +1,10 @@
 # Project overview deck: outline (6 slides)
 
+**Built deck (2026-10-20):** https://claude.ai/artifact/6TYq1G1Lz1dzK172GLKDmB, 12 slides in black and white (plots in
+colour): cover · goal · what a trace is (`t_trace_anatomy.png`) · from a trace to numbers (`t_trace_noise.png`) · drift ·
+run_WADERs labels · gain-correction side track · from a packet to training data (`p_processing.png`) · the models (table) ·
+how we test them (`m_cv.png`) · results · next steps. The outline below is the first, 6-slide version.
+
 Figures are in `docs/slides/figures/`; remake them with `.venv/bin/python docs/slides/make_slide_figures.py`.
 Style: at most 3 short callouts per slide; key numbers large; one colour per idea throughout
 (trace = blue, image = orange, model = green, problem = red). Exact numbers go in the speaker notes.
