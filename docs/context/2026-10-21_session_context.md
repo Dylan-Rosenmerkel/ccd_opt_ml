@@ -94,3 +94,15 @@ The session may run out: document every step here and push.
 - NEXT STEPS (not started): `--feature-tiers` option in train_lvl1.py (per-model default
   feature sets: gp/nn/ridge = evidence tier A; trees/sets/physics_joint/cnn = A+B; physics lambda GP = A); tolerance
   test of gp_saas / gp_dim; re-run process_packet on the rehearsal to confirm the new features flow into model_inputs.
+
+## 4. Next request (user, 2026-10-21, later)
+
+1. Update the context and push (this section).
+2. Build `--feature-tiers` in `lvl1/train_lvl1.py`.
+3. The training script should automatically try the different tiers and compare performance (tier ablation).
+4. Can tier A be broken down further, so that all tiers have a similar number of features?
+5. Can an ML model help decide which feature goes in which tier (via the weights or importances of trained models)?
+6. Standing preference: "when I tell you to write up results I want you to write up an overleaf latex doc with the
+   results, not md" (saved in memory).
+
+Status of this request: see section 5 below (updated as the work goes).
