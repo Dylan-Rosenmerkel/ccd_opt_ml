@@ -85,6 +85,12 @@ The session may run out: document every step here and push.
   ("Step 2") and tolerance_*.csv. Plain gp collapses with +20 uninformative columns (sigma_e +51 pp); nn and ridge
   degrade steadily; trees immune; physics/physics_joint/sets sigma_e immune, lambda degrades mildly. Consequence: the
   plain gp must get tier A only on real data (134+134 features would break it).
-- [ ] 6 pipeline check, and NEXT STEPS (not started): `--feature-tiers` option in train_lvl1.py (per-model default
+- [x] 6 pipeline check: process_packet on 2 rehearsal packets -> model_inputs features.npz X_trace (8, 134), 13 start:
+  features, curves (8, 18, 256) incl. Hadamard and mean transient. OK.
+- [x] Document `docs/trace_features_and_tiers.md` (user request): new features, the 3-layer tier structure
+  (implementation 0/1/2, evidence A/B/C, model feature sets), test results, the 43-packet scan, and the plan for the
+  first data: (1) finalize tiers after session A (add label relevance), (2) per-model tier ablation S0/SA/SAB/SABC/
+  S-impl0 with paired comparisons, chosen on A+B, confirmed once on C.
+- NEXT STEPS (not started): `--feature-tiers` option in train_lvl1.py (per-model default
   feature sets: gp/nn/ridge = evidence tier A; trees/sets/physics_joint/cnn = A+B; physics lambda GP = A); tolerance
   test of gp_saas / gp_dim; re-run process_packet on the rehearsal to confirm the new features flow into model_inputs.
