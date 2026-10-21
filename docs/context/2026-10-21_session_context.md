@@ -171,3 +171,15 @@ dip recovery time B. With --feature-tiers auto, gp/nn/ridge (tier A) would not s
 the user's go-ahead: (a) protected physical-estimator set always included; (b) clusters within amplifier; (c) no
 repeat-share penalty until compared with the labels' repeat scatter; (d) label relevance + learned L1 on all features
 override the evidence tier once labels exist.
+Guards PROTOTYPED IN THE SCRATCHPAD ONLY (user: "implement the guards on a scratchpad and test them, then I make the
+call whether to change fully"): `<scratchpad>/guards/guarded_study.py` (guards a-c + label_relevance) and
+`build_and_run.py` (test). Repo code unchanged. Results:
+- real 59 traces: 21 features change tier; guarded sizes A1 41 / A2 41 / B 24 / C 35; protected set P = 8 estimators.
+- synthetic test: td41_s0/1/2 + the 120 other real features as uninformative real-named columns (values drawn at
+  random); D = synthetic features that are learned-L1 in >= 2 of the OTHER importance runs or have within-amplifier
+  label relevance > 0.5 on the other datasets. Error %, mean of 3 (sigma_e / lambda / gain):
+  gp: A 57.5/29.2/31.3 (collapsed, = mean); P 9.6/22.0/0.9; D 8.9/10.9/0.9; P+D 9.0/14.5/0.9; TRUE 6.9/8.0/0.9
+  nn: A 32.9/22.4/17.6; gA+P 21.7/21.9/10.2; P+D 10.2/16.9/2.6; TRUE 10.1/17.1/1.5
+  ridge: A 16.8/19.9/4.4; gA+P 14.7/23.2/3.3; P+D 9.5/14.0/0.9; TRUE 9.5/12.4/0.9
+  Guards a-c alone help nn/ridge on sigma_e and gain but cannot save the plain gp (tier A still holds ~80 columns);
+  the label-driven set (d) nearly reaches the true-feature result. Waiting for the user's decision.
