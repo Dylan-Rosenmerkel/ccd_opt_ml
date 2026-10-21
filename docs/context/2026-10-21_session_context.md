@@ -73,8 +73,13 @@ The session may run out: document every step here and push.
   rise time (#22), jitter decomposition (#43-44), in-window drift vs baseline (#14), EMG, spectral flux, cepstrum.
 - [x] 2 tests: `tests/test_trace_features_new.py`, 16 tests pass (synthetic signals with known answers + the pilot
   numbers on one real ch0 trace: lever arm -212, R^2 0.97, tau 12.9 us, amplitude 614 ADU, row-start ratio 0.92).
-- [ ] 3 results on real traces
+- [x] 3 results on real traces: `docs/slides/oct12_features.py` rerun (59 x 134 features in
+  `docs/slides/data/oct12_trace_features.csv`); `lvl1/feature_study.py` -> `lvl1/feature_study/` (feature_table.csv,
+  evidence_tiers.json, README.md with the results). Evidence tiers A/B/C for ALL features (= step 5a done too):
+  original 85: 46 A / 22 B / 17 C; new tier 1: 11/3/9; new tier 2: 11/6/9. Highlights: start transient amplitude
+  (matched filter) settings F 264, amp F 70, repeat share 0.02; ch2 step rate 8.2 % vs 0, null kurtosis 5.2, jump share
+  0.27; pickup-line and start-mode features unstable (repeat share 0.6-1.3).
 - [ ] 4 notebook
-- [ ] 5a tiering of all features
+- [x] 5a tiering of all features (done with step 3, `lvl1/feature_study.py`)
 - [ ] 5b synthetic tolerance test
 - [ ] 6 pipeline check
