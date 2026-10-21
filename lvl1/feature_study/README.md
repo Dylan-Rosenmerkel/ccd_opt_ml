@@ -81,3 +81,58 @@ it separates the amplifiers well (F 186).
 - Step 2: the synthetic tolerance test, i.e. how many extra columns each model can take.
 - After session A: rerun this study on real packets, where the noise changes, then choose the feature sets per model
   with the setting-grouped CV and the session-C hold-out.
+
+## Step 2: how many extra feature columns can each model take? (`lvl1/feature_tolerance.py`, synthetic)
+
+**Setup.** Three synthetic 41-packet datasets; the toy world has 17 trace features. 20, 50 or 100 extra columns were
+added to both the own-trace and the reference features, of three kinds:
+
+- noise: independent Gaussian columns;
+- copies: near-copies of existing features;
+- real: real 2026-10-12 feature values drawn at random, i.e. realistic distributions and outliers, but no information.
+
+All models were run with `--quick`. Files: [`tolerance_results.csv`](tolerance_results.csv),
+[`tolerance_summary.csv`](tolerance_summary.csv).
+
+**Error with no extra columns** (σe / λ / gain %):
+
+| model | σe / λ / gain % |
+|---|---|
+| gp | 6.9 / 8.0 / 0.9 |
+| physics | 9.1 / 7.4 / 0.9 |
+| physics_joint | 9.1 / 4.6 / 0.9 |
+| sets | 5.7 / 10.9 / 0.9 |
+| ridge | 9.5 / 12.4 / 0.9 |
+| trees | 9.7 / 21.0 / 1.3 |
+| nn | 10.0 / 17.0 / 1.5 |
+| cnn | 9.5 / 14.5 / 3.3 |
+
+**Change in error with extra columns** (percentage points, mean of 3 datasets; "noise" and "real" columns behave almost
+the same):
+
+| model | σe at +20 / +50 / +100 | λ at +20 / +50 / +100 | gain at +100 | verdict |
+|---|---|---|---|---|
+| gp (plain ARD, maximum likelihood) | **+51 / +51 / +51** | **+21 / +21 / +21** | **+30** | collapses to about "guess the average" with only 20 uninformative columns |
+| nn | +2 / +7 / +15 | +3 / +5 / +8 | +11 | degrades steadily |
+| ridge | +2 / +4 / +5 | +6 / +8 / +14 | +3 | degrades, mostly for λ |
+| cnn | 0 / +1 / +4 | +1 / +3 / +5 | +1 | mild (it sees the extras only as scalars) |
+| physics (λ by a SAAS GP) | 0 / 0 / 0 | 0 / +2.5 / +7 | 0 | σe and gain immune (they come from the trace physics); λ degrades at 100 |
+| physics_joint | 0 / 0 / 0 | +1 / +2 / +3 | 0 | robust |
+| sets | 0 / 0 / 0 | +2.5 / +3.5 / +4 | 0 | robust |
+| trees | 0 / 0 / 0 | 0 / 0 / 0 | 0 | immune |
+
+Near-copies hurt much less than uninformative columns, except for the λ of the plain gp (+6 to +11) and of physics
+(+3 to +5).
+
+**What this means for the real data.**
+
+- **The plain `gp` must not get all features.** On synthetic data it sees 17 + 17 trace features; on real data it would
+  see 134 + 134 and, by this test, collapse. Give it evidence tier A only, or use the prior-regularized variants
+  (`gp_saas`, `gp_dim`) and test their tolerance the same way.
+- **`nn` and `ridge`:** tier A, perhaps A + B; not tier C.
+- **`trees`, `sets`, `physics_joint`, `cnn`:** can take A + B, and trees even everything.
+- **`physics`:** σe and gain are safe. Its λ GP should get tier A only, or switch to the joint λ, which is more robust.
+
+The per-model choice is to be confirmed on real data after session A, with the setting-grouped CV and the session-C
+hold-out. **Not done yet:** the `--feature-tiers` option in `train_lvl1.py`, and the tolerance test of `gp_saas` and
+`gp_dim`.

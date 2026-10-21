@@ -79,15 +79,12 @@ The session may run out: document every step here and push.
   original 85: 46 A / 22 B / 17 C; new tier 1: 11/3/9; new tier 2: 11/6/9. Highlights: start transient amplitude
   (matched filter) settings F 264, amp F 70, repeat share 0.02; ch2 step rate 8.2 % vs 0, null kurtosis 5.2, jump share
   0.27; pickup-line and start-mode features unstable (repeat share 0.6-1.3).
-- [ ] 4 notebook: generator `lvl1/make_feature_notebook.py` written and the notebook `lvl1/new_trace_features.ipynb`
-  generated (8 sections), NOT yet executed (the user stopped the run). To finish:
-  `cd lvl1 && ../.venv/bin/jupyter execute --inplace new_trace_features.ipynb` (section 8 reads
-  lvl1/feature_study/tolerance_summary.csv, which does not exist yet).
+- [x] 4 notebook: `lvl1/make_feature_notebook.py` -> `lvl1/new_trace_features.ipynb`, 8 sections, executed, all cells ok.
 - [x] 5a tiering of all features (done with step 3, `lvl1/feature_study.py`)
-- [ ] 5b synthetic tolerance test: `lvl1/feature_tolerance.py` written. Smoke test: plain gp +46 pp sigma_e error with
-  only 20 noise columns, ridge +2 pp. FULL RUN was started in the background but STOPPED by the user (2026-10-21, to save usage); no results (3 synthetic 41-packet datasets in
-  scratchpad/gpcmp/td41_s{0,1,2}/model_inputs; k 0/20/50/100; noise/copies/real; 8 models; --quick), output
-  scratchpad/tolerance/ (tolerance_results.csv, tolerance_summary.csv), log scratchpad/tolerance.log. If the session reset
-  before it finished: rerun the same command (in the script's docstring) and write the results up in
-  lvl1/feature_study/README.md.
-- [ ] 6 pipeline check
+- [x] 5b synthetic tolerance test (rerun after the stop, completed): results in lvl1/feature_study/README.md
+  ("Step 2") and tolerance_*.csv. Plain gp collapses with +20 uninformative columns (sigma_e +51 pp); nn and ridge
+  degrade steadily; trees immune; physics/physics_joint/sets sigma_e immune, lambda degrades mildly. Consequence: the
+  plain gp must get tier A only on real data (134+134 features would break it).
+- [ ] 6 pipeline check, and NEXT STEPS (not started): `--feature-tiers` option in train_lvl1.py (per-model default
+  feature sets: gp/nn/ridge = evidence tier A; trees/sets/physics_joint/cnn = A+B; physics lambda GP = A); tolerance
+  test of gp_saas / gp_dim; re-run process_packet on the rehearsal to confirm the new features flow into model_inputs.
