@@ -1,0 +1,501 @@
+\documentclass[10pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=0.85in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black}
+\usepackage{xcolor}
+\graphicspath{{figures/}}
+
+\title{New Trace Features, Feature Tiers and Learned Importance:\\ Results of 2026-10-21}
+\author{ML-assisted optimization of CCD operating parameters --- working note}
+\date{21 October 2026}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\se}{\sigma_e}
+\emergencystretch=3em
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Forty-nine new scalar trace features and four new curves were added to \code{src/trace\_features.py}. Most come from
+signal analysis in other fields: radar, finance, electrophysiology, gravitational-wave detectors, cardiology, astronomy,
+audio, machine diagnostics, metrology and seismology. They were tested on the 59 usable board-101 traces of the
+2026-10-12 packet tests. Two families stand out. The \emph{start-of-pixel} features are the only new ones that separate
+the settings (best: settings $F = 264$, repeat share 0.02). The \emph{telegraph and jump} features single out ch2, whose
+excess noise is a Gaussian part plus discrete steps that an ordinary $\sigma$ cannot separate.
+
+With 134 scalar features, not every model can take them all. A synthetic tolerance test shows that the plain Gaussian
+process collapses with only 20 uninformative columns ($\se$ error $+51$ percentage points), while trees are immune. The
+features are therefore sorted into tiers: an implementation tier (where a feature came from), an evidence tier A1/A2/B/C
+(what the data say, no labels needed) and a per-model feature set. The training script can now select tiers
+(\code{--feature-tiers}) and compare them automatically (\code{--tier-ablation}). Finally, a learned importance method
+(stability selection and permutation importance against shadow features) was built and checked on five synthetic
+datasets: none of 100 added noise columns reached its top tier L1.
+\end{abstract}
+
+\tableofcontents
+
+%======================================================================
+\section{Summary}
+
+\begin{itemize}
+  \item \textbf{The first-skip offset is a baseline slope.} The CDS of the first skips of every pixel reads the slope of a
+        decaying baseline. Regressing the offset on the in-window slope gives a lever arm of $-212$ samples, against the
+        $-207$-sample spacing of the window centres ($R^2 = 0.97$). Its size rises by 21\,\% only when all horizontal
+        low rails are lowered: horizontal-clock feedthrough.
+  \item \textbf{The start-of-pixel group separates settings.} The matched-filter transient amplitude has settings
+        $F = 264$, amplifier $F = 70$ and repeat share 0.02. No noise feature, old or new, separates these four
+        settings, because they did not change the noise.
+  \item \textbf{ch2 has random telegraph switching.} Steps appear inside single integration windows in 8.2\,\% of ch2's
+        windows and in none of the others. The jumps carry 27--28\,\% of ch2's CDS variance; its rms is 22.5\,ADU,
+        but the jump-robust sigma is 16.8\,ADU.
+  \item \textbf{No dominant pickup waveform.} The three largest waveform modes of the skip cycles carry only 0.9\,\% of
+        the CDS variance; 106 modes are needed for 90\,\%.
+  \item \textbf{Tiers.} 134 scalar features: evidence tiers A1 34, A2 34, B 31, C 35. The plain GP should see tier A
+        only; trees can take everything.
+  \item \textbf{Learned tiers.} L1 (both methods confirm, by a margin) contained no noise column in five synthetic
+        datasets. L2 (a candidate) contained 4--8 of 20 noise columns, so it is a list to look at, not a feature set.
+\end{itemize}
+
+%======================================================================
+\section{The new features and where they came from}
+\label{sec:features}
+
+Two literature searches looked for hand-computable features in other fields: \code{signal\_analysis\_features.md}
+(21 fields, 49 candidates) and \code{landscape\_exploratory.md}, both in \code{docs/literature/}. Each candidate was piloted on real traces
+before it was implemented. The new code is \code{src/trace\_features\_extra.py}; 16 unit tests with known answers are in
+\code{tests/test\_trace\_features\_new.py}. Computing all features takes about 1.2\,s per trace.
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{3.2cm}L}
+\toprule
+feature(s) & field & the idea \\
+\midrule
+start: transient amplitude, matched filter & radar and sonar & project each pixel onto the trace's own mean transient; about 30\,\% less noise than reading skip 0 \\
+start: in-cycle slope at skip 0 & chromatography (derivative filters), CDS theory & the baseline slope inside the window \\
+start: first-skip excess per volt H & our own \code{edge: dip per volt} & divide by the H-clock swing so settings compare \\
+noise: waveform modes for 90\,\% of the CDS variance & cardiology (KLT of heartbeats), machine diagnostics & treat the 5000 skip cycles like heartbeats, split them into modes and give each mode's exact share of the CDS variance \\
+noise: null-CDS noise, kurtosis, lag-1 autocorrelation & gravitational-wave detectors (null streams), metrology (A--A tests) & a CDS between the two halves of the pedestal window, where no charge moves \\
+discrete: in-window step rate and amplitude & electrophysiology (single-channel patch clamp), changepoint statistics & detect open/closed steps; here, telegraph steps of a trap \\
+noise: jump-robust CDS sigma, discrete: jump share & high-frequency finance (MedRV) & separate the smooth noise from the jumps \cite{ads2012} \\
+discrete: jump count (Lee--Mykland) & finance & a jump test with a calibrated false-alarm rate \cite{lm2008} \\
+noise: structure-function excess & astronomy (light curves) & the time scale of the noise inside the window \\
+noise: CDS spectral centroid & audio and speech & the mean frequency of the spectrum \\
+discrete: crest factor & machine-vibration diagnostics & peak over rms \\
+noise: Hadamard and modified Allan deviation & time and frequency metrology & drift-insensitive versions of the Allan deviation \cite{riley2008} \\
+discrete: STA/LTA maximum & seismology & short- over long-term average, the earthquake trigger \\
+discrete: line count, frequency, phase coherence & oceanography (multitaper F-test), gravitational waves & pickup lines with a stated false-alarm rate \cite{thomson1982} \\
+\bottomrule
+\end{tabularx}
+\caption{The most useful new features and the field each came from.}
+\label{tab:fields}
+\end{table}
+
+The start-of-pixel group did not come from another field: it grew out of the question whether the first-skip offset is
+worth studying. The pilot found that it is a baseline slope, and the group measures it.
+
+\paragraph{What did not carry over.} The pickup-line features are real but change from trace to trace, so they are in
+tier C for now. Heart-rate-variability measures (RMSSD, Poincar\'e SD1/SD2) are exact functions of the lag-1
+autocorrelation and were not implemented. DFA, the entropies and the spectral flatness were redundant or unstable in the
+pilots. Also left out: hidden-Markov dwell times, step rise times, jitter decomposition, spectral flux and cepstrum.
+
+\paragraph{The full list.} By implementation tier (Section~\ref{sec:tiers}):
+\begin{itemize}
+  \item \textbf{Tier 1} (23 scalars, 2 curves): start-of-pixel lever arm, slope-explained fraction, in-cycle slope,
+        time constant, amplitude, excess per volt H; slope-corrected CDS rise; null-CDS noise and kurtosis; in-window
+        step rate and amplitude; jump-robust sigma and jump share; 1/f corner and exponent; Hadamard deviation;
+        waveform-mode share and count; line count, frequency, amplitude and two phase coherences. Curves: the mean
+        start transient and the Hadamard deviation.
+  \item \textbf{Tier 2} (26 scalars, 2 curves): row-start/inner ratio, reset jump, mode frequency and damping, fast
+        decay, matched-filter amplitude, ringing frequency; null-CDS autocorrelation; Lee--Mykland count, STA/LTA,
+        crest factor, volatility clustering, whitened kurtosis, spectral kurtosis; Lorentzian corner; structure-function
+        excess; lag-1 autocorrelation of 10-skip means, DFA, spectral slope and centroid, sample and permutation
+        entropy, red-noise $\beta$; whole-trace line frequency; common-pattern spread; baseline--CDS correlation.
+        Curves: the within-cycle structure function and the modified Allan deviation.
+\end{itemize}
+
+%======================================================================
+\section{Results on the 59 real traces of 2026-10-12}
+\label{sec:real}
+
+\paragraph{Data.} Board 101: 5 settings (reference, VDD $-20.5$\,V, vertical low rails and TG, all horizontal low rails,
+H3\_A\_L only) $\times$ 3 repeats $\times$ 4 amplifiers, less one damaged ch3 trace.
+
+\paragraph{Measures.} \emph{Settings F} is the one-way ANOVA $F$ over the four changed settings (all taken with NCOLPRE 185,
+so the reference's different NCOLPRE cannot fake a separation), per amplifier ch0, ch1, ch3; the minimum is reported.
+\emph{Amplifier F} is the ANOVA $F$ over the four amplifiers within each setting; the median is reported. With df $(3, 8)$,
+$F > 4$ means $p < 0.05$. The \emph{repeat share} is the within-(setting, amplifier) variance over the total: 0 is
+perfectly repeatable, about 1 is pure repeat noise.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig_top_new_features.png}
+\caption{The 16 most informative new features. Red: separation of the settings. Blue: separation of the amplifiers.
+The evidence tier is in brackets. Only the start-of-pixel features separate settings.}
+\label{fig:top}
+\end{figure}
+
+\subsection{The start-of-pixel transient}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.52\textwidth]{nb_differentiator.png}\hfill
+\includegraphics[width=0.46\textwidth]{fig_start_amplitude.png}
+\caption{Left: the first-skip offset against the in-window baseline slope (ch0, reference). The fitted lever arm,
+$-212$ samples, matches the $-207$-sample spacing of the window centres: the CDS reads a slope. Right: the transient
+amplitude moves only when all horizontal low rails are lowered (red), on all four amplifiers.}
+\label{fig:start}
+\end{figure}
+
+The first skips of every pixel carry about $+290$\,ADU at skip 0. Inside skip 0 the baseline decays as an exponential with
+$\tau \approx 12\,\mu$s. The amplitude is about 615\,ADU at the other settings and 741\,ADU with all horizontal low rails
+lowered (+21\,\%); lowering H3 alone does not move it.
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+feature & settings $F$ min & amplifier $F$ & repeat share & tier \\
+\midrule
+start: transient amplitude, matched filter & 264 & 70 & 0.02 & A1 \\
+start: transient amplitude & 171 & 42 & 0.04 & B (same cluster) \\
+start: in-cycle slope at skip 0 & 58 & 19 & 0.07 & A1 \\
+start: first-skip excess per volt H & 12 & 87 & 0.04 & A1 \\
+start: slope-explained fraction & 2.4 & 12 & 0.17 & A2 \\
+start: CDS-slope lever arm & 1.0 & 14 & 0.20 & A2 \\
+start: reset jump skip 0 to 1 & 0.7 & 26 & 0.14 & A2 \\
+start: transient time constant & 1.9 & 2.1 & 0.58 & C (unstable) \\
+\bottomrule
+\end{tabular}
+\caption{The start-of-pixel group.}
+\end{table}
+
+\subsection{Telegraph switching and jumps on ch2}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{nb_null_cds.png}
+\caption{Left: the null CDS (no charge transfer) of ch0 and ch2. Middle: a ch2 window with a telegraph step. Right: the
+in-window step rate per amplifier.}
+\label{fig:null}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{nb_jumps.png}
+\caption{The CDS along the skips, ch0 and ch2. The jumps carry 28\,\% of ch2's CDS variance.}
+\label{fig:jumps}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lccccc}
+\toprule
+feature (median per amplifier) & ch0 & ch1 & ch2 & ch3 & amplifier $F$ \\
+\midrule
+discrete: in-window step rate (\%) & 0 & 0 & \textbf{8.2} & 0 & 73 \\
+discrete: null-CDS kurtosis & $-0.34$ & $-0.20$ & \textbf{5.2} & $-0.11$ & 49 \\
+discrete: jump share of CDS variance & 0.001 & 0.005 & \textbf{0.27} & 0.005 & 32 \\
+noise: null-CDS noise (ADU) & 7.8 & 7.1 & \textbf{20.4} & 8.0 & 225 \\
+\bottomrule
+\end{tabular}
+\caption{The telegraph and jump features. The steps are $\pm 40$--110\,ADU, equally often up and down, inside one
+10\,$\mu$s window with no charge transfer: random telegraph switching in the output stage.}
+\end{table}
+
+This matters for $\se$. An ordinary $\sigma$ of the CDS mixes the Gaussian noise with the jumps. The jump-robust sigma
+(from MedRV, the median realized variance \cite{ads2012}) and the jump share separate the two.
+
+\subsection{The noise budget}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{nb_noise_budget.png}
+\caption{The noise budget: the residual skip cycles split into waveform modes (principal components), and each mode's
+exact share of the CDS variance. The three largest modes carry 0.9\,\% of it; 106 modes are needed for 90\,\%.}
+\label{fig:budget}
+\end{figure}
+
+The large clock and reset fluctuations of the waveform do not reach the CDS, because the CDS weights cancel them. There
+is no single pickup waveform to subtract. The number of modes needed for 90\,\% still separates the amplifiers very well
+(amplifier $F \approx 700$).
+
+\subsection{Other noise-shape features}
+
+The Hadamard and modified Allan deviations (Figure~\ref{fig:allan}), the sample entropy, the spectral slope and centroid,
+the crest factor, the whitened kurtosis, the Lee--Mykland count, STA/LTA and the permutation entropy all separate the
+amplifiers ($F$ 12--700) but not these settings. Unstable for now (repeat share 0.6--1.3): the pickup-line features, the
+start-transient modes, the transient time constant, the 1/f and Lorentzian corners, and volatility clustering. The 1/f
+features need longer time scales than a 0.2\,s trace offers; the delayInt scan should change that.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{nb_allan.png}
+\caption{Allan, Hadamard and modified Allan deviations of the CDS.}
+\label{fig:allan}
+\end{figure}
+
+%======================================================================
+\section{The tier structure}
+\label{sec:tiers}
+
+Every trace is reduced to all 134 scalars and 18 curves once, in processing, and all of them are stored. What changes is
+which features each model sees. Three layers decide that.
+
+\paragraph{Layer 1: implementation tier} (\code{FEATURES[name].tier}): 0 = the original 85 features, 1 = implement-first
+additions (physics-motivated, piloted; 23), 2 = candidate additions (26).
+
+\paragraph{Layer 2: evidence tier} (\code{lvl1/feature\_study.py}, stored in \code{lvl1/feature\_study/evidence\_tiers.json}).
+It needs no labels.
+\begin{itemize}
+  \item \textbf{A, core:} informative (settings $F$ min $> 10$ or amplifier $F > 10$), repeat share $< 0.5$, at most
+        20\,\% NaN, and the most informative member of its redundancy cluster (features with $|\rho_{\rm Spearman}| > 0.95$
+        form a cluster). A is split by informativeness into \textbf{A1} (the more informative half) and \textbf{A2}, so
+        that all tiers have similar sizes.
+  \item \textbf{B, supporting:} informative but redundant, or moderately informative ($F$ 4--10).
+  \item \textbf{C, store only:} not informative on the data so far, unstable, mostly NaN, or constant.
+\end{itemize}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lccccc}
+\toprule
+implementation tier & A1 & A2 & B & C & total \\
+\midrule
+0 (original) & 28 & 18 & 22 & 17 & 85 \\
+1 (new) & 4 & 7 & 3 & 9 & 23 \\
+2 (new) & 2 & 9 & 6 & 9 & 26 \\
+\midrule
+total & 34 & 34 & 31 & 35 & 134 \\
+\bottomrule
+\end{tabular}
+\caption{Evidence tiers by implementation tier.}
+\end{table}
+
+The evidence tiers are provisional. They rest on 59 traces at five settings that did not change the noise, so the noise
+features were judged by amplifier separation alone.
+
+\paragraph{Layer 3: model feature sets.} These come from the tolerance test (Section~\ref{sec:tolerance}) and are the
+defaults of \code{--feature-tiers auto} (\code{MODEL\_TIERS} in \code{lvl1/train\_lvl1.py}): tier A for \code{gp},
+\code{gp\_dim}, \code{gp\_saas}, \code{nn} and \code{ridge}; everything for \code{trees}; settings only for the
+\code{settings} and \code{mean} baselines; A + B for all other models.
+
+%======================================================================
+\section{Synthetic tolerance test: how many extra columns can each model take?}
+\label{sec:tolerance}
+
+\code{lvl1/feature\_tolerance.py} added 20, 50 or 100 extra columns to the own-trace and reference features of three
+synthetic 41-packet datasets (the synthetic world has 17 trace features). Three kinds were tried: independent noise,
+near-copies of existing features, and real 2026-10-12 feature values drawn at random (realistic distributions and
+outliers, but no information). Every model ran with \code{--quick}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig_tolerance.png}
+\caption{Change in the error of $\se$ (left) and $\lambda$ (right) as uninformative columns are added (mean of the noise
+and real-value kinds, three datasets).}
+\label{fig:tol}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lcccl}
+\toprule
+model & base error (\%) & $\Delta\se$ & $\Delta\lambda$ & feature set \\
+ & $\se$ / $\lambda$ / gain & +20 / +50 / +100 & +20 / +50 / +100 & \\
+\midrule
+gp (plain ARD) & 6.9 / 8.0 / 0.9 & \textbf{+51 / +51 / +51} & \textbf{+21 / +21 / +21} & A only \\
+nn & 10.0 / 17.0 / 1.5 & +2 / +7 / +15 & +3 / +5 / +8 & A \\
+ridge & 9.5 / 12.4 / 0.9 & +2 / +4 / +5 & +6 / +8 / +14 & A \\
+cnn & 9.5 / 14.5 / 3.3 & 0 / +1 / +4 & +1 / +3 / +5 & A + B \\
+physics & 9.1 / 7.4 / 0.9 & 0 / 0 / 0 & 0 / +2.5 / +7 & A + B ($\lambda$ GP: A) \\
+physics\_joint & 9.1 / 4.6 / 0.9 & 0 / 0 / 0 & +1 / +2 / +3 & A + B \\
+sets & 5.7 / 10.9 / 0.9 & 0 / 0 / 0 & +2.5 / +3.5 / +4 & A + B \\
+trees & 9.7 / 21.0 / 1.3 & 0 / 0 / 0 & 0 / 0 / 0 & everything \\
+\bottomrule
+\end{tabular}
+\caption{Tolerance test. $\Delta$ in percentage points. The gain changes are small except for gp (+30 at +100) and nn
+(+11).}
+\end{table}
+
+The plain GP collapses to about ``guess the average'' with only 20 uninformative columns. On real data it would see
+134 + 134 features, so it must get tier A only. Near-copies hurt much less than uninformative columns, except for the
+$\lambda$ of the plain GP (+6 to +11) and of physics (+3 to +5).
+
+%======================================================================
+\section{Learned tiers: can a trained model say which features matter?}
+\label{sec:learned}
+
+The evidence tiers need no labels. Once there are labels, trained models can rank the features too
+(\code{lvl1/feature\_importance.py}). Two independent methods are used for every target (log $\se$, log $\lambda$,
+log gain), always with packet-grouped resampling so that a feature is not judged on the rows it was fitted to:
+
+\begin{itemize}
+  \item \textbf{Stability selection} \cite{mb2010}: an elastic net (\code{l1\_ratio} 0.5, $\alpha$ from cross-validation)
+        is refitted on 30 packet-bootstrap resamples; the importance is how often the feature's coefficient is non-zero.
+  \item \textbf{Permutation importance} \cite{breiman2001}: gradient-boosted trees are fitted on four fifths of the
+        packets; the importance is how much the held-out squared error grows when the feature is shuffled.
+\end{itemize}
+
+\paragraph{Why shadow features.} Ranking the features against each other does not work at this data size. On synthetic
+41-packet data, beyond the one or two features that identify the amplifier, real and pure-noise features had the same
+importances (about $10^{-4}$). So every column gets a \emph{shadow}: a copy with its rows shuffled, which keeps the
+distribution and removes the information (Boruta \cite{boruta2010}). A feature wins a round if its importance exceeds
+the 95th percentile of the shadows' importances. There are 5 rounds with fresh shadows; a feature is confirmed by a
+method if it wins most of them.
+
+\paragraph{The learned tiers.}
+\begin{itemize}
+  \item \textbf{L1, confirmed:} both methods confirm the feature, each by more than $1.5\times$ the shadows' 95th
+        percentile, for at least one target.
+  \item \textbf{L2, candidate:} one method confirms it, or both but narrowly.
+  \item \textbf{L3, not shown to matter.}
+\end{itemize}
+
+\paragraph{Check on synthetic data.} 20 pure-noise columns (``null 0''--``null 19'') were added to each dataset. A good
+rule puts none of them in L1.
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+dataset & noise in L1, no margin & noise in L1, margin 1.5 & noise in L2 & real features in L1 \\
+\midrule
+td41\_s0 & 0 & 0 & 6 & 5 \\
+td41\_s1 & 0 & 0 & 6 & 4 \\
+td41\_s2 & 2 & 0 & 5 & 8 \\
+\midrule
+td100\_s0 (unseen) & --- & 0 & 4 & 3 \\
+td13\_s0 (unseen) & --- & 0 & 8 & 5 \\
+\bottomrule
+\end{tabular}
+\caption{Learned tiers on synthetic data, 20 noise columns each. The margin was chosen on the first three datasets and
+then confirmed on two it had not seen.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{fig_learned_tiers.png}
+\caption{Real features and noise columns per learned tier. No noise column reached L1 in any of the five datasets.}
+\label{fig:learned}
+\end{figure}
+
+\paragraph{What it found.} The same features reached L1 in most datasets: the detrended CDS rms and the reset-level
+scatter (in all five), the dip recovery time (in four), and the horizontal minimum or maximum (in four). In the synthetic
+world the CDS rms is $\sigma_1 \times$ gain and the reset-level scatter follows $\sigma_1$, so these two carry $\se$ and
+the gain directly; the horizontal levels follow the H low rails, which drive the clock-induced charge and so $\lambda$.
+The method finds what is really there. One feature that responds to no setting, the within-cycle power at 1--3\,MHz,
+reached L1 once (td41\_s2). It is not a false positive: every synthetic amplifier has its own offset of each feature, so
+this feature identifies the amplifier, and the amplifier carries information about $\se$.
+
+\paragraph{What this means.} L1 can be used as a feature set. L2 cannot: 4--8 of 20 noise columns (20--40\,\%) reached
+it, so it is only a list of features worth a look. The caveat is that the margin was tuned on three of the five
+datasets; the two unseen ones agree, but this is still synthetic data.
+
+\paragraph{Use on real data.} After session A, run it beside the evidence study. A feature in evidence tier A but learned
+L3 is a candidate to demote; a feature in L1 but not in tier A is a candidate to promote. L1 can also be one more set in
+the tier ablation.
+
+%======================================================================
+\section{Training with tiers}
+\label{sec:tooling}
+
+\code{lvl1/train\_lvl1.py} has three new options:
+
+\begin{itemize}
+  \item \code{--feature-tiers SPEC}: \code{all}, \code{none} (settings only), \code{auto} (the per-model defaults of
+        Section~\ref{sec:tiers}), or tier labels joined by \code{+}, e.g.\ \code{A}, \code{A+B}, \code{A1},
+        \code{impl0}. It selects the matching columns of both the own-trace and the reference features.
+  \item \code{--tier-ablation [SET ...]}: train every model on every set (default \code{none A1 A A+B all impl0}) and
+        compare each, paired over packets, with the same model on the reference set \code{--ablation-ref} (default
+        \code{all}). The report gets a ``Tier ablation'' section with the paired differences and their intervals.
+  \item \code{--tier-file}: another evidence-tier file, e.g.\ the one finalized on session A.
+\end{itemize}
+
+It was tested on synthetic data. There, gp on tier A was worse than on all features, as expected: the tiers come from real
+traces, and the synthetic world uses other features.
+
+%======================================================================
+\section{Plan for the first real data}
+\label{sec:plan}
+
+\begin{enumerate}
+  \item \textbf{Finalize the tiers after session A.} Rerun \code{lvl1/feature\_study.py} on the real packets and add two
+        measures: label relevance (how strongly each feature follows $\se$, $\lambda$ and the gain within an amplifier),
+        and the settings separation over the delayInt packets, where the noise finally changes. Run
+        \code{lvl1/feature\_importance.py} beside it. Revise once more after session B; never use session C for this.
+  \item \textbf{Train every model at different tier levels} with \code{--tier-ablation}, on the same setting-grouped
+        folds. A tier is worth adding to a model if it lowers the error with the paired interval excluding 0, or at
+        least does not hurt.
+  \item \textbf{Choose without fooling ourselves.} Choose each model's set on sessions A + B only, confirm the chosen
+        sets once on session C (\code{--holdout-session C}), report every combination tried, and keep the number of sets
+        small: picking the best of many on about 30 packets is optimistic \cite{cawley2010}.
+\end{enumerate}
+
+\paragraph{Open items.} Label relevance in \code{feature\_study.py}; the tolerance test of \code{gp\_saas} and
+\code{gp\_dim} (can a prior-regularized GP take more features than the plain one?); the per-model ablation on real data.
+
+%======================================================================
+\section{Files}
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{6.2cm}L}
+\toprule
+file & what \\
+\midrule
+\code{src/trace\_features\_extra.py} & the 49 new features and 4 curves \\
+\code{src/trace\_features.py} & the \code{tier} attribute and \code{names\_by\_tier()} \\
+\code{tests/test\_trace\_features\_new.py} & 16 tests with known answers \\
+\code{lvl1/feature\_study.py} & evidence tiers; results in \code{lvl1/feature\_study/README.md} \\
+\code{lvl1/feature\_tolerance.py} & the synthetic tolerance test \\
+\code{lvl1/feature\_importance.py} & learned tiers L1/L2/L3 \\
+\code{lvl1/train\_lvl1.py} & \code{--feature-tiers}, \code{--tier-ablation} \\
+\code{lvl1/new\_trace\_features.ipynb} & walkthrough notebook of the new features \\
+\code{docs/trace\_features\_and\_tiers.md} & the working document behind this note \\
+\code{make\_figures.py} (in this folder) & the figures of this note \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+%======================================================================
+\begin{thebibliography}{99}
+\bibitem{ads2012} T.~G. Andersen, D.~Dobrev, E.~Schaumburg, Jump-robust volatility estimation using nearest neighbor
+  truncation, \emph{J. Econometrics} 169 (2012) 75--93.
+\bibitem{lm2008} S.~S. Lee, P.~A. Mykland, Jumps in financial markets: a new nonparametric test and jump dynamics,
+  \emph{Rev. Financial Studies} 21 (2008) 2535.
+\bibitem{bns2004} O.~E. Barndorff-Nielsen, N.~Shephard, Power and bipower variation with stochastic volatility and jumps,
+  \emph{J. Financial Econometrics} 2 (2004) 1--37.
+\bibitem{thomson1982} D.~J. Thomson, Spectrum estimation and harmonic analysis, \emph{Proc. IEEE} 70 (1982) 1055--1096.
+\bibitem{riley2008} W.~J. Riley, \emph{Handbook of Frequency Stability Analysis}, NIST Special Publication 1065 (2008).
+\bibitem{hua1990} Y.~Hua, T.~K. Sarkar, Matrix pencil method for estimating parameters of exponentially damped/undamped
+  sinusoids in noise, \emph{IEEE Trans. ASSP} 38 (1990) 814--824.
+\bibitem{richman2000} J.~S. Richman, J.~R. Moorman, Physiological time-series analysis using approximate entropy and
+  sample entropy, \emph{Am. J. Physiol. Heart Circ. Physiol.} 278 (2000) H2039--H2049.
+\bibitem{allen1978} R.~Allen, Automatic earthquake recognition and timing from single traces, \emph{Bull. Seismol. Soc.
+  Am.} 68 (1978) 1521--1532.
+\bibitem{ligo2020} LIGO Scientific Collaboration and Virgo Collaboration, A guide to LIGO--Virgo detector noise and
+  extraction of transient gravitational-wave signals, \emph{Class. Quantum Grav.} 37 (2020) 055002.
+\bibitem{randall2011} R.~B. Randall, J.~Antoni, Rolling element bearing diagnostics: a tutorial, \emph{Mech. Syst. Signal
+  Process.} 25 (2011) 485--520.
+\bibitem{wang2006} X.~Wang, P.~R. Rao, A.~Mierop, A.~J.~P. Theuwissen, Random telegraph signal in CMOS image sensor
+  pixels, \emph{IEEE IEDM} (2006) 115--118.
+\bibitem{boruta2010} M.~B. Kursa, W.~R. Rudnicki, Feature selection with the Boruta package, \emph{J. Stat. Software} 36
+  (2010) 1--13.
+\bibitem{mb2010} N.~Meinshausen, P.~B\"uhlmann, Stability selection, \emph{J. R. Stat. Soc. B} 72 (2010) 417--473.
+\bibitem{breiman2001} L.~Breiman, Random forests, \emph{Machine Learning} 45 (2001) 5--32.
+\bibitem{cawley2010} G.~C. Cawley, N.~L.~C. Talbot, On over-fitting in model selection and subsequent selection bias in
+  performance evaluation, \emph{J. Mach. Learn. Res.} 11 (2010) 2079--2107.
+\end{thebibliography}
+
+\end{document}
