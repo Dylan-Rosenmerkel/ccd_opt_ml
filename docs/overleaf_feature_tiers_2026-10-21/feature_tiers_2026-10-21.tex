@@ -33,9 +33,10 @@ audio, machine diagnostics, metrology and seismology. They were tested on the 59
 the settings (best: settings $F = 264$, repeat share 0.02). The \emph{telegraph and jump} features single out ch2, whose
 excess noise is a Gaussian part plus discrete steps that an ordinary $\sigma$ cannot separate. A third family, the
 \emph{clocking-region} features (the vertical-clock block before a row and the first horizontal block after it), was
-added at the end of the day; all four of its main features land in the top evidence tier.
+added at the end of the day; all four of its main features land in the top evidence tier. So does the depth of a
+sharp dip just before the per-cycle pulse, which is fixed by the amplifier.
 
-With 139 scalar features, not every model can take them all. A synthetic tolerance test shows that the plain Gaussian
+With 141 scalar features, not every model can take them all. A synthetic tolerance test shows that the plain Gaussian
 process collapses with only 20 uninformative columns ($\se$ error $+51$ percentage points), while trees are immune. The
 features are therefore sorted into tiers: an implementation tier (where a feature came from), an evidence tier A1/A2/B/C
 (what the data say, no labels needed) and a per-model feature set. The training script can now select tiers
@@ -67,7 +68,10 @@ datasets: none of 100 added noise columns reached its top tier L1.
         rails low) and the excess of the first H block after the V clocking ($F = 172$, largest with the H rails low)
         are all repeatable (repeat share $\le 0.03$) and not redundant with any existing feature. The steep climb in
         the first V block is real but not repeatable: the trace starts at a random point in that block.
-  \item \textbf{Tiers.} 139 scalar features: evidence tiers A1 36, A2 36, B 32, C 35. The plain GP should see tier A
+  \item \textbf{The dip before the pulse is an amplifier fingerprint.} A dip 120--130\,ns before the per-cycle pulse is
+        $-505$ to $-990$\,ADU deep depending on the amplifier, with repeat share 0.001, and does not change with any of
+        these settings (none touched RG, SW, OG or DG).
+  \item \textbf{Tiers.} 141 scalar features: evidence tiers A1 37, A2 36, B 33, C 35. The plain GP should see tier A
         only; trees can take everything.
   \item \textbf{Learned tiers.} L1 (both methods confirm, by a margin) contained no noise column in five synthetic
         datasets. L2 (a candidate) contained 4--8 of 20 noise columns, so it is a list to look at, not a feature set.
@@ -79,7 +83,7 @@ datasets: none of 100 added noise columns reached its top tier L1.
 
 Two literature searches looked for hand-computable features in other fields: \code{signal\_analysis\_features.md}
 (21 fields, 49 candidates) and \code{landscape\_exploratory.md}, both in \code{docs/literature/}. Each candidate was piloted on real traces
-before it was implemented. The new code is \code{src/trace\_features\_extra.py}; 17 unit tests with known answers are in
+before it was implemented. The new code is \code{src/trace\_features\_extra.py}; 18 unit tests with known answers are in
 \code{tests/test\_trace\_features\_new.py}. Computing all features takes about 1.2\,s per trace.
 
 \begin{table}[H]
@@ -119,12 +123,12 @@ pilots. Also left out: hidden-Markov dwell times, step rise times, jitter decomp
 
 \paragraph{The full list.} By implementation tier (Section~\ref{sec:tiers}):
 \begin{itemize}
-  \item \textbf{Tier 1} (27 scalars, 2 curves): start-of-pixel lever arm, slope-explained fraction, in-cycle slope,
+  \item \textbf{Tier 1} (29 scalars, 2 curves): start-of-pixel lever arm, slope-explained fraction, in-cycle slope,
         time constant, amplitude, excess per volt H; slope-corrected CDS rise; null-CDS noise and kurtosis; in-window
         step rate and amplitude; jump-robust sigma and jump share; 1/f corner and exponent; Hadamard deviation;
         waveform-mode share and count; line count, frequency, amplitude and two phase coherences. Curves: the mean
         start transient and the Hadamard deviation. Clocking regions: V-block level slope, V-transfer
-        peak-to-peak, H/V peak-to-peak ratio, first-H-block excess.
+        peak-to-peak, H/V peak-to-peak ratio, first-H-block excess. Pre-pulse dip depth and dip/pulse ratio.
   \item \textbf{Tier 2} (27 scalars, 2 curves): row-start/inner ratio, reset jump, mode frequency and damping, fast
         decay, matched-filter amplitude, ringing frequency; null-CDS autocorrelation; Lee--Mykland count, STA/LTA,
         crest factor, volatility clustering, whitened kurtosis, spectral kurtosis; Lorentzian corner; structure-function
@@ -299,11 +303,48 @@ and becomes useful if the acquisition is made to start at a fixed point, for exa
 The level \emph{difference} between the H and V regions was dropped too: it flips sign with NCOLPRE. The dip at the
 second H transfer of an ordinary block is strong but duplicates \code{fit: baseline droop amplitude} ($|\rho| = 0.98$).
 
+\subsection{The dip before the per-cycle pulse}
+\label{sec:prepulse}
+
+Zoomed in, every skip cycle shows one low sample just before the large per-cycle pulse. The equivalent-time pulse
+(samples placed at their exact time relative to the edge, 0.1-sample bins) resolves it: a sharp dip 120--130\,ns before
+the pulse's half-height crossing and about 1.5 samples wide (Figure~\ref{fig:prepulse}). It was inside the
+\code{edge: equivalent-time pulse} curve before, but no number measured it. Two features now do:
+\code{edge: pre-pulse dip depth} and \code{edge: pre-pulse dip / pulse height} (\code{lvl1/feature\_study/prepulse\_pilot/}).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig_prepulse_dip.png}
+\caption{Left: the per-cycle pulse of all 59 traces. Middle: the dip before it. Right: its depth by setting and
+amplifier.}
+\label{fig:prepulse}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lcccccc}
+\toprule
+ & ch0 & ch1 & ch2 & ch3 & amp.\ $F$ & repeat share \\
+\midrule
+dip depth (ADU) & $-886$ & $-505$ & $-990$ & $-601$ & 5851 & 0.001 \\
+dip / pulse height & $-0.019$ & $-0.011$ & $-0.021$ & $-0.014$ & 4023 & 0.001 \\
+\bottomrule
+\end{tabular}
+\caption{The pre-pulse dip on the 59 traces (medians). Settings $F$ is 0.2--0.4: none of these settings moved it.}
+\end{table}
+
+\paragraph{What it is.} It is not the edge of the pulse itself: the dip/pulse ratio differs by amplifier, and within an
+amplifier the dip does not follow the pulse height. In the \code{ReadoutCDS} recipe of \code{reference\_v5.seq}, SW goes
+high and RG low together right after the signal window, SW and OG go low 3 units later, then OG and RG go high again.
+The dip is most likely the feedthrough of one of the first edges, but the trace flags do not record these clocks. The
+session-B packets that move RG\_H, RG\_L and SW\_L by $\pm0.5$\,V will show which rail it follows; then it measures how
+strongly that clock couples into each amplifier's output.
+
 %======================================================================
 \section{The tier structure}
 \label{sec:tiers}
 
-Every trace is reduced to all 139 scalars and 18 curves once, in processing, and all of them are stored. What changes is
+Every trace is reduced to all 141 scalars and 18 curves once, in processing, and all of them are stored. What changes is
 which features each model sees. Three layers decide that.
 
 \paragraph{Layer 1: implementation tier} (\code{FEATURES[name].tier}): 0 = the original 85 features, 1 = implement-first
@@ -327,14 +368,21 @@ It needs no labels.
 implementation tier & A1 & A2 & B & C & total \\
 \midrule
 0 (original) & 27 & 19 & 22 & 17 & 85 \\
-1 (new) & 7 & 8 & 3 & 9 & 27 \\
+1 (new) & 8 & 8 & 4 & 9 & 29 \\
 2 (new) & 2 & 9 & 7 & 9 & 27 \\
 \midrule
-total & 36 & 36 & 32 & 35 & 139 \\
+total & 37 & 36 & 33 & 35 & 141 \\
 \bottomrule
 \end{tabular}
 \caption{Evidence tiers by implementation tier.}
 \end{table}
+
+\paragraph{Caveat: label-free tiers can demote the best noise estimators.} The evidence tiers reward features that
+separate settings or amplifiers, and they pick a cluster's representative by that separation. On these 59 traces the
+amplifier dominates every correlation, so ``redundant'' means ``identifies the same amplifier''. As a result the most
+direct $\se$ estimator, \code{skip: CDS rms (detrended)}, is in tier B, represented by the number of waveform modes; the
+reset-level scatter (kTC noise, the top learned feature on synthetic data) is in B because it hardly separates the
+amplifiers. A model restricted to tier A would not see them. Section~\ref{sec:plan} lists the changes that prevent this.
 
 The evidence tiers are provisional. They rest on 59 traces at five settings that did not change the noise, so the noise
 features were judged by amplifier separation alone.
@@ -383,7 +431,7 @@ trees & 9.7 / 21.0 / 1.3 & 0 / 0 / 0 & 0 / 0 / 0 & everything \\
 \end{table}
 
 The plain GP collapses to about ``guess the average'' with only 20 uninformative columns. On real data it would see
-139 + 139 features, so it must get tier A only. Near-copies hurt much less than uninformative columns, except for the
+141 + 141 features, so it must get tier A only. Near-copies hurt much less than uninformative columns, except for the
 $\lambda$ of the plain GP (+6 to +11) and of physics (+3 to +5).
 
 %======================================================================
@@ -488,6 +536,16 @@ traces, and the synthetic world uses other features.
         measures: label relevance (how strongly each feature follows $\se$, $\lambda$ and the gain within an amplifier),
         and the settings separation over the delayInt packets, where the noise finally changes. Run
         \code{lvl1/feature\_importance.py} beside it. Revise once more after session B; never use session C for this.
+  \item \textbf{Do not let the label-free tiers decide alone (proposed).} The evidence tiers measure separation, not
+        whether a feature predicts $\se$, $\lambda$ or the gain. Four guards:
+        (a) a protected set of direct physical estimators (CDS rms, white noise per skip, jump-robust sigma, null-CDS
+        noise, reset-level scatter, Allan deviation, pulse per volt RG, dip per volt SW) that every model sees;
+        (b) redundancy clusters computed within each amplifier, so that ``identifies the same amplifier'' no longer
+        counts as redundant;
+        (c) no penalty for repeat scatter until it is compared with the repeat scatter of the labels, since a feature
+        that follows the realized noise of each repeat \emph{should} scatter;
+        (d) once labels exist, label relevance and the learned tier L1, computed on all features, override the
+        evidence tier: a tier-C feature that predicts a label is promoted.
   \item \textbf{Train every model at different tier levels} with \code{--tier-ablation}, on the same setting-grouped
         folds. A tier is worth adding to a model if it lowers the error with the paired interval excluding 0, or at
         least does not hurt.
@@ -508,7 +566,8 @@ traces, and the synthetic world uses other features.
 \toprule
 file & what \\
 \midrule
-\code{src/trace\_features\_extra.py} & the 54 new features (including the \code{clock:} group) and 4 curves \\
+\code{src/trace\_features\_extra.py} & the 56 new features (including the \code{clock:} group and the pre-pulse dip) and 4 curves \\
+\code{lvl1/feature\_study/prepulse\_pilot/} & the pre-pulse dip pilot (script, numbers, figure) \\
 \code{lvl1/feature\_study/clock\_pilot/} & the clocking-region pilot (script, numbers, figure) \\
 \code{src/trace\_features.py} & the \code{tier} attribute and \code{names\_by\_tier()} \\
 \code{tests/test\_trace\_features\_new.py} & 16 tests with known answers \\

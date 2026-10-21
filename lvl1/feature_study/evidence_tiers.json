@@ -35,7 +35,8 @@
   "clock: V-block level slope (ADU/transfer)",
   "clock: V-transfer peak-to-peak (ADU)",
   "clock: H/V peak-to-peak ratio",
-  "clock: first H block of a row, excess (ADU)"
+  "clock: first H block of a row, excess (ADU)",
+  "edge: pre-pulse dip depth (ADU)"
  ],
  "A2": [
   "fit: settling amplitude after pulse",
@@ -107,6 +108,7 @@
   "noise: lag-1 autocorrelation of 10-skip means",
   "noise: red-noise beta (50 skips)",
   "level: common-pattern amplitude spread",
+  "edge: pre-pulse dip / pulse height",
   "clock: leading V-block level slope (ADU/transfer)"
  ],
  "C": [

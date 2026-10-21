@@ -1,8 +1,9 @@
 # Feature study: how informative, stable and redundant is every trace feature?
 
 `lvl1/feature_study.py`, on the 59 usable board-101 traces of the 2026-10-12 packet tests: 5 settings × 3 repeats ×
-4 amplifiers, one damaged ch3 trace left out. It covers all 139 scalar features: the 85 original ones, and 54 added on
-2026-10-21 in `src/trace_features_extra.py` (49 from the literature search, 5 in the `clock:` group). The data come from `docs/slides/oct12_features.py` and are in
+4 amplifiers, one damaged ch3 trace left out. It covers all 141 scalar features: the 85 original ones, and 56 added on
+2026-10-21 in `src/trace_features_extra.py` (49 from the literature search, 5 in the `clock:` group, 2 for the
+pre-pulse dip). The data come from `docs/slides/oct12_features.py` and are in
 `docs/slides/data/oct12_trace_features.csv`. Outputs: [`feature_table.csv`](feature_table.csv) (every number per
 feature) and [`evidence_tiers.json`](evidence_tiers.json).
 
@@ -30,11 +31,11 @@ here. Revisit the tiers on session A, where delayInt changes the noise.
 | implementation tier | A1 | A2 | B | C |
 |---|---|---|---|---|
 | 0 (original 85) | 27 | 19 | 22 | 17 |
-| 1 (new, 27) | 7 | 8 | 3 | 9 |
+| 1 (new, 29) | 8 | 8 | 4 | 9 |
 | 2 (new, 27) | 2 | 9 | 7 | 9 |
-| total | 36 | 36 | 32 | 35 |
+| total | 37 | 36 | 33 | 35 |
 
-A is split by informativeness into A1 (top half) and A2. So 26 of the 54 new features reach tier A, and 22 of the
+A is split by informativeness into A1 (top half) and A2. So 27 of the 56 new features reach tier A, and 22 of the
 original 85 are redundant or only moderately informative (B).
 
 ## The new features (2026-10-21)
@@ -95,6 +96,28 @@ None is in a redundancy cluster (closest existing |ρ| 0.71–0.84). The leading
 does climb by 300–1,200 ADU per transfer, but the trace starts at a random point in it (14–19 of 20 transfers
 recorded) and what came before is not controlled, so it is stored as tier 2 only. Dropped: the H − V level difference
 (flips sign with NCOLPRE) and the dip at the second H transfer (|ρ| 0.98 with `fit: baseline droop amplitude`).
+
+## The dip before the per-cycle pulse (`edge: pre-pulse dip …`, added 2026-10-21 evening)
+
+Pilot: [`prepulse_pilot/`](prepulse_pilot/). From the equivalent-time pulse: a sharp dip 120–130 ns before the pulse
+edge, about 1.5 samples wide. Depth ch0 −886, ch1 −505, ch2 −990, ch3 −601 ADU; repeat share 0.001; amplifier F 5851;
+settings F 0.2 (no setting touched RG/SW/OG/DG). `edge: pre-pulse dip depth (ADU)` is A1; the dip/pulse ratio is B
+(same cluster). The clock edge behind it is not identified yet: the session-B RG_H, RG_L and SW_L packets will show it.
+
+## Caveat: the label-free tiers can demote the best noise estimators
+
+The evidence tiers reward separation of settings and amplifiers, and choose cluster representatives by that. On these
+59 traces the amplifier dominates every correlation, so "redundant" means "identifies the same amplifier":
+
+- `skip: CDS rms (detrended)`, the most direct σe estimator, is in B; its cluster (with `fit: white noise per skip`,
+  `noise: jump-robust CDS sigma`) is represented by `noise: waveform modes for 90 % of the CDS variance`;
+- `noise: reset-level scatter (ADU)` (kTC noise; the top learned feature on synthetic data) is in B (amplifier F 7);
+- `fit: dip recovery time` is in B, represented by `noise: within-cycle power 0.3-1 MHz`.
+
+A model limited to tier A does not see them. Proposed guards (see the LaTeX write-up, plan): a protected set of direct
+physical estimators that every model sees; clusters computed within each amplifier; no repeat-share penalty until it is
+compared with the labels' own repeat scatter; label relevance and learned L1 (on all features) override the evidence
+tier once labels exist.
 
 ## What next
 

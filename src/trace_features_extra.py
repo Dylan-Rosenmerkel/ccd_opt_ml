@@ -131,6 +131,14 @@ EXTRA = [
      "Mean over H transfers 0-4 of the peak-to-peak in the H block of a row-start pixel (not pixel 0), minus the median "
      "over the other pixels of the same; mean over those row starts.",
      "memory of the V clocking in the first H transfers after coming off a row (pilot settings F 172)", "scalar", 1),
+    # ------------------------------------------------------------------ the dip before the per-cycle pulse (user question, 2026-10-21)
+    ("edge: pre-pulse dip depth (ADU)", "edge", "ADU",
+     "Minimum of the equivalent-time pulse between 6 and 0 samples before the edge, minus its mean 15-8 samples before "
+     "(a sharp dip ~120-130 ns before the pulse, ~1.5 samples wide, so single cycles show it as one low sample).",
+     "feedthrough of a clock edge just before the pulse (SW/RG/OG, not yet identified); pilot: amplifier-specific, "
+     "repeat share 0.001", "scalar", 1),
+    ("edge: pre-pulse dip / pulse height", "edge", "", "That depth divided by the height of the equivalent-time pulse above the same baseline.",
+     "coupling of that edge relative to the pulse; the common amplification cancels", "scalar", 1),
     ("clock: leading V-block level slope (ADU/transfer)", "clock", "ADU/transfer",
      "Slope of the median level per vertical transfer over the last 12 transfers of the V block that the trace starts in "
      "(before pixel 0), aligned at the block end.",
@@ -448,7 +456,7 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
     ctx: the shared arrays of trace_features._trace_features: Cm (pixels x skips CDS), cyc {p: skips x samples},
     res {p: residual cycles}, det {p: detrended CDS}, good, row_starts, n_ped, sig, sig_end, first, n, skip_rate,
     sample_rate, starts {p: absolute cycle starts}, meta, scalars (the existing ones, read only), allan_n, common,
-    regions (TraceRegions), trace (DecodedTrace).
+    regions (TraceRegions), trace (DecodedTrace), curves (the existing curves, read only).
     Returns (scalars, per_pixel {name: values}, curves).
     """
     S, PP, C = {}, {}, {}
@@ -652,6 +660,24 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
         PP["noise: baseline-CDS residual correlation"] = [
             float(np.corrcoef(detrend(cyc[p][first:n, :n_ped].mean(1)), det[p])[0, 1]) for p in good]
     block("levels", levels)
+
+    # ---------------- the dip before the per-cycle pulse (from the equivalent-time pulse of trace_features)
+    def prepulse():
+        e = ctx.get("curves", {}).get("edge: equivalent-time pulse")
+        if e is None:
+            return
+        e = np.asarray(e, float)
+        c = np.arange(-15, 60.05, 0.1)[:-1] + 0.05                 # the bin centres of that curve (samples from the edge)
+        base = np.nanmean(e[(c > -15) & (c < -8)])
+        win = np.flatnonzero((c > -6) & (c < 0) & np.isfinite(e))
+        if not len(win) or not np.isfinite(base):
+            return
+        depth = float(np.nanmin(e[win]) - base)
+        S["edge: pre-pulse dip depth (ADU)"] = depth
+        peak = float(np.nanmax(e) - base)
+        if peak > 0:
+            S["edge: pre-pulse dip / pulse height"] = depth / peak
+    block("prepulse", prepulse)
 
     # ---------------- clocking regions (V blocks, first H block of a row)
     def clock():

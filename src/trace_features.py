@@ -719,7 +719,7 @@ def _trace_features(trace: DecodedTrace, meta: dict | None, regions: TraceRegion
         ctx = {"Cm": Cm, "cyc": cyc, "res": res, "det": det, "good": good, "row_starts": row_starts, "n_ped": n_ped,
                "sig": sig, "sig_end": sig_end, "first": first, "n": n, "skip_rate": skip_rate, "sample_rate": SAMPLE_RATE_HZ,
                "starts": starts, "meta": meta, "scalars": dict(S), "allan_n": ALLAN_N, "common": np.median(Cm[good], axis=0),
-               "regions": r, "trace": trace}
+               "regions": r, "trace": trace, "curves": dict(Cv)}
         scalars, pixel_values, curves = extra_features(ctx)
         for name, err in scalars.pop("_errors", {}).items():
             result.info["errors"][f"extra: {name}"] = err

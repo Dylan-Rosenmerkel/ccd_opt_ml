@@ -7,7 +7,8 @@ make_figures.py -- the figures of feature_tiers_2026-10-21.tex.
 * fig_learned_tiers: the counts of the five lvl1/feature_importance.py runs (synthetic, 20 noise columns added), typed in
   below because the run outputs are not kept in the repository;
 * nb_*.png: copied out of the executed notebook lvl1/new_trace_features.ipynb;
-* fig_clock_regions: copied from lvl1/feature_study/clock_pilot (the pilot needs the raw traces).
+* fig_clock_regions, fig_prepulse_dip: copied from lvl1/feature_study/clock_pilot and prepulse_pilot (the pilots need
+  the raw traces).
 
     .venv/bin/python docs/overleaf_feature_tiers_2026-10-21/make_figures.py
 """
@@ -127,6 +128,7 @@ def notebook_figures():
 def clock_regions():
     """The clocking-region pilot figure (made by lvl1/feature_study/clock_pilot, which needs the raw traces)."""
     (OUT / "fig_clock_regions.png").write_bytes((ROOT / "lvl1" / "feature_study" / "clock_pilot" / "fig_clock_regions.png").read_bytes())
+    (OUT / "fig_prepulse_dip.png").write_bytes((ROOT / "lvl1" / "feature_study" / "prepulse_pilot" / "fig_prepulse_dip.png").read_bytes())
 
 
 if __name__ == "__main__":

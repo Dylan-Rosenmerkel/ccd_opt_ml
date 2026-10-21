@@ -162,4 +162,12 @@ inside the window of `edge: cycle variation at reset`, but no scalar measures it
 - origin (reference_v5.seq, ReadoutCDS): right after the signal window SW goes high and RG low together, 3 units later
   SW and OG go low, then OG high, then RG high; the flags do not record these clocks, so the edge is not identified.
   Session B's RG_H/RG_L/SW_L packets (L1_17, L1_18, L1_19, L1_28, L1_29) will show which rail it follows.
-Next if the user agrees: `edge: pre-pulse dip depth (ADU)` and `edge: pre-pulse dip / pulse height` (tier 1).
+DONE: both added (extra_features `prepulse` block, from the ETS curve; ctx gets `curves`); test_prepulse_dip; 141 scalars;
+tiers A1 37 / A2 36 / B 33 / C 35; LaTeX section 3.6 + tier caveat + proposed guards (14 pages), md docs updated.
+
+## 8. User concern: do the label-free tiers bias us against the best noise predictors? YES, found evidence
+`skip: CDS rms (detrended)` is B (cluster rep = waveform modes, chosen by amplifier separation); reset-level scatter B;
+dip recovery time B. With --feature-tiers auto, gp/nn/ridge (tier A) would not see them. Proposed guards, waiting for
+the user's go-ahead: (a) protected physical-estimator set always included; (b) clusters within amplifier; (c) no
+repeat-share penalty until compared with the labels' repeat scatter; (d) label relevance + learned L1 on all features
+override the evidence tier once labels exist.

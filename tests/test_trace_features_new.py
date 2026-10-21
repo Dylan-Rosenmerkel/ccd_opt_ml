@@ -154,6 +154,11 @@ class RealTrace(unittest.TestCase):
         self.assertTrue(1000 < s["clock: first H block of a row, excess (ADU)"] < 4000)
         self.assertGreater(s["clock: leading V-block level slope (ADU/transfer)"], 0)   # the first V block climbs
 
+    def test_prepulse_dip(self):
+        s = self.r.scalars                              # pilot (lvl1/feature_study/prepulse_pilot): ch0 -886 ADU, 0.019
+        self.assertTrue(-1000 < s["edge: pre-pulse dip depth (ADU)"] < -780)
+        self.assertTrue(-0.025 < s["edge: pre-pulse dip / pulse height"] < -0.014)
+
     def test_curves(self):
         self.assertEqual(len(self.r.curves["start: mean transient"]), 30)
         self.assertEqual(len(self.r.curves["noise: Hadamard deviation"]), len(tf.ALLAN_N))

@@ -2,7 +2,8 @@
 
 2026-10-21. This document gathers in one place:
 
-- the 54 trace features and 4 curves added today (49 from the literature search, 5 in the `clock:` group);
+- the 56 trace features and 4 curves added today (49 from the literature search, 5 in the `clock:` group, 2 for the
+  pre-pulse dip);
 - how features are now organised in tiers;
 - what the tests showed;
 - the packet plan ("the scan");
@@ -16,7 +17,7 @@ It builds on [`trace_feature_candidates.md`](trace_feature_candidates.md) (the c
 
 ## 1. Summary
 
-- **Every trace now gives 139 numbers and 18 curves**, where it gave 85 and 14. The new ones are in
+- **Every trace now gives 141 numbers and 18 curves**, where it gave 85 and 14. The new ones are in
   `src/trace_features_extra.py`; 16 tests cover them in `tests/test_trace_features_new.py`; a trace takes about 1.2 s.
   Processing (`process_packet.py`) writes them into `model_inputs/` without any further change; this was checked on
   simulated packets.
@@ -152,13 +153,23 @@ occur equally up and down: the signature of random telegraph switching in the ou
 
 Details and figure: `lvl1/feature_study/README.md` and `lvl1/feature_study/clock_pilot/`.
 
+### 2.8 The dip before the per-cycle pulse
+
+`edge: pre-pulse dip depth (ADU)` (tier 1, A1) and `edge: pre-pulse dip / pulse height` (tier 1, B): a sharp dip
+120–130 ns before the pulse edge, −505 to −990 ADU by amplifier, repeat share 0.001, unchanged by these settings. Its
+clock edge (SW, RG or OG) is to be identified with the session-B RG/SW packets. Pilot: `lvl1/feature_study/prepulse_pilot/`.
+
+**Caveat on the tiers** (found while adding these): the label-free evidence tiers put the most direct σe estimator
+(`skip: CDS rms (detrended)`) and the reset-level scatter in B. See `lvl1/feature_study/README.md` for the proposed
+guards.
+
 ## 3. The tiered structure of the data and the learning
 
 Every trace is reduced to features once, in processing, and **all of them are stored**. What changes is which features
 each model *sees*. Three layers decide that:
 
 ```
-raw trace ──► 139 scalars + 18 curves, all stored (process_packet.py → dataset.csv, model_inputs/)
+raw trace ──► 141 scalars + 18 curves, all stored (process_packet.py → dataset.csv, model_inputs/)
                  │
    layer 1  implementation tier   0 / 1 / 2        where the feature came from (fixed)
                  │
@@ -185,7 +196,7 @@ features of each tier.
 | **C**, store only | not informative on the data so far, unstable, mostly NaN, or constant | 17 | 18 | **35** |
 
 **Balanced sizes (2026-10-21).** A was split by informativeness into **A1** (the more informative half) and **A2**,
-so the four tiers hold similar numbers: A1 36, A2 36, B 32, C 35.
+so the four tiers hold similar numbers: A1 37, A2 36, B 33, C 35.
 
 The evidence tiers are *provisional*. They rest on 59 traces at 5 settings whose voltage changes did not move the
 noise, so the noise features have been judged by amplifier separation alone. They will be revised on real packets (§6).
@@ -352,10 +363,10 @@ demote, and features in L1 but not in tier A are candidates to promote. L1 can a
 
 | file | what |
 |---|---|
-| `src/trace_features_extra.py` | the 54 new features and 4 curves (registry `EXTRA`, `extra_features`) |
+| `src/trace_features_extra.py` | the 56 new features and 4 curves (registry `EXTRA`, `extra_features`) |
 | `src/trace_features.py` | the `tier` attribute and `names_by_tier()`; calls the new block |
 | `tests/test_trace_features_new.py` | 16 tests: synthetic signals with known answers, plus the pilot numbers on one real trace |
-| `docs/slides/oct12_features.py` → `docs/slides/data/oct12_trace_features.csv` | all 139 features of the 59 real traces |
+| `docs/slides/oct12_features.py` → `docs/slides/data/oct12_trace_features.csv` | all 141 features of the 59 real traces |
 | `lvl1/feature_study.py` → `lvl1/feature_study/` | separation, stability and redundancy per feature; evidence tiers; results README |
 | `lvl1/feature_tolerance.py` → `lvl1/feature_study/tolerance_*.csv` | the synthetic tolerance test |
 | `lvl1/feature_importance.py` → `feature_importance.csv` | learned tiers L1/L2/L3 (stability selection + permutation vs shadow features) |
