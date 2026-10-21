@@ -147,5 +147,15 @@
   "noise: DFA exponent",
   "discrete: line frequency, whole trace (kHz)",
   "noise: baseline-CDS residual correlation"
+ ],
+ "P": [
+  "skip: CDS rms (detrended)",
+  "fit: white noise per skip (ADU)",
+  "noise: jump-robust CDS sigma (ADU)",
+  "noise: null-CDS noise (ADU)",
+  "noise: Allan deviation n=50 (ADU)",
+  "noise: reset-level scatter (ADU)",
+  "edge: pulse per volt RG (ADU/V)",
+  "edge: dip per volt SW (ADU/V)"
  ]
 }

@@ -173,7 +173,8 @@ raw trace ──► 141 scalars + 18 curves, all stored (process_packet.py → d
                  │
    layer 1  implementation tier   0 / 1 / 2        where the feature came from (fixed)
                  │
-   layer 2  evidence tier          A / B / C        what the data say (revised as data arrive)
+   layer 2  evidence tier          P + A / B / C    P: protected physical estimators (fixed by physics);
+                                                    A/B/C: what the data say, without labels (revised as data arrive)
                  │
    layer 3  model feature set      per model        which evidence tiers a model can cope with
 ```
@@ -184,16 +185,24 @@ features of each tier.
 | tier | what | count |
 |---|---|---|
 | 0 | the original features | 85 scalars + 14 curves |
-| 1 | implement-first additions (physics-motivated, piloted) | 23 scalars + 2 curves |
-| 2 | candidate additions | 26 scalars + 2 curves |
+| 1 | implement-first additions (physics-motivated, piloted; incl. `clock:` and the pre-pulse dip) | 29 scalars + 2 curves |
+| 2 | candidate additions | 27 scalars + 2 curves |
 
 **Layer 2: evidence tier.** It comes from `lvl1/feature_study.py` and is stored in `lvl1/feature_study/evidence_tiers.json`.
 
 | tier | rule | original | new | total |
 |---|---|---|---|---|
-| **A**, core | informative (settings F min > 10 or amplifier F > 10), repeat share < 0.5, at most 20 % NaN, and the most informative member of its redundancy cluster (\|ρ\| > 0.95) | 46 | 22 | **68** |
-| **B**, supporting | informative but redundant, or moderately informative (F 4–10) | 22 | 9 | **31** |
+| **P**, protected (guard a) | direct physical estimators of the labels, chosen by physics, given to **every** model: σe — CDS rms (detrended), white noise per skip, jump-robust sigma, null-CDS noise, Allan deviation n=50; gain — reset-level scatter (kTC), pulse per volt RG, dip per volt SW. No direct λ estimator exists yet | 6 | 2 | **8** (also in A/B) |
+| **A**, core | informative (settings F min > 10 or amplifier F > 10), repeat share < 0.5, at most 20 % NaN, and the most informative member of its redundancy cluster (\|ρ\| > 0.95) | 46 | 27 | **73** |
+| **B**, supporting | informative but redundant, or moderately informative (F 4–10) | 22 | 11 | **33** |
 | **C**, store only | not informative on the data so far, unstable, mostly NaN, or constant | 17 | 18 | **35** |
+
+**Why P exists.** The evidence tiers reward *separating* the traces, not *predicting* σe, λ or gain, and on the 59
+traces the amplifier dominates every correlation, so "redundant" means "identifies the same amplifier". Without P the
+most direct σe estimator (`skip: CDS rms (detrended)`) and the kTC noise (`noise: reset-level scatter`) sit in B, and a
+tier-A model would not see them. In a synthetic test (lvl1/feature_study/README.md) these two features alone took the
+plain GP from 57.5 % to 9.6 % (σe) and from 31 % to 0.9 % (gain). Two further guards were prototyped (clusters within each
+amplifier; no repeat-share penalty) and are **not adopted**: they helped less and enlarge tier A.
 
 **Balanced sizes (2026-10-21).** A was split by informativeness into **A1** (the more informative half) and **A2**,
 so the four tiers hold similar numbers: A1 37, A2 36, B 33, C 35.
@@ -207,18 +216,19 @@ percentage points:
 
 | model | σe at +20 / +50 / +100 | λ at +20 / +50 / +100 | suggested feature set |
 |---|---|---|---|
-| gp (plain) | **+51 / +51 / +51** | +21 / +21 / +21 | **A only**, or a prior-regularized GP (`gp_saas`, `gp_dim`; their tolerance is still to test) |
-| nn | +2 / +7 / +15 | +3 / +5 / +8 | A |
-| ridge | +2 / +4 / +5 | +6 / +8 / +14 | A (perhaps A + B) |
-| cnn | 0 / +1 / +4 | +1 / +3 / +5 | A + B |
-| physics | 0 / 0 / 0 | 0 / +2.5 / +7 | A + B for σe and gain; A for its λ GP |
-| physics_joint | 0 / 0 / 0 | +1 / +2 / +3 | A + B |
-| sets | 0 / 0 / 0 | +2.5 / +3.5 / +4 | A + B |
+| gp (plain) | **+51 / +51 / +51** | +21 / +21 / +21 | **P + A1**, or a prior-regularized GP (`gp_saas`, `gp_dim`; their tolerance is still to test) |
+| nn | +2 / +7 / +15 | +3 / +5 / +8 | P + A |
+| ridge | +2 / +4 / +5 | +6 / +8 / +14 | P + A |
+| cnn | 0 / +1 / +4 | +1 / +3 / +5 | P + A + B |
+| physics | 0 / 0 / 0 | 0 / +2.5 / +7 | P + A + B for σe and gain |
+| physics_joint | 0 / 0 / 0 | +1 / +2 / +3 | P + A + B |
+| sets | 0 / 0 / 0 | +2.5 / +3.5 / +4 | P + A + B |
 | trees | 0 / 0 / 0 | 0 / 0 / 0 | everything |
 
-These sets are wired in: `lvl1/train_lvl1.py --feature-tiers auto` uses them, `--feature-tiers A+B` (or any combination
-of A1, A2, A, B, C, impl0, impl1, impl2) gives every model the same set, and `--tier-ablation` trains every model with
-each set and compares them (§6.2).
+These sets are wired in (`MODEL_TIERS` in `lvl1/train_lvl1.py`): `--feature-tiers auto` uses them, `--feature-tiers
+P+A+B` (or any combination of P, A1, A2, A, B, C, impl0, impl1, impl2) gives every model the same set, `--tier-ablation`
+trains every model with several sets, and `--feature-ladder` feeds every model more and more features (§6.2). They are
+**starting points**; the ladder on real data decides.
 
 ---
 
@@ -278,61 +288,64 @@ Two short DAQ trace tests are still worth doing before the trace settings are fi
 
 ## 6. Plan for the first real data
 
-### 6.1 Finalize the tiers
+### 6.1 Finalize the tiers (without letting the labels choose the features)
 
-After session A, rerun `lvl1/feature_study.py` on the real packets, and add two measures that need labels:
+After session A, rerun `lvl1/feature_study.py` on the real packets. The settings F over the delayInt packets is the
+first test where noise features have something to separate. The evidence tiers stay **label-free**.
 
-1. **Label relevance.** Within each amplifier, how strongly each feature follows σe, λ and gain across the session's
-   settings: rank correlation, and a simple per-feature regression's cross-validated R².
-2. **Settings separation where the noise changes.** The settings F over the delayInt packets, where noise features
-   finally have something to separate.
+Label relevance (how strongly a feature follows σe, λ and gain within an amplifier) and the learned tiers (§6.4) are
+computed and **reported beside** the tiers, as diagnostics: they say which features to look at physically. They do not
+move features between tiers on their own. A feature joins P only with a stated physical mechanism (as the 8 did), not on
+a number alone.
 
-Then:
-- promote features that track the labels;
-- demote those that are unstable between the nominal repeats (§5);
-- reassess the redundancy clusters on the real-packet data.
+**Why not rank the features by the labels.** Ranking ~141 features by how well each follows the labels, on ~30 packets:
+- is noisy, so the top of the ranking is partly luck (the winner's curse);
+- makes the cross-validated error of the top features optimistic unless the ranking is redone inside every fold;
+- favours features that matter for the settings scanned so far (session A: timing), and misses those that matter only
+  for later settings or only together with other features;
+- lets the labels' own errors (WADERs fits) steer the feature choice.
+The synthetic guard test showed a label-driven set *can* nearly reach the true-feature result, but there the ranking
+came from sibling datasets of a known world, the optimistic case. On real data it is at most one clearly marked extra set
+after session B, ranked inside each fold, and confirmed on C.
 
-The evidence tiers become *finalized for session A*, and are revised once more after session B. Session C is not used
-for this.
+### 6.2 Feed every model more and more features (the feature ladder, `--feature-ladder`)
 
-### 6.2 Train every model at different tier levels (an ablation)
+Every model is trained on a nested series of feature sets, on the same setting-grouped folds, and its error is read
+against the number of features. **The orders never use the labels**; the labels only score a few fixed, declared sets.
+The orders can be frozen before the first labels are seen (pre-registration): the cover order uses the features only.
 
-For each applicable model, train and test with nested feature sets, using the same setting-grouped folds:
+| order | steps | what it asks |
+|---|---|---|
+| `tiers` | none (settings only) → P → P+A1 → P+A → P+A+B → all | does each evidence tier help this model? |
+| `cover` | P → 15 → 25 → 40 → 60 → 90 → all | the next feature is always the one least explained by those already taken (column-pivoted QR of the standardized features, after P): covers the feature space evenly, without favouring amplifier separation |
+| `random` | P → the same sizes, 3 random orders | the control: if `tiers` or `cover` do not beat random orders, the order does not matter for this model |
+| `groups` | P + one physics group at a time (start, clock, edge, noise, discrete, …) | which family adds what (not nested) |
 
-| feature set | contents |
-|---|---|
-| S0 | settings only (the `settings` baseline) |
-| SA | settings + evidence tier A |
-| SAB | settings + A + B |
-| SABC | settings + everything |
-| S-impl0 | settings + the original 85 (today's default, for reference) |
-
-**For each model and target (σe, λ, gain)**, read the error with its bootstrap interval, CRPS and calibrated coverage.
-Read the **paired difference** against the model's current feature set with the existing validation
-(`--paired-ref`, bootstrap over packets). A tier is worth adding to a model if it lowers the error with the paired
-interval excluding 0, or at least does not hurt.
+**Read-out per model and target:** error % against the number of features (table and `feature_ladder.png`), with
+bootstrap intervals; paired differences against the same model on P. **Suggested set:** the smallest step within one
+standard error of the model's best step (the one-standard-error rule: do not chase noise).
 
 **Choosing without fooling ourselves:**
-- choose each model's feature set by cross-validation on sessions A + B only;
-- confirm the chosen sets **once** on session C (`--holdout-session C`);
-- report every combination tried, not just the winner, because picking the best of many on ~30 packets is optimistic
-  (Cawley & Talbot 2010);
-- keep the number of sets small (the five above).
+- choose on sessions A + B only, confirm once on session C (`--holdout-session C`);
+- report every step of every order, not just the winner (Cawley & Talbot 2010);
+- the number of steps is fixed in advance (about 6 per order).
 
-**Which models.** All of them except the baselines and `trace_physics`, which take no trace features. The CNN family
-mainly uses the curves; for it, ablate the scalar block (settings + reference features) the same way.
+**Which models.** All except the baselines and `trace_physics`: gp, gp_dim, gp_saas, nn, ridge (expected to be
+sensitive), trees, sets, physics_joint (expected to be robust), the λ GP of physics, and the scalar block of cnn.
 
-### 6.3 What has to be built first
+    .venv/bin/python lvl1/train_lvl1.py --inputs <model_inputs> --feature-ladder tiers cover random [groups] \
+        [--ladder-steps 15 25 40 60 90] [--ladder-random 3] --holdout-session C
 
-1. **Done:** the **`--feature-tiers` option** in `lvl1/train_lvl1.py`: `all`, `none`, `auto` (the per-model defaults
-   of §3, `MODEL_TIERS`) or tier labels such as `A`, `A+B`, `A1`, `impl0`. It selects the X_trace and X_ref columns
-   from `lvl1/feature_study/evidence_tiers.json`.
-2. **Done:** the **ablation runner**, `--tier-ablation [SET ...]` (default `none A1 A A+B all impl0`). It trains every
-   model on every set and compares each, paired, with the same model on `--ablation-ref` (default `all`); the report
-   gets a "Tier ablation" section.
-3. **Not started:** label relevance in `lvl1/feature_study.py`, used when packets with labels are given.
-4. **Not started:** the tolerance test of `gp_saas` and `gp_dim`, to see whether a prior-regularized GP can take more
-   features than the plain one.
+### 6.3 What has been built
+
+1. **Done:** `--feature-tiers` (`all`, `none`, `auto` = `MODEL_TIERS`, or tier labels such as `P+A`, `A1`, `impl0`).
+2. **Done:** `--tier-ablation [SET ...]` (default `none P P+A1 P+A P+A+B all impl0`), each model paired against its own
+   `--ablation-ref` run.
+3. **Done (2026-10-21):** guard (a), the protected tier P, in `lvl1/feature_study.py` (`PROTECTED`) and in every
+   default set; `--feature-ladder` with the four label-free orders, the one-standard-error suggestion and the plot;
+   unit tests in `tests/test_lvl1_validation.py`.
+4. **Not started:** label relevance as a *reported* column of `lvl1/feature_study.py` (§6.1).
+5. **Not started:** the tolerance test of `gp_saas` and `gp_dim`.
 
 ### 6.4 Learned tiers: let trained models say which features matter (`lvl1/feature_importance.py`)
 
@@ -354,8 +367,8 @@ importances. Every feature is therefore compared with **shadow features**, row-s
 L2. So L1 can be used as a feature set and L2 only as a list to look at. The 1.5 margin was chosen on these runs and then
 confirmed on two unseen datasets (td100_s0, td13_s0): again no noise column in L1. Details: `lvl1/feature_study/README.md`, step 3.
 
-**Use on real data:** after session A, beside §6.1. Features in evidence tier A but learned L3 are candidates to
-demote, and features in L1 but not in tier A are candidates to promote. L1 can also be one more set in the ablation.
+**Use on real data:** after session A, beside §6.1, as a **diagnostic**: features in L1 but not in tier A, and tier-A
+features in L3, are the ones to look at physically. Learned importance does not choose any model's features (§6.1).
 
 ---
 

@@ -1,6 +1,6 @@
 """
 Tests of the level-1 validation scores (src/ml/evaluate.py, lvl1/train_lvl1.py): CRPS, packet bootstrap, paired
-differences, setting groups, the held-out session.
+differences, setting groups, the held-out session, the feature sets (protected tier, feature ladder).
 
     .venv/bin/python -m unittest tests/test_lvl1_validation.py        (or: .venv/bin/python -m pytest tests)
 """
@@ -156,6 +156,44 @@ class TestHoldout(unittest.TestCase):
         self.assertFalse(tl.matches_packet("L1_330", ids))
         self.assertFalse(tl.matches_packet("syn_00010", ids))
         self.assertFalse(tl.matches_packet("L1_32", ids))
+
+
+class TestFeatureLadder(unittest.TestCase):
+    def setUp(self):
+        rng = np.random.default_rng(0)
+        base = rng.normal(size=(60, 4))
+        # columns: p0 p1 (protected), a b c independent, a2 = near-copy of a, b2 = near-copy of b
+        self.X = np.column_stack([base[:, 0], base[:, 1], base[:, 2], base[:, 3], rng.normal(size=60),
+                                  base[:, 2] + 0.01 * rng.normal(size=60), base[:, 3] + 0.01 * rng.normal(size=60)])
+        self.names = ["p0", "p1", "a", "b", "c", "a2", "b2"]
+        self.tiers = {"p0": {"P", "A1"}, "p1": {"P", "B"}, "a": {"A1", "A"}, "b": {"A2", "A"}, "c": {"B"}, "a2": {"C"}, "b2": {"C"}}
+
+    def test_protected_in_every_default_set(self):
+        for spec in set(tl.MODEL_TIERS.values()) | {tl.DEFAULT_MODEL_TIERS}:
+            if spec not in ("none", "all"):
+                self.assertIn("P", spec.split("+"))
+
+    def test_cover_order_takes_protected_first_and_copies_last(self):
+        order = tl.cover_order(self.X, self.names, ["p0", "p1"])
+        self.assertEqual(order[:2], ["p0", "p1"])
+        first = set(order[2:5])                                       # one of each independent direction first;
+        self.assertIn("c", first)                                     # the second of a near-copy pair comes last
+        self.assertEqual(len(first & {"a", "a2"}), 1)
+        self.assertEqual(len(first & {"b", "b2"}), 1)
+
+    def test_ladder_sets(self):
+        tiers = {k: set(v) for k, v in self.tiers.items()}
+        lad = tl.ladder_sets(self.names, self.X, tiers, ["tiers", "cover", "random"], steps=(3, 4, 5), n_random=2)
+        by = {(o, lab): k for o, lab, k in lad}
+        self.assertEqual(by[("tiers", "P")], 2)
+        self.assertEqual(by[("tiers", "P+A")], 4)
+        self.assertEqual(by[("tiers", "all")], 7)
+        for k in (3, 4, 5):                                           # nested prefixes, P always inside
+            m = tl.feature_mask(self.names, f"ladder:cover:{k}", tiers)
+            self.assertEqual(m.sum(), k)
+            self.assertTrue(m[:2].all())
+            self.assertEqual(tl.feature_mask(self.names, f"ladder:random.2:{k}", tiers).sum(), k)
+        self.assertTrue((tl.feature_mask(self.names, "ladder:cover:4", tiers) <= tl.feature_mask(self.names, "ladder:cover:5", tiers)).all())
 
 
 if __name__ == "__main__":

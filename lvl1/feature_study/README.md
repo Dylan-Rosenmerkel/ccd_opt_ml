@@ -114,10 +114,27 @@ The evidence tiers reward separation of settings and amplifiers, and choose clus
 - `noise: reset-level scatter (ADU)` (kTC noise; the top learned feature on synthetic data) is in B (amplifier F 7);
 - `fit: dip recovery time` is in B, represented by `noise: within-cycle power 0.3-1 MHz`.
 
-A model limited to tier A does not see them. Proposed guards (see the LaTeX write-up, plan): a protected set of direct
-physical estimators that every model sees; clusters computed within each amplifier; no repeat-share penalty until it is
-compared with the labels' own repeat scatter; label relevance and learned L1 (on all features) override the evidence
-tier once labels exist.
+A model limited to tier A does not see them.
+
+**Guard (a), adopted 2026-10-21:** `PROTECTED` in `feature_study.py`, written as tier `P` in `evidence_tiers.json` and
+included in every model's default set (`MODEL_TIERS` in `lvl1/train_lvl1.py`): CDS rms (detrended), white noise per
+skip, jump-robust sigma, null-CDS noise, Allan deviation n=50 (σe); reset-level scatter, pulse per volt RG, dip per
+volt SW (gain).
+
+**Prototyped, not adopted** (scratchpad test: synthetic td41_s0/1/2 plus the 120 other real features as uninformative
+real-named columns; error %, mean of 3, σe / λ / gain):
+
+| set | gp | nn | ridge |
+|---|---|---|---|
+| A (old default) | 57.5 / 29.2 / 31.3 (collapsed) | 32.9 / 22.4 / 17.6 | 16.8 / 19.9 / 4.4 |
+| guards a–c (P + tiers with within-amplifier clusters, no repeat penalty) | collapsed | 21.7 / 21.9 / 10.2 | 14.7 / 23.2 / 3.3 |
+| P alone | 9.6 / 22.0 / 0.9 | 12.9 / 18.6 / 6.3 | 12.2 / 17.0 / 6.3 |
+| P + label-driven set (from other datasets) | 9.0 / 14.5 / 0.9 | 10.2 / 16.9 / 2.6 | 9.5 / 14.0 / 0.9 |
+| the 17 true synthetic features | 6.9 / 8.0 / 0.9 | 10.1 / 17.1 / 1.5 | 9.5 / 12.4 / 0.9 |
+
+Guards (b) within-amplifier clusters and (c) no repeat penalty helped less and enlarge tier A; (d) label-driven selection
+is deliberately not used to choose features (docs/trace_features_and_tiers.md §6.1): instead every model is fed the
+features in label-free orders (`--feature-ladder`, §6.2).
 
 ## What next
 

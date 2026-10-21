@@ -224,8 +224,10 @@ Options:
 | `--include-flagged` | off | also use labels that WADERs flagged |
 | `--allow-fake` | off | also use rehearsal packets |
 | `--quick` | off | short training, to test the pipeline |
-| `--feature-tiers` | all | which trace features the models see: `all`, `none` (settings only), `auto` (per-model defaults from the tolerance test: gp/nn/ridge `A`, trees `all`, the rest `A+B`), or tier labels joined by `+`: evidence `A1`, `A2`, `A` (= A1+A2), `B`, `C` (`lvl1/feature_study/evidence_tiers.json`) and implementation `impl0`, `impl1`, `impl2` |
-| `--tier-ablation [SET ...]` | off | train every model with each feature set (default `none A1 A A+B all impl0`) on the same folds and compare each with its own `--ablation-ref` run (default `all`), with paired bootstrap intervals; adds a "Tier ablation" section to the report |
+| `--feature-tiers` | all | which trace features the models see: `all`, `none` (settings only), `auto` (per-model defaults: gp family `P+A1`, nn/ridge `P+A`, trees `all`, the rest `P+A+B`), or tier labels joined by `+`: protected `P`, evidence `A1`, `A2`, `A` (= A1+A2), `B`, `C` (`lvl1/feature_study/evidence_tiers.json`) and implementation `impl0`, `impl1`, `impl2` |
+| `--tier-ablation [SET ...]` | off | train every model with each feature set (default `none P P+A1 P+A P+A+B all impl0`) on the same folds and compare each with its own `--ablation-ref` run (default `all`), with paired bootstrap intervals; adds a "Tier ablation" section to the report |
+| `--feature-ladder [ORDER ...]` | off | feed every model more and more features in label-free orders (default `tiers cover random`; also `groups`); reports error against the number of features, the one-standard-error suggestion per model, and `feature_ladder.png`; compares against `P` (docs/trace_features_and_tiers.md §6.2) |
+| `--ladder-steps`, `--ladder-random` | 15 25 40 60 90; 3 | feature counts of the cover and random ladders; number of random orders |
 | `--tier-file` | `lvl1/feature_study/evidence_tiers.json` | the evidence tiers |
 | `--out` | `<processed>/lvl1_results/<date>/` | where to write the results |
 

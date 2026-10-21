@@ -33,11 +33,18 @@ intervals of every score (resampling the out-of-fold predictions, no refitting),
 with ``--paired-ref`` (default physics) on the same resamples, an optional prospective test (``--holdout-session C``:
 train once on the other packets, score the held-out ones) and an optional leave-one-amplifier-out score (``--loao``).
 
+Feature sets (docs/trace_features_and_tiers.md): ``--feature-tiers`` chooses the trace features every model sees (tier
+labels, or ``auto`` = MODEL_TIERS, which always includes the protected estimators P); ``--tier-ablation`` trains every
+model on several sets; ``--feature-ladder`` feeds every model more and more features in LABEL-FREE orders (the evidence
+tiers; a coverage order that adds the least redundant feature next; random orders as the control; one physics group at a
+time) and reports error against the number of features.
+
 The amplifier and board are used ONLY to group rows for these scores, never as model inputs.
 
     python lvl1/train_lvl1.py --inputs <processed>/model_inputs [--models physics gp cnn ...] [--board 101]
                               [--folds 5] [--out DIR] [--quick] [--group-by setting|packet] [--n-boot 1000]
                               [--paired-ref physics] [--holdout-session C | --holdout-packets ID ...] [--loao]
+                              [--feature-tiers auto | --tier-ablation [SET ...] | --feature-ladder [tiers cover random groups]]
 
 Baselines (no trace at all; a model is only useful if it beats them):
     mean            [features]  the training mean of each target, with the training spread as its error bar
@@ -107,12 +114,17 @@ MAX_NAN_FRACTION = 0.2
 #: the evidence tiers of every trace feature (lvl1/feature_study.py); see docs/trace_features_and_tiers.md
 TIER_FILE = ROOT / "lvl1" / "feature_study" / "evidence_tiers.json"
 #: per-model default feature sets for --feature-tiers auto (from the synthetic tolerance test, lvl1/feature_study/README.md):
-#: the plain GP collapses with 20 uninformative columns, nn and ridge degrade, trees are immune
-MODEL_TIERS = {"gp": "A", "gp_dim": "A", "gp_saas": "A", "nn": "A", "ridge": "A", "settings": "none", "mean": "none",
-               "trees": "all"}
-DEFAULT_MODEL_TIERS = "A+B"
+#: the plain GP collapses with 20 uninformative columns, nn and ridge degrade, trees are immune.  P (guard a) = the
+#: protected physical estimators, given to every model that takes trace features: the label-free evidence tiers can put
+#: the most direct sigma_e and gain estimators in B (lvl1/feature_study/README.md, "Caveat").
+MODEL_TIERS = {"gp": "P+A1", "gp_dim": "P+A1", "gp_saas": "P+A1", "nn": "P+A", "ridge": "P+A", "settings": "none",
+               "mean": "none", "trees": "all"}
+DEFAULT_MODEL_TIERS = "P+A+B"
 #: the feature sets tried by --tier-ablation (by default); "none" = settings only, "impl0" = the original 85 features
-ABLATION_SETS = ["none", "A1", "A", "A+B", "all", "impl0"]
+ABLATION_SETS = ["none", "P", "P+A1", "P+A", "P+A+B", "all", "impl0"]
+#: --feature-ladder: label-free orders in which the features are fed to every model (none of them uses the labels)
+LADDER_ORDERS = ("tiers", "cover", "random", "groups")
+LADDER_STEPS = (15, 25, 40, 60, 90)                     # feature counts of the cover and random ladders (plus P and all)
 
 
 def load_tiers(path: Path = TIER_FILE) -> dict[str, set[str]]:
@@ -133,6 +145,149 @@ def load_tiers(path: Path = TIER_FILE) -> dict[str, set[str]]:
         if ls & {"A1", "A2"}:
             ls.add("A")
     return labels
+
+
+def cover_order(X: np.ndarray, names, first) -> list[str]:
+    """A label-free order of the features that covers the feature space evenly: ``first`` (the protected set), then
+    repeatedly the feature with the most variance NOT explained by those already taken (column-pivoted QR of the
+    standardized features, after projecting out ``first``).  Mostly-missing or constant columns go last."""
+    names = [str(n) for n in names]
+    X = np.asarray(X, float)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ok = (np.isnan(X).mean(0) <= MAX_NAN_FRACTION) & (np.nanstd(X, 0) > 0)
+        Z = np.where(np.isnan(X), np.nanmedian(X, 0), X)
+        Z = (Z - Z.mean(0)) / np.where(Z.std(0) > 0, Z.std(0), 1)
+    head = [i for i, n in enumerate(names) if n in set(first)]
+    rest = [i for i in range(len(names)) if i not in head and ok[i]]
+    R = Z[:, rest]
+    if head:
+        B = Z[:, head]
+        R = R - B @ np.linalg.lstsq(B, R, rcond=None)[0]
+    from scipy.linalg import qr
+    piv = qr(R, mode="r", pivoting=True)[1] if R.size else np.array([], int)
+    order = head + [rest[i] for i in piv] + [i for i in range(len(names)) if i not in head and not ok[i]]
+    return [names[i] for i in order]
+
+
+def ladder_sets(names, X, tiers: dict, orders, steps=LADDER_STEPS, n_random: int = 3, seed: int = 0) -> list[tuple[str, str, int]]:
+    """The feature sets of --feature-ladder, as (order, set label, number of features); the sets of the cover and random
+    ladders are added to ``tiers`` as labels "ladder:<order>:<k>".  None of the orders uses the labels:
+
+    * tiers   none -> P -> P+A1 -> P+A -> P+A+B -> all (the evidence tiers, cumulative)
+    * cover   P, then the cover order (cover_order) cut at ``steps`` features, then all
+    * random  P, then ``n_random`` random orders of the rest cut at ``steps`` (the control: does the order matter?)
+    * groups  P + one physics group at a time (fit, skip, noise, ...), not nested: which family adds what"""
+    names = [str(n) for n in names]
+    P = [n for n in names if "P" in tiers.get(n, set())]
+    count = lambda spec: int(feature_mask(names, spec, tiers).sum())
+    out = []
+    ks = [k for k in steps if len(P) < k < len(names)]
+    def label_prefixes(order_name, order):
+        for k in ks:
+            lab = f"ladder:{order_name}:{k}"
+            for n in order[:k]:
+                tiers.setdefault(n, set()).add(lab)
+            out.append((order_name.split(".")[0], lab, k))
+    for o in orders:
+        if o == "tiers":
+            out += [("tiers", spec, count(spec)) for spec in ("none", "P", "P+A1", "P+A", "P+A+B", "all")]
+        elif o == "cover":
+            out.append(("cover", "P", len(P)))
+            label_prefixes("cover", cover_order(X, names, P))
+            out.append(("cover", "all", len(names)))
+        elif o == "random":
+            rng = np.random.default_rng(seed)
+            out.append(("random", "P", len(P)))
+            rest = [n for n in names if n not in P]
+            for r in range(n_random):
+                label_prefixes(f"random.{r + 1}", P + list(rng.permutation(rest)))
+            out.append(("random", "all", len(names)))
+        elif o == "groups":
+            import trace_features as tf
+            for g in sorted({tf.FEATURES[n].group for n in names if n in tf.FEATURES}):
+                lab = f"group:{g}"
+                for n in names:
+                    if n in tf.FEATURES and tf.FEATURES[n].group == g:
+                        tiers.setdefault(n, set()).add(lab)
+                out.append(("groups", f"P+{lab}", count(f"P+{lab}")))
+        else:
+            raise ValueError(f"unknown ladder order {o!r} (choose from {LADDER_ORDERS})")
+    return out
+
+
+def ladder_tables(results: dict, ladder: list[tuple[str, str, int]], plot_path: Path | None = None) -> list[str]:
+    """Error against the number of features, per order, model and target; random orders are averaged (mean, and the
+    spread over orders).  The suggested set per model and target: the smallest step whose error is within one standard
+    error (half the 68 % bootstrap interval) of that model's best step (the one-standard-error rule)."""
+    models = list(dict.fromkeys(split_key(k)[0] for k in results if split_key(k)[1] is not None))
+    def err(m, lab, t):
+        r = results.get(f"{m} [{lab}]", {})
+        return 100 * r["scores"][t]["error"] if "scores" in r else np.nan
+    def se(m, lab, t):
+        b = results.get(f"{m} [{lab}]", {}).get("bootstrap", {}).get(t, {}).get("error", {}).get("68")
+        return 100 * (b[1] - b[0]) / 2 if b else np.nan
+    lines = ["Every model is fed more and more features in label-free orders (same folds): `tiers` adds the evidence "
+             "tiers one by one, `cover` adds the feature that is least redundant with those already taken, `random` "
+             "is the control (mean of the random orders, their spread in brackets), `groups` adds one physics group to P. "
+             "Cells: error %. Suggested set: the smallest step within one standard error of the model's best step.", ""]
+    curves = {}
+    for o in dict.fromkeys(o for o, _, _ in ladder):
+        steps = [(lab, k) for oo, lab, k in ladder if oo == o]
+        if o == "random":                                   # merge the random orders by k
+            ks = sorted({k for _, k in steps})
+            by_k = {k: [lab for lab, kk in steps if kk == k] for k in ks}
+        else:
+            ks = [k for _, k in steps]
+            by_k = None
+        heads = [lab.replace("ladder:", "").split(":")[-1] if lab.startswith("ladder:") else lab for lab, _ in steps] if by_k is None else [str(k) for k in ks]
+        lines += [f"### order `{o}`", ""]
+        for t in TARGETS:
+            lines += [f"**{t}**", "", "| model | " + " | ".join(f"{h} ({k})" if by_k is None else h for h, k in zip(heads, ks)) + " | suggested |",
+                      "|---|" + "---|" * (len(ks) + 1)]
+            for m in models:
+                if by_k is None:
+                    e = [err(m, lab, t) for lab, _ in steps]
+                    u = [se(m, lab, t) for lab, _ in steps]
+                    cells = [f"{x:.1f}" if np.isfinite(x) else "–" for x in e]
+                    labs = [lab for lab, _ in steps]
+                else:
+                    E = [[err(m, lab, t) for lab in by_k[k]] for k in ks]
+                    e = [np.nanmean(v) if np.isfinite(v).any() else np.nan for v in E]
+                    u = [np.nanmean([se(m, lab, t) for lab in by_k[k]]) for k in ks]
+                    cells = [f"{x:.1f}" + (f" ({np.nanstd(v):.1f})" if np.isfinite(v).sum() > 1 else "") if np.isfinite(x) else "–" for x, v in zip(e, E)]
+                    labs = [f"{k} features" for k in ks]
+                e, u = np.array(e, float), np.array(u, float)
+                pick = "–"
+                if np.isfinite(e).any():
+                    b = int(np.nanargmin(e))
+                    thr = e[b] + (u[b] if np.isfinite(u[b]) else 0)
+                    pick = labs[int(np.flatnonzero(np.isfinite(e) & (e <= thr))[0])]
+                lines.append(f"| {m} | " + " | ".join(cells) + f" | `{pick}` |")
+                curves[(o, m, t)] = (np.array(ks), e)
+            lines.append("")
+    if plot_path is not None and curves:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        orders = [o for o in dict.fromkeys(o for o, _, _ in ladder) if o != "groups"]
+        fig, axes = plt.subplots(len(models), len(TARGETS), figsize=(4.2 * len(TARGETS), 2.8 * len(models)), squeeze=False)
+        for i, m in enumerate(models):
+            for j, t in enumerate(TARGETS):
+                ax = axes[i, j]
+                for o in orders:
+                    if (o, m, t) in curves:
+                        k, e = curves[(o, m, t)]
+                        ax.plot(np.maximum(k, 0.5), e, "o-", ms=3, label=o, ls="--" if o == "random" else "-")
+                ax.set_xscale("log"); ax.set_title(f"{m}: {t}", fontsize=9)
+                if i == len(models) - 1:
+                    ax.set_xlabel("trace features (0 = settings only)")
+                if j == 0:
+                    ax.set_ylabel("error %")
+        axes[0, 0].legend(fontsize=8)
+        fig.tight_layout(); fig.savefig(plot_path, dpi=110); plt.close(fig)
+        lines += [f"![feature ladder]({plot_path.name})", ""]
+    return lines
 
 
 def feature_mask(names, spec: str, tiers: dict[str, set[str]]) -> np.ndarray:
@@ -857,12 +1012,18 @@ def main():
     parser.add_argument("--loao", action="store_true", help="also score leave-one-amplifier-out (a new-module indicator)")
     parser.add_argument("--feature-tiers", default="all",
                         help="trace features the models see: 'all' (default), 'none' (settings only), 'auto' (per-model "
-                             "defaults, MODEL_TIERS), or tier labels joined by '+': evidence A, A1, A2, B, C (lvl1/feature_study/"
+                             "defaults, MODEL_TIERS), or tier labels joined by '+': protected P, evidence A, A1, A2, B, C (lvl1/feature_study/"
                              "evidence_tiers.json) and implementation impl0, impl1, impl2 (e.g. A+B, impl0)")
     parser.add_argument("--tier-ablation", nargs="*", default=None, metavar="SET",
                         help="train every model with each of these feature sets (default: " + " ".join(ABLATION_SETS) +
                              ") and compare them, each model against its own --ablation-ref run")
-    parser.add_argument("--ablation-ref", default="all", help="the feature set each model is compared against in the ablation (default all)")
+    parser.add_argument("--ablation-ref", default=None, help="the feature set each model is compared against in the ablation "
+                                                             "(default all; P with --feature-ladder)")
+    parser.add_argument("--feature-ladder", nargs="*", default=None, metavar="ORDER", choices=LADDER_ORDERS,
+                        help="feed every model more and more features in label-free orders (default: tiers cover random; "
+                             "also groups) and report error against the number of features; see ladder_sets")
+    parser.add_argument("--ladder-steps", type=int, nargs="+", default=list(LADDER_STEPS), help="feature counts of the cover and random ladders")
+    parser.add_argument("--ladder-random", type=int, default=3, help="number of random orders (default 3)")
     parser.add_argument("--tier-file", default=str(TIER_FILE), help="evidence tiers (default lvl1/feature_study/evidence_tiers.json)")
     parser.add_argument("--include-flagged", action="store_true", help="also use labels that WADERs flagged")
     parser.add_argument("--allow-fake", action="store_true", help="also use FAKE (rehearsal) packets")
@@ -913,6 +1074,16 @@ def main():
     cv_splits = [(np.setdiff1d(cv_idx, test), test) for test in folds]
     local = lambda idx: [np.searchsorted(cv_idx, f) for f in idx]             # fold indices within cv_idx
     tiers = load_tiers(Path(args.tier_file))
+    ladder = None
+    if args.feature_ladder is not None:
+        if "features" not in files:
+            raise SystemExit("--feature-ladder needs features.npz")
+        orders = args.feature_ladder or ["tiers", "cover", "random"]
+        ladder = ladder_sets(files["features"]["feature_names"], files["features"]["X_trace"][rows][cv_idx], tiers, orders,
+                             args.ladder_steps, args.ladder_random)
+        args.tier_ablation = list(dict.fromkeys(lab for _, lab, _ in ladder))
+        args.ablation_ref = args.ablation_ref or "P"
+    args.ablation_ref = args.ablation_ref or "all"
     runner = Runner(files, rows, args.quick, tiers)
     # the runs: one per model, or (ablation) one per model and feature set; key "model [set]" when a set is given
     if args.tier_ablation is not None:
@@ -934,7 +1105,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     info = {"date": datetime.now().isoformat(timespec="seconds"), "inputs": str(inputs), "boards": args.board,
             "n_rows": int(len(cv_idx)), "n_packets": int(len(np.unique(packets[cv_idx]))), "n_folds": n_folds, "quick": args.quick,
-            "models": args.models, "feature_tiers": args.feature_tiers, "tier_ablation": args.tier_ablation, "group_by": args.group_by, "setting_tol": args.setting_tol, "n_groups": n_groups,
+            "models": args.models, "feature_tiers": args.feature_tiers, "tier_ablation": args.tier_ablation,
+            "feature_ladder": [list(x) for x in ladder] if ladder else None, "group_by": args.group_by, "setting_tol": args.setting_tol, "n_groups": n_groups,
             "n_cv_packets": int(len(np.unique(packets[cv_idx]))), "merged_groups": merged, "n_boot": args.n_boot,
             "paired_ref": args.paired_ref, "holdout_packets": sorted(np.unique(packets[ho_idx]).tolist()),
             "holdout_source": hold_source if len(ho_idx) else None}
@@ -1053,7 +1225,9 @@ def main():
     info_json = {k: v for k, v in info.items() if not k.startswith("_")}
     (out / "report.json").write_text(json.dumps({"info": info_json, "results": results, "holdout": holdout, "leave_one_amplifier_out": loao}, indent=1))
     report = report_md(results, info, holdout, loao)
-    if args.tier_ablation is not None:
+    if ladder:
+        report += "\n## Feature ladder\n\n" + "\n".join(ladder_tables(results, ladder, out / "feature_ladder.png")) + "\n"
+    elif args.tier_ablation is not None:
         report += "\n## Tier ablation\n\n" + "\n".join(ablation_tables(results, sets, args.ablation_ref)) + "\n"
     (out / "report.md").write_text(report)
     import pandas as pd

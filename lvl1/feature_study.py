@@ -21,6 +21,11 @@ by informativeness into A1 (top half) and A2, so that A1, A2, B and C hold simil
                  and the representative of its cluster;
   B  supporting  informative but a non-representative cluster member, or moderately informative (F 4-10);
   C  store only  not informative on this data (both F < 4), mostly NaN, or constant.
+Guard (a), added 2026-10-21: PROTECTED lists the direct physical estimators of the labels.  They are written as tier
+"P" in evidence_tiers.json, besides their evidence tier, and lvl1/train_lvl1.py gives them to every model.  The
+evidence tiers reward separating the traces, not predicting the labels, and on these 59 traces the amplifier dominates
+every correlation, so without this guard the most direct sigma_e estimator (skip: CDS rms (detrended)) and the kTC
+noise (noise: reset-level scatter) end up in B and tier-A models would not see them.
 Caveat: these 4 settings did not change the noise, so noise features can only show amplifier separation here; the tiers
 are to be revisited on session A (delayInt changes the noise).
 
@@ -42,6 +47,12 @@ sys.path.insert(0, str(ROOT / "src"))
 import trace_features as tf  # noqa: E402
 
 CHANGED = ["VDD −20.5 V", "V low rails + TG", "all H low rails", "H3_A_L only"]
+#: guard (a): direct physical estimators of the labels, always given to every model (tier "P"); chosen by physics, not by
+#: these data: sigma_e (CDS scatter, white noise, jump-robust and null-CDS noise, Allan deviation) and gain (kTC noise,
+#: the amplification of the RG and SW clock feedthrough).  No direct lambda estimator exists in a trace yet.
+PROTECTED = ["skip: CDS rms (detrended)", "fit: white noise per skip (ADU)", "noise: jump-robust CDS sigma (ADU)",
+             "noise: null-CDS noise (ADU)", "noise: Allan deviation n=50 (ADU)",
+             "noise: reset-level scatter (ADU)", "edge: pulse per volt RG (ADU/V)", "edge: dip per volt SW (ADU/V)"]
 GROUPS = ["reference"] + CHANGED
 
 
@@ -109,6 +120,7 @@ def study(df: pd.DataFrame) -> pd.DataFrame:
     t["evidence subtier"] = t["evidence tier"]
     t.loc[a.index[: (len(a) + 1) // 2], "evidence subtier"] = "A1"
     t.loc[a.index[(len(a) + 1) // 2:], "evidence subtier"] = "A2"
+    t["protected"] = t.index.isin(PROTECTED)
     return t
 
 
@@ -124,8 +136,9 @@ def main():
     t.to_csv(out / "feature_table.csv")
     counts = pd.crosstab(t["implementation tier"], t["evidence subtier"])
     print(counts)
-    # A1, A2, B, C (A = A1 + A2 is formed by the reader, lvl1/train_lvl1.py load_tiers)
+    # A1, A2, B, C and P (A = A1 + A2 is formed by the reader, lvl1/train_lvl1.py load_tiers)
     tiers = {k: list(v) for k, v in t.groupby("evidence subtier").groups.items()}
+    tiers["P"] = [n for n in PROTECTED if n in t.index]                  # guard (a): given to every model
     (out / "evidence_tiers.json").write_text(json.dumps(tiers, indent=1))
     print(f"wrote {out / 'feature_table.csv'} and evidence_tiers.json")
 
