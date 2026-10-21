@@ -106,3 +106,25 @@ The session may run out: document every step here and push.
    results, not md" (saved in memory).
 
 Status of this request: see section 5 below (updated as the work goes).
+
+## 5. Status of the section-4 request
+
+- [x] 1 context updated and pushed.
+- [x] 2+3 `--feature-tiers` (all / none / auto / tier labels such as A, A+B, A1, impl0) and `--tier-ablation [SET ...]`
+  (every model x feature set; paired comparison of each against its own `--ablation-ref` run, default `all`; "Tier
+  ablation" section in the report) in `lvl1/train_lvl1.py`; `MODEL_TIERS` holds the per-model defaults for `auto`.
+  Tested on synthetic td41_s0 (commit 2f433d5).
+- [x] 4 tier A split by informativeness into A1/A2: A1 34, A2 34, B 31, C 35 (`lvl1/feature_study.py`,
+  `evidence_tiers.json`).
+- [x] 5 `lvl1/feature_importance.py` (commit c28faca): stability selection (elastic net, packet bootstrap) +
+  permutation importance (HistGradientBoosting, grouped folds), each against Boruta shadow features over 5 rounds.
+  Learned tiers: L1 = both methods beat the shadows' 95th percentile by > 1.5x; L2 = candidate; L3 = not shown.
+  Synthetic td41_s0/1/2 with 20 noise columns: 0 noise columns in L1 (with the margin rule; 2 in one run without it),
+  but 5-6 of 20 in L2, so L2 is not a feature set. Consistent L1: reset-level scatter, detrended CDS rms, dip recovery
+  time, horizontal min/max. Write-up in lvl1/feature_study/README.md, step 3.
+- [ ] Confirmation of the 1.5 margin on unseen synthetic sets td100_s0 and td13_s0 (running; logs in the scratchpad
+  `imp_confirm_*.log`; if lost, rerun:
+  `lvl1/feature_importance.py --inputs <gpcmp>/td100_s0/model_inputs --add-noise 20`).
+- [ ] Add the importance results to `docs/trace_features_and_tiers.md`.
+- Figures shown to the user today (scratchpad, not in the repo): top 16 new features (settings F vs amplifier F), start
+  transient (lever arm + H-rail dependence), ch2 telegraph, jump share, noise budget, tolerance curves.
