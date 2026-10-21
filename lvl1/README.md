@@ -47,14 +47,21 @@ tests as a real-data example and synthetic packets for the training (real labell
 
 ## The packet plan (`lvl1/packet_plan/`)
 
-`lvl1/make_packet_plan.py` writes [`packet_plan/PLAN.md`](packet_plan/PLAN.md): **41 packets in three sessions (~11 h)**,
+`lvl1/make_packet_plan.py` writes [`packet_plan/PLAN.md`](packet_plan/PLAN.md): **43 packets in three sessions (~12 h)**,
 each a ready changes file `L1_NN.txt`.
 
 | Session | Packets | What changes | Status |
 |---|---|---|---|
-| A | 13 (~4 h) | timing only: delayInt 300–3000, the horizontal clock hold, the reset hold; nominal packets at the start, middle and end | **can be taken now** |
-| B | ~17 | one voltage group at a time (VDD, VR, RG high/low, SW low, H lows, V lows, TG, VSUB), one `max_step` either way | provisional: the voltage windows are placeholders (`reviewed = false`) |
+| A | 14 (~3.8 h) | timing only: delayInt 300–3000, the horizontal clock hold, the reset hold, in a shuffled order; nominal packets at the start, middle and end; delayInt 300 repeated | **can be taken now** |
+| B | 18 (~4.9 h) | one voltage group at a time (VDD, VR, RG high/low, SW low, H lows, V lows, TG, VSUB), one `max_step` either way, the two signs of a group far apart in time; delayInt 3000 repeated | provisional: the voltage windows are placeholders (`reviewed = false`) |
 | C | 11 | joint changes (a Latin hypercube in the same box) and a final nominal | provisional, as B |
+
+**Run order (2026-10-21, `docs/literature/landscape_grounded.md`):** session A no longer scans delayInt in increasing order
+(a slow drift during the session would be aliased with the strongest knob): its values alternate low/high
+(1500, 300, 3000, 500, 2000, 700) with the delay_H and delayRGH packets between them. In session B the two signs of a group
+are taken in two passes (the second in reverse order), never back to back. Two replicates away from nominal (delayInt
+300 late in A, delayInt 3000 in the middle of B) measure the pure error and the drift where the noise is not nominal.
+**Take the packets in the plan's order.**
 
 Rules:
 * every configuration passes `ccd_limits` (windows, the ACM manual's hardware ranges, the group's voltage rules);

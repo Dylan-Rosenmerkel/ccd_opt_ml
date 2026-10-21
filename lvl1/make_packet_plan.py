@@ -23,8 +23,9 @@ RULES the plan follows:
   limits.toml (reviewed = false) and are marked provisional until the group's windows are confirmed.
 
 Sessions (in this order):
-    A  timing only, one parameter at a time, nominal packets at the start, middle and end (drift, label noise)
-    B  one voltage group at a time, one max_step either way
+    A  timing only, one parameter at a time, in a shuffled order (not a monotone scan, so a slow drift is not aliased
+       with a setting); nominal packets at the start, middle and end (drift, label noise); one non-nominal replicate
+    B  one voltage group at a time, one max_step either way; the two signs of a group far apart in time; one replicate
     C  joint changes (a Latin hypercube in the same box): the earlier tests showed a scan with joint changes learns lambda
        5-10 times better than one-at-a-time alone
 
@@ -122,22 +123,40 @@ def main():
         timing = {k: changes.get(k, v) for k, v in TIMING.items()}
         planned.append({"session": session, "purpose": purpose, "changes": changes, "minutes": round(packet_minutes(timing), 1)})
 
-    # --- A: timing only
+    # --- A: timing only.  Run order (docs/literature/landscape_grounded.md, "data-taking implications"): delayInt is NOT
+    # scanned in increasing order (a slow drift during the session would be aliased with the strongest knob); its
+    # values alternate low/high, the delay_H and delayRGH packets sit between them, and nominal packets bracket the
+    # session and its middle.  delayInt 300 is repeated late in A (a replicate away from nominal: pure error and drift).
     add("A", "nominal (reference packet: repeatability and label noise)", {})
-    for v in (300, 500, 700, 1500, 2000, 3000):
-        add("A", f"delayInt = {v}", {"delayInt": v})
-    add("A", "nominal again (drift since the first)", {})
-    for v in (900, 3600):
-        add("A", f"delay_Ha/Hb/Hc = {v}", {"delay_H": v})
-    for v in (400, 1600):
-        add("A", f"delayRGH = {v}", {"delayRGH": v})
+    add("A", "delayInt = 1500", {"delayInt": 1500})
+    add("A", "delay_Ha/Hb/Hc = 900", {"delay_H": 900})
+    add("A", "delayInt = 300", {"delayInt": 300})
+    add("A", "delayRGH = 1600", {"delayRGH": 1600})
+    add("A", "delayInt = 3000", {"delayInt": 3000})
+    add("A", "nominal again (middle of session A: drift)", {})
+    add("A", "delayInt = 500", {"delayInt": 500})
+    add("A", "delay_Ha/Hb/Hc = 3600", {"delay_H": 3600})
+    add("A", "delayInt = 2000", {"delayInt": 2000})
+    add("A", "delayRGH = 400", {"delayRGH": 400})
+    add("A", "delayInt = 700", {"delayInt": 700})
+    add("A", "REPLICATE: delayInt = 300 again (pure error away from nominal, drift)", {"delayInt": 300})
     add("A", "nominal again (end of session A)", {})
-    # --- B: one voltage group at a time, one max_step either way
-    for g in ("VDD", "VR", "RG_H", "RG_L", "SW_L", "H_low", "V_low", "TG", "VSUB"):
+    # --- B: one voltage group at a time, one max_step either way.  The two signs of a group are not taken back to back:
+    # a first pass goes through the groups with alternating signs, a second pass in reverse order takes the opposite
+    # signs.  delayInt 3000 is repeated between the passes (a replicate in another session: pure error and drift).
+    groups_b = ("VDD", "VR", "RG_H", "RG_L", "SW_L", "H_low", "V_low", "TG", "VSUB")
+
+    def add_b(g, sign):
         pin = GROUPS[g][0]
         d = step[pin] if g != "TG" else 0.25
-        for sign in (-1, +1):
-            add("B", f"{g} {'-' if sign < 0 else '+'}{d:g} V", {g: sign * d})
+        add("B", f"{g} {'-' if sign < 0 else '+'}{d:g} V", {g: sign * d})
+
+    first = [(g, -1 if i % 2 == 0 else +1) for i, g in enumerate(groups_b)]
+    for g, sign in first:
+        add_b(g, sign)
+    add("B", "REPLICATE: delayInt = 3000 again (pure error away from nominal, drift across sessions)", {"delayInt": 3000})
+    for g, sign in reversed(first):
+        add_b(g, -sign)
     add("B", "nominal again (end of session B)", {})
     # --- C: joint changes, Latin hypercube in the same box (voltages within one max_step; timing in session A's range)
     rng = np.random.default_rng(args.seed)

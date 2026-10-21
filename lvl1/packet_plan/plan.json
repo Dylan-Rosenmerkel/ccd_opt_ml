@@ -10,64 +10,12 @@
   },
   {
    "session": "A",
-   "purpose": "delayInt = 300",
-   "changes": {
-    "delayInt": 300
-   },
-   "minutes": 13.1,
-   "packet_id": "L1_02"
-  },
-  {
-   "session": "A",
-   "purpose": "delayInt = 500",
-   "changes": {
-    "delayInt": 500
-   },
-   "minutes": 13.9,
-   "packet_id": "L1_03"
-  },
-  {
-   "session": "A",
-   "purpose": "delayInt = 700",
-   "changes": {
-    "delayInt": 700
-   },
-   "minutes": 14.7,
-   "packet_id": "L1_04"
-  },
-  {
-   "session": "A",
    "purpose": "delayInt = 1500",
    "changes": {
     "delayInt": 1500
    },
    "minutes": 18.1,
-   "packet_id": "L1_05"
-  },
-  {
-   "session": "A",
-   "purpose": "delayInt = 2000",
-   "changes": {
-    "delayInt": 2000
-   },
-   "minutes": 20.2,
-   "packet_id": "L1_06"
-  },
-  {
-   "session": "A",
-   "purpose": "delayInt = 3000",
-   "changes": {
-    "delayInt": 3000
-   },
-   "minutes": 24.3,
-   "packet_id": "L1_07"
-  },
-  {
-   "session": "A",
-   "purpose": "nominal again (drift since the first)",
-   "changes": {},
-   "minutes": 16.0,
-   "packet_id": "L1_08"
+   "packet_id": "L1_02"
   },
   {
    "session": "A",
@@ -78,7 +26,50 @@
     "delay_Hc": 900
    },
    "minutes": 16.0,
-   "packet_id": "L1_09"
+   "packet_id": "L1_03"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 300",
+   "changes": {
+    "delayInt": 300
+   },
+   "minutes": 13.1,
+   "packet_id": "L1_04"
+  },
+  {
+   "session": "A",
+   "purpose": "delayRGH = 1600",
+   "changes": {
+    "delayRGH": 1600
+   },
+   "minutes": 17.7,
+   "packet_id": "L1_05"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 3000",
+   "changes": {
+    "delayInt": 3000
+   },
+   "minutes": 24.3,
+   "packet_id": "L1_06"
+  },
+  {
+   "session": "A",
+   "purpose": "nominal again (middle of session A: drift)",
+   "changes": {},
+   "minutes": 16.0,
+   "packet_id": "L1_07"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 500",
+   "changes": {
+    "delayInt": 500
+   },
+   "minutes": 13.9,
+   "packet_id": "L1_08"
   },
   {
    "session": "A",
@@ -89,6 +80,15 @@
     "delay_Hc": 3600
    },
    "minutes": 16.0,
+   "packet_id": "L1_09"
+  },
+  {
+   "session": "A",
+   "purpose": "delayInt = 2000",
+   "changes": {
+    "delayInt": 2000
+   },
+   "minutes": 20.2,
    "packet_id": "L1_10"
   },
   {
@@ -102,19 +102,28 @@
   },
   {
    "session": "A",
-   "purpose": "delayRGH = 1600",
+   "purpose": "delayInt = 700",
    "changes": {
-    "delayRGH": 1600
+    "delayInt": 700
    },
-   "minutes": 17.7,
+   "minutes": 14.7,
    "packet_id": "L1_12"
+  },
+  {
+   "session": "A",
+   "purpose": "REPLICATE: delayInt = 300 again (pure error away from nominal, drift)",
+   "changes": {
+    "delayInt": 300
+   },
+   "minutes": 13.1,
+   "packet_id": "L1_13"
   },
   {
    "session": "A",
    "purpose": "nominal again (end of session A)",
    "changes": {},
    "minutes": 16.0,
-   "packet_id": "L1_13"
+   "packet_id": "L1_14"
   },
   {
    "session": "B",
@@ -124,27 +133,7 @@
     "VDD2": -20.0
    },
    "minutes": 16.0,
-   "packet_id": "L1_14"
-  },
-  {
-   "session": "B",
-   "purpose": "VDD +1 V",
-   "changes": {
-    "VDD1": -18.0,
-    "VDD2": -18.0
-   },
-   "minutes": 16.0,
    "packet_id": "L1_15"
-  },
-  {
-   "session": "B",
-   "purpose": "VR -0.5 V",
-   "changes": {
-    "VR1": -3.5,
-    "VR2": -3.5
-   },
-   "minutes": 16.0,
-   "packet_id": "L1_16"
   },
   {
    "session": "B",
@@ -154,7 +143,7 @@
     "VR2": -2.5
    },
    "minutes": 16.0,
-   "packet_id": "L1_17"
+   "packet_id": "L1_16"
   },
   {
    "session": "B",
@@ -164,27 +153,7 @@
     "RG_2_H": 8.5
    },
    "minutes": 16.0,
-   "packet_id": "L1_18"
-  },
-  {
-   "session": "B",
-   "purpose": "RG_H +0.5 V",
-   "changes": {
-    "RG_1_H": 9.5,
-    "RG_2_H": 9.5
-   },
-   "minutes": 16.0,
-   "packet_id": "L1_19"
-  },
-  {
-   "session": "B",
-   "purpose": "RG_L -0.5 V",
-   "changes": {
-    "RG_1_L": 2.5,
-    "RG_2_L": 2.5
-   },
-   "minutes": 16.0,
-   "packet_id": "L1_20"
+   "packet_id": "L1_17"
   },
   {
    "session": "B",
@@ -194,7 +163,7 @@
     "RG_2_L": 3.5
    },
    "minutes": 16.0,
-   "packet_id": "L1_21"
+   "packet_id": "L1_18"
   },
   {
    "session": "B",
@@ -204,20 +173,7 @@
     "SW_2_L": -6.5
    },
    "minutes": 16.0,
-   "packet_id": "L1_22"
-  },
-  {
-   "session": "B",
-   "purpose": "H_low -0.5 V",
-   "changes": {
-    "H1_A_L": 6.2,
-    "H1_B_L": 6.0,
-    "H2_C_L": 6.2,
-    "H3_A_L": 6.2,
-    "H3_B_L": 6.0
-   },
-   "minutes": 16.0,
-   "packet_id": "L1_23"
+   "packet_id": "L1_19"
   },
   {
    "session": "B",
@@ -230,7 +186,58 @@
     "H3_B_L": 7.0
    },
    "minutes": 16.0,
+   "packet_id": "L1_20"
+  },
+  {
+   "session": "B",
+   "purpose": "TG +0.25 V",
+   "changes": {
+    "TG_A_H": 7.65,
+    "TG_A_L": 7.65,
+    "TG_B_H": 7.65,
+    "TG_B_L": 7.65
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_21"
+  },
+  {
+   "session": "B",
+   "purpose": "VSUB -5 V",
+   "changes": {
+    "VSUB": 40.0
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_22"
+  },
+  {
+   "session": "B",
+   "purpose": "REPLICATE: delayInt = 3000 again (pure error away from nominal, drift across sessions)",
+   "changes": {
+    "delayInt": 3000
+   },
+   "minutes": 24.3,
+   "packet_id": "L1_23"
+  },
+  {
+   "session": "B",
+   "purpose": "VSUB +5 V",
+   "changes": {
+    "VSUB": 50.0
+   },
+   "minutes": 16.0,
    "packet_id": "L1_24"
+  },
+  {
+   "session": "B",
+   "purpose": "TG -0.25 V",
+   "changes": {
+    "TG_A_H": 7.15,
+    "TG_A_L": 7.15,
+    "TG_B_H": 7.15,
+    "TG_B_L": 7.15
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_25"
   },
   {
    "session": "B",
@@ -243,56 +250,67 @@
     "V3_B_L": 8.2
    },
    "minutes": 16.0,
-   "packet_id": "L1_25"
-  },
-  {
-   "session": "B",
-   "purpose": "TG -0.25 V",
-   "changes": {
-    "TG_A_H": 7.15,
-    "TG_A_L": 7.15,
-    "TG_B_H": 7.15,
-    "TG_B_L": 7.15
-   },
-   "minutes": 16.0,
    "packet_id": "L1_26"
   },
   {
    "session": "B",
-   "purpose": "TG +0.25 V",
+   "purpose": "H_low -0.5 V",
    "changes": {
-    "TG_A_H": 7.65,
-    "TG_A_L": 7.65,
-    "TG_B_H": 7.65,
-    "TG_B_L": 7.65
+    "H1_A_L": 6.2,
+    "H1_B_L": 6.0,
+    "H2_C_L": 6.2,
+    "H3_A_L": 6.2,
+    "H3_B_L": 6.0
    },
    "minutes": 16.0,
    "packet_id": "L1_27"
   },
   {
    "session": "B",
-   "purpose": "VSUB -5 V",
+   "purpose": "RG_L -0.5 V",
    "changes": {
-    "VSUB": 40.0
+    "RG_1_L": 2.5,
+    "RG_2_L": 2.5
    },
    "minutes": 16.0,
    "packet_id": "L1_28"
   },
   {
    "session": "B",
-   "purpose": "VSUB +5 V",
+   "purpose": "RG_H +0.5 V",
    "changes": {
-    "VSUB": 50.0
+    "RG_1_H": 9.5,
+    "RG_2_H": 9.5
    },
    "minutes": 16.0,
    "packet_id": "L1_29"
   },
   {
    "session": "B",
+   "purpose": "VR -0.5 V",
+   "changes": {
+    "VR1": -3.5,
+    "VR2": -3.5
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_30"
+  },
+  {
+   "session": "B",
+   "purpose": "VDD +1 V",
+   "changes": {
+    "VDD1": -18.0,
+    "VDD2": -18.0
+   },
+   "minutes": 16.0,
+   "packet_id": "L1_31"
+  },
+  {
+   "session": "B",
    "purpose": "nominal again (end of session B)",
    "changes": {},
    "minutes": 16.0,
-   "packet_id": "L1_30"
+   "packet_id": "L1_32"
   },
   {
    "session": "C",
@@ -316,7 +334,7 @@
     "RG_2_H": 8.76
    },
    "minutes": 16.2,
-   "packet_id": "L1_31"
+   "packet_id": "L1_33"
   },
   {
    "session": "C",
@@ -340,7 +358,7 @@
     "RG_2_H": 9.46
    },
    "minutes": 15.7,
-   "packet_id": "L1_32"
+   "packet_id": "L1_34"
   },
   {
    "session": "C",
@@ -364,7 +382,7 @@
     "RG_2_H": 8.68
    },
    "minutes": 14.8,
-   "packet_id": "L1_33"
+   "packet_id": "L1_35"
   },
   {
    "session": "C",
@@ -388,7 +406,7 @@
     "RG_2_H": 9.16
    },
    "minutes": 19.5,
-   "packet_id": "L1_34"
+   "packet_id": "L1_36"
   },
   {
    "session": "C",
@@ -412,7 +430,7 @@
     "RG_2_H": 8.93
    },
    "minutes": 18.0,
-   "packet_id": "L1_35"
+   "packet_id": "L1_37"
   },
   {
    "session": "C",
@@ -436,7 +454,7 @@
     "RG_2_H": 9.34
    },
    "minutes": 14.2,
-   "packet_id": "L1_36"
+   "packet_id": "L1_38"
   },
   {
    "session": "C",
@@ -460,7 +478,7 @@
     "RG_2_H": 8.58
    },
    "minutes": 18.7,
-   "packet_id": "L1_37"
+   "packet_id": "L1_39"
   },
   {
    "session": "C",
@@ -484,7 +502,7 @@
     "RG_2_H": 8.86
    },
    "minutes": 17.0,
-   "packet_id": "L1_38"
+   "packet_id": "L1_40"
   },
   {
    "session": "C",
@@ -508,7 +526,7 @@
     "RG_2_H": 9.1
    },
    "minutes": 17.6,
-   "packet_id": "L1_39"
+   "packet_id": "L1_41"
   },
   {
    "session": "C",
@@ -532,29 +550,17 @@
     "RG_2_H": 9.24
    },
    "minutes": 19.8,
-   "packet_id": "L1_40"
+   "packet_id": "L1_42"
   },
   {
    "session": "C",
    "purpose": "nominal again (end of the plan)",
    "changes": {},
    "minutes": 16.0,
-   "packet_id": "L1_41"
+   "packet_id": "L1_43"
   }
  ],
  "refused": [
-  {
-   "session": "B",
-   "purpose": "SW_L +0.5 V",
-   "changes": {
-    "SW_1_L": -5.5,
-    "SW_2_L": -5.5
-   },
-   "why": [
-    "OG_1_L=-6.0 must be at or above SW_1_L=-5.5",
-    "OG_2_L=-6.0 must be at or above SW_2_L=-5.5"
-   ]
-  },
   {
    "session": "B",
    "purpose": "V_low -0.5 V",
@@ -571,6 +577,18 @@
     "V2_C_L=7.4 must be above every TG level (TG_A_H=7.4)",
     "V3_A_L=7.4 must be above every TG level (TG_A_H=7.4)",
     "V3_B_L=7.2 must be above every TG level (TG_A_H=7.4)"
+   ]
+  },
+  {
+   "session": "B",
+   "purpose": "SW_L +0.5 V",
+   "changes": {
+    "SW_1_L": -5.5,
+    "SW_2_L": -5.5
+   },
+   "why": [
+    "OG_1_L=-6.0 must be at or above SW_1_L=-5.5",
+    "OG_2_L=-6.0 must be at or above SW_2_L=-5.5"
    ]
   }
  ]
