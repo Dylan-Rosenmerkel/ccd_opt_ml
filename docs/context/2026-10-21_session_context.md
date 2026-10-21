@@ -148,3 +148,18 @@ DONE (user said go ahead): `clock:` group in src/trace_features_extra.py (4 tier
 tier 2, evidence B); ctx gets regions + trace; test_clock_regions; oct12 CSV regenerated (59 x 144); feature_study rerun:
 139 scalars, A1 36 / A2 36 / B 32 / C 35. LaTeX doc docs/overleaf_feature_tiers_2026-10-21/ updated (section 3.5, 13
 pages, no warnings) and re-zipped; README and trace_features_and_tiers.md updated.
+
+## 7. User question: the dip just before the per-cycle (reset) pulse (pilot done, not implemented)
+
+Never measured as a number before: it sits inside the `edge: equivalent-time pulse` curve (from -15 samples) and
+inside the window of `edge: cycle variation at reset`, but no scalar measures it. Pilot on the 59 traces
+(`lvl1/feature_study/prepulse_pilot/`: pilot.py from the equivalent-time pulse, predip.csv, fig_prepulse_dip.png):
+- a sharp dip ~120-130 ns before the pulse's half-height crossing, ~70-100 ns wide;
+- depth per amplifier: ch0 -886, ch1 -505, ch2 -990, ch3 -601 ADU; repeat share 0.001; amplifier F 5851;
+  settings F 0.2 (none of the 2026-10-12 settings touched RG/SW/OG/DG);
+- not a fixed fraction of the pulse (dip/pulse 0.011-0.021 by amplifier; no correlation with the pulse height within
+  an amplifier); |rho| 0.95 with amplifier-identifying features, which on these data is unavoidable.
+- origin (reference_v5.seq, ReadoutCDS): right after the signal window SW goes high and RG low together, 3 units later
+  SW and OG go low, then OG high, then RG high; the flags do not record these clocks, so the edge is not identified.
+  Session B's RG_H/RG_L/SW_L packets (L1_17, L1_18, L1_19, L1_28, L1_29) will show which rail it follows.
+Next if the user agrees: `edge: pre-pulse dip depth (ADU)` and `edge: pre-pulse dip / pulse height` (tier 1).
