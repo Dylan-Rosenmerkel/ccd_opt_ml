@@ -81,5 +81,10 @@ The session may run out: document every step here and push.
   0.27; pickup-line and start-mode features unstable (repeat share 0.6-1.3).
 - [ ] 4 notebook
 - [x] 5a tiering of all features (done with step 3, `lvl1/feature_study.py`)
-- [ ] 5b synthetic tolerance test
+- [ ] 5b synthetic tolerance test: `lvl1/feature_tolerance.py` written. Smoke test: plain gp +46 pp sigma_e error with
+  only 20 noise columns, ridge +2 pp. FULL RUN started in the background (3 synthetic 41-packet datasets in
+  scratchpad/gpcmp/td41_s{0,1,2}/model_inputs; k 0/20/50/100; noise/copies/real; 8 models; --quick), output
+  scratchpad/tolerance/ (tolerance_results.csv, tolerance_summary.csv), log scratchpad/tolerance.log. If the session reset
+  before it finished: rerun the same command (in the script's docstring) and write the results up in
+  lvl1/feature_study/README.md.
 - [ ] 6 pipeline check
