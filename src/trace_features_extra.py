@@ -118,6 +118,24 @@ EXTRA = [
     ("level: common-pattern amplitude spread", "level", "", "Robust spread over the usable pixels of a_p in CDS_p,k - mean ~ a_p (common_k - mean) (#41).",
      "whether the common CDS pattern couples differently to different pixels", "scalar", 2),
     ("noise: baseline-CDS residual correlation", "noise", "", "Correlation of the detrended per-skip pedestal level with the detrended CDS (#42).", "common supply or reset disturbance", "scalar", 2),
+    # ------------------------------------------------------------------ clocking regions (user idea, 2026-10-21)
+    ("clock: V-block level slope (ADU/transfer)", "clock", "ADU/transfer",
+     "Slope of the median level per vertical transfer against the transfer number, in the V block before the second row "
+     "(regions.v; its first transfer, which follows the skip region, is left out).",
+     "relaxation of the output level during the V clocking; steeper with the V rails low (pilot settings F 45)", "scalar", 1),
+    ("clock: V-transfer peak-to-peak (ADU)", "clock", "ADU", "Median over the vertical transfers of that block of the peak-to-peak of one transfer.",
+     "V-clock feedthrough amplitude (pilot settings F 544)", "scalar", 1),
+    ("clock: H/V peak-to-peak ratio", "clock", "", "Median peak-to-peak of the H transfers of the pixels that do not start a row, divided by the V-transfer peak-to-peak.",
+     "H-clock relative to V-clock feedthrough (pilot settings F 879)", "scalar", 1),
+    ("clock: first H block of a row, excess (ADU)", "clock", "ADU",
+     "Mean over H transfers 0-4 of the peak-to-peak in the H block of a row-start pixel (not pixel 0), minus the median "
+     "over the other pixels of the same; mean over those row starts.",
+     "memory of the V clocking in the first H transfers after coming off a row (pilot settings F 172)", "scalar", 1),
+    ("clock: leading V-block level slope (ADU/transfer)", "clock", "ADU/transfer",
+     "Slope of the median level per vertical transfer over the last 12 transfers of the V block that the trace starts in "
+     "(before pixel 0), aligned at the block end.",
+     "recovery from what preceded the trace; NOT repeatable while the trace starts at a random point in this block "
+     "(pilot: 14-19 of 20 transfers recorded, repeat share 0.3)", "scalar", 2),
 ]
 
 MPENCIL_ORDER = 4
@@ -429,7 +447,8 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
     """
     ctx: the shared arrays of trace_features._trace_features: Cm (pixels x skips CDS), cyc {p: skips x samples},
     res {p: residual cycles}, det {p: detrended CDS}, good, row_starts, n_ped, sig, sig_end, first, n, skip_rate,
-    sample_rate, starts {p: absolute cycle starts}, meta, scalars (the existing ones, read only), allan_n, common.
+    sample_rate, starts {p: absolute cycle starts}, meta, scalars (the existing ones, read only), allan_n, common,
+    regions (TraceRegions), trace (DecodedTrace).
     Returns (scalars, per_pixel {name: values}, curves).
     """
     S, PP, C = {}, {}, {}
@@ -633,6 +652,45 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
         PP["noise: baseline-CDS residual correlation"] = [
             float(np.corrcoef(detrend(cyc[p][first:n, :n_ped].mean(1)), det[p])[0, 1]) for p in good]
     block("levels", levels)
+
+    # ---------------- clocking regions (V blocks, first H block of a row)
+    def clock():
+        r = ctx.get("regions")
+        if r is None:
+            return
+        def level_slope(V):
+            med = np.median(V, axis=1)
+            return float(np.polyfit(np.arange(len(med)), med, 1)[0]) if len(med) >= 3 else nan
+        pp_v = nan
+        if r.v is not None and len(r.v) >= 3:
+            S["clock: V-block level slope (ADU/transfer)"] = level_slope(r.v)
+            pp_v = float(np.median(np.ptp(r.v, axis=1)))
+            S["clock: V-transfer peak-to-peak (ADU)"] = pp_v
+        inner = [p for p in range(len(r.h)) if p not in r.row_starts and r.h[p].ndim == 2 and len(r.h[p]) >= 5]
+        if inner and np.isfinite(pp_v) and pp_v > 0:
+            S["clock: H/V peak-to-peak ratio"] = float(np.median(np.concatenate([np.ptp(r.h[p], axis=1) for p in inner])) / pp_v)
+        if inner:
+            base = np.median([np.ptp(r.h[p][:5], axis=1) for p in inner], axis=0)
+            ex = [float(np.mean(np.ptp(r.h[p][:5], axis=1) - base)) for p in r.row_starts
+                  if p > 0 and r.h[p].ndim == 2 and len(r.h[p]) >= 5]
+            if ex:
+                S["clock: first H block of a row, excess (ADU)"] = float(np.mean(ex))
+        trace = ctx.get("trace")
+        if trace is not None and r.v_period and np.isfinite(r.v_period) and r.ped_starts:
+            from trace_regions import _rising
+            flags = np.asarray(trace.flags)
+            e_v = _rising(flags, 7)
+            if len(e_v) < 2:
+                e_v = _rising(flags, 5)
+            e_h = _rising(flags, 6)
+            end = int(e_h[0]) if len(e_h) else int(r.ped_starts[0][0])
+            lead = e_v[e_v < end]
+            period = int(round(r.v_period))
+            values = np.asarray(trace.values, float)
+            V = np.array([values[e:e + period] for e in lead if e + period <= end])
+            if len(V) >= 13:
+                S["clock: leading V-block level slope (ADU/transfer)"] = level_slope(V[-12:])
+    block("clock", clock)
 
     S["_errors"] = errors
     return S, PP, C

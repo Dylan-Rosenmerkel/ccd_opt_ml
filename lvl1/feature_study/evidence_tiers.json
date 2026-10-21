@@ -15,7 +15,6 @@
   "noise: within-cycle power 0.3-1 MHz",
   "noise: within-cycle power 1-3 MHz",
   "noise: within-cycle power 3-7.5 MHz",
-  "noise: window-length ratio 75/150",
   "noise: pedestal-window settling (ADU)",
   "edge: jitter (ns)",
   "edge: period offset (1e-3 samples)",
@@ -30,10 +29,13 @@
   "slow: H-transfer first-to-last change (ADU)",
   "start: in-cycle slope at skip 0 (ADU/us)",
   "start: first-skip excess per volt H (ADU/V)",
-  "noise: null-CDS noise (ADU)",
   "noise: waveform modes for 90 % of the CDS variance",
   "start: transient amplitude, matched filter (ADU)",
-  "noise: structure-function excess at 9 blocks (ADU)"
+  "noise: structure-function excess at 9 blocks (ADU)",
+  "clock: V-block level slope (ADU/transfer)",
+  "clock: V-transfer peak-to-peak (ADU)",
+  "clock: H/V peak-to-peak ratio",
+  "clock: first H block of a row, excess (ADU)"
  ],
  "A2": [
   "fit: settling amplitude after pulse",
@@ -48,6 +50,7 @@
   "noise: CDS autocorrelation at lag 1",
   "noise: Allan deviation n=50 (ADU)",
   "noise: CDS power <1 kHz / >10 kHz",
+  "noise: window-length ratio 75/150",
   "discrete: CDS excess kurtosis",
   "discrete: CDS outlier fraction",
   "discrete: CDS spectrum lines",
@@ -56,6 +59,7 @@
   "slow: PC1 variance fraction",
   "start: CDS-slope lever arm (samples)",
   "start: slope-explained fraction",
+  "noise: null-CDS noise (ADU)",
   "discrete: null-CDS kurtosis",
   "discrete: in-window step rate (%)",
   "discrete: jump share of CDS variance",
@@ -102,7 +106,8 @@
   "discrete: max within-window spectral kurtosis",
   "noise: lag-1 autocorrelation of 10-skip means",
   "noise: red-noise beta (50 skips)",
-  "level: common-pattern amplitude spread"
+  "level: common-pattern amplitude spread",
+  "clock: leading V-block level slope (ADU/transfer)"
  ],
  "C": [
   "fit: first-skip ringing frequency (cyc/skip)",

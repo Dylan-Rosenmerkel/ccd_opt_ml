@@ -1,8 +1,8 @@
 # Feature study: how informative, stable and redundant is every trace feature?
 
 `lvl1/feature_study.py`, on the 59 usable board-101 traces of the 2026-10-12 packet tests: 5 settings × 3 repeats ×
-4 amplifiers, one damaged ch3 trace left out. It covers all 134 scalar features: the 85 original ones, and 49 added on
-2026-10-21 in `src/trace_features_extra.py`. The data come from `docs/slides/oct12_features.py` and are in
+4 amplifiers, one damaged ch3 trace left out. It covers all 139 scalar features: the 85 original ones, and 54 added on
+2026-10-21 in `src/trace_features_extra.py` (49 from the literature search, 5 in the `clock:` group). The data come from `docs/slides/oct12_features.py` and are in
 `docs/slides/data/oct12_trace_features.csv`. Outputs: [`feature_table.csv`](feature_table.csv) (every number per
 feature) and [`evidence_tiers.json`](evidence_tiers.json).
 
@@ -27,13 +27,15 @@ here. Revisit the tiers on session A, where delayInt changes the noise.
 
 ## Counts
 
-| implementation tier | A | B | C |
-|---|---|---|---|
-| 0 (original 85) | 46 | 22 | 17 |
-| 1 (new) | 11 | 3 | 9 |
-| 2 (new) | 11 | 6 | 9 |
+| implementation tier | A1 | A2 | B | C |
+|---|---|---|---|---|
+| 0 (original 85) | 27 | 19 | 22 | 17 |
+| 1 (new, 27) | 7 | 8 | 3 | 9 |
+| 2 (new, 27) | 2 | 9 | 7 | 9 |
+| total | 36 | 36 | 32 | 35 |
 
-So 22 of the 49 new features reach tier A, and 22 of the original 85 are redundant or only moderately informative (B).
+A is split by informativeness into A1 (top half) and A2. So 26 of the 54 new features reach tier A, and 22 of the
+original 85 are redundant or only moderately informative (B).
 
 ## The new features (2026-10-21)
 
@@ -75,6 +77,24 @@ These, and the other new noise measures in tier A, separate the amplifiers (F 12
 
 `discrete: in-window step amplitude` is NaN wherever there are no steps (58 %), so it is C by the NaN rule, although
 it separates the amplifiers well (F 186).
+
+## The clocking regions (`clock:`, added 2026-10-21 evening)
+
+From the user's look at the trace: the first V-clock block climbs, the second is flat; the H and V transfers differ;
+the first H block after coming off a row looks different. Pilot: [`clock_pilot/`](clock_pilot/).
+
+| feature | settings F min | amplifier F | repeat share | tier | per setting (median) |
+|---|---|---|---|---|---|
+| clock: H/V peak-to-peak ratio | 879 | 1093 | 0.00 | A1 | 2.7 with V rails low, 3.3 with H rails low, else 3.0–3.1 |
+| clock: V-transfer peak-to-peak (ADU) | 544 | 1240 | 0.00 | A1 | 46.1 k with V rails low, else 41.8–42.3 k |
+| clock: first H block of a row, excess (ADU) | 172 | 173 | 0.01 | A1 | 3.0 k with H rails low, else 1.9–2.2 k |
+| clock: V-block level slope (ADU/transfer) | 45 | 65 | 0.03 | A1 | −173 with V rails low, else −113 to −123 |
+| clock: leading V-block level slope (ADU/transfer) | 1.5 | 8.4 | 0.30 | B | not repeatable |
+
+None is in a redundancy cluster (closest existing |ρ| 0.71–0.84). The leading V block (the one the trace starts in)
+does climb by 300–1,200 ADU per transfer, but the trace starts at a random point in it (14–19 of 20 transfers
+recorded) and what came before is not controlled, so it is stored as tier 2 only. Dropped: the H − V level difference
+(flips sign with NCOLPRE) and the dip at the second H transfer (|ρ| 0.98 with `fit: baseline droop amplitude`).
 
 ## What next
 

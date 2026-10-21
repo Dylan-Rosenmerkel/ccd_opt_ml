@@ -26,8 +26,8 @@ Usage
 Conventions
 -----------
 * Names start with their group: ``fit:``, ``skip:``, ``horizontal:``, ``vertical:`` (comparison
-  tools) and ``level:``, ``noise:``, ``discrete:``, ``edge:``, ``slow:`` (advanced features), and ``start:``
-  (the start-of-pixel transient, 2026-10-21).
+  tools) and ``level:``, ``noise:``, ``discrete:``, ``edge:``, ``slow:`` (advanced features), ``start:``
+  (the start-of-pixel transient, 2026-10-21) and ``clock:`` (the V-clock blocks and the first H block of a row).
 * Every feature has a ``tier``: 0 = the original set, 1 and 2 = added 2026-10-21 in
   ``trace_features_extra.py`` (docs/trace_feature_candidates.md); ``names_by_tier`` lists them.
 * ``scalars`` holds one number per feature.  For per-pixel features it is the median over the
@@ -718,7 +718,8 @@ def _trace_features(trace: DecodedTrace, meta: dict | None, regions: TraceRegion
     def extra():
         ctx = {"Cm": Cm, "cyc": cyc, "res": res, "det": det, "good": good, "row_starts": row_starts, "n_ped": n_ped,
                "sig": sig, "sig_end": sig_end, "first": first, "n": n, "skip_rate": skip_rate, "sample_rate": SAMPLE_RATE_HZ,
-               "starts": starts, "meta": meta, "scalars": dict(S), "allan_n": ALLAN_N, "common": np.median(Cm[good], axis=0)}
+               "starts": starts, "meta": meta, "scalars": dict(S), "allan_n": ALLAN_N, "common": np.median(Cm[good], axis=0),
+               "regions": r, "trace": trace}
         scalars, pixel_values, curves = extra_features(ctx)
         for name, err in scalars.pop("_errors", {}).items():
             result.info["errors"][f"extra: {name}"] = err

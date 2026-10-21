@@ -144,5 +144,7 @@ clocking; the first H/V clocks after coming off a row look different. Pilot on t
 - First H block of row 2, peak-to-peak excess over the other blocks (transfers 0-4): settings F min 172, repeat 0.01,
   largest with H rails low; |rho| 0.84 with the droop features.
 - Redundant: H transfer-1 dip (|rho| 0.98 with fit: baseline droop amplitude / slow: H-transfer first-to-last change).
-Next if the user agrees: add a `clock:` group (tier 1) to src/trace_features_extra.py using the SECOND V block,
-regenerate oct12_trace_features.csv, rerun feature_study (tier counts change).
+DONE (user said go ahead): `clock:` group in src/trace_features_extra.py (4 tier 1, all evidence A1; leading-block slope
+tier 2, evidence B); ctx gets regions + trace; test_clock_regions; oct12 CSV regenerated (59 x 144); feature_study rerun:
+139 scalars, A1 36 / A2 36 / B 32 / C 35. LaTeX doc docs/overleaf_feature_tiers_2026-10-21/ updated (section 3.5, 13
+pages, no warnings) and re-zipped; README and trace_features_and_tiers.md updated.

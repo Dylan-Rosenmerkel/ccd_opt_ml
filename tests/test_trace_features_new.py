@@ -146,6 +146,14 @@ class RealTrace(unittest.TestCase):
         self.assertTrue(abs(s["discrete: null-CDS kurtosis"]) < 1)
         self.assertTrue(6 < s["noise: null-CDS noise (ADU)"] < 9)
 
+    def test_clock_regions(self):
+        s = self.r.scalars                              # pilot (lvl1/feature_study/clock_pilot): -160, 40951, 3.08, 2381
+        self.assertTrue(-250 < s["clock: V-block level slope (ADU/transfer)"] < -80)
+        self.assertTrue(38000 < s["clock: V-transfer peak-to-peak (ADU)"] < 48000)
+        self.assertTrue(2.5 < s["clock: H/V peak-to-peak ratio"] < 3.5)
+        self.assertTrue(1000 < s["clock: first H block of a row, excess (ADU)"] < 4000)
+        self.assertGreater(s["clock: leading V-block level slope (ADU/transfer)"], 0)   # the first V block climbs
+
     def test_curves(self):
         self.assertEqual(len(self.r.curves["start: mean transient"]), 30)
         self.assertEqual(len(self.r.curves["noise: Hadamard deviation"]), len(tf.ALLAN_N))
