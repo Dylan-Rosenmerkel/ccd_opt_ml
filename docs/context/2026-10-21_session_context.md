@@ -127,3 +127,22 @@ Status of this request: see section 5 below (updated as the work goes).
 - [x] Importance results added to `docs/trace_features_and_tiers.md` (6.3 updated, new 6.4).
 - Figures shown to the user today (scratchpad, not in the repo): top 16 new features (settings F vs amplifier F), start
   transient (lever arm + H-rail dependence), ch2 telegraph, jump share, noise budget, tolerance curves.
+
+## 6. User idea (2026-10-21, late): clocking-region features (pilot done, not implemented)
+
+User: the first V-clock block has a clear upward slope, the second is flat; the ADU difference between H and V
+clocking; the first H/V clocks after coming off a row look different. Pilot on the 59 traces:
+`lvl1/feature_study/clock_pilot/` (pilot.py, clock_pilot.csv, fig_clock_regions.png). Findings:
+- V block 1 starts the trace at a random point (14-19 of 20 transfers recorded) and climbs +300 to +1,200 ADU per
+  transfer (recovery from before the trace, tau ~ms) but NOT repeatable (settings F ~2, repeat share 0.3-0.9) -> tier C
+  unless the acquisition start is synchronized.
+- V block 2 slope: -90 to -230 ADU/transfer, repeat share 0.03, settings F min 45 (steeper with V rails low); max
+  |rho| with existing features 0.71 -> new, candidate A.
+- V transfer peak-to-peak (V feedthrough amplitude): settings F min 544, repeat 0.00, |rho| 0.84 -> new, candidate A.
+- H/V peak-to-peak ratio: settings F min 879, repeat 0.00.
+- H-V level difference: settings F 194 among the NCOLPRE-185 settings, but flips sign with NCOLPRE (reference +39 k).
+- First H block of row 2, peak-to-peak excess over the other blocks (transfers 0-4): settings F min 172, repeat 0.01,
+  largest with H rails low; |rho| 0.84 with the droop features.
+- Redundant: H transfer-1 dip (|rho| 0.98 with fit: baseline droop amplitude / slow: H-transfer first-to-last change).
+Next if the user agrees: add a `clock:` group (tier 1) to src/trace_features_extra.py using the SECOND V block,
+regenerate oct12_trace_features.csv, rerun feature_study (tier counts change).
