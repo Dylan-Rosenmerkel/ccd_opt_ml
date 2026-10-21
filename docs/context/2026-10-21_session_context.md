@@ -183,3 +183,15 @@ call whether to change fully"): `<scratchpad>/guards/guarded_study.py` (guards a
   ridge: A 16.8/19.9/4.4; gA+P 14.7/23.2/3.3; P+D 9.5/14.0/0.9; TRUE 9.5/12.4/0.9
   Guards a-c alone help nn/ridge on sigma_e and gain but cannot save the plain gp (tier A still holds ~80 columns);
   the label-driven set (d) nearly reaches the true-feature result. Waiting for the user's decision.
+
+## 9. Guard (a) adopted, feature ladder built (user: "adopt guard a and build the feature ladder", labels must not order the features)
+- `PROTECTED` (8 estimators) in lvl1/feature_study.py -> tier "P" in evidence_tiers.json; MODEL_TIERS: gp P, gp_dim/gp_saas
+  P+A1, nn/ridge P+A, trees all, default P+A+B. Guards b-d NOT adopted (labels never order the features).
+- `--feature-ladder [tiers cover random groups]` in lvl1/train_lvl1.py (cover_order = column-pivoted QR after P,
+  label-free; random = control; groups = P + one family); one-SE suggestion; feature_ladder.png; tests in
+  tests/test_lvl1_validation.py (TestFeatureLadder).
+- Synthetic ladder (lvl1/feature_study/ladder_synthetic/): gp best 8-15 features, collapses beyond 15-25 (-> gp default P);
+  nn worse with every step; ridge best ~25-45; trees flat; physics_joint/sets flat for sigma_e/gain, lose on lambda.
+  Cover order did not beat random (expected with all-junk extras).
+- Docs: trace_features_and_tiers.md (sec 3 tiers with P, 6.1-6.3 rewritten, ladder results), lvl1/README.md,
+  lvl1/feature_study/README.md, LaTeX (16 pages: P, sec 7.1 guards, 7.2 ladder + figure, plan rewritten), zip rebuilt.

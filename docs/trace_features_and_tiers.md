@@ -216,7 +216,7 @@ percentage points:
 
 | model | σe at +20 / +50 / +100 | λ at +20 / +50 / +100 | suggested feature set |
 |---|---|---|---|
-| gp (plain) | **+51 / +51 / +51** | +21 / +21 / +21 | **P + A1**, or a prior-regularized GP (`gp_saas`, `gp_dim`; their tolerance is still to test) |
+| gp (plain) | **+51 / +51 / +51** | +21 / +21 / +21 | **P only** (the ladder: collapse beyond 15–25 features); `gp_saas`, `gp_dim`: P + A1 until their tolerance is tested |
 | nn | +2 / +7 / +15 | +3 / +5 / +8 | P + A |
 | ridge | +2 / +4 / +5 | +6 / +8 / +14 | P + A |
 | cnn | 0 / +1 / +4 | +1 / +3 / +5 | P + A + B |
@@ -335,6 +335,27 @@ sensitive), trees, sets, physics_joint (expected to be robust), the λ GP of phy
 
     .venv/bin/python lvl1/train_lvl1.py --inputs <model_inputs> --feature-ladder tiers cover random [groups] \
         [--ladder-steps 15 25 40 60 90] [--ladder-random 3] --holdout-session C
+
+**Synthetic test of the ladder** (`lvl1/feature_study/ladder_synthetic/`: td41_s0/1/2 with the 120 other real features
+added as uninformative real-named columns; `--quick`; error %, mean of 3, σe / λ / gain):
+
+| model | settings only | P (8) | P+A1 (44) | all (137) | shape of the curve |
+|---|---|---|---|---|---|
+| gp | 57.5 / 21.5 / 31.3 | **9.6 / 22.0 / 0.9** | collapsed | collapsed | best at 8–15 features, collapses beyond 15–25 in every order |
+| nn | 57.5 / 19.3 / 31.4 | **12.9 / 18.6 / 6.3** | 17.2 / 20.5 / 8.0 | 26.6 / 23.5 / 13.8 | gets steadily worse with every step |
+| ridge | 57.4 / 17.2 / 31.3 | 12.2 / 17.0 / 6.3 | **10.5 / 18.5 / 1.3** | 14.9 / 21.7 / 4.7 | best around 25–45 features, worse beyond 60 |
+| trees | 57.0 / 21.0 / 31.2 | 9.3 / 21.0 / 1.3 | 10.0 / 21.0 / 1.3 | 9.9 / 20.5 / 1.4 | flat |
+| physics_joint | 36.0 / 15.7 / 31.3 | **9.3 / 5.0 / 1.0** | 8.8 / 5.8 / 1.0 | 9.0 / 7.5 / 1.7 | flat for σe and gain; λ worse with more features |
+| sets | 32.0 / 20.7 / 31.3 | **5.8 / 9.3 / 1.0** | 6.2 / 12.6 / 1.0 | 6.6 / 15.6 / 1.7 | flat for σe and gain; λ clearly worse with more features |
+
+What it shows:
+- **P carries almost everything here**, because two of its features (CDS rms, reset-level scatter) are informative in
+  the synthetic world; on real data A and B features will carry more than in this all-junk test.
+- **gp must stay small** (now `MODEL_TIERS`: P only). Even the "robust" models lose on λ as features are added
+  (sets 9.3 → 15.6), so their default A+B is to be checked on real data.
+- **The cover order did not beat the random control** here, as expected: without labels no order can know which of
+  these columns carry information. On real data, the comparison of `tiers`, `cover` and `random` is the point.
+- No order uses the labels; the ladder only measures how each model responds to more features.
 
 ### 6.3 What has been built
 

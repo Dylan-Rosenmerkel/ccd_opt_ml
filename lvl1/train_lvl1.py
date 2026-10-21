@@ -116,8 +116,9 @@ TIER_FILE = ROOT / "lvl1" / "feature_study" / "evidence_tiers.json"
 #: per-model default feature sets for --feature-tiers auto (from the synthetic tolerance test, lvl1/feature_study/README.md):
 #: the plain GP collapses with 20 uninformative columns, nn and ridge degrade, trees are immune.  P (guard a) = the
 #: protected physical estimators, given to every model that takes trace features: the label-free evidence tiers can put
-#: the most direct sigma_e and gain estimators in B (lvl1/feature_study/README.md, "Caveat").
-MODEL_TIERS = {"gp": "P+A1", "gp_dim": "P+A1", "gp_saas": "P+A1", "nn": "P+A", "ridge": "P+A", "settings": "none",
+#: the most direct sigma_e and gain estimators in B (lvl1/feature_study/README.md, "Caveat").  The plain gp gets P only:
+#: in the synthetic feature ladder (lvl1/feature_study/ladder_synthetic) it collapsed beyond 15-25 features in every order.
+MODEL_TIERS = {"gp": "P", "gp_dim": "P+A1", "gp_saas": "P+A1", "nn": "P+A", "ridge": "P+A", "settings": "none",
                "mean": "none", "trees": "all"}
 DEFAULT_MODEL_TIERS = "P+A+B"
 #: the feature sets tried by --tier-ablation (by default); "none" = settings only, "impl0" = the original 85 features

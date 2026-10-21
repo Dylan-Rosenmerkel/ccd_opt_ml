@@ -40,7 +40,9 @@ With 141 scalar features, not every model can take them all. A synthetic toleran
 process collapses with only 20 uninformative columns ($\se$ error $+51$ percentage points), while trees are immune. The
 features are therefore sorted into tiers: an implementation tier (where a feature came from), an evidence tier A1/A2/B/C
 (what the data say, no labels needed) and a per-model feature set. The training script can now select tiers
-(\code{--feature-tiers}) and compare them automatically (\code{--tier-ablation}). Finally, a learned importance method
+(\code{--feature-tiers}), compare them (\code{--tier-ablation}), and feed every model more and more features in
+label-free orders (\code{--feature-ladder}). Because the label-free tiers can demote the most direct noise estimators,
+a protected set of eight physical estimators is now given to every model. Finally, a learned importance method
 (stability selection and permutation importance against shadow features) was built and checked on five synthetic
 datasets: none of 100 added noise columns reached its top tier L1.
 \end{abstract}
@@ -73,6 +75,11 @@ datasets: none of 100 added noise columns reached its top tier L1.
         these settings (none touched RG, SW, OG or DG).
   \item \textbf{Tiers.} 141 scalar features: evidence tiers A1 37, A2 36, B 33, C 35. The plain GP should see tier A
         only; trees can take everything.
+  \item \textbf{Guarding the tiers.} The label-free tiers put the most direct $\se$ estimator and the kTC noise in B. A
+        protected set P of eight physical estimators now goes to every model; on synthetic data this alone took the
+        plain GP from collapsed to 9.6\,\% ($\se$) and 0.9\,\% (gain). Features are never ordered by the labels.
+  \item \textbf{Feature ladder.} On synthetic data the plain GP is best with 8--15 features and collapses beyond, nn
+        degrades with every added step, ridge is best near 25--45, trees are flat.
   \item \textbf{Learned tiers.} L1 (both methods confirm, by a margin) contained no noise column in five synthetic
         datasets. L2 (a candidate) contained 4--8 of 20 noise columns, so it is a list to look at, not a feature set.
 \end{itemize}
@@ -348,11 +355,15 @@ Every trace is reduced to all 141 scalars and 18 curves once, in processing, and
 which features each model sees. Three layers decide that.
 
 \paragraph{Layer 1: implementation tier} (\code{FEATURES[name].tier}): 0 = the original 85 features, 1 = implement-first
-additions (physics-motivated, piloted; 23), 2 = candidate additions (26).
+additions (physics-motivated, piloted; 29), 2 = candidate additions (27).
 
 \paragraph{Layer 2: evidence tier} (\code{lvl1/feature\_study.py}, stored in \code{lvl1/feature\_study/evidence\_tiers.json}).
 It needs no labels.
 \begin{itemize}
+  \item \textbf{P, protected} (guard a, adopted): eight direct physical estimators of the labels, chosen by physics and
+        given to \emph{every} model, besides their evidence tier. For $\se$: CDS rms (detrended), white noise per skip,
+        jump-robust sigma, null-CDS noise, Allan deviation at $n = 50$. For the gain: reset-level scatter (kTC noise),
+        pulse per volt RG, dip per volt SW. No direct $\lambda$ estimator exists in a trace yet.
   \item \textbf{A, core:} informative (settings $F$ min $> 10$ or amplifier $F > 10$), repeat share $< 0.5$, at most
         20\,\% NaN, and the most informative member of its redundancy cluster (features with $|\rho_{\rm Spearman}| > 0.95$
         form a cluster). A is split by informativeness into \textbf{A1} (the more informative half) and \textbf{A2}, so
@@ -382,15 +393,17 @@ separate settings or amplifiers, and they pick a cluster's representative by tha
 amplifier dominates every correlation, so ``redundant'' means ``identifies the same amplifier''. As a result the most
 direct $\se$ estimator, \code{skip: CDS rms (detrended)}, is in tier B, represented by the number of waveform modes; the
 reset-level scatter (kTC noise, the top learned feature on synthetic data) is in B because it hardly separates the
-amplifiers. A model restricted to tier A would not see them. Section~\ref{sec:plan} lists the changes that prevent this.
+amplifiers. A model restricted to tier A would not see them; that is why P exists. Two further guards were prototyped and not adopted
+(Section~\ref{sec:guards}).
 
 The evidence tiers are provisional. They rest on 59 traces at five settings that did not change the noise, so the noise
 features were judged by amplifier separation alone.
 
 \paragraph{Layer 3: model feature sets.} These come from the tolerance test (Section~\ref{sec:tolerance}) and are the
-defaults of \code{--feature-tiers auto} (\code{MODEL\_TIERS} in \code{lvl1/train\_lvl1.py}): tier A for \code{gp},
-\code{gp\_dim}, \code{gp\_saas}, \code{nn} and \code{ridge}; everything for \code{trees}; settings only for the
-\code{settings} and \code{mean} baselines; A + B for all other models.
+defaults of \code{--feature-tiers auto} (\code{MODEL\_TIERS} in \code{lvl1/train\_lvl1.py}): P only for the plain
+\code{gp} (the feature ladder, Section~\ref{sec:ladder}); P + A1 for \code{gp\_dim} and \code{gp\_saas} until their tolerance is
+tested; P + A for \code{nn} and \code{ridge}; everything for \code{trees}; settings only for the \code{settings} and
+\code{mean} baselines; P + A + B for all other models. They are starting points: the ladder on real data decides.
 
 %======================================================================
 \section{Synthetic tolerance test: how many extra columns can each model take?}
@@ -504,58 +517,119 @@ this feature identifies the amplifier, and the amplifier carries information abo
 it, so it is only a list of features worth a look. The caveat is that the margin was tuned on three of the five
 datasets; the two unseen ones agree, but this is still synthetic data.
 
-\paragraph{Use on real data.} After session A, run it beside the evidence study. A feature in evidence tier A but learned
-L3 is a candidate to demote; a feature in L1 but not in tier A is a candidate to promote. L1 can also be one more set in
-the tier ablation.
+\paragraph{Use on real data.} After session A, run it beside the evidence study as a \emph{diagnostic}: features in L1
+but not in tier A, and tier-A features in L3, are the ones to look at physically. It does not choose any model's
+features (Section~\ref{sec:guards}).
 
 %======================================================================
 \section{Training with tiers}
 \label{sec:tooling}
 
-\code{lvl1/train\_lvl1.py} has three new options:
+\code{lvl1/train\_lvl1.py} has these options for the feature sets:
 
 \begin{itemize}
   \item \code{--feature-tiers SPEC}: \code{all}, \code{none} (settings only), \code{auto} (the per-model defaults of
-        Section~\ref{sec:tiers}), or tier labels joined by \code{+}, e.g.\ \code{A}, \code{A+B}, \code{A1},
-        \code{impl0}. It selects the matching columns of both the own-trace and the reference features.
-  \item \code{--tier-ablation [SET ...]}: train every model on every set (default \code{none A1 A A+B all impl0}) and
-        compare each, paired over packets, with the same model on the reference set \code{--ablation-ref} (default
-        \code{all}). The report gets a ``Tier ablation'' section with the paired differences and their intervals.
+        Section~\ref{sec:tiers}), or tier labels joined by \code{+}, e.g.\ \code{P+A}, \code{A1}, \code{impl0}. It
+        selects the matching columns of both the own-trace and the reference features.
+  \item \code{--tier-ablation [SET ...]}: train every model on every set (default \code{none P P+A1 P+A P+A+B all impl0})
+        and compare each, paired over packets, with the same model on \code{--ablation-ref} (default \code{all}).
+  \item \code{--feature-ladder [ORDER ...]}: feed every model more and more features in \emph{label-free} orders and
+        report error against the number of features (Section~\ref{sec:ladder}).
   \item \code{--tier-file}: another evidence-tier file, e.g.\ the one finalized on session A.
 \end{itemize}
 
-It was tested on synthetic data. There, gp on tier A was worse than on all features, as expected: the tiers come from real
-traces, and the synthetic world uses other features.
+\subsection{Guards against the label-free tiers}
+\label{sec:guards}
+
+The evidence tiers measure separation, not prediction. Four guards were prototyped and tested on synthetic data: the
+three synthetic 41-packet datasets, plus the 120 other real features as uninformative columns with their real names
+(values drawn at random), so that the tiers act as they would on real data.
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\textwidth}{Lccc}
+\toprule
+feature set & gp & nn & ridge \\
+\midrule
+A (the old default) & collapsed & 32.9 / 22.4 / 17.6 & 16.8 / 19.9 / 4.4 \\
+(a)--(c): P + tiers with within-amplifier clusters and no repeat penalty & collapsed & 21.7 / 21.9 / 10.2 & 14.7 / 23.2 / 3.3 \\
+(a) alone: P & 9.6 / 22.0 / 0.9 & 12.9 / 18.6 / 6.3 & 12.2 / 17.0 / 6.3 \\
+(a) + (d): P + a set chosen with labels on other datasets & 9.0 / 14.5 / 0.9 & 10.2 / 16.9 / 2.6 & 9.5 / 14.0 / 0.9 \\
+the 17 true synthetic features & 6.9 / 8.0 / 0.9 & 10.1 / 17.1 / 1.5 & 9.5 / 12.4 / 0.9 \\
+\bottomrule
+\end{tabularx}
+\caption{Error \% ($\se$ / $\lambda$ / gain), mean of three datasets, short training. ``Collapsed'' = no better than the
+training mean.}
+\end{table}
+
+\textbf{Adopted: (a), the protected tier P.} \textbf{Not adopted:} (b) clusters within each amplifier and (c) no repeat
+penalty, which helped less and enlarge tier A; and (d) choosing features by the labels. (d) nearly reaches the true
+features here, but its ranking came from sibling datasets of a known world, the optimistic case. On $\sim$30 real
+packets a ranking by the labels is noisy (the winner's curse), optimistic unless redone inside every fold, favours the
+settings scanned so far, and lets the labels' own errors steer the choice. The labels therefore score a few fixed sets
+but never order the features.
+
+\subsection{The feature ladder}
+\label{sec:ladder}
+
+Every model is trained on a nested series of feature sets on the same folds, and its error is read against the number
+of features. None of the orders uses the labels, so they can be frozen before the first labels are seen.
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.4cm}>{\raggedright\arraybackslash}p{5.2cm}L}
+\toprule
+order & steps & what it asks \\
+\midrule
+\code{tiers} & none $\to$ P $\to$ P+A1 $\to$ P+A $\to$ P+A+B $\to$ all & does each evidence tier help this model? \\
+\code{cover} & P $\to$ 15 $\to$ 25 $\to$ 40 $\to$ 60 $\to$ 90 $\to$ all & the next feature is the one least explained by those
+already taken (column-pivoted QR of the standardized features, after P): even coverage, no preference for amplifier separation \\
+\code{random} & P, then the same sizes in 3 random orders & the control: does the order matter at all? \\
+\code{groups} & P + one physics group at a time & which family adds what (not nested) \\
+\bottomrule
+\end{tabularx}
+\caption{The label-free orders of \code{--feature-ladder}.}
+\end{table}
+
+The report gives error per step, the paired difference against the same model on P, a plot, and a suggested set per
+model and target: the smallest step within one standard error of the model's best step.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig_feature_ladder.png}
+\caption{The ladder on synthetic data (17 informative features + 120 uninformative real-named columns; mean of three
+datasets; short training).}
+\label{fig:ladder}
+\end{figure}
+
+On this all-junk test (Figure~\ref{fig:ladder}): the plain GP is best at 8--15 features and collapses beyond 15--25 in
+every order, so its default is now P only; nn gets steadily worse with every step; ridge is best around 25--45 features;
+trees are flat; physics\_joint and sets are flat for $\se$ and the gain but lose on $\lambda$ as features are added
+(sets 9.3\,\% at P, 15.6\,\% with all). The cover order did not beat the random control, as expected: without labels no
+order can know which of these columns carry information. On real data, where many A and B features carry information,
+comparing the orders is the point.
 
 %======================================================================
 \section{Plan for the first real data}
 \label{sec:plan}
 
 \begin{enumerate}
-  \item \textbf{Finalize the tiers after session A.} Rerun \code{lvl1/feature\_study.py} on the real packets and add two
-        measures: label relevance (how strongly each feature follows $\se$, $\lambda$ and the gain within an amplifier),
-        and the settings separation over the delayInt packets, where the noise finally changes. Run
-        \code{lvl1/feature\_importance.py} beside it. Revise once more after session B; never use session C for this.
-  \item \textbf{Do not let the label-free tiers decide alone (proposed).} The evidence tiers measure separation, not
-        whether a feature predicts $\se$, $\lambda$ or the gain. Four guards:
-        (a) a protected set of direct physical estimators (CDS rms, white noise per skip, jump-robust sigma, null-CDS
-        noise, reset-level scatter, Allan deviation, pulse per volt RG, dip per volt SW) that every model sees;
-        (b) redundancy clusters computed within each amplifier, so that ``identifies the same amplifier'' no longer
-        counts as redundant;
-        (c) no penalty for repeat scatter until it is compared with the repeat scatter of the labels, since a feature
-        that follows the realized noise of each repeat \emph{should} scatter;
-        (d) once labels exist, label relevance and the learned tier L1, computed on all features, override the
-        evidence tier: a tier-C feature that predicts a label is promoted.
-  \item \textbf{Train every model at different tier levels} with \code{--tier-ablation}, on the same setting-grouped
-        folds. A tier is worth adding to a model if it lowers the error with the paired interval excluding 0, or at
-        least does not hurt.
-  \item \textbf{Choose without fooling ourselves.} Choose each model's set on sessions A + B only, confirm the chosen
-        sets once on session C (\code{--holdout-session C}), report every combination tried, and keep the number of sets
-        small: picking the best of many on about 30 packets is optimistic \cite{cawley2010}.
+  \item \textbf{Freeze the ladder before the first labels.} The orders (\code{tiers}, \code{cover}, \code{random},
+        \code{groups}) use the features only; fix them, and the steps, before session A's labels are seen.
+  \item \textbf{Update the tiers after session A, without labels.} Rerun \code{lvl1/feature\_study.py} on the real
+        packets: the delayInt packets are the first where noise features can separate settings. Label relevance and the
+        learned tiers (\code{lvl1/feature\_importance.py}) are reported beside the tiers as diagnostics, not used to move
+        features. A feature joins P only with a stated physical mechanism. Revise once more after session B; never use
+        session C for this.
+  \item \textbf{Run the ladder for every model} (\code{--feature-ladder tiers cover random groups}) on sessions A + B,
+        with the setting-grouped folds. Read each model's curve; take the smallest step within one standard error of
+        its best.
+  \item \textbf{Confirm once on session C} (\code{--holdout-session C}), report every step of every order, and keep the
+        number of steps fixed in advance: picking the best of many on about 30 packets is optimistic \cite{cawley2010}.
 \end{enumerate}
 
-\paragraph{Open items.} Label relevance in \code{feature\_study.py}; the tolerance test of \code{gp\_saas} and
-\code{gp\_dim} (can a prior-regularized GP take more features than the plain one?); the per-model ablation on real data.
+\paragraph{Open items.} Label relevance as a reported column of \code{feature\_study.py}; the tolerance test (or the
+ladder) of \code{gp\_saas} and \code{gp\_dim}, which may take more features than the plain GP; the ladder on real data.
 
 %======================================================================
 \section{Files}
@@ -569,6 +643,7 @@ file & what \\
 \code{src/trace\_features\_extra.py} & the 56 new features (including the \code{clock:} group and the pre-pulse dip) and 4 curves \\
 \code{lvl1/feature\_study/prepulse\_pilot/} & the pre-pulse dip pilot (script, numbers, figure) \\
 \code{lvl1/feature\_study/clock\_pilot/} & the clocking-region pilot (script, numbers, figure) \\
+\code{lvl1/feature\_study/ladder\_synthetic/} & the synthetic feature-ladder results and figure \\
 \code{src/trace\_features.py} & the \code{tier} attribute and \code{names\_by\_tier()} \\
 \code{tests/test\_trace\_features\_new.py} & 16 tests with known answers \\
 \code{lvl1/feature\_study.py} & evidence tiers; results in \code{lvl1/feature\_study/README.md} \\
