@@ -136,3 +136,38 @@ Near-copies hurt much less than uninformative columns, except for the λ of the 
 The per-model choice is to be confirmed on real data after session A, with the setting-grouped CV and the session-C
 hold-out. **Not done yet:** the `--feature-tiers` option in `train_lvl1.py`, and the tolerance test of `gp_saas` and
 `gp_dim`.
+
+## Step 3: can a trained model learn the tiers? (`lvl1/feature_importance.py`, synthetic check)
+
+**Method.** Two independent learned importances per target (log σe, log λ, log gain), always with packet-grouped
+resampling:
+
+- stability selection: how often an elastic net, refitted on packet-bootstrap resamples, keeps the feature;
+- permutation importance: the increase of the held-out error of gradient-boosted trees when the feature is shuffled.
+
+Ranking features against each other does not work at 41 packets: real and pure-noise features had the same importances.
+So every feature is compared with **shadow features** (a row-shuffled copy of every column; Boruta). It must beat the
+shadows' 95th percentile in most of 5 rounds with fresh shadows.
+
+**Learned tiers.**
+
+- **L1:** both methods confirm the feature, each by more than 1.5 × the shadows' 95th percentile.
+- **L2, candidate:** one method only, or both but narrowly.
+- **L3:** not shown to matter.
+
+**Check on synthetic data.** Three 41-packet datasets (td41_s0/1/2), with 20 pure-noise columns added:
+
+| rule | noise columns in L1 | noise columns in L2 | real features in L1 |
+|---|---|---|---|
+| L1 = both methods win (no margin) | 0 / 0 / 2 | 6 / 6 / 3 | 5 / 4 / 8 |
+| L1 = both win by > 1.5 × (current) | **0 / 0 / 0** | 6 / 6 / 5 | 5 / 4 / 8 |
+
+The features in L1 in all three datasets: reset-level scatter, detrended CDS rms, dip recovery time, horizontal minimum or maximum.
+
+**What this means.**
+
+- L1 is trustworthy on this check; L2 is not, because about 30 % of the noise columns reach it. Use L2 as a list to
+  look at, not as a feature set.
+- The 1.5 margin was chosen on these three runs. It is being confirmed on td100_s0 and td13_s0, which it has not seen.
+- On real data, run it on session A after the evidence tiers, and compare: features in evidence tier A but in learned
+  L3 are candidates to drop; features in L1 but not in tier A are candidates to promote.
