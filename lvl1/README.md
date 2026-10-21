@@ -214,6 +214,13 @@ Options:
 | `--models` | all | which models to run |
 | `--board` | 101 | which board's amplifiers to use (module 102 is not used for trace analysis) |
 | `--folds` | 5 | number of cross-validation folds |
+| `--group-by` | `setting` | CV groups: packets at identical settings share a fold (`setting`), or each packet alone (`packet`, the behaviour before 2026-10-21); see [The report](#the-report) |
+| `--setting-tol` | 0.01 | settings count as identical within this fraction of each setting's range over the packets |
+| `--n-boot` | 1000 | packet-bootstrap resamples for the intervals and the paired comparison (0: none) |
+| `--paired-ref` | `physics` | the reference model of the paired comparison |
+| `--holdout-session` / `--holdout-packets` | none | the prospective test: hold these packets out of the CV (a session of `--plan`, e.g. `C` = L1_33…L1_43, and/or a list of packet ids) |
+| `--plan` | `lvl1/packet_plan/plan.json` | the packet plan read by `--holdout-session` |
+| `--loao` | off | also score leave-one-amplifier-out (a new-module indicator; amplifiers × folds extra fits) |
 | `--include-flagged` | off | also use labels that WADERs flagged |
 | `--allow-fake` | off | also use rehearsal packets |
 | `--quick` | off | short training, to test the pipeline |
@@ -221,7 +228,8 @@ Options:
 
 ## The report
 
-`report.md` / `report.json` / `predictions.csv`, per model and per target (σe, λ, gain):
+`report.md` / `report.json` / `predictions.csv`, per model and per target (σe, λ, gain). The run also prints a one-line
+summary per model (error with its 68 % interval) and the paired comparison.
 
 | Score | Meaning | Good |
 |---|---|---|
@@ -233,7 +241,68 @@ Options:
 | cover 68 / 95 | fraction of truths within ±1σ / ±1.96σ of the prediction | 0.68 / 0.95 |
 | calibrated | the same after conformal calibration (each fold's factor from the other folds) | 0.68 / 0.95 |
 | factor | how much the error bars must be scaled for 68 % coverage | ≈ 1 |
+| 68 % CI | the 16–84 % range of the error over packet-bootstrap resamples (below) | narrow compared with the gaps between models |
+| worst amp 68 | the calibrated 68 % coverage of the worst-covered amplifier (the average can hide one badly covered amplifier; per amplifier in `report.json`, `by_amp`) | ≈ 0.68 |
+| CRPS | continuous ranked probability score of the Gaussian prediction in log space, mean over rows | lowest (≈ 0.56 × error for a calibrated Gaussian) |
 | label error | median error of the labels (WADERs) | — (no model can be judged below it) |
+
+**CRPS.** For a prediction N(μ, σ²) of log y it is σ·[z(2Φ(z)−1) + 2φ(z) − 1/√π] with z = (log y − μ)/σ (Gneiting &
+Raftery 2007), in the units of the log target (0.05 ≈ 5 %). It is a *proper* score: it is lowest when σ is the true
+spread, so it rewards accuracy and honest error bars in one number. A perfectly sharp prediction (σ → 0) scores its
+absolute error; a calibrated Gaussian scores on average σ/√π ≈ 0.56 × its RMS error; too small or too large error bars
+both score worse. It uses the raw error bars (before the conformal calibration).
+
+**How the CV is grouped.** The rows of one packet are always in the same fold. In addition (default `--group-by
+setting`), packets taken at *identical settings* share a fold: the nominal packets (L1_01, L1_07, L1_14, L1_32, L1_43)
+and the two replicates with their originals (L1_13 with L1_04, L1_23 with L1_06). Otherwise a held-out nominal packet
+has its twins in the training set, and the score of a "new" setting is flattered (Saeb et al. 2017; level 2 always
+predicts at new settings). The groups come from the settings (`theta`, as the boards report them): two packets are
+identical when every setting differs by at most `--setting-tol` (1 %) of that setting's range over all packets, and
+chains of identical packets form one group. The run prints the number of groups and the merged ones (e.g.
+`L1_01+L1_07+L1_14+L1_32`); check them. With `--group-by packet` every packet is its own group. `predictions.csv` has a
+`cv group` column.
+
+**The intervals (packet bootstrap).** The out-of-fold predictions are resampled by packet, with replacement, 1000 times
+(no refitting: each packet keeps the prediction it got in the CV). Every score is recomputed on each resample; the report
+gives the 16–84 % range ("68 %") and the 2.5–97.5 % range ("95 %"), in the main table for the error and in the section
+*Bootstrap intervals* for error, vs mean, shape, rank, calibrated coverage, worst amplifier and CRPS. How to read them:
+* two models whose 68 % intervals overlap widely are not distinguished by these packets; but the intervals of two models
+  are correlated (same packets), so for "is A better than B" use the paired comparison, not the overlap;
+* the width shrinks roughly as 1/√(packets) (synthetic, 13 → 41 packets: the 68 % range of `gp`'s σe error 6.3–8.5 → 4.2–5.2 %,
+  of `physics_joint`'s λ error 12.7–18.6 → 4.0–5.0 %);
+* with ~40 packets they are rough: a bootstrap over few clusters tends to be too narrow, and
+  the conformal factor is not re-estimated per resample. Read them as "at least this uncertain".
+
+**The paired comparison (vs `physics`, `--paired-ref`).** On the same resamples, the difference of each model's error and
+the reference's (Δ error, in percentage points of log error; negative = the model is better), its 95 % interval, and
+P(better), the fraction of resamples in which the model's error is the lower one (equivalently its mean squared log error
+per row). A difference marked \* has a 95 % interval that excludes 0. With 14+ models compared on the same ~40 packets,
+the best-looking one is partly lucky (Cawley & Talbot 2010): **change the default model only on a difference marked \*,
+and confirm it on the prospective test.** JSON: `results[model]["paired_vs_physics"]`.
+Example (41 synthetic packets, `--quick`): `mean` vs `physics` σe +42.5 pp [+32.0, +53.9] \*; `physics_joint` vs
+`physics` λ −3.6 pp [−6.4, −1.1] \*; but `sets` vs `physics` σe −10.0 pp [−19.9, +0.9], P(better) 0.81: the 5.0 % vs
+15.0 % gap is mostly one damaged packet, and `physics`' own σe interval is 4.4–20.7 %. A model with exactly the
+reference's predictions for a target (e.g. `physics_joint`'s σe and gain are `physics`') is shown as "same".
+
+**The prospective test (session C).** Session C (L1_33…L1_43, joint Latin-hypercube changes) is declared the
+prospective test set. The workflow:
+1. after sessions A and B: run `train_lvl1.py --inputs … --holdout-session C` (or before C exists, just `--inputs …`)
+   and choose the model(s) on the cross-validation of A+B (main tables and paired comparison);
+2. freeze that choice (write it down, with the date and the commit);
+3. after session C: run once more with `--holdout-session C`. The section *Prospective test (held-out packets)* has every
+   model trained once on all A+B packets (no CV) and scored on the C packets only, with the conformal factor taken from
+   the A+B cross-validation, and its own paired comparison. Read it once, as the test of the frozen choice; do not go back
+   and pick the model that happens to win on C.
+
+`--holdout-session C` takes the session's packet ids from `lvl1/packet_plan/plan.json` (`--plan`); a processed packet id
+matches when it equals a planned id or continues it with a non-digit (`L1_33`, `L1_33b`, `L1_33_retake`, not `L1_330`).
+`--holdout-packets` takes ids directly. A held-out packet whose settings also occur in training (L1_43 is nominal) is
+named in the report: it is in the scores, but it is not a new setting. JSON: `report.json["holdout"]`.
+
+**Leave one amplifier out (`--loao`).** Each amplifier is predicted by models trained on the other amplifiers only,
+crossed with the packet folds (so the test packets are not in training either). Level 1 always has the same amplifiers
+in training, so this is only an indicator of how a model would do on a new module; it is expected to be poor, and a
+model that fails it is not wrong for level 1. It costs amplifiers × folds fits per model.
 
 **A suggested pass mark for level 1** (to agree on):
 * the best label-free model predicts σe on held-out packets within about twice the label error, and clearly beats

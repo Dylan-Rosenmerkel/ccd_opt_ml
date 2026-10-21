@@ -11,6 +11,8 @@ read by 4 amplifiers gives 4 examples).
 Testing is by packet-grouped cross-validation: the packets are split into K folds; each fold's packets are
 predicted by models trained on the other folds only.  The 4 examples of a packet always stay in the same fold
 (they share the CCD's state at that moment; splitting them would make the scores look better than they are).
+Packets taken at identical settings (the nominal repeats, the replicates) also share a fold (``--group-by setting``,
+the default), so a test packet's twin is never in training.
 
 Reported per model and per target (read noise sigma_e, dark charge lambda, gain):
 
@@ -22,12 +24,20 @@ Reported per model and per target (read noise sigma_e, dark charge lambda, gain)
 * coverage  fraction of truths within the predicted +-1 sigma (should be 0.68) and +-1.96 sigma (0.95);
 * cal. cov. the same after conformal calibration, with each fold's factor taken from the OTHER folds (honest);
 * factor    by how much the error bars must be scaled for 68 % coverage (1 = calibrated);
-* label     the median error of the labels themselves (WADERs): no model can be judged below this.
+* label     the median error of the labels themselves (WADERs): no model can be judged below this;
+* CRPS      continuous ranked probability score of the Gaussian prediction in log space (lower is better);
+* worst amp the calibrated 68 % coverage of the worst-covered amplifier.
+
+Stronger validation (docs/literature/landscape_grounded.md, H1; lvl1/README.md, "The report"): packet-bootstrap
+intervals of every score (resampling the out-of-fold predictions, no refitting), a paired comparison of every model
+with ``--paired-ref`` (default physics) on the same resamples, an optional prospective test (``--holdout-session C``:
+train once on the other packets, score the held-out ones) and an optional leave-one-amplifier-out score (``--loao``).
 
 The amplifier and board are used ONLY to group rows for these scores, never as model inputs.
 
     python lvl1/train_lvl1.py --inputs <processed>/model_inputs [--models physics gp cnn ...] [--board 101]
-                              [--folds 5] [--out DIR] [--quick]
+                              [--folds 5] [--out DIR] [--quick] [--group-by setting|packet] [--n-boot 1000]
+                              [--paired-ref physics] [--holdout-session C | --holdout-packets ID ...] [--loao]
 
 Baselines (no trace at all; a model is only useful if it beats them):
     mean            [features]  the training mean of each target, with the training spread as its error bar
@@ -77,7 +87,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from scipy.stats import spearmanr  # noqa: E402
 
 from ml import models, real_inputs, structured as st  # noqa: E402
-from ml.evaluate import grouped_folds  # noqa: E402
+from ml.evaluate import bootstrap_weights, crps_gaussian, grouped_folds, percentile_interval, setting_groups  # noqa: E402
 
 TARGETS = ("sigma_e", "lambda", "gain")
 ALL_MODELS = ("mean", "settings", "trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
@@ -375,11 +385,39 @@ def conformal_q(z: np.ndarray, c: float) -> float:
     return float(z[min(max(k, 0), len(z) - 1)])
 
 
-def scores(Y, Y_err, mean, std, amp, folds) -> dict:
-    out = {}
-    for t, name in enumerate(TARGETS):
+def row_terms(Y, mean, std, folds=None, cal_z=None) -> list[dict]:
+    """Per target, the per-row pieces every score is built from: residual r, ok, |z|, the calibrated 68 / 95 %
+    coverage indicators and the CRPS.  The calibration is cross-conformal over ``folds`` (each fold's factor from
+    the other folds) or, for a held-out test set, the factor of the out-of-fold |z| ``cal_z[t]`` of the CV."""
+    out = []
+    for t in range(len(TARGETS)):
         ok = np.isfinite(Y[:, t]) & np.isfinite(mean[:, t])
         r = mean[:, t] - Y[:, t]
+        s = np.maximum(std[:, t], 1e-12)
+        z = np.abs(r) / s
+        cal68, cal95 = np.zeros(len(r), bool), np.zeros(len(r), bool)
+        if cal_z is not None:
+            cal68, cal95 = z <= conformal_q(cal_z[t], 0.68), z <= conformal_q(cal_z[t], 0.95)
+        else:
+            for test in folds:                                   # cross-conformal: each fold's factor from the others
+                other = np.setdiff1d(np.flatnonzero(ok), test)
+                cal68[test] = z[test] <= conformal_q(z[other], 0.68)
+                cal95[test] = z[test] <= conformal_q(z[other], 0.95)
+        crps = np.where(ok, crps_gaussian(np.nan_to_num(Y[:, t]), np.nan_to_num(mean[:, t]), s), np.nan)
+        out.append({"ok": ok, "r": np.where(ok, r, 0.0), "z": np.where(ok, z, np.nan), "cal68": cal68, "cal95": cal95, "crps": crps})
+    return out
+
+
+def scores(Y, Y_err, mean, std, amp, folds, cal_z=None) -> dict:
+    with warnings.catch_warnings():                          # Spearman of a near-constant prediction
+        warnings.simplefilter("ignore")
+        return _scores(Y, Y_err, mean, std, amp, folds, cal_z)
+
+
+def _scores(Y, Y_err, mean, std, amp, folds, cal_z=None) -> dict:
+    out = {}
+    for t, (name, rt) in enumerate(zip(TARGETS, row_terms(Y, mean, std, folds, cal_z))):
+        ok, r, z, cal68, cal95 = rt["ok"], rt["r"], rt["z"], rt["cal68"], rt["cal95"]
         shape = r.copy()
         for a in np.unique(amp):
             sel = (amp == a) & ok
@@ -390,12 +428,9 @@ def scores(Y, Y_err, mean, std, amp, folds) -> dict:
             sel = (amp == a) & ok
             if sel.sum() >= 4 and np.std(Y[sel, t]) > 0 and np.std(mean[sel, t]) > 0:
                 ranks.append(spearmanr(mean[sel, t], Y[sel, t])[0])
-        z = np.abs(r) / np.maximum(std[:, t], 1e-12)
-        cal68, cal95 = np.zeros(len(r), bool), np.zeros(len(r), bool)
-        for test in folds:                                   # cross-conformal: each fold's factor from the others
-            other = np.setdiff1d(np.flatnonzero(ok), test)
-            cal68[test] = z[test] <= conformal_q(z[other], 0.68)
-            cal95[test] = z[test] <= conformal_q(z[other], 0.95)
+        by_amp = {str(a): {"calibrated_coverage68": float(np.mean(cal68[(amp == a) & ok])),
+                           "calibrated_coverage95": float(np.mean(cal95[(amp == a) & ok])), "n": int(((amp == a) & ok).sum())}
+                  for a in np.unique(amp) if ((amp == a) & ok).any()}
         out[name] = {"error": float(np.sqrt(np.mean(r[ok] ** 2))), "bias": float(np.mean(r[ok])),
                      "shape": float(np.sqrt(np.mean(shape[ok] ** 2))),
                      "rank": float(np.mean(ranks)) if ranks else None,
@@ -403,14 +438,144 @@ def scores(Y, Y_err, mean, std, amp, folds) -> dict:
                      "calibrated_coverage68": float(np.mean(cal68[ok])), "calibrated_coverage95": float(np.mean(cal95[ok])),
                      "factor68": conformal_q(z[ok], 0.68),
                      "label_error": float(np.nanmedian(Y_err[ok, t])) if np.isfinite(Y_err[ok, t]).any() else None,
+                     "crps": float(np.mean(rt["crps"][ok])),
+                     "worst_amp_calibrated_coverage68": min(v["calibrated_coverage68"] for v in by_amp.values()) if by_amp else None,
+                     "worst_amp_calibrated_coverage95": min(v["calibrated_coverage95"] for v in by_amp.values()) if by_amp else None,
+                     "by_amp": by_amp,
                      "n": int(ok.sum())}
     return out
 
+
+# -- packet bootstrap (no refitting: the out-of-fold predictions are resampled by packet) ---------------------------
+
+def _weighted_ranks(v: np.ndarray, W: np.ndarray) -> np.ndarray:
+    """Ranks of v in each resample (rows of W = how often each row was drawn), ties of the copies averaged."""
+    o = np.argsort(v, kind="stable")
+    Ws = W[:, o]
+    R = np.empty_like(Ws)
+    R[:, o] = np.cumsum(Ws, 1) - Ws + (Ws + 1) / 2
+    return R
+
+
+def weighted_spearman(x: np.ndarray, y: np.ndarray, W: np.ndarray) -> np.ndarray:
+    """Spearman correlation of x and y in every resample (= spearmanr on the resampled rows; NaN below 4 rows)."""
+    rx, ry = _weighted_ranks(x, W), _weighted_ranks(y, W)
+    sw = W.sum(1, keepdims=True)
+    with np.errstate(all="ignore"):
+        dx, dy = rx - (W * rx).sum(1, keepdims=True) / sw, ry - (W * ry).sum(1, keepdims=True) / sw
+        rho = (W * dx * dy).sum(1) / np.sqrt((W * dx ** 2).sum(1) * (W * dy ** 2).sum(1))
+    rho[(W > 0).sum(1) < 4] = np.nan
+    return rho
+
+
+def bootstrap_scores(Y, mean, std, amp, folds, W, cal_z=None) -> list[dict]:
+    """Per target, each score in every packet-bootstrap resample (arrays of length n_boot).  The calibrated coverage
+    indicators are those of the full data (the conformal factor is not re-estimated per resample)."""
+    amps = np.unique(amp)
+    with warnings.catch_warnings():                          # resamples without a usable amplifier: NaN
+        warnings.simplefilter("ignore")
+        return _bootstrap_scores(Y, mean, std, amp, amps, row_terms(Y, mean, std, folds, cal_z), W)
+
+
+def _bootstrap_scores(Y, mean, std, amp, amps, terms, W) -> list[dict]:
+    out = []
+    for t, rt in enumerate(terms):
+        ok, r = rt["ok"], rt["r"]
+        Wk = W * ok
+        n = Wk.sum(1)
+        with np.errstate(all="ignore"):
+            mse = Wk @ r ** 2 / n
+            shape_ss = Wk @ r ** 2
+            ranks, cov68 = [], []
+            for a in amps:
+                sel = (amp == a) & ok
+                Wa = Wk[:, sel]
+                na = Wa.sum(1)
+                shape_ss = shape_ss - np.where(na > 0, (Wa @ r[sel]) ** 2 / np.where(na > 0, na, 1), 0)
+                cov68.append(np.where(na > 0, Wa @ rt["cal68"][sel] / na, np.nan))
+                if sel.sum() >= 4 and np.std(Y[sel, t]) > 0 and np.std(mean[sel, t]) > 0:
+                    ranks.append(weighted_spearman(mean[sel, t], Y[sel, t], Wa))
+            out.append({"error": np.sqrt(mse), "mse": mse, "shape": np.sqrt(np.maximum(shape_ss, 0) / n),
+                        "rank": np.nanmean(np.array(ranks), 0) if ranks else np.full(len(W), np.nan),
+                        "calibrated_coverage68": Wk @ rt["cal68"] / n, "calibrated_coverage95": Wk @ rt["cal95"] / n,
+                        "worst_amp_calibrated_coverage68": np.nanmin(np.array(cov68), 0),
+                        "crps": Wk @ np.nan_to_num(rt["crps"]) / n})
+    return out
+
+
+BOOT_KEYS = ("error", "vs_mean", "shape", "rank", "calibrated_coverage68", "calibrated_coverage95",
+             "worst_amp_calibrated_coverage68", "crps")
+
+
+def bootstrap_summary(boots: dict, base: str | None = "mean") -> dict:
+    """{model: {target: {score: {'68': [lo, hi], '95': [lo, hi]}}}} from the bootstrap arrays of every model;
+    'vs_mean' is the ratio to the mean baseline's error in the same resample."""
+    out = {}
+    for model, per_t in boots.items():
+        out[model] = {}
+        for t, name in enumerate(TARGETS):
+            b = dict(per_t[t])
+            if base in boots and model != base:
+                with np.errstate(all="ignore"):
+                    b["vs_mean"] = b["error"] / boots[base][t]["error"]
+            out[model][name] = {k: percentile_interval(b[k]) for k in BOOT_KEYS if k in b}
+    return out
+
+
+def paired_vs(preds: dict, Y, ref: str, W, sel=None) -> dict:
+    """Paired comparison of every model with ``ref`` on the same packet-bootstrap resamples.
+
+    Per target: the difference in RMS log error (model - ref; negative = the model is better) on the rows both
+    predicted, its 68 / 95 % intervals, the mean difference in squared log error per row (the resampled quantity)
+    and the fraction of resamples in which the model's error is below the reference's."""
+    if ref not in preds:
+        return {}
+    sel = np.arange(len(Y)) if sel is None else sel
+    out = {}
+    for model, (m, _) in preds.items():
+        if model == ref:
+            continue
+        out[model] = {}
+        for t, name in enumerate(TARGETS):
+            y, a, b = Y[sel, t], m[sel, t], preds[ref][0][sel, t]
+            ok = np.isfinite(y) & np.isfinite(a) & np.isfinite(b)
+            if not ok.any():
+                continue
+            d2 = np.where(ok, (a - y) ** 2 - (b - y) ** 2, 0.0)
+            ra, rb = np.where(ok, (a - y) ** 2, 0.0), np.where(ok, (b - y) ** 2, 0.0)
+            Wk = W * ok
+            n = Wk.sum(1)
+            with np.errstate(all="ignore"):
+                dmse = Wk @ d2 / n
+                derr = np.sqrt(Wk @ ra / n) - np.sqrt(Wk @ rb / n)
+            out[model][name] = {"delta_error": float(np.sqrt(ra[ok].mean()) - np.sqrt(rb[ok].mean())),
+                                "delta_error_interval": percentile_interval(derr),
+                                "delta_sq_log_error": float(d2[ok].mean()), "delta_sq_log_error_interval": percentile_interval(dmse),
+                                # identical predictions (e.g. physics_joint's sigma_e is physics'): no winner
+                                "identical": bool(np.all(d2[ok] == 0)),
+                                "p_better": None if np.all(d2[ok] == 0) else float(np.mean(dmse[np.isfinite(dmse)] < 0)),
+                                "n_rows": int(ok.sum())}
+    return out
+
+
+# -- report ---------------------------------------------------------------------------------------------------------
 
 def fmt(v, pct=True):
     if v is None or (isinstance(v, float) and not np.isfinite(v)):
         return "–"
     return f"{100 * v:.1f} %" if pct else f"{v:.2f}"
+
+
+def fmt_iv(iv, pct=True, level="68"):
+    """'12.1–18.3' (percent) or '0.85–0.95' for an interval {'68': [lo, hi], ...}."""
+    if not iv or not iv.get(level):
+        return "–"
+    lo, hi = iv[level]
+    return f"{100 * lo:.1f}–{100 * hi:.1f}" if pct else f"{lo:.2f}–{hi:.2f}"
+
+
+def fmt_pp(v):
+    return "–" if v is None or not np.isfinite(v) else f"{100 * v:+.1f}"
 
 
 def vs_mean(results: dict, model: str, target: str) -> float | None:
@@ -421,28 +586,129 @@ def vs_mean(results: dict, model: str, target: str) -> float | None:
     return results[model]["scores"][target]["error"] / base["error"]
 
 
-def report_md(results: dict, info: dict) -> str:
-    lines = [f"# Level 1 results ({info['date']})", "",
-             f"Inputs: `{info['inputs']}`; boards {info['boards']}; {info['n_rows']} examples from {info['n_packets']} packets; "
-             f"{info['n_folds']}-fold cross-validation grouped by packet.  No amplifier labels are model inputs.", ""]
-    if "mean" in results and "scores" in results["mean"]:
-        lines += ["**vs mean** is a model's error divided by that of the `mean` baseline (always predicting the training average): "
-                  "below 1 the model has learned something; near 1 it has not, however small its error looks.  `settings` uses "
-                  "the settings alone: a trace model that does not beat it has not shown that the traces help.", ""]
+def _tag(model):
+    return " (labels)" if model in USES_LABELS else " (baseline)" if model in BASELINES else ""
+
+
+def _score_tables(results: dict, level: str = "##") -> list[str]:
+    """The main table per target (as before, plus the error's 68 % interval, the worst amplifier and the CRPS)."""
+    lines = []
     for name in TARGETS:
-        lines += [f"## {name}", "", "| model | error | vs mean | bias | shape | rank | cover 68 / 95 | calibrated 68 / 95 | factor | label error |",
-                  "|---|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"{level} {name}", "",
+                  "| model | error | 68 % CI | vs mean | bias | shape | rank | cover 68 / 95 | calibrated 68 / 95 | worst amp 68 | factor | CRPS | label error |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for model, res in results.items():
             if "skipped" in res:
                 continue
             s = res["scores"][name]
-            tag = " (labels)" if model in USES_LABELS else " (baseline)" if model in BASELINES else ""
-            lines.append(f"| {model}{tag} | {fmt(s['error'])} | {fmt(vs_mean(results, model, name), False)} | {fmt(s['bias'])} | {fmt(s['shape'])} | {fmt(s['rank'], False)} | "
+            ci = res.get("bootstrap", {}).get(name, {}).get("error")
+            lines.append(f"| {model}{_tag(model)} | {fmt(s['error'])} | {fmt_iv(ci)} | {fmt(vs_mean(results, model, name), False)} | {fmt(s['bias'])} | {fmt(s['shape'])} | {fmt(s['rank'], False)} | "
                          f"{fmt(s['coverage68'], False)} / {fmt(s['coverage95'], False)} | {fmt(s['calibrated_coverage68'], False)} / "
-                         f"{fmt(s['calibrated_coverage95'], False)} | {fmt(s['factor68'], False)} | {fmt(s['label_error'])} |")
+                         f"{fmt(s['calibrated_coverage95'], False)} | {fmt(s.get('worst_amp_calibrated_coverage68'), False)} | {fmt(s['factor68'], False)} | "
+                         f"{fmt(s.get('crps'))} | {fmt(s['label_error'])} |")
         lines.append("")
+    return lines
+
+
+def _interval_tables(results: dict, level: str = "###") -> list[str]:
+    lines = []
+    for name in TARGETS:
+        rows = [(m, r["bootstrap"][name]) for m, r in results.items() if "bootstrap" in r and name in r["bootstrap"]]
+        if not rows:
+            continue
+        lines += [f"{level} {name}", "", "| model | error 68 % | error 95 % | vs mean 68 % | shape 68 % | rank 68 % | calibrated 68 (68 %) | worst amp 68 (68 %) | CRPS 68 % |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for m, b in rows:
+            lines.append(f"| {m}{_tag(m)} | {fmt_iv(b.get('error'))} | {fmt_iv(b.get('error'), level='95')} | {fmt_iv(b.get('vs_mean'), False)} | "
+                         f"{fmt_iv(b.get('shape'))} | {fmt_iv(b.get('rank'), False)} | {fmt_iv(b.get('calibrated_coverage68'), False)} | "
+                         f"{fmt_iv(b.get('worst_amp_calibrated_coverage68'), False)} | {fmt_iv(b.get('crps'))} |")
+        lines.append("")
+    return lines
+
+
+def _paired_table(paired: dict, ref: str) -> list[str]:
+    if not paired:
+        return [f"(`{ref}` was not run, so there is no paired comparison.)", ""]
+    head = "| model | " + " | ".join(f"{t}: Δ error [95 % CI] | P(better)" for t in TARGETS) + " |"
+    lines = [head, "|---|" + "---|---|" * len(TARGETS)]
+    for m, per_t in paired.items():
+        cells = []
+        for t in TARGETS:
+            p = per_t.get(t)
+            if not p:
+                cells += ["–", "–"]
+                continue
+            if p.get("identical"):
+                cells += [f"same as {ref}", "–"]
+                continue
+            iv = p["delta_error_interval"].get("95")
+            ci = f" [{100 * iv[0]:+.1f}, {100 * iv[1]:+.1f}]" if iv else ""
+            sig = " *" if iv and (iv[1] < 0 or iv[0] > 0) else ""
+            cells += [f"{fmt_pp(p['delta_error'])}{ci}{sig}", f"{p['p_better']:.2f}"]
+        lines.append(f"| {m}{_tag(m)} | " + " | ".join(cells) + " |")
+    return lines + ["", f"Δ error: the model's error minus `{ref}`'s, in percentage points of log error (negative = better than `{ref}`); "
+                        "\\* = the 95 % interval excludes 0.  P(better): fraction of packet-bootstrap resamples in which the model's "
+                        "error is the lower.  Change the default model only on a difference marked \\*.", ""]
+
+
+def report_md(results: dict, info: dict, holdout: dict | None = None, loao: dict | None = None) -> str:
+    grouping = ("grouped by setting (packets at identical settings share a fold)" if info.get("group_by") == "setting"
+                else "grouped by packet")
+    lines = [f"# Level 1 results ({info['date']})", "",
+             f"Inputs: `{info['inputs']}`; boards {info['boards']}; {info['n_rows']} examples from {info['n_packets']} packets; "
+             f"{info['n_folds']}-fold cross-validation {grouping}.  No amplifier labels are model inputs.", ""]
+    if info.get("n_groups") is not None and info.get("group_by") == "setting":
+        merged = info.get("merged_groups") or []
+        lines += [f"{info['n_groups']} setting groups for {info['n_cv_packets']} cross-validated packets"
+                  + (": " + ", ".join(f"`{g}`" for g in merged) + " are each one group." if merged else " (no two packets share settings)."), ""]
+    if info.get("holdout_packets"):
+        lines += [f"Held out (not in the cross-validation, scored once at the end): {len(info['holdout_packets'])} packets "
+                  f"({info.get('holdout_source', '')}).", ""]
+    if "mean" in results and "scores" in results["mean"]:
+        lines += ["**vs mean** is a model's error divided by that of the `mean` baseline (always predicting the training average): "
+                  "below 1 the model has learned something; near 1 it has not, however small its error looks.  `settings` uses "
+                  "the settings alone: a trace model that does not beat it has not shown that the traces help.", ""]
+    nb = info.get("n_boot", 0)
+    lines += [(f"**68 % CI**: the 16–84 % range of the error over {nb} packet-bootstrap resamples of the out-of-fold "
+               "predictions (no refitting).  " if nb else "") + "**worst amp 68**: the calibrated 68 % coverage of the worst-covered amplifier.  **CRPS**: "
+              "the continuous ranked probability score of the Gaussian prediction in log space (lower is better; it rewards "
+              "accuracy and honest error bars together, and equals the mean absolute log error for a perfectly sharp prediction).", ""]
+    lines += _score_tables(results)
     if any(m in USES_LABELS for m in results):
         lines += ["(labels): a reference model told the module and amplifier; every other model sees only each amplifier's own traces.", ""]
+    ref = info.get("paired_ref", "physics")
+    if nb:
+        lines += [f"## Paired comparison vs {ref}", "", f"On the same {nb} packet-bootstrap resamples as the intervals.", ""]
+        lines += _paired_table(info.get("_paired", {}), ref)
+    if nb:
+        lines += ["## Bootstrap intervals", "", "68 % = 16–84 % range, 95 % = 2.5–97.5 % range over packet-bootstrap resamples (errors and CRPS in %).  "
+                  "With ~40 packets the intervals are rough (a bootstrap over few clusters tends to make them too narrow).", ""]
+        lines += _interval_tables(results)
+    if holdout:
+        lines += ["## Prospective test (held-out packets)", "",
+                  f"Every model trained ONCE on all cross-validated packets and scored on the {holdout['info']['n_packets']} held-out "
+                  f"packets ({holdout['info']['n_rows']} examples) only.  The calibrated coverage uses the conformal factor of the "
+                  "cross-validation (no information from the held-out packets).  Choose the model on the cross-validation above; "
+                  "read this section once, as the test of that choice.", ""]
+        if holdout["info"].get("twins"):
+            lines += ["Held-out packets whose settings also appear in the training packets (included in the scores, but they are "
+                      "not new settings): " + ", ".join(f"`{p}`" for p in holdout["info"]["twins"]) + ".", ""]
+        lines += _score_tables(holdout["results"], "###")
+        if nb:
+            lines += [f"### Paired comparison vs {ref} (held-out packets)", ""] + _paired_table(holdout["paired"], ref)
+    if loao:
+        lines += ["## Leave one amplifier out (new-module indicator)", "",
+                  f"Each of the {loao['n_folds']} amplifiers predicted by models trained on the OTHER amplifiers only, crossed with the "
+                  f"{loao.get('n_packet_folds', '')} packet folds (the test packets are not in training either, so this costs amplifiers x folds fits).  "
+                  "Level 1 always has the same amplifiers in training, so this is only an indicator of how a model would do on a "
+                  "new module; it is expected to be poor.", "",
+                  "| model | " + " | ".join(f"{t} error | {t} vs mean" for t in TARGETS) + " |", "|---|" + "---|---|" * len(TARGETS)]
+        for m, r in loao["results"].items():
+            if "skipped" in r:
+                lines.append(f"| {m} | " + " | ".join(["–"] * 2 * len(TARGETS)) + f" |")
+                continue
+            lines.append(f"| {m}{_tag(m)} | " + " | ".join(f"{fmt(r['scores'][t]['error'])} | {fmt(vs_mean(loao['results'], m, t), False)}" for t in TARGETS) + " |")
+        lines.append("")
     skipped = {m: r["skipped"] for m, r in results.items() if "skipped" in r}
     if skipped:
         lines += ["## Skipped", ""] + [f"* {m}: {why}" for m, why in skipped.items()] + [""]
@@ -454,12 +720,48 @@ def report_md(results: dict, info: dict) -> str:
 # --------------------------------------------------------------------------- #
 
 
+def matches_packet(packet_id: str, ids) -> bool:
+    """True if packet_id is one of ids, or one of them followed by a non-digit suffix ('L1_33' matches 'L1_33',
+    'L1_33b', 'L1_33_retake', but not 'L1_330')."""
+    for p in ids:
+        if packet_id == p or (packet_id.startswith(p) and not packet_id[len(p)].isdigit()):
+            return True
+    return False
+
+
+def session_packets(plan_path: Path, session: str) -> list[str]:
+    """The planned packet ids of one session (lvl1/packet_plan/plan.json)."""
+    plan = json.loads(Path(plan_path).read_text())
+    return [p["packet_id"] for p in plan["packets"] if str(p.get("session")) == session]
+
+
+def run_model(runner, name, splits):
+    """(mean, std) for every row of each (train, test) split; NaN where a row is in no test set."""
+    mean, std = np.full(runner.Y.shape, np.nan), np.full(runner.Y.shape, np.nan)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for train, test in splits:
+            m, s = getattr(runner, name)(train, test)
+            mean[test], std[test] = m, s
+    return mean, std
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--inputs", required=True, help="the model_inputs directory written by process_packet.py")
     parser.add_argument("--models", nargs="*", default=list(ALL_MODELS), choices=ALL_MODELS + EXTRA_MODELS)
     parser.add_argument("--board", type=int, nargs="*", default=[101], help="boards whose amplifiers are used (default 101)")
     parser.add_argument("--folds", type=int, default=5)
+    parser.add_argument("--group-by", choices=("setting", "packet"), default="setting",
+                        help="CV groups: packets at identical settings together (default), or each packet alone")
+    parser.add_argument("--setting-tol", type=float, default=0.01,
+                        help="settings are 'identical' within this fraction of each setting's range over the packets (default 0.01)")
+    parser.add_argument("--n-boot", type=int, default=1000, help="packet-bootstrap resamples for the intervals (default 1000; 0 = none)")
+    parser.add_argument("--paired-ref", default="physics", help="reference model of the paired comparison (default physics)")
+    parser.add_argument("--holdout-packets", nargs="*", default=[], help="packet ids held out of the CV and scored once at the end")
+    parser.add_argument("--holdout-session", help="hold out the plan's packets of this session (e.g. C: L1_33..L1_43)")
+    parser.add_argument("--plan", default=str(ROOT / "lvl1" / "packet_plan" / "plan.json"), help="the packet plan (for --holdout-session)")
+    parser.add_argument("--loao", action="store_true", help="also score leave-one-amplifier-out (a new-module indicator)")
     parser.add_argument("--include-flagged", action="store_true", help="also use labels that WADERs flagged")
     parser.add_argument("--allow-fake", action="store_true", help="also use FAKE (rehearsal) packets")
     parser.add_argument("--quick", action="store_true", help="short training (to test the pipeline)")
@@ -479,46 +781,149 @@ def main():
     rows = np.flatnonzero(rows)
     if len(rows) < 6:
         raise SystemExit(f"only {len(rows)} usable examples (boards {args.board}, labels ok, not fake): take more packets")
-    packets = base["packet_id"][rows]
+    packets = base["packet_id"][rows].astype(str)
     amp = np.array([f"{b}_ch{c}" for b, c in zip(base["board"][rows], base["channel"][rows])])
-    n_folds = min(args.folds, len(np.unique(packets)))
-    folds = grouped_folds(packets, n_folds, seed=0)
+
+    # held-out packets (a prospective test): out of the cross-validation, scored once at the end
+    hold_ids, hold_source = list(args.holdout_packets), "--holdout-packets"
+    if args.holdout_session:
+        hold_ids += session_packets(Path(args.plan), args.holdout_session)
+        hold_source = f"session {args.holdout_session} of {Path(args.plan).name}" + (" and --holdout-packets" if args.holdout_packets else "")
+    held = np.array([matches_packet(p, hold_ids) for p in packets]) if hold_ids else np.zeros(len(rows), bool)
+    if hold_ids and not held.any():
+        print(f"warning: no packet matches the held-out ids {hold_ids[:5]}{'...' if len(hold_ids) > 5 else ''}: nothing is held out")
+    cv_idx, ho_idx = np.flatnonzero(~held), np.flatnonzero(held)
+    if len(np.unique(packets[cv_idx])) < 2:
+        raise SystemExit("fewer than 2 packets left for the cross-validation after the hold-out")
+
+    # CV groups: identical settings share a group (the nominal repeats, the replicates), so a twin is never in training
+    if args.group_by == "setting" and "theta" in base and np.asarray(base["theta"]).size:
+        groups = setting_groups(base["theta"][rows], packets, args.setting_tol)
+    else:
+        if args.group_by == "setting":
+            print("warning: no settings (theta) in the inputs: grouping by packet")
+            args.group_by = "packet"
+        groups = packets.copy()
+    n_groups = len(np.unique(groups[cv_idx]))
+    merged = sorted(g for g in np.unique(groups[cv_idx]) if len(np.unique(packets[cv_idx][groups[cv_idx] == g])) > 1)
+    n_folds = min(args.folds, n_groups)
+    folds = [cv_idx[f] for f in grouped_folds(groups[cv_idx], n_folds, seed=0)]
+    cv_splits = [(np.setdiff1d(cv_idx, test), test) for test in folds]
+    local = lambda idx: [np.searchsorted(cv_idx, f) for f in idx]             # fold indices within cv_idx
     runner = Runner(files, rows, args.quick)
     out = Path(args.out) if args.out else inputs.parent / "lvl1_results" / datetime.now().strftime("%Y%m%d_%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
     info = {"date": datetime.now().isoformat(timespec="seconds"), "inputs": str(inputs), "boards": args.board,
-            "n_rows": int(len(rows)), "n_packets": int(len(np.unique(packets))), "n_folds": n_folds, "quick": args.quick,
-            "models": args.models}
-    print(f"{len(rows)} examples from {info['n_packets']} packets, boards {args.board}, {n_folds} folds (grouped by packet)")
-    results, preds = {}, {}
+            "n_rows": int(len(cv_idx)), "n_packets": int(len(np.unique(packets[cv_idx]))), "n_folds": n_folds, "quick": args.quick,
+            "models": args.models, "group_by": args.group_by, "setting_tol": args.setting_tol, "n_groups": n_groups,
+            "n_cv_packets": int(len(np.unique(packets[cv_idx]))), "merged_groups": merged, "n_boot": args.n_boot,
+            "paired_ref": args.paired_ref, "holdout_packets": sorted(np.unique(packets[ho_idx]).tolist()),
+            "holdout_source": hold_source if len(ho_idx) else None}
+    print(f"{len(cv_idx)} examples from {info['n_packets']} packets, boards {args.board}, {n_folds} folds (grouped by {args.group_by}"
+          + (f": {n_groups} setting groups" + (f", merged: {', '.join(merged)}" if merged else ", none merged") if args.group_by == "setting" else "") + ")")
+    if len(ho_idx):
+        print(f"held out for the prospective test: {len(ho_idx)} examples from {len(info['holdout_packets'])} packets ({hold_source})")
+    n_boot = max(args.n_boot, 0)
+    W_cv = bootstrap_weights(packets[cv_idx], n_boot, seed=0) if n_boot else None
+    sl = cv_idx
+    results, preds, boots, cal_z = {}, {}, {}, {}
     for name in args.models:
         if FAMILY[name] not in files:
             results[name] = {"skipped": f"{FAMILY[name]}.npz not found"}
             print(f"{name:14s} skipped: {results[name]['skipped']}")
             continue
         t0 = time.time()
-        mean, std = np.full(runner.Y.shape, np.nan), np.full(runner.Y.shape, np.nan)
         try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                for test in folds:
-                    train = np.setdiff1d(np.arange(len(rows)), test)
-                    m, s = getattr(runner, name)(train, test)
-                    mean[test], std[test] = m, s
+            mean, std = run_model(runner, name, cv_splits)
         except SkipModel as exc:
             results[name] = {"skipped": str(exc)}
             print(f"{name:14s} skipped: {exc}")
             continue
-        sc = scores(runner.Y, runner.Y_err, mean, std, amp, folds)
+        sc = scores(runner.Y[sl], runner.Y_err[sl], mean[sl], std[sl], amp[sl], local(folds))
         results[name] = {"scores": sc, "seconds": time.time() - t0}
         preds[name] = (mean, std)
+        cal_z[name] = [rt["z"] for rt in row_terms(runner.Y[sl], mean[sl], std[sl], local(folds))]
+        if n_boot:
+            boots[name] = bootstrap_scores(runner.Y[sl], mean[sl], std[sl], amp[sl], local(folds), W_cv)
+            ci = {t: percentile_interval(boots[name][i]["error"])["68"] for i, t in enumerate(TARGETS)}
         ratio = lambda t: f", {vs_mean(results, name, t):.2f}x mean" if name != "mean" and vs_mean(results, name, t) is not None else ""
-        print(f"{name + (' (labels)' if name in USES_LABELS else ''):14s} " + "  ".join(f"{t}: {100 * sc[t]['error']:5.1f} % (rank {fmt(sc[t]['rank'], False)}, cover {sc[t]['coverage68']:.2f}{ratio(t)})"
+        iv = lambda t: f" [{100 * ci[t][0]:.1f}–{100 * ci[t][1]:.1f}]" if n_boot and ci[t] else ""
+        print(f"{name + (' (labels)' if name in USES_LABELS else ''):14s} " + "  ".join(f"{t}: {100 * sc[t]['error']:5.1f} %{iv(t)} (rank {fmt(sc[t]['rank'], False)}, cover {sc[t]['coverage68']:.2f}{ratio(t)})"
                                           for t in TARGETS) + f"   {time.time() - t0:5.0f} s", flush=True)
-    (out / "report.json").write_text(json.dumps({"info": info, "results": results}, indent=1))
-    (out / "report.md").write_text(report_md(results, info))
+    paired = {}
+    if n_boot:
+        for model, b in bootstrap_summary(boots).items():
+            results[model]["bootstrap"] = b
+        paired = paired_vs({k: (v[0][sl], v[1][sl]) for k, v in preds.items()}, runner.Y[sl], args.paired_ref, W_cv)
+        for model, p in paired.items():
+            results[model]["paired_vs_" + args.paired_ref] = p
+        if paired:
+            print(f"\npaired vs {args.paired_ref} (Δ error in percentage points [95 % CI], P(better)):")
+            for model, p in paired.items():
+                print(f"  {model:14s} " + "  ".join(f"{t}: {fmt_pp(p[t]['delta_error'])} [{fmt_pp(p[t]['delta_error_interval']['95'][0])}, "
+                                                    f"{fmt_pp(p[t]['delta_error_interval']['95'][1])}] P={p[t]['p_better']:.2f}"
+                                                    if not p[t]["identical"] else f"{t}: same"
+                                                    for t in TARGETS if t in p and p[t]['delta_error_interval']['95']))
+    info["_paired"] = paired
+
+    # the prospective test: train once on every cross-validated packet, score the held-out packets
+    holdout = None
+    if len(ho_idx):
+        twins = sorted({p for p, g in zip(packets[ho_idx], groups[ho_idx]) if np.isin(g, groups[cv_idx])})
+        h_res, h_preds, h_boots = {}, {}, {}
+        W_ho = bootstrap_weights(packets[ho_idx], n_boot, seed=1) if n_boot else None
+        print(f"\nprospective test on {len(info['holdout_packets'])} held-out packets"
+              + (f" (setting twins in training: {', '.join(twins)})" if twins else ""))
+        for name in preds:
+            t0 = time.time()
+            try:
+                m, s = run_model(runner, name, [(cv_idx, ho_idx)])
+            except SkipModel as exc:
+                h_res[name] = {"skipped": str(exc)}
+                continue
+            pm, ps = preds[name]
+            pm[ho_idx], ps[ho_idx] = m[ho_idx], s[ho_idx]          # predictions.csv: CV rows out-of-fold, held-out rows from this fit
+            h = ho_idx
+            sc = scores(runner.Y[h], runner.Y_err[h], m[h], s[h], amp[h], None, cal_z=cal_z[name])
+            h_res[name] = {"scores": sc, "seconds": time.time() - t0}
+            h_preds[name] = (m[h], s[h])
+            if n_boot:
+                h_boots[name] = bootstrap_scores(runner.Y[h], m[h], s[h], amp[h], None, W_ho, cal_z=cal_z[name])
+            print(f"{name:14s} " + "  ".join(f"{t}: {100 * sc[t]['error']:5.1f} %" for t in TARGETS) + f"   {time.time() - t0:5.0f} s", flush=True)
+        h_paired = {}
+        if n_boot:
+            for model, b in bootstrap_summary(h_boots).items():
+                h_res[model]["bootstrap"] = b
+            h_paired = paired_vs(h_preds, runner.Y[ho_idx], args.paired_ref, W_ho)
+        holdout = {"info": {"n_packets": len(info["holdout_packets"]), "n_rows": int(len(ho_idx)), "packets": info["holdout_packets"],
+                            "twins": twins, "source": hold_source}, "results": h_res, "paired": h_paired}
+
+    # leave one amplifier out (only an indicator for a new module)
+    loao = None
+    if args.loao:
+        # crossed with the packet folds: the test amplifier's rows of one fold, trained on the OTHER amplifiers of the
+        # OTHER folds (holding out the amplifier alone would leave the test packet's other amplifiers in training)
+        amps = np.unique(amp[cv_idx])
+        splits = [(np.setdiff1d(cv_idx[amp[cv_idx] != a], test), test[amp[test] == a]) for a in amps for test in folds]
+        splits = [(tr, te) for tr, te in splits if len(te) and len(tr)]
+        l_res = {}
+        print(f"\nleave one amplifier out ({len(amps)} amplifiers x {len(folds)} packet folds)")
+        for name in preds:
+            try:
+                m, s = run_model(runner, name, splits)
+            except Exception as exc:                                 # e.g. a model that needs every amplifier in training
+                l_res[name] = {"skipped": f"{type(exc).__name__}: {exc}"}
+                print(f"{name:14s} failed: {l_res[name]['skipped']}")
+                continue
+            l_res[name] = {"scores": scores(runner.Y[sl], runner.Y_err[sl], m[sl], s[sl], amp[sl], [np.searchsorted(cv_idx, t) for _, t in splits])}
+            print(f"{name:14s} " + "  ".join(f"{t}: {100 * l_res[name]['scores'][t]['error']:5.1f} %" for t in TARGETS), flush=True)
+        loao = {"n_folds": len(amps), "n_packet_folds": len(folds), "results": l_res}
+
+    info_json = {k: v for k, v in info.items() if not k.startswith("_")}
+    (out / "report.json").write_text(json.dumps({"info": info_json, "results": results, "holdout": holdout, "leave_one_amplifier_out": loao}, indent=1))
+    (out / "report.md").write_text(report_md(results, info, holdout, loao))
     import pandas as pd
-    table = {"packet_id": packets, "board": base["board"][rows], "channel": base["channel"][rows]}
+    table = {"packet_id": packets, "board": base["board"][rows], "channel": base["channel"][rows], "cv group": groups, "held out": held}
     for t, tn in enumerate(TARGETS):
         table[f"true log {tn}"] = runner.Y[:, t]
         table[f"label error {tn}"] = runner.Y_err[:, t]
