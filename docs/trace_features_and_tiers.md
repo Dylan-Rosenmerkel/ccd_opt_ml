@@ -328,8 +328,8 @@ importances. Every feature is therefore compared with **shadow features**, row-s
 - **L3:** not shown to matter.
 
 **Synthetic check** (td41_s0/1/2, 20 pure-noise columns added): no noise column reached L1, but 5–6 of the 20 reached
-L2. So L1 can be used as a feature set and L2 only as a list to look at. The 1.5 margin was chosen on these runs; it is
-being confirmed on unseen datasets. Details: `lvl1/feature_study/README.md`, step 3.
+L2. So L1 can be used as a feature set and L2 only as a list to look at. The 1.5 margin was chosen on these runs and then
+confirmed on two unseen datasets (td100_s0, td13_s0): again no noise column in L1. Details: `lvl1/feature_study/README.md`, step 3.
 
 **Use on real data:** after session A, beside §6.1. Features in evidence tier A but learned L3 are candidates to
 demote, and features in L1 but not in tier A are candidates to promote. L1 can also be one more set in the ablation.

@@ -122,9 +122,8 @@ Status of this request: see section 5 below (updated as the work goes).
   Synthetic td41_s0/1/2 with 20 noise columns: 0 noise columns in L1 (with the margin rule; 2 in one run without it),
   but 5-6 of 20 in L2, so L2 is not a feature set. Consistent L1: reset-level scatter, detrended CDS rms, dip recovery
   time, horizontal min/max. Write-up in lvl1/feature_study/README.md, step 3.
-- [ ] Confirmation of the 1.5 margin on unseen synthetic sets td100_s0 and td13_s0 (running; logs in the scratchpad
-  `imp_confirm_*.log`; if lost, rerun:
-  `lvl1/feature_importance.py --inputs <gpcmp>/td100_s0/model_inputs --add-noise 20`).
-- [ ] Add the importance results to `docs/trace_features_and_tiers.md`.
+- [x] 1.5 margin confirmed on unseen td100_s0 (0/20 noise in L1, 4 in L2, 3 real in L1) and td13_s0 (0 in L1, 8 in L2,
+  5 real in L1).
+- [x] Importance results added to `docs/trace_features_and_tiers.md` (6.3 updated, new 6.4).
 - Figures shown to the user today (scratchpad, not in the repo): top 16 new features (settings F vs amplifier F), start
   transient (lever arm + H-rail dependence), ch2 telegraph, jump share, noise budget, tolerance curves.

@@ -168,6 +168,7 @@ The features in L1 in all three datasets: reset-level scatter, detrended CDS rms
 
 - L1 is trustworthy on this check; L2 is not, because about 30 % of the noise columns reach it. Use L2 as a list to
   look at, not as a feature set.
-- The 1.5 margin was chosen on these three runs. It is being confirmed on td100_s0 and td13_s0, which it has not seen.
+- The 1.5 margin was chosen on these three runs. **Confirmed on two unseen datasets:** td100_s0 has 0 of 20 noise
+  columns in L1 (4 in L2) and 3 real features in L1; td13_s0 has 0 in L1 (8 in L2) and 5 real features in L1.
 - On real data, run it on session A after the evidence tiers, and compare: features in evidence tier A but in learned
   L3 are candidates to drop; features in L1 but not in tier A are candidates to promote.
