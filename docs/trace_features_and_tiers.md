@@ -299,15 +299,40 @@ interval excluding 0, or at least does not hurt.
 **Which models.** All of them except the baselines and `trace_physics`, which take no trace features. The CNN family
 mainly uses the curves; for it, ablate the scalar block (settings + reference features) the same way.
 
-### 6.3 What has to be built first (not started)
+### 6.3 What has to be built first
 
-1. A **`--feature-tiers` option** in `lvl1/train_lvl1.py`. It reads `lvl1/feature_study/evidence_tiers.json`, selects
-   the X_trace and X_ref columns of the chosen tiers, and gives each model a default set from §3.
-2. A small **ablation runner**: models × the five sets × targets, one report with the paired comparisons (in the
-   spirit of `lvl1/feature_tolerance.py`).
-3. **Label relevance in `lvl1/feature_study.py`**, used when packets with labels are given.
-4. The **tolerance test of `gp_saas` and `gp_dim`**, to see whether a prior-regularized GP can take more features than
-   the plain one.
+1. **Done:** the **`--feature-tiers` option** in `lvl1/train_lvl1.py`: `all`, `none`, `auto` (the per-model defaults
+   of §3, `MODEL_TIERS`) or tier labels such as `A`, `A+B`, `A1`, `impl0`. It selects the X_trace and X_ref columns
+   from `lvl1/feature_study/evidence_tiers.json`.
+2. **Done:** the **ablation runner**, `--tier-ablation [SET ...]` (default `none A1 A A+B all impl0`). It trains every
+   model on every set and compares each, paired, with the same model on `--ablation-ref` (default `all`); the report
+   gets a "Tier ablation" section.
+3. **Not started:** label relevance in `lvl1/feature_study.py`, used when packets with labels are given.
+4. **Not started:** the tolerance test of `gp_saas` and `gp_dim`, to see whether a prior-regularized GP can take more
+   features than the plain one.
+
+### 6.4 Learned tiers: let trained models say which features matter (`lvl1/feature_importance.py`)
+
+The evidence tiers need no labels. With labels, trained models can rank the features too:
+
+- **stability selection:** how often an elastic net, refitted on packet-bootstrap resamples, keeps the feature;
+- **permutation importance:** the increase of the held-out error of gradient-boosted trees when the feature is
+  shuffled.
+
+At ~40 packets a plain ranking does not work: on synthetic data, real and pure-noise features had the same
+importances. Every feature is therefore compared with **shadow features**, row-shuffled copies of every column
+(Boruta). The learned tiers:
+
+- **L1:** both methods beat the shadows' 95th percentile by more than 1.5 ×, in most of 5 rounds;
+- **L2:** a candidate (one method, or both narrowly);
+- **L3:** not shown to matter.
+
+**Synthetic check** (td41_s0/1/2, 20 pure-noise columns added): no noise column reached L1, but 5–6 of the 20 reached
+L2. So L1 can be used as a feature set and L2 only as a list to look at. The 1.5 margin was chosen on these runs; it is
+being confirmed on unseen datasets. Details: `lvl1/feature_study/README.md`, step 3.
+
+**Use on real data:** after session A, beside §6.1. Features in evidence tier A but learned L3 are candidates to
+demote, and features in L1 but not in tier A are candidates to promote. L1 can also be one more set in the ablation.
 
 ---
 
@@ -321,6 +346,7 @@ mainly uses the curves; for it, ablate the scalar block (settings + reference fe
 | `docs/slides/oct12_features.py` → `docs/slides/data/oct12_trace_features.csv` | all 134 features of the 59 real traces |
 | `lvl1/feature_study.py` → `lvl1/feature_study/` | separation, stability and redundancy per feature; evidence tiers; results README |
 | `lvl1/feature_tolerance.py` → `lvl1/feature_study/tolerance_*.csv` | the synthetic tolerance test |
+| `lvl1/feature_importance.py` → `feature_importance.csv` | learned tiers L1/L2/L3 (stability selection + permutation vs shadow features) |
 | `lvl1/make_feature_notebook.py` → `lvl1/new_trace_features.ipynb` | the walkthrough notebook |
 | `docs/trace_feature_candidates.md` | the candidate list and the reasons |
 | `lvl1/packet_plan/PLAN.md` | the 43-packet scan |
