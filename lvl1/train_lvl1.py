@@ -104,6 +104,49 @@ FAMILY = {"mean": "features", "settings": "features", "trace_physics": "physics"
           "physics_joint_weak": "physics", "physics_joint_select": "physics",
           "physics_saasmap_lambda": "physics", "physics_saasfull_lambda": "physics"}
 MAX_NAN_FRACTION = 0.2
+#: the evidence tiers of every trace feature (lvl1/feature_study.py); see docs/trace_features_and_tiers.md
+TIER_FILE = ROOT / "lvl1" / "feature_study" / "evidence_tiers.json"
+#: per-model default feature sets for --feature-tiers auto (from the synthetic tolerance test, lvl1/feature_study/README.md):
+#: the plain GP collapses with 20 uninformative columns, nn and ridge degrade, trees are immune
+MODEL_TIERS = {"gp": "A", "gp_dim": "A", "gp_saas": "A", "nn": "A", "ridge": "A", "settings": "none", "mean": "none",
+               "trees": "all"}
+DEFAULT_MODEL_TIERS = "A+B"
+#: the feature sets tried by --tier-ablation (by default); "none" = settings only, "impl0" = the original 85 features
+ABLATION_SETS = ["none", "A1", "A", "A+B", "all", "impl0"]
+
+
+def load_tiers(path: Path = TIER_FILE) -> dict[str, set[str]]:
+    """Feature name -> its tier labels: evidence tiers from ``path`` (A, A1, A2, B, C) and implementation tiers
+    ("impl0", "impl1", "impl2", from trace_features.FEATURES)."""
+    labels: dict[str, set[str]] = {}
+    if Path(path).exists():
+        for tier, names in json.loads(Path(path).read_text()).items():
+            for n in names:
+                labels.setdefault(n, set()).add(tier)
+    try:
+        import trace_features as tf
+        for n, f in tf.FEATURES.items():
+            labels.setdefault(n, set()).add(f"impl{f.tier}")
+    except Exception:                                        # noqa: BLE001 - tiers by file only
+        pass
+    for n, ls in labels.items():                             # A = A1 + A2
+        if ls & {"A1", "A2"}:
+            ls.add("A")
+    return labels
+
+
+def feature_mask(names, spec: str, tiers: dict[str, set[str]]) -> np.ndarray:
+    """Columns of ``names`` selected by ``spec``: "all", "none", or tier labels joined by "+" (e.g. "A+B", "A1",
+    "impl0+impl1").  A feature without a tier label is kept only by "all"."""
+    names = [str(n) for n in names]
+    if spec == "all":
+        return np.ones(len(names), bool)
+    if spec == "none":
+        return np.zeros(len(names), bool)
+    want = set(spec.split("+"))
+    return np.array([bool(tiers.get(n, set()) & want) for n in names])
+
+
 #: NUTS settings of the SAAS GP that fits lambda in ``physics`` (short chains: almost all of the full chains' gain)
 SAAS_LAMBDA_KW = dict(warmup=96, num_samples=48, thinning=8)
 
@@ -164,9 +207,11 @@ def fill_sets(sets: np.ndarray, n_sets: np.ndarray, rng) -> np.ndarray:
 class Runner:
     """Holds the loaded files and the shared pre-trained encoder; ``run(name, train, test)``."""
 
-    def __init__(self, files: dict, rows: np.ndarray, quick: bool):
+    def __init__(self, files: dict, rows: np.ndarray, quick: bool, tiers: dict | None = None):
         self.files, self.rows, self.quick = files, rows, quick
         self.pretrainer = None
+        self.tiers = tiers or {}
+        self.feature_spec = "all"                            # which trace features the models see (--feature-tiers)
         d = files[next(iter(files))]
         self.Y, self.Y_err = d["Y"][rows], d["Y_err"][rows]
         # integer module / amplifier ids (for the labelled reference only)
@@ -178,11 +223,16 @@ class Runner:
     NOT_PER_ROW = ("allan_ns", "theta_names", "feature_names", "curve_names", "targets")
 
     def f(self, family):
-        """The family's arrays restricted to the selected examples."""
+        """The family's arrays restricted to the selected examples, and to the trace features of ``feature_spec``."""
         d = self.files[family]
         n = len(d["packet_id"])
-        return {k: (v[self.rows] if k not in self.NOT_PER_ROW and isinstance(v, np.ndarray) and v.ndim and len(v) == n else v)
-                for k, v in d.items()}
+        out = {k: (v[self.rows] if k not in self.NOT_PER_ROW and isinstance(v, np.ndarray) and v.ndim and len(v) == n else v)
+               for k, v in d.items()}
+        if self.feature_spec != "all" and "feature_names" in out and "X_trace" in out:
+            keep = feature_mask(out["feature_names"], self.feature_spec, self.tiers)
+            out["X_trace"], out["X_ref"] = out["X_trace"][:, keep], out["X_ref"][:, keep]
+            out["feature_names"] = np.asarray(out["feature_names"])[keep]
+        return out
 
     # -- the physics family -------------------------------------------------------
     def _physics_X(self, d, train, test):
@@ -735,15 +785,58 @@ def session_packets(plan_path: Path, session: str) -> list[str]:
     return [p["packet_id"] for p in plan["packets"] if str(p.get("session")) == session]
 
 
-def run_model(runner, name, splits):
-    """(mean, std) for every row of each (train, test) split; NaN where a row is in no test set."""
+def run_model(runner, name, splits, spec: str | None = None):
+    """(mean, std) for every row of each (train, test) split; NaN where a row is in no test set.  ``name`` may be a
+    run key "model [feature set]"; ``spec`` (or the set in the key) chooses the trace features the model sees."""
+    model, key_spec = split_key(name)
+    spec = spec or key_spec or runner.feature_spec
+    previous, runner.feature_spec = runner.feature_spec, spec
     mean, std = np.full(runner.Y.shape, np.nan), np.full(runner.Y.shape, np.nan)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        for train, test in splits:
-            m, s = getattr(runner, name)(train, test)
-            mean[test], std[test] = m, s
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for train, test in splits:
+                m, s = getattr(runner, model)(train, test)
+                mean[test], std[test] = m, s
+    finally:
+        runner.feature_spec = previous
     return mean, std
+
+
+def split_key(key: str) -> tuple[str, str | None]:
+    """"gp [A+B]" -> ("gp", "A+B"); "gp" -> ("gp", None)."""
+    if key.endswith("]") and " [" in key:
+        model, spec = key[:-1].split(" [", 1)
+        return model, spec
+    return key, None
+
+
+def ablation_tables(results: dict, sets: list[str], ref_set: str) -> list[str]:
+    """Per target: rows = models, columns = feature sets: error % and the paired difference against the model's own
+    ``ref_set`` run (percentage points; * = the 95 % interval excludes 0)."""
+    models = list(dict.fromkeys(split_key(k)[0] for k in results if split_key(k)[1] is not None))
+    lines = [f"Each model was trained with each feature set (same folds). Cells: error % and, in brackets, the paired "
+             f"difference against the same model with `{ref_set}` (percentage points; negative = better; * = 95 % interval "
+             "excludes 0).", ""]
+    for t in TARGETS:
+        lines += [f"### {t}", "", "| model | " + " | ".join(f"`{s}`" for s in sets) + " |", "|---|" + "---|" * len(sets)]
+        for m in models:
+            cells = []
+            for s in sets:
+                r = results.get(f"{m} [{s}]", {})
+                if "scores" not in r:
+                    cells.append("–")
+                    continue
+                cell = f"{100 * r['scores'][t]['error']:.1f}"
+                p = r.get("paired_vs_own", {}).get(t)
+                if p and not p.get("identical") and p.get("delta_error_interval", {}).get("95"):
+                    lo, hi = p["delta_error_interval"]["95"]
+                    star = "*" if (lo > 0 or hi < 0) else ""
+                    cell += f" ({100 * p['delta_error']:+.1f}{star})"
+                cells.append(cell)
+            lines.append(f"| {m} | " + " | ".join(cells) + " |")
+        lines.append("")
+    return lines
 
 
 def main():
@@ -762,6 +855,15 @@ def main():
     parser.add_argument("--holdout-session", help="hold out the plan's packets of this session (e.g. C: L1_33..L1_43)")
     parser.add_argument("--plan", default=str(ROOT / "lvl1" / "packet_plan" / "plan.json"), help="the packet plan (for --holdout-session)")
     parser.add_argument("--loao", action="store_true", help="also score leave-one-amplifier-out (a new-module indicator)")
+    parser.add_argument("--feature-tiers", default="all",
+                        help="trace features the models see: 'all' (default), 'none' (settings only), 'auto' (per-model "
+                             "defaults, MODEL_TIERS), or tier labels joined by '+': evidence A, A1, A2, B, C (lvl1/feature_study/"
+                             "evidence_tiers.json) and implementation impl0, impl1, impl2 (e.g. A+B, impl0)")
+    parser.add_argument("--tier-ablation", nargs="*", default=None, metavar="SET",
+                        help="train every model with each of these feature sets (default: " + " ".join(ABLATION_SETS) +
+                             ") and compare them, each model against its own --ablation-ref run")
+    parser.add_argument("--ablation-ref", default="all", help="the feature set each model is compared against in the ablation (default all)")
+    parser.add_argument("--tier-file", default=str(TIER_FILE), help="evidence tiers (default lvl1/feature_study/evidence_tiers.json)")
     parser.add_argument("--include-flagged", action="store_true", help="also use labels that WADERs flagged")
     parser.add_argument("--allow-fake", action="store_true", help="also use FAKE (rehearsal) packets")
     parser.add_argument("--quick", action="store_true", help="short training (to test the pipeline)")
@@ -810,12 +912,29 @@ def main():
     folds = [cv_idx[f] for f in grouped_folds(groups[cv_idx], n_folds, seed=0)]
     cv_splits = [(np.setdiff1d(cv_idx, test), test) for test in folds]
     local = lambda idx: [np.searchsorted(cv_idx, f) for f in idx]             # fold indices within cv_idx
-    runner = Runner(files, rows, args.quick)
+    tiers = load_tiers(Path(args.tier_file))
+    runner = Runner(files, rows, args.quick, tiers)
+    # the runs: one per model, or (ablation) one per model and feature set; key "model [set]" when a set is given
+    if args.tier_ablation is not None:
+        sets = args.tier_ablation or list(ABLATION_SETS)
+        if args.ablation_ref not in sets:
+            sets.append(args.ablation_ref)
+        # the baselines without trace features keep their plain names (the vs-mean scores look for "mean")
+        runs = [(m, m, "none") if m in ("mean", "trace_physics") else (f"{m} [{s}]", m, s) for m in args.models
+                for s in ([None] if m in ("mean", "trace_physics") else sets)]
+    elif args.feature_tiers == "auto":
+        runs = [(f"{m} [{MODEL_TIERS.get(m, DEFAULT_MODEL_TIERS)}]", m, MODEL_TIERS.get(m, DEFAULT_MODEL_TIERS)) for m in args.models]
+    else:
+        runs = [(m, m, args.feature_tiers) for m in args.models]
+    if "features" in files:
+        names = files["features"]["feature_names"]
+        for spec in dict.fromkeys(s for _, _, s in runs):
+            print(f"feature set {spec!r}: {int(feature_mask(names, spec, tiers).sum())} of {len(names)} trace features")
     out = Path(args.out) if args.out else inputs.parent / "lvl1_results" / datetime.now().strftime("%Y%m%d_%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
     info = {"date": datetime.now().isoformat(timespec="seconds"), "inputs": str(inputs), "boards": args.board,
             "n_rows": int(len(cv_idx)), "n_packets": int(len(np.unique(packets[cv_idx]))), "n_folds": n_folds, "quick": args.quick,
-            "models": args.models, "group_by": args.group_by, "setting_tol": args.setting_tol, "n_groups": n_groups,
+            "models": args.models, "feature_tiers": args.feature_tiers, "tier_ablation": args.tier_ablation, "group_by": args.group_by, "setting_tol": args.setting_tol, "n_groups": n_groups,
             "n_cv_packets": int(len(np.unique(packets[cv_idx]))), "merged_groups": merged, "n_boot": args.n_boot,
             "paired_ref": args.paired_ref, "holdout_packets": sorted(np.unique(packets[ho_idx]).tolist()),
             "holdout_source": hold_source if len(ho_idx) else None}
@@ -827,14 +946,14 @@ def main():
     W_cv = bootstrap_weights(packets[cv_idx], n_boot, seed=0) if n_boot else None
     sl = cv_idx
     results, preds, boots, cal_z = {}, {}, {}, {}
-    for name in args.models:
-        if FAMILY[name] not in files:
-            results[name] = {"skipped": f"{FAMILY[name]}.npz not found"}
+    for name, model, spec in runs:
+        if FAMILY[model] not in files:
+            results[name] = {"skipped": f"{FAMILY[model]}.npz not found"}
             print(f"{name:14s} skipped: {results[name]['skipped']}")
             continue
         t0 = time.time()
         try:
-            mean, std = run_model(runner, name, cv_splits)
+            mean, std = run_model(runner, name, cv_splits, spec)
         except SkipModel as exc:
             results[name] = {"skipped": str(exc)}
             print(f"{name:14s} skipped: {exc}")
@@ -865,6 +984,18 @@ def main():
                                                     if not p[t]["identical"] else f"{t}: same"
                                                     for t in TARGETS if t in p and p[t]['delta_error_interval']['95']))
     info["_paired"] = paired
+    if args.tier_ablation is not None and n_boot:
+        print(f"\ntier ablation: each model vs its own [{args.ablation_ref}] run (Δ error in percentage points, * = 95 % CI excludes 0)")
+        for m in args.models:
+            ref = f"{m} [{args.ablation_ref}]"
+            own = {k: (v[0][sl], v[1][sl]) for k, v in preds.items() if split_key(k)[0] == m}
+            if ref not in own:
+                continue
+            for k, p in paired_vs(own, runner.Y[sl], ref, W_cv).items():
+                results[k]["paired_vs_own"] = p
+                print(f"  {k:24s} " + "  ".join(
+                    f"{t}: {100 * p[t]['delta_error']:+.1f}{'*' if (p[t]['delta_error_interval']['95'][0] > 0 or p[t]['delta_error_interval']['95'][1] < 0) else ''}"
+                    if t in p and not p[t]["identical"] and p[t]["delta_error_interval"]["95"] else f"{t}: same" for t in TARGETS))
 
     # the prospective test: train once on every cross-validated packet, score the held-out packets
     holdout = None
@@ -921,7 +1052,10 @@ def main():
 
     info_json = {k: v for k, v in info.items() if not k.startswith("_")}
     (out / "report.json").write_text(json.dumps({"info": info_json, "results": results, "holdout": holdout, "leave_one_amplifier_out": loao}, indent=1))
-    (out / "report.md").write_text(report_md(results, info, holdout, loao))
+    report = report_md(results, info, holdout, loao)
+    if args.tier_ablation is not None:
+        report += "\n## Tier ablation\n\n" + "\n".join(ablation_tables(results, sets, args.ablation_ref)) + "\n"
+    (out / "report.md").write_text(report)
     import pandas as pd
     table = {"packet_id": packets, "board": base["board"][rows], "channel": base["channel"][rows], "cv group": groups, "held out": held}
     for t, tn in enumerate(TARGETS):

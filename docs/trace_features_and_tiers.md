@@ -172,6 +172,9 @@ features of each tier.
 | **B**, supporting | informative but redundant, or moderately informative (F 4–10) | 22 | 9 | **31** |
 | **C**, store only | not informative on the data so far, unstable, mostly NaN, or constant | 17 | 18 | **35** |
 
+**Balanced sizes (2026-10-21).** A was split by informativeness into **A1** (the more informative half) and **A2**,
+so the four tiers hold similar numbers: A1 34, A2 34, B 31, C 35.
+
 The evidence tiers are *provisional*. They rest on 59 traces at 5 settings whose voltage changes did not move the
 noise, so the noise features have been judged by amplifier separation alone. They will be revised on real packets (§6).
 
@@ -190,7 +193,9 @@ percentage points:
 | sets | 0 / 0 / 0 | +2.5 / +3.5 / +4 | A + B |
 | trees | 0 / 0 / 0 | 0 / 0 / 0 | everything |
 
-The suggested sets are not wired in yet. That needs a `--feature-tiers` option in `lvl1/train_lvl1.py` (§6).
+These sets are wired in: `lvl1/train_lvl1.py --feature-tiers auto` uses them, `--feature-tiers A+B` (or any combination
+of A1, A2, A, B, C, impl0, impl1, impl2) gives every model the same set, and `--tier-ablation` trains every model with
+each set and compares them (§6.2).
 
 ---
 

@@ -224,6 +224,9 @@ Options:
 | `--include-flagged` | off | also use labels that WADERs flagged |
 | `--allow-fake` | off | also use rehearsal packets |
 | `--quick` | off | short training, to test the pipeline |
+| `--feature-tiers` | all | which trace features the models see: `all`, `none` (settings only), `auto` (per-model defaults from the tolerance test: gp/nn/ridge `A`, trees `all`, the rest `A+B`), or tier labels joined by `+`: evidence `A1`, `A2`, `A` (= A1+A2), `B`, `C` (`lvl1/feature_study/evidence_tiers.json`) and implementation `impl0`, `impl1`, `impl2` |
+| `--tier-ablation [SET ...]` | off | train every model with each feature set (default `none A1 A A+B all impl0`) on the same folds and compare each with its own `--ablation-ref` run (default `all`), with paired bootstrap intervals; adds a "Tier ablation" section to the report |
+| `--tier-file` | `lvl1/feature_study/evidence_tiers.json` | the evidence tiers |
 | `--out` | `<processed>/lvl1_results/<date>/` | where to write the results |
 
 ## The report

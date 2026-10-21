@@ -15,7 +15,8 @@ docs/slides/oct12_features.py).  For every feature:
 * cluster      features whose |Spearman rho| across the 59 traces exceeds 0.95 form one cluster (average-linkage
                clustering on 1 - |rho|); the cluster's representative is its most informative member.
 
-Proposed evidence tiers (for the models; NOT the implementation tiers 0/1/2 of trace_features.FEATURES):
+Proposed evidence tiers (for the models; NOT the implementation tiers 0/1/2 of trace_features.FEATURES); A is then split
+by informativeness into A1 (top half) and A2, so that A1, A2, B and C hold similar numbers of features:
   A  core        informative (settings F min > 10 or amplifier F median > 10), repeat share < 0.5, NaN share <= 0.2,
                  and the representative of its cluster;
   B  supporting  informative but a non-representative cluster member, or moderately informative (F 4-10);
@@ -102,6 +103,12 @@ def study(df: pd.DataFrame) -> pd.DataFrame:
             return "A"
         return "B"
     t["evidence tier"] = t.apply(tier, axis=1)
+    # tier A is about twice as large as B and C: split it by informativeness into two halves of similar size,
+    # A1 (the more informative) and A2, so that A1, A2, B and C each hold about a quarter of the features
+    a = t[t["evidence tier"] == "A"].sort_values("informativeness", ascending=False)
+    t["evidence subtier"] = t["evidence tier"]
+    t.loc[a.index[: (len(a) + 1) // 2], "evidence subtier"] = "A1"
+    t.loc[a.index[(len(a) + 1) // 2:], "evidence subtier"] = "A2"
     return t
 
 
@@ -115,9 +122,10 @@ def main():
     df = pd.read_csv(args.data)
     t = study(df)
     t.to_csv(out / "feature_table.csv")
-    counts = pd.crosstab(t["implementation tier"], t["evidence tier"])
+    counts = pd.crosstab(t["implementation tier"], t["evidence subtier"])
     print(counts)
-    tiers = {k: list(v) for k, v in t.groupby("evidence tier").groups.items()}
+    # A1, A2, B, C (A = A1 + A2 is formed by the reader, lvl1/train_lvl1.py load_tiers)
+    tiers = {k: list(v) for k, v in t.groupby("evidence subtier").groups.items()}
     (out / "evidence_tiers.json").write_text(json.dumps(tiers, indent=1))
     print(f"wrote {out / 'feature_table.csv'} and evidence_tiers.json")
 
