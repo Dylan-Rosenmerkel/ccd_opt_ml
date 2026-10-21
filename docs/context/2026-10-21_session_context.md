@@ -64,8 +64,15 @@ The session may run out: document every step here and push.
 
 ## 3. Status (update after each step)
 
-- [ ] 1 features implemented
-- [ ] 2 tests
+- [x] 1 features implemented: `src/trace_features_extra.py` (EXTRA registry + extra_features(ctx)), registered in
+  `trace_features.FEATURES` with `tier` (0 = original 85 scalars + 14 curves; tier 1: 23 scalars incl. 2 curves...;
+  `names_by_tier()`), called as block F of `_trace_features`. 85 + 23 + 26 scalars = 134; curves 14 + 4 (start: mean
+  transient, noise: Hadamard deviation, noise: modified Allan deviation, noise: within-cycle structure function).
+  1.2 s per trace. Fixes made: 1/f corner clipped to the band; matrix-pencil poles chosen by amplitude, "fast decay"
+  only among poles decaying within 10 skips. Not implemented (documented as such): RTS HMM dwell time (#21), RTS step
+  rise time (#22), jitter decomposition (#43-44), in-window drift vs baseline (#14), EMG, spectral flux, cepstrum.
+- [x] 2 tests: `tests/test_trace_features_new.py`, 16 tests pass (synthetic signals with known answers + the pilot
+  numbers on one real ch0 trace: lever arm -212, R^2 0.97, tau 12.9 us, amplitude 614 ADU, row-start ratio 0.92).
 - [ ] 3 results on real traces
 - [ ] 4 notebook
 - [ ] 5a tiering of all features

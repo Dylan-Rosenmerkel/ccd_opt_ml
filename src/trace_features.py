@@ -26,7 +26,10 @@ Usage
 Conventions
 -----------
 * Names start with their group: ``fit:``, ``skip:``, ``horizontal:``, ``vertical:`` (comparison
-  tools) and ``level:``, ``noise:``, ``discrete:``, ``edge:``, ``slow:`` (advanced features).
+  tools) and ``level:``, ``noise:``, ``discrete:``, ``edge:``, ``slow:`` (advanced features), and ``start:``
+  (the start-of-pixel transient, 2026-10-21).
+* Every feature has a ``tier``: 0 = the original set, 1 and 2 = added 2026-10-21 in
+  ``trace_features_extra.py`` (docs/trace_feature_candidates.md); ``names_by_tier`` lists them.
 * ``scalars`` holds one number per feature.  For per-pixel features it is the median over the
   usable pixels (no row-start pixels, no charged pixels), and ``spread`` holds their robust
   pixel-to-pixel spread (1.4826 x median absolute deviation).  A feature that cannot be computed
@@ -69,11 +72,12 @@ class Feature:
     description: str    # what is computed
     link: str = ""      # why a model might use it
     kind: str = "scalar"   # "scalar" or "curve"
-    origin: str = "advanced"   # "comparison" (compare_trace.py) or "advanced"
+    origin: str = "advanced"   # "comparison" (compare_trace.py), "advanced" or "extra" (trace_features_extra.py)
+    tier: int = 0          # 0 = the original 85 + 14; 1, 2 = added 2026-10-21 (docs/trace_feature_candidates.md)
 
 
-def _f(group, unit, description, link="", kind="scalar", origin="advanced"):
-    return Feature(group, unit, description, link, kind, origin)
+def _f(group, unit, description, link="", kind="scalar", origin="advanced", tier=0):
+    return Feature(group, unit, description, link, kind, origin, tier)
 
 
 _C = "comparison"
@@ -191,6 +195,18 @@ FEATURES: dict[str, Feature] = {
 # --------------------------------------------------------------------------- #
 # The result                                                                   #
 # --------------------------------------------------------------------------- #
+
+# the tier-1 and tier-2 features of 2026-10-21 (computed in trace_features_extra.py)
+from trace_features_extra import EXTRA as _EXTRA, extra_features  # noqa: E402
+
+for _name, _group, _unit, _desc, _link, _kind, _tier in _EXTRA:
+    FEATURES[_name] = _f(_group, _unit, _desc, _link, _kind, "extra", _tier)
+
+
+def names_by_tier(tiers=(0, 1, 2), kind: str = "scalar") -> list[str]:
+    """Feature names of the given tiers and kind, in registry order."""
+    return [name for name, f in FEATURES.items() if f.tier in tiers and f.kind == kind]
+
 
 @dataclass
 class TraceFeatures:
@@ -697,6 +713,23 @@ def _trace_features(trace: DecodedTrace, meta: dict | None, regions: TraceRegion
             for i in range(min(3, len(frac))):
                 S[f"slow: PC{i + 1} variance fraction"] = float(frac[i])
     run("slow", slow)
+
+    # ---- F. tier-1/2 features of 2026-10-21 (trace_features_extra.py) -------------------------
+    def extra():
+        ctx = {"Cm": Cm, "cyc": cyc, "res": res, "det": det, "good": good, "row_starts": row_starts, "n_ped": n_ped,
+               "sig": sig, "sig_end": sig_end, "first": first, "n": n, "skip_rate": skip_rate, "sample_rate": SAMPLE_RATE_HZ,
+               "starts": starts, "meta": meta, "scalars": dict(S), "allan_n": ALLAN_N, "common": np.median(Cm[good], axis=0)}
+        scalars, pixel_values, curves = extra_features(ctx)
+        for name, err in scalars.pop("_errors", {}).items():
+            result.info["errors"][f"extra: {name}"] = err
+        S.update(scalars)
+        for name, values in pixel_values.items():
+            per_pixel(name, values)
+        Cv.update(curves)
+    try:
+        extra()
+    except Exception as err:                            # noqa: BLE001
+        result.info["errors"]["extra"] = f"{type(err).__name__}: {err}"
 
     # keep the registry order and make sure every scalar exists
     result.scalars = {name: S.get(name, nan) for name in scalar_names()}
