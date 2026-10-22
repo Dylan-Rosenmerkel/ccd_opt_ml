@@ -61,7 +61,10 @@ def stability(X, y, packets, n_boot, rng) -> np.ndarray:
     from sklearn.linear_model import ElasticNet, ElasticNetCV
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        alpha = ElasticNetCV(l1_ratio=0.5, cv=5, alphas=30, max_iter=5000).fit(X, y).alpha_
+        # alpha by packet-grouped CV (rows of one packet share its noise; row-wise folds would favour a small alpha)
+        folds = grouped_folds(packets, min(5, len(np.unique(packets))), seed=0)
+        cv = [(np.setdiff1d(np.arange(len(y)), te), te) for te in folds]
+        alpha = ElasticNetCV(l1_ratio=0.5, cv=cv, alphas=30, max_iter=5000).fit(X, y).alpha_
         ups = np.unique(packets)
         hits = np.zeros(X.shape[1])
         for _ in range(n_boot):

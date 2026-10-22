@@ -36,7 +36,8 @@ EXAMPLE = SESSION / "trace_2x5x500_20x20_ch0_101_20261008_185447_12.RJ45ADCDATA0
 FULL, HALF = 6.9, 3.4
 RATE = 15e6
 GROUP_COLORS = {"fit": "#e76f51", "skip": "#264653", "horizontal": "#2a9d8f", "vertical": "#8ab17d", "level": "#e9c46a",
-                "noise": "#6d597a", "discrete": "#b56576", "edge": "#355070", "slow": "#a0a0a0"}
+                "noise": "#6d597a", "discrete": "#b56576", "edge": "#355070", "slow": "#a0a0a0",
+                "start": "#f4a261", "clock": "#3d405b"}
 
 plt.rcParams.update({"font.size": 8, "axes.titlesize": 8.5, "axes.labelsize": 8, "legend.fontsize": 7,
                      "xtick.labelsize": 7, "ytick.labelsize": 7, "axes.grid": True, "grid.alpha": 0.3,
@@ -471,7 +472,7 @@ def session_figures(out: Path) -> dict:
 
     # separation: two columns of horizontal bars, readable at full page
     order = [i for i in np.argsort(-np.nan_to_num(med, nan=-1))]
-    halves = (order[:43], order[43:])
+    halves = (order[:(len(order) + 1) // 2], order[(len(order) + 1) // 2:])
     fig, axes = plt.subplots(1, 2, figsize=(FULL, 8.6))
     top = np.nanmax(med) * 2
     for ax, part in zip(axes, halves):

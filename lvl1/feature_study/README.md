@@ -186,8 +186,12 @@ Near-copies hurt much less than uninformative columns, except for the λ of the 
 
 **What this means for the real data.**
 
+*(The recommendations below are from 2026-10-21; the current defaults, after the protected tier P and the feature
+ladder, are in `MODEL_TIERS` of `lvl1/train_lvl1.py`: gp and gp_saas P, gp_dim P+A1, nn/ridge P+A, trees all, the rest
+P+A+B.)*
+
 - **The plain `gp` must not get all features.** On synthetic data it sees 17 + 17 trace features; on real data it would
-  see 134 + 134 and, by this test, collapse. Give it evidence tier A only, or use the prior-regularized variants
+  see 141 + 141 and, by this test, collapse. Give it evidence tier A only, or use the prior-regularized variants
   (`gp_saas`, `gp_dim`) and test their tolerance the same way.
 - **`nn` and `ridge`:** tier A, perhaps A + B; not tier C.
 - **`trees`, `sets`, `physics_joint`, `cnn`:** can take A + B, and trees even everything.

@@ -14,6 +14,7 @@
 \usepackage{hyperref}
 \graphicspath{{figures/}}
 \setlist{itemsep=1pt,topsep=2pt}
+\emergencystretch=3em
 
 % ------------------------------------------------------------------ notation
 \newcommand{\code}[1]{\texttt{#1}}
@@ -34,22 +35,24 @@
 \large How every feature of \code{trace\_features.py} is computed}
 \author{ML-assisted optimization of CCD operating parameters --- technical note\\
 \small companion to ``Trace Features for Machine Learning: the Complete List''}
-\date{14 October 2026}
+\date{14 October 2026; updated 22 October 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-The first note on the trace features (\code{docs/trace\_features.tex}) lists the 85 scalar features and 14 curves with a one-line
-description each. This note gives the mathematics. It covers:
+The first note on the trace features (\code{docs/overleaf\_trace\_features/trace\_features.tex}) lists the scalar features and curves with a one-line
+description each. This note gives the mathematics: since 22 October 2026 for all 141 scalars and 18 curves, the original 85 and 14 and
+the 56 scalars and 4 curves added on 2026-10-21/22 (Section~\ref{sec:extra}). It covers:
 \begin{itemize}
 \item how a raw trace is turned into skip cycles, CDS values and transfers;
 \item the common operations (robust statistics, detrending, spectra, Allan deviation, step statistics, the fitting procedures);
-\item the exact formula of every feature and curve, with the index ranges and constants used in the code.
+\item the exact formula of every feature and curve, with the index ranges and constants used in the code;
+\item the implementation tiers and how the evidence tiers that choose each model's features are computed (Section~\ref{sec:tiers}).
 \end{itemize}
 All counts are given for a general trace. The values for the usual trace geometry (2$\times$5 pixels, 500 skips,
 150-sample windows) are in brackets. The equations follow \code{src/trace\_regions.py}, \code{src/compare\_trace.py} and
-\code{src/trace\_features.py} (version of 2026-10-13); where the code makes a choice (a degree of freedom, a tolerance), it is
+\code{src/trace\_features.py} and \code{src/trace\_features\_extra.py} (version of 2026-10-22); where the code makes a choice (a degree of freedom, a tolerance), it is
 stated.
 \end{abstract}
 
@@ -92,8 +95,11 @@ pedestal minus signal, so that charge (which lowers the signal level) gives a po
 
 \paragraph{Transfers.} In the gap before each pixel, the rising edges of bit 6 mark horizontal transfers. They are stacked into
 $H^{(p)}_{m,\tau}$, $m = 1\dots M_p$ (transfer) [19 complete ones], $\tau = 0\dots L_H - 1$. The rising edges of bit 7 mark vertical
-transfers, stacked into $V_{m,\tau}$ for the vertical block of the first row change. The first transfer of the block is dropped when there are
-at least three, because it follows the skip region.
+transfers (bit 5 if bit 7 has fewer than two edges; an edge counts only if the bit stays high for $\ge 10$ samples), stacked into
+$V_{m,\tau}$, $\tau < \mathrm{round}(P_V)$ ($P_V$: median spacing of the vertical edges), for the vertical block before the first row-start
+pixel after pixel 0 (else the leading block), using only transfers that end before that gap's first horizontal edge. The first transfer
+of the block is dropped when there are at least three, because it follows the skip region. The trace usually \emph{starts} inside a vertical
+block (the leading block, before pixel 0), at a random point: only part of its transfers are recorded.
 
 \subsection{Pixel sets and counts}
 \paragraph{Row-start pixels} $\mathcal S$ are pixel 0 and every pixel read right after vertical transfers ($p \bmod \code{NCOL} = 0$ from
@@ -439,6 +445,7 @@ about 1; missing or doubled ADC codes give more.
 
 %======================================================================
 \section{Edges (group \code{edge})}
+\label{sec:edges}
 
 \paragraph{Pulse window.} With the mean shape over usable pixels $M_\tau = \mean_p m^{(p)}_\tau$, the pulse peak is
 $\tau_\text{pk} = e + \argmax_{\tau \ge e} M_\tau$. The edge is searched in $[\ell_o, \ell_h)$ with
@@ -534,6 +541,264 @@ walk at the edges, and PC2 is the level shift set by each reset.
 \end{figure}
 
 %======================================================================
+\section{The additions of 2026-10-21/22 (\code{trace\_features\_extra.py})}
+\label{sec:extra}
+
+The 56 scalar features and 4 curves added on 2026-10-21/22 are computed by \code{extra\_features(ctx)} in
+\code{src/trace\_features\_extra.py}, called as block F at the end of \code{\_trace\_features}, after all other groups. They use the same
+shared arrays as the other features (the \code{ctx} dictionary):
+
+\begin{center}
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.24\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}l}
+\toprule
+\code{ctx} field & meaning & notation here \\
+\midrule
+\code{Cm} & CDS of every pixel, pixels $\times$ skips (equal lengths $N$) & $c_{p,k}$ \\
+\code{cyc}, \code{res} & raw cycles of every pixel; residual cycles of the usable pixels (skips $\ge \ko$) & $Y_{k,\tau}$, $R_{k,\tau}$ \\
+\code{det} & detrended CDS of the usable pixels (skips $\ge \ko$) & $r_{p,k}$, length $N' = N - \ko$ \\
+\code{good}, \code{row\_starts} & usable and row-start pixels & $\G$, $\mathcal S$ \\
+\code{n\_ped}, \code{sig}, \code{first}, \code{n} & window length, signal-window offset, first noise skip, skips & $\nw$, $s$, $\ko$, $N$ \\
+\code{skip\_rate}, \code{sample\_rate} & $f_s/P_\text{exact}$, $f_s$ & $f_\text{skip}$, $f_s$ \\
+\code{starts} & absolute first sample of every cycle & $t^\text{ped}_{p,k}$ \\
+\code{common} & $\med_{p\in\G} c_{p,k}$ over all skips & $\hat c_k$ \\
+\code{scalars}, \code{curves} & the features already computed (read only) & \\
+\code{allan\_n} & the 13 block lengths $\{1,2,3,5,7,10,15,20,30,50,75,100,160\}$ & $n$ \\
+\code{regions}, \code{trace} & the \code{TraceRegions} and the decoded trace (values and flags) & \\
+\code{meta} & the \code{.meta} settings (may be empty) & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Blocks and errors.} The additions are computed in seven blocks (\code{start}, \code{switching}, \code{shape}, \code{lines},
+\code{levels}, \code{prepulse}, \code{clock}), each inside its own \code{try}. A block that raises an exception leaves its features
+NaN and records the reason as \code{info["errors"]["extra: <block>"]}; the other blocks still run. Every scalar of the registry
+exists in the result; one that was never set is NaN. Per-pixel values $f_p$ are reduced as in Section~2: $F = \med f_p$ (NaN values
+ignored), spread $= \rsd f_p$.
+
+\paragraph{Constants} (module level): \code{LATE} $= (20, 60)$, \code{FIRST\_SKIPS} $= 20$, \code{TRANSIENT\_SKIPS} $= 30$,
+\code{MPENCIL\_ORDER} $= 4$. With them,
+\begin{equation}
+\mathcal K_L = \{k : \min(20, \lfloor N/5\rfloor) \le k < \min(60, N)\}\ [20\dots59],\qquad k_F = \min(20, N),\qquad
+\tilde c_p = \med_{k \ge \ko} c_{p,k}.
+\end{equation}
+
+\subsection{Start of pixel (group \code{start}, block \code{start})}
+
+\paragraph{In-window slope.} For every skip, the least-squares slope (ADU per sample) of the pedestal window and of the signal window
+of the raw cycle, averaged:
+\begin{equation}
+\Delta_{p,k} = \tfrac12\bigl[\beta(Y_{k,0:\nw}) + \beta(Y_{k,s:s+\nw})\bigr],\qquad
+\beta(y_{0:m}) = \frac{\sum_i (i - \bar\imath)(y_i - \bar y)}{\sum_i (i - \bar\imath)^2}.
+\end{equation}
+Write $\Delta^\text{late}_p = \med_{k \in \mathcal K_L}\Delta_{p,k}$, $x_{p,k} = \Delta_{p,k} - \Delta^\text{late}_p$ and
+$y_{p,k} = c_{p,k} - \tilde c_p$.
+
+\feat{start: CDS-slope lever arm (samples)}{samples}
+Ordinary least squares $y_{p,k} = L\,x_{p,k} + a$ over $k < k_F$ and $p \in \G$, pooled. The feature is $L$. If the first-skip CDS
+offset is pure baseline slope seen through the CDS, $L \approx -s$, minus the distance between the two window centres [$-207$].
+\code{start: slope-explained fraction} $= 1 - \operatorname{var}(\text{residual})/\operatorname{var}(y)$ ($R^2$).
+\feat{start: in-cycle slope at skip 0 (ADU/us)}{ADU/µs}
+$x_{p,0}\cdot f_s/10^6$ per pixel; median.
+\feat{start: transient time constant (us)}{µs}
+Per pixel, $Y^b_{k,\tau} = Y_{k,\tau} - \tfrac{1}{\nw}\sum_{\tau'<\nw}Y_{k,\tau'}$ and
+$d_\tau = Y^b_{0,\tau} - \mean_{k\in\mathcal K_L} Y^b_{k,\tau}$ (skip 0 minus the late mean waveform). One exponential
+$d_\tau = A e^{-t/\tau_0} + C$ (Section~2.1) is fitted on the samples of the two windows,
+$\tau \in [0, \nw) \cup [s, \min(s+\nw, P))$, with $t = \tau/f_s$ in µs and $\tau_0 \in [0.5, 200]$\,µs. Features: $\tau_0$ and
+\code{start: transient amplitude (ADU)} $= A$ (the value at the start of the cycle); medians over $\G$.
+\feat{start: first-skip excess per volt H (ADU/V)}{ADU/V}
+\code{skip: first-skip CDS excess} divided by $\code{H1\_A\_H} - \code{H1\_A\_L}$ from the \code{.meta} (NaN without them or if equal).
+The swing of \code{H1\_A} is used for every channel.
+\feat{level: slope-corrected CDS rise (ADU)}{ADU}
+With $\bar\Delta_k = \med_{p\in\G}\Delta_{p,k}$ and $K = \max(1,\lfloor N/10\rfloor)$:
+\code{level: common CDS rise} $- L\,\bigl(\mean_{k \ge N-K}\bar\Delta_k - \mean_{\ko \le k < \ko+K}\bar\Delta_k\bigr)$ (needs $N - K \ge \ko + K$).
+\feat{start: row-start/inner first-skip ratio}{---}
+With $E_p = c_{p,0} - \tilde c_p$ for every pixel: $\med_{p\in\mathcal S} E_p \,/\, \med_{p\in\G} E_p$.
+\feat{start: reset jump skip 0 to 1 (ADU)}{ADU}
+$\tfrac{1}{\nw}\sum_{\tau<\nw}(Y_{1,\tau} - Y_{0,\tau})$ per pixel (raw pedestal means of skips 1 and 0); median.
+\paragraph{Mean transient (curve \code{start: mean transient}).} $T_k = \mean_{p\in\G}\, y_{p,k}$, $k = 0 \dots 29$.
+\feat{start: transient amplitude, matched filter (ADU)}{ADU}
+$\dfrac{\sum_{k<30} y_{p,k}T_k}{\sum_{k<30}T_k^2}\,\max_k|T_k|$ per pixel; median. The projection on the trace's own template has about
+30\,\% less noise than $E_p$ alone.
+\feat{start: mode frequency (kHz)}{kHz}
+\textbf{Matrix pencil} of $T_0 \dots T_{29}$ ($M = 30$, order $q = 4$): the Hankel matrix $\mathbf Y_{ij} = T_{i+j}$,
+$i = 0 \dots M - L - 1$, $j = 0 \dots L$, $L = \lfloor M/2\rfloor$; its SVD $\mathbf Y = U\Sigma V^\top$; $V_q$ = the first $q$ right
+singular vectors; the poles $z$ are the eigenvalues of $V_{q,1}^+ V_{q,2}$ ($V_{q,1}$, $V_{q,2}$: $V_q$ without its last and first row);
+the amplitudes $c$ solve $T_k \approx \sum_i c_i z_i^k$ by least squares. Among the poles with $\Im z > 10^{-6}$ and $0 < |z| < 1$, the one
+with the largest $|c|$ gives $\arg z\, f_\text{skip}/(2\pi)$ (kHz) and \code{start: mode damping (us)} $= -10^6/(f_\text{skip}\ln|z|)$.
+\code{start: fast decay (us)} $= -10^6/(f_\text{skip}\ln z)$ for the real pole ($|\Im z| \le 10^{-6}$) with $0 < z < e^{-1/10}$ (decaying within
+10 skips) and the largest $|c|$. NaN when no such pole exists (often, for the fast decay).
+\feat{start: ringing frequency (kHz)}{kHz}
+\code{fit: first-skip ringing frequency (cyc/skip)} $\times f_\text{skip}/10^3$.
+
+\subsection{Telegraph switching and jumps (block \code{switching})}
+
+\paragraph{Null CDS.} With $h = \lfloor\nw/2\rfloor$ [75], a CDS between the two halves of the pedestal window of the residual cycles, where
+no charge moves:
+\begin{equation}
+z_{p,k} = \tfrac1h\sum_{\tau<h}R_{k,\tau} - \tfrac1h\sum_{\tau=h}^{2h-1}R_{k,\tau},\qquad k \ge \ko .
+\end{equation}
+\code{noise: null-CDS noise (ADU)} $= \std_k z_{p,k}$ (ddof 0); \code{discrete: null-CDS kurtosis} $= \mean\tilde z^4/(\mean \tilde z^2)^2 - 3$
+(NaN with $\le 3$ values or zero variance); \code{noise: null-CDS autocorrelation at lag 1} $=$ the Pearson correlation of
+$(z_{p,k})$ with $(z_{p,k+1})$. Medians over $\G$.
+
+\paragraph{In-window steps.} All windows of a pixel: the rows $R_{k,0:\nw}$ and $R_{k,s:s+\nw}$, $k \ge \ko$ [$2\times490$]. Each row
+is cut into $m = \lfloor\nw/10\rfloor$ [15] blocks of 10 samples with means $\mu_j$. The block-mean noise is
+$\sigma_b = \sqrt{v/10}$, with $v$ the median of the within-block variances (ddof 1) over all blocks and windows. For every split
+$j = 1 \dots m-1$,
+\begin{equation}
+t_j = \frac{|\bar\mu_{[j,m)} - \bar\mu_{[0,j)}|}{\sigma_b\sqrt{1/j + 1/(m-j)}},
+\end{equation}
+and a window's best step is the split with the largest $t_j$. \code{discrete: in-window step rate (\%)} $= 100\times$ the fraction of
+windows with best $t > 6$; \code{discrete: in-window step amplitude (ADU)} $=$ the median $|\bar\mu_{[j,m)} - \bar\mu_{[0,j)}|$ of those
+windows (NaN if none). Medians over $\G$. The amplitude is NaN on most pixels without switching (about 58\,\% of the 2026-10-12 traces).
+
+\paragraph{Jump-robust variance} (Andersen, Dobrev \& Schaumburg 2012) of $r = r_p$, length $N'$:
+\begin{equation}
+\text{MedRV} = \frac{\pi}{6 - 4\sqrt3 + \pi}\,\frac{N'}{N'-2}\sum_{k=1}^{N'-2}\med\bigl(|r_{k-1}|, |r_k|, |r_{k+1}|\bigr)^2
+\end{equation}
+(NaN for $N' < 5$). \code{noise: jump-robust CDS sigma (ADU)} $= \sqrt{\text{MedRV}/N'}$; \code{discrete: jump share of CDS variance}
+$= \max\bigl(0,\ 1 - \text{MedRV}/\sum_k r_k^2\bigr)$. For Gaussian white noise these are $\approx \std(r)$ and $\approx 0.02$.
+\feat{discrete: jump count (Lee-Mykland, 1 \%)}{count}
+Window $K_\text{LM} = 20$ (NaN for $N' < 60$). For $k = K_\text{LM} \dots N'-1$, the local bipower variance from the previous skips
+$\hat\sigma_k^2 = \frac{1}{K_\text{LM}-2}\sum_{j=k-K_\text{LM}+1}^{k-2}|r_{j+1}||r_j|$, $L_k = |r_k|/\hat\sigma_k$, and $k$ counts if
+$(L_k - C_n)/S_n > \beta^\ast$ with $n = N'$, $c = \sqrt{2/\pi}$,
+$C_n = \frac{\sqrt{2\ln n}}{c} - \frac{\ln\pi + \ln\ln n}{2c\sqrt{2\ln n}}$, $S_n = \frac{1}{c\sqrt{2\ln n}}$ and
+$\beta^\ast = -\ln(-\ln 0.99) = 4.60$ (Lee \& Mykland 2008; the factor $c$ matches the bipower estimate, which is
+$\tfrac2\pi\sigma^2$; it was missing before 2026-10-22). \emph{Caveat:} with a local window of only 20 skips the estimate
+$\hat\sigma_k$ is noisy, so pure Gaussian noise still gives about 0.26 counts per pixel (simulated) rather than a 1\,\% rate:
+the count is a relative measure of jumps.
+\feat{discrete: STA/LTA maximum}{---}
+On $q_k = r_k^2$: $\max_k \bigl(\tfrac15\sum_{i=k}^{k+4} q_i\bigr)\big/\bigl(\tfrac1{50}\sum_{i=k-50}^{k-1}q_i\bigr)$ over
+$k = 50 \dots N'-6$ (NaN for $N' < 56$).
+\feat{discrete: crest factor}{---}
+$\max_k|r_k|/\std(r)$ (ddof 0).
+\feat{noise: volatility clustering (Ljung-Box of e\^{}2, 10 lags)}{---}
+On $q_k = r_k^2 - \overline{r^2}$: $Q = N'(N'+2)\sum_{\ell=1}^{10}\hat\rho_\ell^2/(N' - \ell)$, $\hat\rho_\ell = \sum_k q_kq_{k+\ell}/\sum_k q_k^2$.
+\feat{discrete: whitened CDS kurtosis}{---}
+$X = \mathrm{rfft}(r - \bar r)$, $\Pi_j = |X_j|^2$; $\Pi$ is smoothed by a 9-point moving average with 9 mirrored values at each end;
+$w = \mathrm{irfft}(X/\sqrt{\Pi^\text{smooth}})$; feature $=$ the excess kurtosis of $w$ (NaN for $N' < 32$).
+\feat{discrete: max within-window spectral kurtosis}{---}
+On the pedestal windows of the residual cycles ($R_{k,0:\nw}$, at least 10 rows): $X_{k,j} = |\mathrm{rfft}(R_{k,0:\nw}\,h)_j|^2$ with a
+Hann window $h$; $\mathrm{SK}_j = \mean_k X_{k,j}^2/(\mean_k X_{k,j})^2 - 2$; feature $\max_{j\ge1}\mathrm{SK}_j$ (0 for Gaussian noise).
+
+\paragraph{Within-cycle structure function (curve).} On the pedestal windows $R_{k,0:\nw}$: $m = \lfloor\nw/15\rfloor$ [10] block means
+$B_{k,j}$ of 15 samples (1\,µs), and
+$D(\ell) = \sqrt{\mean_{k,j}(B_{k,j+\ell} - B_{k,j})^2}$, $\ell = 1\dots9$ (NaN where $\ell \ge m$); the curve is $\mean_{p\in\G}D_p(\ell)$.
+\feat{noise: structure-function excess at 9 blocks (ADU)}{ADU}
+$\sqrt{\max(D(9)^2 - D(1)^2, 0)}$ of that curve.
+
+\subsection{Noise shape (block \code{shape})}
+
+\paragraph{Hadamard deviation.} On $u_p$, the CDS with only the common pattern removed (Section~2; \emph{not} detrended), with disjoint
+$n$-block means $\bar u_j$ ($m = \lfloor N'/n\rfloor \ge 4$, else NaN):
+$\sigma_H(n) = \sqrt{\tfrac16\mean_j(\bar u_{j+2} - 2\bar u_{j+1} + \bar u_j)^2}$. The second difference cancels a linear drift, so no
+polynomial is needed and the long blocks are not biased low. Curve \code{noise: Hadamard deviation}: $\mean_p\sigma_H(n)$ at the 13 values
+of $n$ (NaN at $n = 160$ for $N' = 490$). \code{noise: Hadamard deviation n=50 (ADU)}: $\sigma_H(50)$ per pixel, median.
+\paragraph{Modified Allan deviation (curve).} On $r_p$: running means $a_i$ of length $n$, $d_i = a_{i+n} - a_i$,
+$\delta_j = \tfrac1n\sum_{i=j}^{j+n-1} d_i$, $\operatorname{MDEV}(n) = \sqrt{\tfrac12\mean_j\delta_j^2}$ (NaN if $N' < 3n+1$);
+$\mean_p$ at the 13 values of $n$.
+\feat{noise: 1/f corner frequency (kHz)}{kHz}
+On the curve \code{noise: CDS spectrum, log frequency} $\bar S_i$ (spectrum of the $u_p$ in 40 log bins with centres
+$f_i = \sqrt{e_ie_{i+1}}$), the model $\ln S = \ln(W + A f^{-\gamma})$ is fitted to $\ln \bar S_i$ against $\ln f_i$ (non-linear least squares,
+$\gamma \in [0.2, 3]$, start $W = \med$ of the upper half of $\bar S$, $A = W f_1$, $\gamma = 1$). The corner
+$f_c = (A/W)^{1/\gamma}$ is clipped to $[f_1/2,\ 2f_{40}]$ (a corner outside the band means ``no $1/f$ in the band'' or ``$1/f$ everywhere'');
+reported in kHz. \code{noise: 1/f exponent} $= \gamma$. NaN with fewer than 6 finite positive bins or if the fit fails.
+\feat{noise: Lorentzian corner (kHz)}{kHz}
+The same data, model $\ln(W + B/(1 + (f/f_L)^2))$ against $f$ (linear), $f_L \in [f_1/10, 10f_{40}]$, start $f_L = \med f_i$;
+$f_L$ in kHz.
+\feat{noise: lag-1 autocorrelation of 10-skip means}{---}
+$\rho(1)$ of the disjoint 10-skip means of $r_p$ (needs $\ge 5$ blocks); median.
+\feat{noise: DFA exponent}{---}
+Profile $y_k = \sum_{i\le k}(r_i - \bar r)$; for each scale $\sigma \in \{4,6,8,12,16,24,32,48\}$ with $\ge 4$ segments, the rms $F(\sigma)$ of
+$y$ about a straight line fitted in each non-overlapping segment; the slope of $\ln F$ against $\ln\sigma$ (needs $\ge 3$ scales). White
+noise: 0.5.
+\feat{noise: CDS spectral slope}{---}
+$\Pi_j = |\mathrm{rfft}((r - \bar r)h)_j|^2$, $j \ge 1$ (Hann window $h$): slope of $\ln\Pi_j$ against $\ln j$.
+\code{noise: CDS spectral centroid} $= \sum_j (j/J)\Pi_j/\sum_j\Pi_j$ with $J$ the number of bins (a fraction of the Nyquist frequency).
+\feat{noise: sample entropy}{---}
+$r$ standardized; templates of length $m = 2$ and $3$ (the first $N'-2$ of each); $B$, $A$ = the number of pairs $i<j$ within Chebyshev
+distance $0.2$; feature $-\ln(A/B)$ (NaN for $N' < 20$ or $A$ or $B = 0$).
+\feat{noise: permutation entropy (m=4)}{---}
+The ordinal pattern of every 4 consecutive values (delay 1); $-\sum p\ln p/\ln 4!$ over the observed patterns (needs $N' \ge 240$).
+\feat{noise: red-noise beta (50 skips)}{---}
+$\std(\text{50-skip block means})/(\std(r)/\sqrt{50})$, both ddof 1, $\ge 3$ blocks. White noise: 1.
+
+\paragraph{Noise budget.} The residual cycles of all usable pixels are stacked, $\mathbf R$ ($\sum_p N'$ rows $\times$ $P$ columns), and
+centred by column. The CDS weight vector is $w_\tau = +1/\nw$ for $\tau < \nw$, $-1/\nw$ for $s \le \tau < s + \nw$, else 0, so
+$\mathbf R w$ is the CDS of the residuals. With the SVD $\mathbf R = U\Sigma V^\top$ (singular values $\varsigma_i$ in decreasing order:
+the waveform modes by waveform variance), mode $i$ carries $\kappa_i = \varsigma_i^2 (v_i^\top w)^2$ of the CDS variance,
+$\sum_i\kappa_i = \|\mathbf Rw\|^2$.
+\code{noise: CDS variance share of the 3 largest waveform modes} $= (\kappa_1+\kappa_2+\kappa_3)/\sum\kappa$;
+\code{noise: waveform modes for 90 \% of the CDS variance} $=$ the smallest $i$ with $\sum_{j\le i}\kappa_j \ge 0.9\sum\kappa$. If the signal window would run past the cycle ($s + \nw > P$) the block raises an error (the weights would not balance), so the noise-budget features are NaN.
+
+\subsection{Pickup lines (block \code{lines})}
+
+\paragraph{Multitaper F test} (Thomson 1982) on each $r_p$, $p\in\G$, all cut to the shortest length $n$: $K = 5$ DPSS tapers $v_k$ with
+$NW = 3$ (unit energy), $U_k = \sum_t v_k(t)$, $Y_k(f) = \mathrm{rfft}(v_k\,(r - \bar r))$,
+\begin{equation}
+\mu(f) = \frac{\sum_k U_kY_k(f)}{\sum_kU_k^2},\qquad
+F(f) = \frac{(K-1)\,|\mu|^2\sum_kU_k^2}{\sum_k|Y_k(f) - \mu U_k|^2},
+\end{equation}
+compared with $F_\text{crit} = F^{-1}_{2,\,2K-2}(1 - 0.001)$. The bins with $f \le 3f_\text{skip}/n$ (the taper bandwidth) are left out.
+\code{discrete: line count (F-test, p<0.001)}: the number of bins where $F > F_\text{crit}$ in at least half of the pixels.
+\code{strongest line frequency (kHz)}: $f_0 = \argmax_f\med_pF_p(f)$. \code{strongest line amplitude (ADU)}: $\med_p 2|\mu_p(f_0)|$.
+\code{line phase coherence, pixel clock}: $|\mean_p e^{\mathrm i\varphi_p}|$ with $\varphi_p = \arg\mu_p(f_0)$ (referred to each pixel's
+skip $\ko$); \code{absolute time}: $|\mean_p e^{\mathrm i(\varphi_p - 2\pi f_0t_p)}|$ with $t_p = t^\text{ped}_{p,\ko}/f_s$.
+\feat{discrete: line frequency, whole trace (kHz)}{kHz}
+Lomb--Scargle periodogram of all $r_{p,k}$ ($p\in\G$) at their absolute times $t^\text{ped}_{p,\ko+k}/f_s$, mean removed, on the grid
+$200, 205, \dots$\,Hz up to $\min(15\,\text{kHz}, f_\text{skip}/2)$; the frequency of the maximum.
+
+\subsection{Levels (block \code{levels})}
+
+\feat{level: common-pattern amplitude spread}{---}
+With $\gamma_k = \hat c_k - \mean_{k'\ge\ko}\hat c_{k'}$ ($k \ge \ko$): $a_p = \sum_k(c_{p,k} - \bar c_p)\gamma_k/\sum_k\gamma_k^2$;
+feature $\rsd_{p\in\G}\,a_p$.
+\feat{noise: baseline-CDS residual correlation}{---}
+Pearson correlation of $\Dt(b_{p,\ko:N})$ (the per-skip pedestal means of the raw cycles, detrended) with $r_p$; median.
+
+\subsection{The dip before the per-cycle pulse (block \code{prepulse}, group \code{edge})}
+
+On the equivalent-time pulse $E(\phi)$ (Section~\ref{sec:edges}; 0.1-sample bins with centres $\phi_i = -15 + 0.05 + 0.1i$ samples,
+$\phi = 0$ at the half-height crossing of the edge):
+\begin{equation}
+E_0 = \mean\{E(\phi_i) : -15 < \phi_i < -8\},\qquad
+\text{depth} = \min\{E(\phi_i) : -6 < \phi_i < 0\} - E_0 .
+\end{equation}
+\begin{itemize}
+\item \code{edge: pre-pulse dip depth (ADU)} $=$ depth (negative);
+\item \code{edge: pre-pulse dip / pulse height} $=$ depth$/(\max_iE(\phi_i) - E_0)$, only if the pulse height is positive.
+\end{itemize} On the 2026-10-12 traces the dip sits 120--130\,ns ($\approx$1.9 samples) before the crossing and is
+about 1.5 samples wide, which is why single cycles show it as one low sample.
+
+\subsection{Clocking regions (block \code{clock}, group \code{clock})}
+
+\paragraph{The vertical block $V$} is \code{regions.v} (Section~1.1): the transfers of the vertical block before the first row-start pixel
+after pixel 0 (the block before row 2), first transfer dropped when there are at least three, each transfer
+$V_{m,\tau} = v_{t^V_m + \tau}$, $\tau < \mathrm{round}(P_V)$ with $P_V$ the median spacing of the vertical edges, and only transfers
+that end before the block's first horizontal edge. If no pixel after pixel 0 starts a row (a one-row trace), \code{regions.v} falls back to
+the leading block; the \code{clock:} V features are then NaN (since 2026-10-22), because the leading block is not repeatable. The horizontal stacks $H^{(p)}_{m,\tau}$ are \code{regions.h} (length $\mathrm{round}(P_H)$).
+
+Write $\ell_m = \med_\tau V_{m,\tau}$ (the level of transfer $m$) and $a(T_m) = \max_\tau T_{m,\tau} - \min_\tau T_{m,\tau}$ (peak-to-peak
+of one transfer, no baseline removed). Let $\mathcal I = \{p \notin \mathcal S : M_p \ge 5\}$ (pixels that do not start a row, with at
+least 5 horizontal transfers; charged pixels are not excluded).
+\feat{clock: V-block level slope (ADU/transfer)}{ADU/transfer}
+Least-squares slope of $\ell_m$ against $m$ (needs $\ge 3$ transfers).
+\feat{clock: V-transfer peak-to-peak (ADU)}{ADU}
+$a_V = \med_m a(V_m)$.
+\feat{clock: H/V peak-to-peak ratio}{---}
+$\med\{a(H^{(p)}_m) : p\in\mathcal I,\ \text{all } m\}/a_V$.
+\feat{clock: first H block of a row, excess (ADU)}{ADU}
+$\bar a_m = \med_{p\in\mathcal I} a(H^{(p)}_m)$ for $m = 0\dots4$; for every row-start pixel $p > 0$ with $\ge 5$ transfers,
+$\tfrac15\sum_{m<5}\bigl(a(H^{(p)}_m) - \bar a_m\bigr)$; the mean over those pixels. With a prescan (\code{NCOLPRE} $> 0$) the first
+transfers of a row-start pixel are the first prescan transfers.
+\feat{clock: leading V-block level slope (ADU/transfer)}{ADU/transfer}
+The block the trace starts in: the rising edges of flag bit 7 (bit 5 if bit 7 has fewer than two), lasting $\ge 10$ samples, before the
+first rising edge of bit 6 in the trace (else before the first pedestal window). Transfers $v_{t:t+\mathrm{round}(P_V)}$ that end before that
+point; if there are at least 13, the slope of $\ell_m$ over the last 12. Stored only (tier 2): the trace starts at a random point inside
+this block (14--19 of its 20 transfers recorded on 2026-10-12), so the slope depends on what preceded the acquisition.
+
+%======================================================================
 \section{The curves}
 
 \begin{longtable}{>{\raggedright\arraybackslash}p{0.3\textwidth}>{\raggedright\arraybackslash}p{0.63\textwidth}}
@@ -556,13 +821,19 @@ Curve & Definition \\
 \code{noise: noise vs window length} & $\mean_p \sigma(L, 0)$, $L \in \mathcal L$ \\
 \code{edge: equivalent-time pulse} & $E(\phi)$, $-15 \le \phi < 60$ in 0.1-sample bins \\
 \code{edge: variation along the cycle} & $\Sigma_\tau$, $\tau = 0 \dots P-1$ \\
+\midrule
+\multicolumn{2}{l}{\emph{added 2026-10-21 (Section~\ref{sec:extra})}} \\
+\code{start: mean transient} & $T_k = \mean_{p\in\G}(c_{p,k} - \tilde c_p)$, $k = 0 \dots 29$ \\
+\code{noise: Hadamard deviation} & $\mean_p\sigma_H(n)$ of the $u_p$, at the 13 values of $n$ \\
+\code{noise: within-cycle structure function} & $\mean_p D_p(\ell)$, $\ell = 1\dots9$ blocks of 15 samples \\
+\code{noise: modified Allan deviation} & $\mean_p\operatorname{MDEV}(n)$ of the $r_p$, at the 13 values of $n$ \\
 \bottomrule
 \end{longtable}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth,height=0.8\textheight,keepaspectratio]{all_curves_a.png}
-\caption{Curves 1--7 of the example trace.}
+\caption{Curves 1--7 of the example trace (the 14 original curves; the 4 added ones are shown in the 2026-10-21 write-up).}
 \end{figure}
 \begin{figure}[H]
 \centering
@@ -585,6 +856,97 @@ The scatter \code{trace\_sd} is the feature's measurement noise, used to judge c
 to weight features in the models.
 
 %======================================================================
+\section{Implementation tiers and evidence tiers}
+\label{sec:tiers}
+
+\paragraph{Implementation tier.} Every registry entry \code{FEATURES[name]} is a \code{Feature(group, unit, description, link, kind,
+origin, tier)}. \code{origin} is \code{"comparison"} (\code{compare\_trace.py}), \code{"advanced"} (\code{trace\_features.py}) or
+\code{"extra"} (\code{trace\_features\_extra.py}). \code{tier} is 0 for the original features, 1 for the implement-first additions and 2 for
+the candidate additions; \code{names\_by\_tier(tiers=(0,1,2), kind="scalar")} lists the names of the given tiers and kind in registry order.
+
+\begin{center}
+\small
+\begin{tabular}{lc>{\raggedright\arraybackslash}p{0.55\textwidth}}
+\toprule
+implementation tier & scalars & curves \\
+\midrule
+0 (original) & 85 & 14 \\
+1 (2026-10-21/22) & 29 & 2 (\code{start: mean transient}, \code{noise: Hadamard deviation}) \\
+2 (2026-10-21/22) & 27 & 2 (\code{noise: within-cycle structure function}, \code{noise: modified Allan deviation}) \\
+\midrule
+total & 141 & 18 \\
+\bottomrule
+\end{tabular}
+\end{center}
+By group, the 56 new scalars are: \code{noise} 19, \code{discrete} 15, \code{start} 13, \code{clock} 5, \code{level} 2, \code{edge} 2.
+
+\paragraph{Evidence tiers.} They are computed by \code{lvl1/feature\_study.py} and need no labels.
+
+\noindent Output: \code{lvl1/feature\_study/evidence\_tiers.json} and \code{feature\_table.csv}.
+
+\noindent Data: the 59 usable traces of board 101 from the packet tests of 2026-10-12 (5 settings $\times$ 3 repeats $\times$ 4
+amplifiers, one damaged ch3 trace left out), in \code{docs/slides/data/oct12\_trace\_features.csv}.
+
+\noindent For each scalar $x$:
+\begin{itemize}
+\item \textbf{One-way ANOVA} $F = \dfrac{\sum_g n_g(\bar x_g - \bar x)^2/(G-1)}{\sum_g\sum_{i\in g}(x_i - \bar x_g)^2/(n - G)}$ over the
+  groups with at least 2 finite values (NaN with fewer than 2 groups; $\infty$ if the within term is 0 and the between term is not).
+\item \textbf{Settings $F$}: over the 4 \emph{changed} settings (VDD $-20.5$\,V, V low rails + TG, all H low rails, H3\_A\_L only; all
+  taken with \code{NCOLPRE} 185, so the reference's \code{NCOLPRE} 0 cannot fake a separation), separately for ch0, ch1 and ch3; the minimum
+  and the median of the three. With df $(3, 8)$, $F > 4$ means $p < 0.05$.
+\item \textbf{Amplifier $F$}: over the 4 amplifiers within each of the 5 settings; the median of the five.
+\item \textbf{Repeat share} $=\dfrac{\sum_{(g,\text{ch})}(n_{g,\text{ch}} - 1)s^2_{g,\text{ch}}/\sum(n_{g,\text{ch}} - 1)}{s^2_\text{all}}$ (ddof 1
+  throughout): 0 = perfectly repeatable, about 1 = pure repeat scatter.
+\item \textbf{NaN share} and \textbf{constant} (zero spread).
+\item \textbf{Redundancy clusters}: over the features with $> 80$\,\% finite values and non-zero spread, $|\rho|$ = the absolute Spearman
+  correlation across the 59 traces (Pearson correlation of the ranks; NaN set to 0); distance $1 - |\rho|$; average-linkage hierarchical
+  clustering cut at distance 0.05 (on average $|\rho| > 0.95$).
+\item \textbf{Informativeness} $= \ln(1 + \max(F_\text{set,min}, 0)) + \ln(1 + \max(F_\text{amp}, 0))$ (NaN counted as 0). The
+  \textbf{representative} of a cluster is its most informative member; a feature outside the clustering counts as a representative.
+\end{itemize}
+The rules, applied in this order:
+\begin{center}
+\small
+\begin{tabular}{lp{0.7\textwidth}}
+\toprule
+tier & rule \\
+\midrule
+C & constant, or NaN share $> 0.2$, or neither $F_\text{set,min} > 4$ nor $F_\text{amp} > 4$ \\
+A & $F_\text{set,min} > 10$ or $F_\text{amp} > 10$, and repeat share $< 0.5$, and the representative of its cluster \\
+B & all others (informative but redundant, or only $F$ 4--10, or repeat share $\ge 0.5$ or NaN) \\
+\bottomrule
+\end{tabular}
+\end{center}
+A is then sorted by informativeness and split into \textbf{A1} (the first $\lceil|A|/2\rceil$) and \textbf{A2} (the rest), so that the four
+tiers have similar sizes. \textbf{P (protected)} is a fixed list (\code{PROTECTED}), chosen by physics, not by these data, and written
+besides the evidence tiers:
+\begin{itemize}[before=\raggedright]
+\item $\sigma_e$: \code{skip: CDS rms (detrended)}, \code{fit: white noise per skip (ADU)}, \code{noise: jump-robust CDS sigma (ADU)},
+  \code{noise: null-CDS noise (ADU)}, \code{noise: Allan deviation n=50 (ADU)};
+\item gain: \code{noise: reset-level scatter (ADU)}, \code{edge: pulse per volt RG (ADU/V)}, \code{edge: dip per volt SW (ADU/V)}.
+\end{itemize}
+It exists because the evidence tiers reward
+separating the traces, not predicting the labels, and on these 59 traces the amplifier dominates every correlation: without it the most
+direct $\sigma_e$ estimator (CDS rms) and the kTC noise (reset-level scatter) are in B.
+
+\begin{center}
+\small
+\begin{tabular}{lccccc}
+\toprule
+implementation tier & A1 & A2 & B & C & total \\
+\midrule
+0 & 27 & 19 & 22 & 17 & 85 \\
+1 & 8 & 8 & 4 & 9 & 29 \\
+2 & 2 & 9 & 7 & 9 & 27 \\
+\midrule
+total & 37 & 36 & 33 & 35 & 141 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\code{lvl1/train\_lvl1.py} reads these labels (A = A1 + A2, and \code{impl0/1/2} from the implementation tier) to choose the trace features
+each model sees (\code{--feature-tiers}, \code{--tier-ablation}, \code{--feature-ladder}); the per-model defaults are \code{MODEL\_TIERS} there.
+
+%======================================================================
 \section{Summary of the conventions}
 \begin{itemize}
 \item Medians over pixels or transfers, and $\rsd$ for spreads, keep single bad pixels from dominating.
@@ -592,7 +954,11 @@ to weight features in the models.
 \item Times: samples $\times 1/15$ = µs, $\times 10^9/f_s$ = ns. Frequencies are scaled to the skip rate where they depend on it.
 \item Every count follows the trace's own geometry (Section~1.2); impossible features are NaN, not zero.
 \item Fits are least squares in the linear parameters with a grid-and-parabola search in the nonlinear ones, so they never get stuck
-  at a grid point.
+  at a grid point (the $1/f$ and Lorentzian fits of Section~\ref{sec:extra} use bounded non-linear least squares instead).
+\item Groups, and the blocks of the 2026-10-21 additions, fail independently: a failure leaves that group's features NaN and is recorded in
+  \code{info["errors"]}; the rest of the trace is still computed.
+\item Every feature has an implementation tier (0, 1, 2); the evidence tiers (A1, A2, B, C) and the protected set P are computed from
+  real traces without labels (Section~\ref{sec:tiers}).
 \end{itemize}
 
 \end{document}

@@ -232,8 +232,8 @@ def process_trace(entry: dict, out_dir: Path, cfg: ProcessingConfig) -> dict:
     Decode one trace, check it, compute every feature, and save the arrays.
 
     The features come from ``trace_features.trace_features``: the 39 comparison tools of
-    ``compare_trace.py`` and the advanced features, 85 numbers and 12 curves, each documented in
-    ``trace_features.FEATURES`` and ``docs/trace_features.tex``.  They use the usable pixels (no
+    ``compare_trace.py``, the advanced features and the 2026-10-21 additions: 141 numbers and 18 curves, each documented in
+    ``trace_features.FEATURES`` and ``docs/overleaf_trace_features/trace_features.tex``.  They use the usable pixels (no
     row-start or charged pixels).  Returns a summary dict (also stored in features.json).  A trace
     with quality problems is decoded and saved but marked ``usable = False``; no features.
     """

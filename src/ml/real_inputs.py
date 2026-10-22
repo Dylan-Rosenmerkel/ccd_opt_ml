@@ -62,8 +62,9 @@ FAMILIES = {
 
 
 def _log_names(names) -> tuple[str, ...]:
-    """Curves spanning decades are taken in log: every Allan deviation and spectrum."""
-    return tuple(n for n in names if "Allan" in n or "spectrum" in n)
+    """Curves spanning decades are taken in log: every Allan, Hadamard and modified Allan deviation, the spectra and the
+    within-cycle structure function."""
+    return tuple(n for n in names if any(k in n for k in ("Allan", "Hadamard", "spectrum", "structure function")))
 
 
 def common(df: pd.DataFrame) -> dict[str, np.ndarray]:

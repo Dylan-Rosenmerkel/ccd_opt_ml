@@ -38,7 +38,7 @@ Conventions
 * ``curves`` holds vectors (mean shapes, autocorrelation, spectra, ...), always of the same length
   for the same trace geometry.
 * The features describe the trace; they are candidate inputs for a model, not calibrated physical
-  quantities.  Every feature is documented in ``FEATURES`` and in ``docs/trace_features.tex``.
+  quantities.  Every feature is documented in ``FEATURES`` and in ``docs/overleaf_trace_features/trace_features.tex``.
 """
 
 from __future__ import annotations

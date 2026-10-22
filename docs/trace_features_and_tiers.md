@@ -18,9 +18,9 @@ It builds on [`trace_feature_candidates.md`](trace_feature_candidates.md) (the c
 ## 1. Summary
 
 - **Every trace now gives 141 numbers and 18 curves**, where it gave 85 and 14. The new ones are in
-  `src/trace_features_extra.py`; 16 tests cover them in `tests/test_trace_features_new.py`; a trace takes about 1.2 s.
+  `src/trace_features_extra.py`; 18 tests cover them in `tests/test_trace_features_new.py`; a trace takes about 1.2 s.
   Processing (`process_packet.py`) writes them into `model_inputs/` without any further change; this was checked on
-  simulated packets.
+  simulated packets. Caveat: the five `clock:` features are NaN with the planned trace geometry (NPBIN = NSBIN = 1, §2.7).
 - **Every feature has two labels:**
   - an *implementation tier* (0 / 1 / 2): where it came from;
   - an *evidence tier* (A / B / C): what the data say about it.
@@ -34,9 +34,10 @@ It builds on [`trace_feature_candidates.md`](trace_feature_candidates.md) (the c
   2. The new **telegraph-switching features single out ch2**: steps in 8.2 % of its integration windows against 0 % on
      the other amplifiers, null-CDS kurtosis 5.2 against about 0, and 27 % of its CDS variance in jumps.
   3. The **noise budget** of the skip cycle: the three largest waveform fluctuations carry 95 % of the waveform's
-     variation but under 1 % of the CDS noise. The CDS noise is spread over about 100 small modes.
+     variation but under 1 % of the CDS noise. On the good amplifiers the CDS noise is spread over 70–105 small modes;
+     on ch2 about 8 modes carry 90 % of it.
   4. **The plain Gaussian process collapses** when 20 uninformative features are added: σe error +51 percentage
-     points, which is about "guess the average". On real data it must get only the core features.
+     points, which is about "guess the average". On real data it gets only the protected set P (§3, §6.2).
   5. **Nothing about the noise separates the four voltage settings tested on 2026-10-12**, because those settings did
      not change the noise. The noise features can only be judged on session A, where delayInt changes the noise.
 
@@ -44,8 +45,9 @@ It builds on [`trace_feature_candidates.md`](trace_feature_candidates.md) (the c
 
 ## 2. The new features
 
-There are 49 scalars and 4 curves, in six families. The evidence tier and the key numbers come from the 59 real traces
-of 2026-10-12 (§4).
+There are 56 scalars and 4 curves: 49 scalars from the literature search, in six families (§2.1–2.6), plus the `clock:`
+group (§2.7) and the pre-pulse dip (§2.8). The evidence tier and the key numbers come from the 59 real traces of
+2026-10-12 (§4); "A" in the tables of §2.1–2.6 means A1 or A2.
 
 **Settings F** = how strongly the feature separates the four changed settings, and **amplifier F** = how strongly it
 separates the four amplifiers. Both are ANOVA F values, against the scatter between repeats; F > 4 is significant
@@ -53,7 +55,7 @@ separates the four amplifiers. Both are ANOVA F values, against the scatter betw
 
 ### 2.1 Start of pixel (`start:`, a new group)
 
-The first skips of every pixel carry a transient, about +290 ADU at skip 0 on board 101. It is the CDS reading the
+The first skips of every pixel carry a transient, about +250 to +290 ADU at skip 0 on board 101 (median per amplifier). It is the CDS reading the
 slope of a decaying baseline (lever arm ≈ −212 samples, close to the 207-sample spacing of the window centres;
 R² 0.97). Inside skip 0 it is an exponential with τ ≈ 12 µs, and it scales with the horizontal-clock swing.
 
@@ -94,7 +96,7 @@ occur equally up and down: the signature of random telegraph switching in the ou
 |---|---|---|---|---|
 | discrete: jump share of CDS variance (1 − MedRV/RV) | 1 | A | 32 | ch2 0.27, the others ≤ 0.005 |
 | noise: jump-robust CDS sigma (ADU) | 1 | B (redundant with the CDS rms) | 255 | |
-| discrete: jump count (Lee–Mykland, 1 %) | 2 | A | 33 | |
+| discrete: jump count (Lee–Mykland, 1 %) | 2 | A2 | 31 | |
 | discrete: crest factor | 2 | A | 56 | |
 | discrete: whitened CDS kurtosis | 2 | A | 23 | |
 | discrete: STA/LTA maximum (seismology) | 2 | A | 14 | |
@@ -153,6 +155,12 @@ occur equally up and down: the signature of random telegraph switching in the ou
 
 Details and figure: `lvl1/feature_study/README.md` and `lvl1/feature_study/clock_pilot/`.
 
+**Caveat: trace geometry.** These need ≥ 3 vertical transfers per row and ≥ 5 horizontal transfers per pixel; the
+2026-10-12 traces had 20 of each. The planned packets' traces (`daq_scripts/manual_packet.sh`: NPBIN = 1, NSBIN = 1,
+NCOLPRE = 100) have one of each, so all five `clock:` features are NaN there (seen on simulated packets of that
+geometry; processing drops such columns). They return if the trace binning goes back to 20 × 20, or if the features are
+adapted to single transfers.
+
 ### 2.8 The dip before the per-cycle pulse
 
 `edge: pre-pulse dip depth (ADU)` (tier 1, A1) and `edge: pre-pulse dip / pulse height` (tier 1, B): a sharp dip
@@ -200,8 +208,9 @@ features of each tier.
 **Why P exists.** The evidence tiers reward *separating* the traces, not *predicting* σe, λ or gain, and on the 59
 traces the amplifier dominates every correlation, so "redundant" means "identifies the same amplifier". Without P the
 most direct σe estimator (`skip: CDS rms (detrended)`) and the kTC noise (`noise: reset-level scatter`) sit in B, and a
-tier-A model would not see them. In a synthetic test (lvl1/feature_study/README.md) these two features alone took the
-plain GP from 57.5 % to 9.6 % (σe) and from 31 % to 0.9 % (gain). Two further guards were prototyped (clusters within each
+tier-A model would not see them. In a synthetic test (lvl1/feature_study/README.md) P took the plain GP from 57.5 % to
+9.6 % (σe) and from 31 % to 0.9 % (gain); there only these two of the eight P features carry information (the synthetic
+world has no others), the other six are uninformative columns. Two further guards were prototyped (clusters within each
 amplifier; no repeat-share penalty) and are **not adopted**: they helped less and enlarge tier A.
 
 **Balanced sizes (2026-10-21).** A was split by informativeness into **A1** (the more informative half) and **A2**,
@@ -402,7 +411,7 @@ features in L3, are the ones to look at physically. Learned importance does not 
 |---|---|
 | `src/trace_features_extra.py` | the 56 new features and 4 curves (registry `EXTRA`, `extra_features`) |
 | `src/trace_features.py` | the `tier` attribute and `names_by_tier()`; calls the new block |
-| `tests/test_trace_features_new.py` | 16 tests: synthetic signals with known answers, plus the pilot numbers on one real trace |
+| `tests/test_trace_features_new.py` | 18 tests: synthetic signals with known answers, plus the pilot numbers on one real trace |
 | `docs/slides/oct12_features.py` → `docs/slides/data/oct12_trace_features.csv` | all 141 features of the 59 real traces |
 | `lvl1/feature_study.py` → `lvl1/feature_study/` | separation, stability and redundancy per feature; evidence tiers; results README |
 | `lvl1/feature_tolerance.py` → `lvl1/feature_study/tolerance_*.csv` | the synthetic tolerance test |

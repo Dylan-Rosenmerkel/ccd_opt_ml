@@ -262,7 +262,7 @@ def ladder_tables(results: dict, ladder: list[tuple[str, str, int]], plot_path: 
                     labs = [f"{k} features" for k in ks]
                 e, u = np.array(e, float), np.array(u, float)
                 pick = "–"
-                if np.isfinite(e).any():
+                if np.isfinite(e).any() and o != "groups":        # the groups are not nested: no "smallest" step
                     b = int(np.nanargmin(e))
                     thr = e[b] + (u[b] if np.isfinite(u[b]) else 0)
                     pick = labs[int(np.flatnonzero(np.isfinite(e) & (e <= thr))[0])]
@@ -326,14 +326,21 @@ def prep_columns(train: np.ndarray, test: np.ndarray) -> tuple[np.ndarray, np.nd
     return fill(train), fill(test), keep
 
 
-def packet_state(packet_id: np.ndarray, X_ref: np.ndarray) -> np.ndarray:
-    """Per row: the mean of the reference features over its packet's rows (the CCD's state; no amplifier identity)."""
-    out = np.full_like(X_ref, np.nan)
-    for p in np.unique(packet_id):
-        rows = packet_id == p
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            out[rows] = np.nanmean(X_ref[rows], 0)
+def packet_state(packet_id: np.ndarray, X_ref: np.ndarray, amp: np.ndarray | None = None) -> np.ndarray:
+    """Per row: the mean over its packet's rows of the reference features, each amplifier's own average removed first
+    (as StructuredPrep.state_vector), so that a packet missing one amplifier's row does not get a state shifted by that
+    amplifier's signature.  The amplifier only centres the features (no labels, no amplifier identity in the output)."""
+    X = np.asarray(X_ref, float)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if amp is not None:
+            X = X.copy()
+            for a in np.unique(amp):
+                X[amp == a] -= np.nanmean(X[amp == a], 0)
+        out = np.full_like(X, np.nan)
+        for p in np.unique(packet_id):
+            rows = packet_id == p
+            out[rows] = np.nanmean(X[rows], 0)
     return out
 
 
@@ -342,7 +349,8 @@ def scalars(d: dict, with_features: bool, with_state: bool) -> np.ndarray:
     if with_features:
         blocks += [d["X_trace"], d["X_ref"]]
     if with_state:
-        blocks.append(packet_state(d["packet_id"], d["X_ref"]))
+        amp = np.array([f"{b}_ch{c}" for b, c in zip(d["board"], d["channel"])]) if "board" in d and "channel" in d else None
+        blocks.append(packet_state(d["packet_id"], d["X_ref"], amp))
     return np.hstack(blocks)
 
 
@@ -1097,9 +1105,20 @@ def main():
         runs = [(m, m, "none") if m in ("mean", "trace_physics") else (f"{m} [{s}]", m, s) for m in args.models
                 for s in ([None] if m in ("mean", "trace_physics") else sets)]
     elif args.feature_tiers == "auto":
-        runs = [(f"{m} [{MODEL_TIERS.get(m, DEFAULT_MODEL_TIERS)}]", m, MODEL_TIERS.get(m, DEFAULT_MODEL_TIERS)) for m in args.models]
+        runs = [(m, m, "none") if m in ("mean", "trace_physics") else
+                (f"{m} [{MODEL_TIERS.get(m, DEFAULT_MODEL_TIERS)}]", m, MODEL_TIERS.get(m, DEFAULT_MODEL_TIERS)) for m in args.models]
     else:
         runs = [(m, m, args.feature_tiers) for m in args.models]
+    # the paired reference by model name: with feature sets in the run keys ("physics [P+A+B]") the plain name would
+    # match nothing and the paired comparison would silently be empty
+    keys = [name for name, _, _ in runs]
+    if args.paired_ref not in keys:
+        same = [k for k in keys if split_key(k)[0] == args.paired_ref]
+        own_ref = f"{args.paired_ref} [{args.ablation_ref}]"
+        if own_ref in same:
+            args.paired_ref = own_ref
+        elif len(same) == 1:
+            args.paired_ref = same[0]
     if "features" in files:
         names = files["features"]["feature_names"]
         for spec in dict.fromkeys(s for _, _, s in runs):

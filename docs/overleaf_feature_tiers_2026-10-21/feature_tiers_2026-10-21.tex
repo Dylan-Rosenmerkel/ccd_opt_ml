@@ -26,7 +26,7 @@
 \maketitle
 
 \begin{abstract}
-Forty-nine new scalar trace features and four new curves were added to \code{src/trace\_features.py}. Most come from
+Fifty-six new scalar trace features and four new curves were added to \code{src/trace\_features.py}. Forty-nine come from
 signal analysis in other fields: radar, finance, electrophysiology, gravitational-wave detectors, cardiology, astronomy,
 audio, machine diagnostics, metrology and seismology. They were tested on the 59 usable board-101 traces of the
 2026-10-12 packet tests. Two families stand out. The \emph{start-of-pixel} features are the only new ones that separate
@@ -63,8 +63,9 @@ datasets: none of 100 added noise columns reached its top tier L1.
   \item \textbf{ch2 has random telegraph switching.} Steps appear inside single integration windows in 8.2\,\% of ch2's
         windows and in none of the others. The jumps carry 27--28\,\% of ch2's CDS variance; its rms is 22.5\,ADU,
         but the jump-robust sigma is 16.8\,ADU.
-  \item \textbf{No dominant pickup waveform.} The three largest waveform modes of the skip cycles carry only 0.9\,\% of
-        the CDS variance; 106 modes are needed for 90\,\%.
+  \item \textbf{No dominant pickup waveform on the good amplifiers.} On ch0 the three largest waveform modes of the skip
+        cycles carry only 0.9\,\% of the CDS variance and 106 modes are needed for 90\,\% (medians over traces: 69--105
+        modes on ch0, ch1, ch3). On ch2 only about 8 modes carry 90\,\%: its excess noise sits in a few large modes.
   \item \textbf{The clocking regions carry setting information.} The V-transfer peak-to-peak (settings $F = 544$), the
         H/V peak-to-peak ratio ($F = 879$), the level slope in the V block before row 2 ($F = 45$, steeper with the V
         rails low) and the excess of the first H block after the V clocking ($F = 172$, largest with the H rails low)
@@ -73,8 +74,8 @@ datasets: none of 100 added noise columns reached its top tier L1.
   \item \textbf{The dip before the pulse is an amplifier fingerprint.} A dip 120--130\,ns before the per-cycle pulse is
         $-505$ to $-990$\,ADU deep depending on the amplifier, with repeat share 0.001, and does not change with any of
         these settings (none touched RG, SW, OG or DG).
-  \item \textbf{Tiers.} 141 scalar features: evidence tiers A1 37, A2 36, B 33, C 35. The plain GP should see tier A
-        only; trees can take everything.
+  \item \textbf{Tiers.} 141 scalar features: evidence tiers A1 37, A2 36, B 33, C 35, plus the protected set P (8).
+        The plain GP gets P only; trees can take everything.
   \item \textbf{Guarding the tiers.} The label-free tiers put the most direct $\se$ estimator and the kTC noise in B. A
         protected set P of eight physical estimators now goes to every model; on synthetic data this alone took the
         plain GP from collapsed to 9.6\,\% ($\se$) and 0.9\,\% (gain). Features are never ordered by the labels.
@@ -107,7 +108,7 @@ noise: waveform modes for 90\,\% of the CDS variance & cardiology (KLT of heartb
 noise: null-CDS noise, kurtosis, lag-1 autocorrelation & gravitational-wave detectors (null streams), metrology (A--A tests) & a CDS between the two halves of the pedestal window, where no charge moves \\
 discrete: in-window step rate and amplitude & electrophysiology (single-channel patch clamp), changepoint statistics & detect open/closed steps; here, telegraph steps of a trap \\
 noise: jump-robust CDS sigma, discrete: jump share & high-frequency finance (MedRV) & separate the smooth noise from the jumps \cite{ads2012} \\
-discrete: jump count (Lee--Mykland) & finance & a jump test with a calibrated false-alarm rate \cite{lm2008} \\
+discrete: jump count (Lee--Mykland) & finance & a jump test against a local volatility estimate \cite{lm2008}; nominally at 1\,\%; after correcting a missing constant (2026-10-22) it still flags about 0.26 jumps per pure-Gaussian 490-skip series with 20-skip windows, so it is a relative count \\
 noise: structure-function excess & astronomy (light curves) & the time scale of the noise inside the window \\
 noise: CDS spectral centroid & audio and speech & the mean frequency of the spectrum \\
 discrete: crest factor & machine-vibration diagnostics & peak over rms \\
@@ -126,8 +127,9 @@ worth studying. The pilot found that it is a baseline slope, and the group measu
 
 \paragraph{What did not carry over.} The pickup-line features are real but change from trace to trace, so they are in
 tier C for now. Heart-rate-variability measures (RMSSD, Poincar\'e SD1/SD2) are exact functions of the lag-1
-autocorrelation and were not implemented. DFA, the entropies and the spectral flatness were redundant or unstable in the
-pilots. Also left out: hidden-Markov dwell times, step rise times, jitter decomposition, spectral flux and cepstrum.
+autocorrelation and were not implemented; spectral flatness was redundant and left out. DFA, the sample and permutation
+entropies and the red-noise $\beta$ looked weak in the pilots but were implemented as tier 2: the entropies separate the
+amplifiers (tier A2), DFA is unstable (tier C) and $\beta$ is moderate (B). Also left out: hidden-Markov dwell times, step rise times, jitter decomposition, spectral flux and cepstrum.
 
 \paragraph{The full list.} By implementation tier (Section~\ref{sec:tiers}):
 \begin{itemize}
@@ -179,7 +181,7 @@ amplitude moves only when all horizontal low rails are lowered (red), on all fou
 \label{fig:start}
 \end{figure}
 
-The first skips of every pixel carry about $+290$\,ADU at skip 0. Inside skip 0 the baseline decays as an exponential with
+The first skips of every pixel carry about $+250$ to $+290$\,ADU at skip 0 (median per amplifier). Inside skip 0 the baseline decays as an exponential with
 $\tau \approx 12\,\mu$s. The amplitude is about 615\,ADU at the other settings and 741\,ADU with all horizontal low rails
 lowered (+21\,\%); lowering H3 alone does not move it.
 
@@ -244,13 +246,14 @@ This matters for $\se$. An ordinary $\sigma$ of the CDS mixes the Gaussian noise
 \centering
 \includegraphics[width=0.85\textwidth]{nb_noise_budget.png}
 \caption{The noise budget: the residual skip cycles split into waveform modes (principal components), and each mode's
-exact share of the CDS variance. The three largest modes carry 0.9\,\% of it; 106 modes are needed for 90\,\%.}
+exact share of the CDS variance (ch0, reference). The three largest modes carry 0.9\,\% of it; 106 modes are needed for 90\,\%.}
 \label{fig:budget}
 \end{figure}
 
 The large clock and reset fluctuations of the waveform do not reach the CDS, because the CDS weights cancel them. There
-is no single pickup waveform to subtract. The number of modes needed for 90\,\% still separates the amplifiers very well
-(amplifier $F \approx 700$).
+is no single pickup waveform to subtract on the good amplifiers (69--105 modes for 90\,\%, medians over traces). ch2 is
+the exception: about 8 modes carry 90\,\% of its CDS variance. The number of modes needed for 90\,\% therefore separates
+the amplifiers very well (amplifier $F \approx 700$).
 
 \subsection{Other noise-shape features}
 
@@ -294,7 +297,7 @@ feature & settings $F$ & amp.\ $F$ & repeat & tier & reading \\
 \midrule
 clock: H/V peak-to-peak ratio & 879 & 1093 & 0.00 & A1 & H relative to V feedthrough; 2.7 with V rails low, 3.3 with H rails low \\
 clock: V-transfer peak-to-peak & 544 & 1240 & 0.00 & A1 & V feedthrough; 46.1\,kADU with V rails low vs 41.8--42.3 \\
-clock: first H block of a row, excess & 172 & 173 & 0.01 & A1 & memory of the V clocking; 3.0\,kADU with H rails low vs 1.9--2.2 \\
+clock: first H block of a row, excess & 172 & 173 & 0.01 & A1 & memory of the V clocking; 3.0\,kADU with H rails low vs 1.9--2.2 at the other NCOLPRE-185 settings (1.6 at the reference, NCOLPRE 0) \\
 clock: V-block level slope & 45 & 65 & 0.03 & A1 & $-173$\,ADU/transfer with V rails low vs $-113$ to $-123$ \\
 clock: leading V-block level slope & 1.5 & 8.4 & 0.30 & B & not repeatable (see text) \\
 \bottomrule
@@ -310,6 +313,13 @@ before is not controlled, so its slope varies between repeats almost as much as 
 and becomes useful if the acquisition is made to start at a fixed point, for example at the start of that block.
 The level \emph{difference} between the H and V regions was dropped too: it flips sign with NCOLPRE. The dip at the
 second H transfer of an ordinary block is strong but duplicates \code{fit: baseline droop amplitude} ($|\rho| = 0.98$).
+
+\paragraph{Caveat: the planned trace geometry.} These features need at least 3 vertical transfers per row and 5
+horizontal transfers per pixel; the 2026-10-12 traces had 20 of each (NPBIN = NSBIN = 20). The traces of the planned
+packets (\code{daq\_scripts/manual\_packet.sh}: NPBIN = 1, NSBIN = 1, NCOLPRE = 100) have one V transfer per row and one H
+transfer per pixel, so all five \code{clock:} features are NaN there (checked on simulated packets of that geometry);
+processing drops such columns. They come back if the trace binning returns to 20 $\times$ 20, or if they are adapted to
+single transfers.
 
 \subsection{The dip before the per-cycle pulse}
 \label{sec:prepulse}
@@ -429,22 +439,23 @@ and real-value kinds, three datasets).}
 model & base error (\%) & $\Delta\se$ & $\Delta\lambda$ & feature set \\
  & $\se$ / $\lambda$ / gain & +20 / +50 / +100 & +20 / +50 / +100 & \\
 \midrule
-gp (plain ARD) & 6.9 / 8.0 / 0.9 & \textbf{+51 / +51 / +51} & \textbf{+21 / +21 / +21} & A only \\
-nn & 10.0 / 17.0 / 1.5 & +2 / +7 / +15 & +3 / +5 / +8 & A \\
-ridge & 9.5 / 12.4 / 0.9 & +2 / +4 / +5 & +6 / +8 / +14 & A \\
-cnn & 9.5 / 14.5 / 3.3 & 0 / +1 / +4 & +1 / +3 / +5 & A + B \\
-physics & 9.1 / 7.4 / 0.9 & 0 / 0 / 0 & 0 / +2.5 / +7 & A + B ($\lambda$ GP: A) \\
-physics\_joint & 9.1 / 4.6 / 0.9 & 0 / 0 / 0 & +1 / +2 / +3 & A + B \\
-sets & 5.7 / 10.9 / 0.9 & 0 / 0 / 0 & +2.5 / +3.5 / +4 & A + B \\
+gp (plain ARD) & 6.9 / 8.0 / 0.9 & \textbf{+51 / +51 / +51} & \textbf{+21 / +21 / +21} & P \\
+nn & 10.0 / 17.0 / 1.5 & +2 / +7 / +15 & +3 / +5 / +8 & P + A \\
+ridge & 9.5 / 12.4 / 0.9 & +2 / +4 / +5 & +6 / +8 / +14 & P + A \\
+cnn & 9.5 / 14.5 / 3.3 & 0 / +1 / +4 & +1 / +3 / +5 & P + A + B \\
+physics & 9.1 / 7.4 / 0.9 & 0 / 0 / 0 & 0 / +2.5 / +7 & P + A + B \\
+physics\_joint & 9.1 / 4.6 / 0.9 & 0 / 0 / 0 & +1 / +2 / +3 & P + A + B \\
+sets & 5.7 / 10.9 / 0.9 & 0 / 0 / 0 & +2.5 / +3.5 / +4 & P + A + B \\
 trees & 9.7 / 21.0 / 1.3 & 0 / 0 / 0 & 0 / 0 / 0 & everything \\
 \bottomrule
 \end{tabular}
-\caption{Tolerance test. $\Delta$ in percentage points. The gain changes are small except for gp (+30 at +100) and nn
-(+11).}
+\caption{Tolerance test, independent-noise columns ($\Delta$ in percentage points; the real-value columns give the same
+within 1--2 points). The gain changes are small except for gp (+30 at +100) and nn (+11). The last column is the
+current default (\code{MODEL\_TIERS}); P is the protected set (Section~\ref{sec:tiers}).}
 \end{table}
 
 The plain GP collapses to about ``guess the average'' with only 20 uninformative columns. On real data it would see
-141 + 141 features, so it must get tier A only. Near-copies hurt much less than uninformative columns, except for the
+141 + 141 features, so it gets the protected set P only (the feature ladder, Section~\ref{sec:ladder}). Near-copies hurt much less than uninformative columns, except for the
 $\lambda$ of the plain GP (+6 to +11) and of physics (+3 to +5).
 
 %======================================================================
@@ -646,11 +657,11 @@ file & what \\
 \code{lvl1/feature\_study/clock\_pilot/} & the clocking-region pilot (script, numbers, figure) \\
 \code{lvl1/feature\_study/ladder\_synthetic/} & the synthetic feature-ladder results and figure \\
 \code{src/trace\_features.py} & the \code{tier} attribute and \code{names\_by\_tier()} \\
-\code{tests/test\_trace\_features\_new.py} & 16 tests with known answers \\
+\code{tests/test\_trace\_features\_new.py} & 18 tests with known answers \\
 \code{lvl1/feature\_study.py} & evidence tiers; results in \code{lvl1/feature\_study/README.md} \\
 \code{lvl1/feature\_tolerance.py} & the synthetic tolerance test \\
 \code{lvl1/feature\_importance.py} & learned tiers L1/L2/L3 \\
-\code{lvl1/train\_lvl1.py} & \code{--feature-tiers}, \code{--tier-ablation} \\
+\code{lvl1/train\_lvl1.py} & \code{--feature-tiers}, \code{--tier-ablation}, \code{--feature-ladder} \\
 \code{lvl1/new\_trace\_features.ipynb} & walkthrough notebook of the new features \\
 \code{docs/trace\_features\_and\_tiers.md} & the working document behind this note \\
 \code{make\_figures.py} (in this folder) & the figures of this note \\

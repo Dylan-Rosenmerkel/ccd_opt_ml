@@ -62,7 +62,7 @@ EXTRA = [
     ("noise: Hadamard deviation n=50 (ADU)", "noise", "ADU",
      "Hadamard deviation (third difference of disjoint n-skip means / sqrt 6) of the CDS with only the common pixel pattern removed, not detrended (#38).",
      "averaging noise, insensitive to linear drift and without the polynomial bias of the detrended Allan", "scalar", 1),
-    ("noise: Hadamard deviation", "noise", "ADU", "The Hadamard deviation for n = 1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100 (curve).", "", "curve", 1),
+    ("noise: Hadamard deviation", "noise", "ADU", "The Hadamard deviation for the Allan n (1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100, 160; curve); NaN where n is too large for the skips (n = 160 at 490 skips).", "", "curve", 1),
     ("noise: CDS variance share of the 3 largest waveform modes", "noise", "",
      "PCA of the residual skip cycles; the fraction of the CDS variance carried by the 3 modes with the most waveform variance (exploratory report, idea 1).",
      "do the big clock / reset fluctuations reach the CDS? (pilot: no)", "scalar", 1),
@@ -85,13 +85,13 @@ EXTRA = [
      "the start ringing in physical units", "scalar", 2),
     ("start: mode damping (us)", "start", "µs", "Damping time of that pole (#9).", "", "scalar", 2),
     ("start: fast decay (us)", "start", "µs", "Decay time of the non-oscillating pole with the largest amplitude among those decaying within 10 skips (#9).", "", "scalar", 2),
-    ("start: transient amplitude, matched filter (ADU)", "start", "ADU", "Projection of each pixel's CDS_0-29 - late on the trace's mean transient, times its peak (#10).",
+    ("start: transient amplitude, matched filter (ADU)", "start", "ADU", "Projection of each pixel's CDS of skips 0-29 minus its median CDS from skip 10 on, onto the trace's mean transient, times its peak (#10).",
      "per-pixel transient size with less noise than the first-skip excess", "scalar", 2),
     ("start: ringing frequency (kHz)", "start", "kHz", "fit: first-skip ringing frequency (cyc/skip) x the skip rate (#11).", "comparable across delayInt settings", "scalar", 2),
     # ------------------------------------------------------------------ telegraph / non-Gaussian (tier 2)
     ("noise: null-CDS autocorrelation at lag 1", "noise", "", "Lag-1 autocorrelation of the null CDS along the skips (#17).", "slow change of the in-window slope", "scalar", 2),
     ("discrete: jump count (Lee-Mykland, 1 %)", "discrete", "",
-     "Number of skips whose |e_k| / local bipower sigma (20 skips) exceeds the 1 % Gumbel critical value (#27).", "calibrated jump count", "scalar", 2),
+     "Number of skips whose |e_k| / local bipower sigma (20 skips) exceeds the 1 % Gumbel critical value of Lee & Mykland, with c = sqrt(2/pi) (#27). With a 20-skip window pure Gaussian noise still gives ~0.26 per series: a relative count.", "jump count (relative)", "scalar", 2),
     ("discrete: STA/LTA maximum", "discrete", "", "max_k mean(e^2, k..k+4) / mean(e^2, k-50..k-1) of the detrended CDS (#28).", "localized bursts (seismology trigger)", "scalar", 2),
     ("discrete: crest factor", "discrete", "", "max |e| / std(e) of the detrended CDS (#29).", "largest excursion", "scalar", 2),
     ("noise: volatility clustering (Ljung-Box of e^2, 10 lags)", "noise", "", "Ljung-Box Q of the squared detrended CDS, 10 lags (#30).", "bursty noise regimes (ARCH)", "scalar", 2),
@@ -185,8 +185,12 @@ def lee_mykland_count(e: np.ndarray, K: int = 20, alpha: float = 0.01) -> float:
     bp = a[1:] * a[:-1]
     c = np.r_[0.0, np.cumsum(bp)]
     count = 0
-    cn = math.sqrt(2 * math.log(n)) - (math.log(math.pi) + math.log(math.log(n))) / (2 * math.sqrt(2 * math.log(n)))
-    sn = 1 / math.sqrt(2 * math.log(n))
+    # Lee & Mykland (2008): the bipower estimate below is (2/pi) sigma^2, so C_n and S_n carry c = sqrt(2/pi).  Even so,
+    # with a local window of only K = 20 skips the rate on pure Gaussian noise is ~0.26 per series, not 1 %: a relative count.
+    cc = math.sqrt(2 / math.pi)
+    cn = (math.sqrt(2 * math.log(n)) / cc
+          - (math.log(math.pi) + math.log(math.log(n))) / (2 * cc * math.sqrt(2 * math.log(n))))
+    sn = 1 / (cc * math.sqrt(2 * math.log(n)))
     beta = -math.log(-math.log(1 - alpha))
     for k in range(K, n):
         sigma2 = (c[k - 1] - c[k - K + 1]) / (K - 2)          # bipower over the K previous skips
@@ -612,6 +616,8 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
         R = np.vstack([res[p] for p in good])
         w = np.zeros(R.shape[1])
         w[:n_ped] = 1 / n_ped
+        if sig + n_ped > R.shape[1]:
+            raise ValueError("signal window runs past the cycle: the CDS weights would not balance")
         w[sig:sig + n_ped] = -1 / n_ped
         R0 = R - R.mean(0)
         U, sv, Vt = np.linalg.svd(R0, full_matrices=False)
@@ -688,7 +694,10 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
             med = np.median(V, axis=1)
             return float(np.polyfit(np.arange(len(med)), med, 1)[0]) if len(med) >= 3 else nan
         pp_v = nan
-        if r.v is not None and len(r.v) >= 3:
+        # regions.v falls back to the leading block (the trace starts inside it at a random point) when no later
+        # pixel starts a row; that block is not repeatable, so the V features need a row start after pixel 0
+        later_row = any(p > 0 for p in r.row_starts)
+        if later_row and r.v is not None and len(r.v) >= 3:
             S["clock: V-block level slope (ADU/transfer)"] = level_slope(r.v)
             pp_v = float(np.median(np.ptp(r.v, axis=1)))
             S["clock: V-transfer peak-to-peak (ADU)"] = pp_v

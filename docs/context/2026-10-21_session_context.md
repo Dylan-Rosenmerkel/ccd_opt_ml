@@ -242,3 +242,61 @@ Same synthetic test (td41_s0/1/2 + 120 uninformative real-named columns, `--quic
 - gp_saas: P 8.9/19.4/0.9; P+A1 9.0/28.1/1.0; all 10.6/29.5/0.9 -> sigma_e and gain nearly flat, lambda worse with every
   step; default changed to P. gp_saas took ~2-4 min per set (NUTS); gp_dim seconds.
 Results merged into lvl1/feature_study/ladder_synthetic/ladder_all.csv and the figure (8 models); docs and LaTeX updated.
+
+## 11. RESTART HERE (2026-10-22, stopped for a session-limit reset)
+
+**User request in progress:** "why haven't the trace features and trace features technical latex been updated based on
+yesterday. Is there a technical document for the ML models; if so update it, if not write it (all relevant details).
+Make sure everything done so far is accurate and validated."
+
+**Done (this commit):**
+- `docs/overleaf_trace_features/trace_features.tex` regenerated for 141 scalars / 18 curves with tier column, tiers
+  section, origins of new features (generator now `src/make_trace_features_note.py`, the updated copy; old
+  `docs/trace_features.tex` removed; figure height 0.78 textheight and \clearpage after figure blocks). 38 pages, 0 warnings,
+  zip rebuilt by the generator.
+- `docs/overleaf_trace_features_technical/trace_features_technical.tex`: exact definitions of all new features, ctx,
+  tiers (23 pages). EDITED AFTER ITS LAST COMPILE (Lee-Mykland constants, clock fallback, noise-budget guard, path):
+  RECOMPILE + re-zip `docs/overleaf_trace_features_technical.zip`.
+- NEW `docs/overleaf_ml_models_technical/ml_models_technical.tex` (+ zip): technical reference of every model, data flow,
+  validation, selection, synthetic world (14 pages). EDITED AFTER ITS LAST COMPILE (packet state, grouped ElasticNetCV,
+  log curves, fixed-issues list): RECOMPILE + re-zip.
+- `docs/overleaf_ml_models/ml_models.tex` updated to 2026-10-22 (new "Changes since 14 October", section 18, plan; 45
+  pages); EDITED AFTER COMPILE (Data bullet): RECOMPILE + re-zip `docs/overleaf_ml_models.zip`.
+- `docs/overleaf_feature_tiers_2026-10-21/`: validation agent fixed many numbers (56 not 49 features, noise-budget per
+  channel, +250-290, DFA/entropies implemented, etc.); EDITED AFTER COMPILE (Lee-Mykland line): RECOMPILE + re-zip.
+- Validation audit (agent): tests 33/33 pass; oct12 CSV / feature_table / evidence_tiers reproduce exactly; pipeline
+  end-to-end OK (rehearsal model_inputs X_trace (8,141)); train_lvl1 auto/ablation/ladder OK. It FIXED in train_lvl1.py:
+  mean/trace_physics keep plain names under --feature-tiers auto (vs-mean ratios were silently lost); --paired-ref resolves
+  to "physics [P+A+B]" etc. (paired comparison was empty under auto); groups ladder gets no "suggested set".
+- Code fixes by me (2026-10-22), tests pass, tiers unchanged (A1 37/A2 36/B 33/C 35/P 8):
+  * Lee-Mykland constants now carry c = sqrt(2/pi) (was 1.6 false jumps per Gaussian series, now ~0.26; still relative);
+    oct12 CSV + feature_table regenerated; jump count median ch0/1/3 = 0, ch2 = 8.5; its tier A2, amp F 31.
+  * clock: V features NaN when no row start after pixel 0 (regions.v would be the non-repeatable leading block);
+  * noise-budget raises (-> NaN) if sig + n_ped > cycle; Hadamard and matched-filter registry descriptions corrected;
+  * packet_state (train_lvl1.py) is amplifier-centred like StructuredPrep.state_vector;
+  * feature_importance.py ElasticNetCV uses packet-grouped folds;
+  * real_inputs._log_names also logs Hadamard and structure-function curves;
+  * process_trace docstring (141/18), src/trace_features.py doc path, plot_feature_figures.py colours for start/clock and
+    no hard-coded 43.
+
+**Interrupted (rerun after restart):**
+1. Importance re-check with grouped CV: for d in td41_s0 td41_s1 td41_s2 td100_s0 td13_s0:
+   `.venv/bin/python -W ignore lvl1/feature_importance.py --inputs <scratchpad>/gpcmp/$d/model_inputs --out <scratchpad>/imp2/$d --add-noise 20`
+   (scratchpad = /private/tmp/claude-501/-Users-dylanrosenmerkel-Documents-Software-ccd-opt-ml/0face8dd-3b86-44b8-b894-2b5f02a97511/scratchpad;
+   if the scratchpad is gone, rebuild synthetic sets with the gpcmp scripts / make_test_data). Check "check:" lines: is
+   L1 still free of noise columns? Update lvl1/feature_study/README.md step 3 and the docs if numbers change.
+2. Full-model rerun with the fixed packet state:
+   `.venv/bin/python -W ignore lvl1/train_lvl1.py --inputs lvl1/test_data/model_inputs --models mean settings trace_physics physics physics_joint physics_hier sets ridge trees gp nn cnn pretrained deep_kernel gp_dim --n-boot 1000 --out <scratchpad>/mltech/full100_v2`
+   (~10 min). Then update Table tab:full100 in ml_models_technical.tex and the "Testing without real data" table in
+   lvl1/README.md (still the 2026-10-15 numbers: physics 5.5/4.9; the pre-fix 2026-10-22 run gave physics 5.3/3.9/0.9).
+3. Recompile (tectonic: <scratchpad>/tectonic/tectonic, or reinstall) and re-zip the four LaTeX docs flagged above; send
+   the PDFs to the user with a summary of the validation findings.
+
+**Open decisions for the user (report them):**
+- The clock: features are NaN with the planned packet trace geometry (daq_scripts/manual_packet.sh: NPBIN=1, NSBIN=1,
+  NCOLPRE=100); they need >= 3 V and >= 5 H transfers (2026-10-12 traces were 20x20). Go back to 20x20 trace binning,
+  or adapt the features.
+- Still-open behaviour changes: sets fits lambda with the weak-prior GP (not SAAS); --quick does not shorten sets;
+  Allan NaN filled with the global median in _physics_X; NN early stopping validates on rows not packets; per-volt H/SW
+  features always use the side-A (H1_A / SW_1) swing.
+- Lambda inputs: log CCD temperature and time since clear/erase per packet; per-target feature sets.

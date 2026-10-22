@@ -13,6 +13,7 @@
 \tcbuselibrary{breakable}
 \usepackage{hyperref}
 \graphicspath{{figures/}}
+\renewcommand{\tabularxcolumn}[1]{>{\raggedright\arraybackslash}p{#1}}
 
 \newcommand{\code}[1]{\texttt{#1}}
 \newtcolorbox{basic}[1][]{breakable,colback=green!4,colframe=green!40!black,title={In plain words},fonttitle=\bfseries,#1}
@@ -21,7 +22,7 @@
 \title{Machine-Learning Models for Optimizing Skipper-CCD Operating Parameters:\\
 What They Do, What They Need, and Whether They Should See the Full Trace}
 \author{ML-assisted optimization of CCD operating parameters --- working note (draft)}
-\date{14 October 2026 (first round of models)}
+\date{14 October 2026 (first round of models); updated 22 October 2026 (level 1, Section~\ref{sec:lvl1})}
 
 \begin{document}
 \maketitle
@@ -35,6 +36,13 @@ model find useful properties of the trace that we did not think of?
 All models are implemented in \code{src/ml/} and were compared on a \emph{synthetic} CCD world built to mimic the packets
 (\code{src/ml/synthetic.py}). The synthetic results compare methods only; they say nothing about the real CCD. The real
 comparison will be repeated on the first scan.
+
+\textbf{Update, 22 October.} Since 14 October the models have been brought together for \emph{level 1} (can the image's noise
+parameters be predicted from hand-taken packets?) in one training command, \code{lvl1/train\_lvl1.py}. It adds two baselines, SAAS
+Gaussian processes (now the default for the dark charge), stronger validation (packet bootstrap, paired comparisons, CRPS,
+setting-grouped folds, a held-out session), 141 hand-made trace features in tiers, and a ``feature ladder'' that feeds every model
+more and more features. Section~\ref{sec:changes} lists the changes; Section~\ref{sec:lvl1} describes them with their results. The
+full details of every model are in the technical reference (\code{docs/overleaf\_ml\_models\_technical}).
 \end{abstract}
 
 \tableofcontents
@@ -60,7 +68,7 @@ comparison will be repeated on the first scan.
 \item \textbf{Can a model find features we missed?} Yes, if it is given the curves (or the folded trace) and enough data. On the
   synthetic world, a network on the curves found an intermittent noise floor that is missing from the hand-made list: $\sigma_e$ error
   1.9\,\% at 480 packets, against $\sim$11\,\% for every model on the hand-made features.
-\item \textbf{Data.} One scan of 10 parameters $\times$ 20 values (241 packets, about 76\,h) is enough for the surrogate and the
+\item \textbf{Data.} (Level 2; level 1 comes first, with the 43-packet plan of Section~\ref{sec:changes}.) One scan of 10 parameters $\times$ 20 values (241 packets, about 76\,h) is enough for the surrogate and the
   feature-based predictor; they are useful from $\sim$60 packets. In the synthetic tests, the network on the curves overtook them between
   240 and 480 labeled packets. Pre-training on unlabeled traces (a scan produces $\sim$30{,}000) should lower that.
 \item \textbf{Reference traces matter}: the dark charge drifts with the CCD state. Settings alone predict it to $\sim$25\,\%; with the reference
@@ -82,8 +90,55 @@ comparison will be repeated on the first scan.
 \item \textbf{Real data} (Sections~\ref{sec:realtest}--\ref{sec:format}): a staged test plan; the packets need no extra time, but per-row
   $\lambda$ from WADERs, a scan design with joint changes, trace-only packets, recorded conditions and 2--5 packets per new module would help;
   and a set of linked tables (per trace set, curves, labels with errors, image rows) instead of one flat \code{dataset.csv}.
+\item \textbf{Level 1 (updated 22 October, Section~\ref{sec:lvl1}).} 12 models and 2 baselines (plus 9 variants on request) train in one
+  command on the processed packets, without amplifier labels. The default is still model A (\code{physics}); its $\lambda$ is now fitted by a SAAS GP, and
+  \code{physics\_joint} (dark current + CIC) is the strongest $\lambda$ model on synthetic data (4.6\,\% at 41 packets). Every score
+  has a packet-bootstrap interval, models are compared in pairs, and session C of the 43-packet plan is held out once.
+\item \textbf{Feature sets (updated 22 October).} 141 trace features are too many for some models: the plain GP collapses with 20
+  uninformative columns. Every model now gets a protected set of 8 physical estimators plus the tiers it can take
+  (plain GP and \code{gp\_saas}: P only; \code{gp\_dim}: P + A1; nn, ridge: P + A; trees: all), and a label-free ``feature ladder''
+  will decide on real data.
+\item \textbf{$\lambda$ is the hard label (updated 22 October).} A trace holds almost no dark charge, and in the synthetic world $\lambda$
+  follows a hidden drifting state; per-amplifier models stay near the settings-only error ($\sim$20\,\%), while the structured joint
+  model reaches $\sim$5\,\%. Recording the CCD temperature and the time since the last clear would help most.
 \end{itemize}
 \end{basic}
+
+
+%======================================================================
+\section{Changes since 14 October 2026}
+\label{sec:changes}
+
+The sections after this one were written on 14 October and are kept as they were, apart from small corrections marked
+``(updated 22 October)''. What changed since, by date (sources: the session context documents in \code{docs/context/}
+of 15--21 October, and the git history):
+
+\begin{itemize}
+\item \textbf{15 October -- level 1 defined and built.} Three levels: (1) predict the noise parameters from hand-taken packets,
+  (2) also suggest new settings, (3) also run new scans. Everything without amplifier labels: one training example is one
+  amplifier's traces in one packet. \code{lvl1/train\_lvl1.py} trains every model in one command on the processed packets
+  (\code{src/ml/real\_inputs.py} writes one ready-to-train file per model family). The image processing now fits $\lambda$ row by
+  row and splits it into dark current and clock-induced charge (\code{src/image\_rows.py}). \code{physics\_hier} (A+B, told the
+  amplifier) runs as a labelled reference. The hierarchical GP now adds the known label noise of a new image to its predictive
+  variance (gain coverage 0.43 $\to$ 0.71). A beginner's learning guide (\code{docs/overleaf\_ml\_guide}) and one tutorial notebook
+  per model (\code{notebooks/model\_tutorials/}) were written.
+\item \textbf{16 October -- rehearsal and packet plan.} A full rehearsal on simulated packets with the planned 16-row image made
+  \code{run\_WADERs} the default label route (labels within $+1.6$\,\% ($\sigma_e$), $+4$\,\% ($\lambda$) and 0\,\% (gain) of the truth,
+  median). Dark current and CIC from a 16-row image are only known to $\sim$20--40\,\% each. The level-1 packet plan was written
+  (\code{lvl1/make\_packet\_plan.py}).
+\item \textbf{19 October -- baselines, robustness, new GP priors.} The \code{mean} and \code{settings} baselines; down-weighting of
+  training rows with outlying residuals in the physics models (41 synthetic packets: $\sigma_e$ 18.5 $\to$ 15.0\,\%); a guard
+  against the networks' divergence on very few packets; GPs with a dimension-scaled prior and SAAS GPs (\code{src/ml/bogp.py}).
+\item \textbf{20 October -- SAAS for $\lambda$ by default.} \code{physics} fits $\lambda$ with a SAAS GP (short NUTS chains), and
+  \code{physics\_joint} fits its dark current and CIC with a SAAS prior by MAP (Section~\ref{sec:lvl1saas}).
+\item \textbf{21 October -- validation, packet plan, trace features, tiers.} Packet-bootstrap intervals, paired comparisons, CRPS,
+  worst-amplifier coverage, CV grouped by identical settings, a held-out session C and leave-one-amplifier-out
+  (Section~\ref{sec:lvl1val}). The plan grew to 43 packets with session A in a shuffled order and two replicates. The trace
+  features grew from 85 to 141 scalars and from 14 to 18 curves, sorted into tiers; a synthetic tolerance test, learned feature
+  importance and the protected tier P were added (Section~\ref{sec:lvl1feat}).
+\item \textbf{22 October -- the feature ladder} for 8 models, including \code{gp\_dim} and \code{gp\_saas}, and the per-model default
+  feature sets (Section~\ref{sec:lvl1ladder}).
+\end{itemize}
 
 %======================================================================
 \section{The problem}
@@ -161,11 +216,11 @@ Input group & Content & Why & Size \\
 \midrule
 \code{theta}, \code{delta} & the operating parameters; their change from the reference & what we control & 10--40 \\
 \code{amp} & which amplifier (one-hot of board and channel) & amplifiers differ by 4$\times$ in noise and 2$\times$ in gain & 4--8 \\
-\code{trace} & the 85 hand-made features at $\theta$, mean over the trace sets & how the clocks, amplifier and noise behave & 85 \\
-\code{ref} & the same at the reference, minutes earlier in the same packet & the amplifier's identity and the CCD state now & 85 \\
-\code{diff} & \code{trace} $-$ \code{ref} & the change the settings caused & 85 \\
-\code{trace\_sd} & the scatter of each feature over the trace sets & how much to trust each feature & 85 \\
-curves & 12 curves: mean skip waveform, H/V transfer shapes, CDS pattern, autocorrelation, Allan deviation, spectra, noise vs window length, equivalent-time pulse, variation along the cycle & room for features nobody has defined & 4{,}187 \\
+\code{trace} & the hand-made features at $\theta$, mean over the trace sets (85 on 14 October; 141 since 21 October, Section~\ref{sec:lvl1feat}) & how the clocks, amplifier and noise behave & 85 / 141 \\
+\code{ref} & the same at the reference, minutes earlier in the same packet & the amplifier's identity and the CCD state now & 85 / 141 \\
+\code{diff} & \code{trace} $-$ \code{ref} & the change the settings caused & 85 / 141 \\
+\code{trace\_sd} & the scatter of each feature over the trace sets & how much to trust each feature & 85 / 141 \\
+curves & 12 curves on 14 October (mean skip waveform, H/V transfer shapes, CDS pattern, autocorrelation, Allan deviation, spectra, noise vs window length, equivalent-time pulse, variation along the cycle); 18 per trace since 21 October & room for features nobody has defined & 4{,}187 \\
 CDS matrix & the CDS of every pixel and skip & skip-to-skip structure & 5{,}000 \\
 raw trace & every ADC sample & everything & $3\times10^6$ \\
 \midrule
@@ -204,6 +259,10 @@ Neural-net ensemble & 5 small networks, each predicts a value and its variance &
 \caption{The model families.}
 \label{tab:families}
 \end{table}
+
+\noindent\textit{(Updated 22 October.)} These five families are the building blocks. The models actually trained for level 1 (the
+physics-structured A and its variants, set models, pre-trained CNN, deep kernel, SAAS GPs and the two baselines) are listed in
+Table~\ref{tab:lvl1models}.
 
 \subsection{Bayesian ridge (linear)}
 \begin{basic}
@@ -441,6 +500,9 @@ The 241-packet scan (10 parameters $\times$ 20 values, $\sim$76\,h) is enough fo
 \item \textbf{Scores}: relative error $\sqrt{\overline{(\hat y - y)^2}}$ in log; $R^2$; \emph{coverage}, the fraction of test points
   within $\hat y \pm \hat\sigma$, which should be 0.68; negative log-likelihood. Coverage tells whether the error bars can be trusted,
   which matters for the optimizer.
+\item \textit{(Updated 22 October.)} Level 1 groups the folds by identical settings as well as by packet, gives every score a
+  packet-bootstrap interval, compares models in pairs on the same resamples, adds CRPS and the worst amplifier's coverage, and holds
+  one session out for a single prospective test (Section~\ref{sec:lvl1val}).
 \end{itemize}
 
 %======================================================================
@@ -772,8 +834,8 @@ The four cheapest candidates of Section~\ref{sec:next} were built and tested on 
 \item \textbf{H}, a calibration of every model's error bars;
 \item \textbf{F}, an optimizer that models the read noise and the dark charge separately.
 \end{itemize}
-Code: \code{src/ml/structured.py}, \code{calibrate.py}, \code{benchmark\_structured.py}; walkthrough:
-\code{notebooks/ml\_structured\_models.ipynb}.
+{\raggedright Code: \code{src/ml/structured.py}, \code{calibrate.py}, \code{benchmark\_structured.py}; walkthrough:
+\code{notebooks/ml\_structured\_models.ipynb}.\par}
 
 \textbf{Main results:}
 \begin{itemize}
@@ -1348,6 +1410,271 @@ packets), 1.1\,\% (new, 2 packets); $\lambda$: 1.8--2.9\,\% throughout.}
 
 \clearpage
 %======================================================================
+\section{Level 1: the models as they stand (22 October)}
+\label{sec:lvl1}
+
+\begin{basic}
+Level 1 asks one question: \emph{can the image's read noise, dark charge and gain be predicted from the traces?} The packets are taken by
+hand (the 43-packet plan below), processed by \code{src/process\_packet.py}, and every model is trained and tested by one command,
+\code{lvl1/train\_lvl1.py}. No model is told which amplifier it sees; it sees that amplifier's own traces. This section collects
+what was added since 14 October and what the synthetic tests showed. As before, the synthetic numbers compare methods only.
+\end{basic}
+
+\subsection{The models}
+\label{sec:lvl1models}
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.9cm}>{\raggedright\arraybackslash}p{1.9cm}X}
+\toprule
+model & reads & what it is \\
+\midrule
+\code{mean} & -- & baseline: the training mean of each target, with the training spread as its error bar \\
+\code{settings} & -- & baseline: a GP on the settings alone (no trace, no amplifier) \\
+\code{trace\_physics} & physics & no learning: the noise from the trace's Allan curve, the training mean gain \\
+\code{physics} (default) & physics & A: trace physics + learned gain and correction; $\lambda$ by a SAAS GP (since 20 October) \\
+\code{physics\_joint} & physics & A with the joint dark-current / CIC fit of $\lambda$ from the per-row line fits; SAAS prior by MAP \\
+\code{physics\_hier} & physics & A+B, \emph{told the module and amplifier}: a labelled reference, marked ``(labels)'' in every report \\
+\code{sets} & sets & E: A with the trace sets combined by a learned set network \\
+\code{ridge}, \code{trees}, \code{gp}, \code{nn} & features & the first-round families on settings + own trace + own reference features \\
+\code{cnn} & curves & 1D CNN on the trace and reference curves + settings \\
+\code{pretrained} & curves & D: CNN whose encoder was pre-trained on every unlabeled trace, then fine-tuned \\
+\code{deep\_kernel} & curves & C: GP on the frozen pre-trained embedding, no amplifier term \\
+\midrule
+\code{gp\_dim}, \code{gp\_saas} & features & on request: \code{gp} with a dimension-scaled prior / as a SAAS GP (\code{src/ml/bogp.py}) \\
+7 more variants & physics & on request: \code{physics\_dim}, \code{physics\_saas}, \code{physics\_gp\_lambda}, \code{physics\_joint\_weak},
+  \code{physics\_joint\_select}, \code{physics\_saasmap\_lambda}, \code{physics\_saasfull\_lambda} (the comparisons of Section~\ref{sec:lvl1saas}) \\
+\bottomrule
+\end{tabularx}
+\caption{The level-1 models (\code{ALL\_MODELS} and \code{EXTRA\_MODELS} in \code{lvl1/train\_lvl1.py}). ``reads'': the model-input file
+(\code{model\_inputs/<family>.npz}, written by \code{src/ml/real\_inputs.py}).}
+\label{tab:lvl1models}
+\end{table}
+
+\paragraph{Two robustness fixes (19 October).}
+\begin{itemize}
+\item \textbf{Outlying training rows.} On one 41-packet synthetic set, \code{physics} had a 18.5\,\% $\sigma_e$ error because one packet with
+  5 of 10 damaged trace sets taught the correction GP a huge residual, which it then applied to other packets. Training rows whose
+  residual is more than 4 robust standard deviations from the median are now down-weighted (their squared deviation is added to their
+  variance; \code{PhysicsStructured(outlier\_z=4.0)}): 18.5 $\to$ 15.0\,\%, the rest of the error being that one packet.
+\item \textbf{Networks on very few packets.} With 6 packets the CNN's $\sigma_e$ error was 1310\,\%: curve points with almost no spread in
+  training became huge standardized inputs. Standardized inputs are now clipped at $\pm10$, and a predicted mean more than 3 training
+  standard deviations beyond the training labels is pulled back to that edge with the distance added to its error bar
+  (\code{INPUT\_CLIP}, \code{OUTPUT\_MARGIN} in \code{src/ml/models.py}): 6 packets 12\,\%, 100 packets unchanged.
+\end{itemize}
+Source: \code{docs/context/2026-10-19\_session\_context.md}.
+
+\subsection{Gaussian processes for many inputs and few points}
+\label{sec:lvl1saas}
+
+\begin{basic}
+A plain GP learns one length scale per input by maximum likelihood. With 100 inputs and 40 packets that over-fits. Two priors keep the
+length scales in check: a \emph{dimension-scaled} prior expects longer length scales when there are more inputs, and the \emph{SAAS}
+prior (sparse axis-aligned subspace) switches every input off unless the data need it.
+\end{basic}
+\begin{advanced}
+Dimension-scaled prior (Hvarfner, Hellsten \& Nardi 2024): $\ell_i \sim \mathrm{LogNormal}(\sqrt2 + \tfrac12\log d,\ \sqrt3)$, RBF kernel.
+SAAS (Eriksson \& Jankowiak 2021): a global scale $\tau \sim \mathrm{HalfCauchy}(0.1)$ and $1/\ell_i^2 \sim \mathrm{HalfCauchy}(\tau)$,
+sampled with NUTS (full chains 256 warm-up / 128 samples / thinning 16; short chains 96 / 48 / 8). Both are BoTorch models
+(\code{src/ml/bogp.py}). The same SAAS prior can also be used for a MAP fit of our own GPs (\code{ls\_penalty} in
+\code{src/ml/structured.py}).
+\end{advanced}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lccc}
+\toprule
+model & 13 packets & 41 packets & 100 packets \\
+\midrule
+\code{gp} & 8.9 / 20.4 / 1.3 & 7.9 / 7.4 / 0.9 & 11.0 / 4.4 / 0.8 \\
+\code{gp\_dim} & 8.7 / 20.7 / 1.3 & 8.0 / 18.3 / 1.0 & 14.4 / 5.0 / 0.9 \\
+\code{gp\_saas} & 10.7 / 23.2 / 1.2 & 8.8 / 12.3 / 0.8 & 10.8 / 6.2 / 0.8 \\
+\code{physics} (old $\lambda$ GP) & 4.1 / 19.1 / 1.3 & 9.1 / 10.9 / 0.9 & 5.3 / 4.9 / 0.9 \\
+\code{physics\_saas} (all GPs SAAS) & 4.6 / 13.5 / 1.7 & 9.1 / 7.3 / 1.0 & 5.3 / 3.9 / 0.8 \\
+\code{physics\_saas\_lambda} ($\lambda$ only) & 4.1 / 13.5 / 1.3 & 9.1 / 7.3 / 0.9 & -- \\
+\bottomrule
+\end{tabular}
+\caption{Error \% ($\sigma_e$ / $\lambda$ / gain), full training, synthetic: three datasets each at 13 and 41 packets, one at 100
+(\code{docs/context/2026-10-19\_session\_context.md}).}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+$\lambda$ fitted by & 13 & 41 & 100 & time (100 packets) \\
+\midrule
+old GP (\code{physics\_gp\_lambda}) & 19.1 & 10.9 & 4.9 & 6\,s \\
+SAAS, full NUTS (\code{physics\_saasfull\_lambda}) & 13.5 & 7.3 & 3.9 & 1143\,s \\
+\textbf{SAAS, short NUTS (\code{physics}, default)} & 15.1 & 7.4 & 3.9 & 75\,s \\
+our GP + SAAS prior by MAP (\code{physics\_saasmap\_lambda}) & 14.8 & 9.7 & 5.0 & 9\,s \\
+joint, weak prior (\code{physics\_joint\_weak}) & 17.3 & 5.2 & 4.6 & 12\,s \\
+\textbf{joint, SAAS prior by MAP (\code{physics\_joint}, default)} & 16.9 & 4.6 & 4.4 & 11\,s \\
+\bottomrule
+\end{tabular}
+\caption{$\lambda$ error \% by the way it is fitted ($\sigma_e$ and gain identical in all rows); 5 folds, run alone
+(\code{docs/context/2026-10-19\_session\_context.md}, section 4b).}
+\end{table}
+
+\begin{itemize}
+\item Neither prior improves the features GP on these 17-feature synthetic sets (\code{gp\_dim} is clearly worse on $\lambda$ at 41
+  packets); their raw error bars are better calibrated at 13 packets. Their value shows with many features (Section~\ref{sec:lvl1ladder}).
+\item Inside model A only $\lambda$ gains from SAAS; $\sigma_e$ is unchanged and the gain slightly worse when every GP is SAAS. Hence the
+  decision of 20 October: \textbf{SAAS for $\lambda$ only}, with short chains, and the SAAS prior by MAP inside the joint model.
+\end{itemize}
+
+\subsection{Validation}
+\label{sec:lvl1val}
+
+Every model is scored per target by cross-validation (\code{lvl1/README.md}, ``The report''):
+\begin{itemize}
+\item \textbf{Folds grouped by packet and by identical settings}: the four amplifiers of a packet stay together, and so do packets taken at
+  the same settings (the nominal repeats, the replicates), so a test packet's twin is never in training (\code{--group-by setting}, the
+  default).
+\item \textbf{Scores}: error (RMS of the log ratio), bias, shape (error after removing each amplifier's mean error), rank (within each
+  amplifier), coverage of $\pm1\sigma$ and $\pm1.96\sigma$ raw and after cross-conformal calibration, the calibration factor, the labels'
+  own error, CRPS (a proper score of the predicted Gaussian, rewarding accuracy and honest error bars together), and the calibrated
+  coverage of the worst amplifier.
+\item \textbf{Packet-bootstrap intervals} of every score (the out-of-fold predictions resampled by packet, 1000 times, no refitting).
+\item \textbf{Paired comparison} of every model with a reference (\code{--paired-ref}, default \code{physics}) on the same resamples: the
+  difference of the errors with its 95\,\% interval and P(better). Example, 41 synthetic packets: \code{mean} vs \code{physics}
+  $\sigma_e$ $+42.5$\,pp $[+32.0, +53.9]$; \code{physics\_joint} vs \code{physics} $\lambda$ $-3.6$\,pp $[-6.4, -1.1]$; but \code{sets} vs
+  \code{physics} $\sigma_e$ $-10.0$\,pp $[-19.9, +0.9]$, P(better) 0.81: that gap is mostly one damaged packet.
+\item \textbf{A prospective test}: session C of the plan is held out (\code{--holdout-session C}); the model is chosen on sessions A + B,
+  the choice is frozen, and C is scored once.
+\item \textbf{Leave one amplifier out} (\code{--loao}): an indicator for a new module only.
+\end{itemize}
+A suggested pass mark: the best label-free model predicts $\sigma_e$ on held-out packets within about twice the label error, clearly
+beats both baselines, ranks $\sigma_e$ within each amplifier (rank $> 0.9$), and its calibrated error bars cover 68 / 95\,\%.
+
+\subsection{The level-1 packet plan}
+\label{sec:lvl1plan}
+
+\code{lvl1/make\_packet\_plan.py} writes \code{lvl1/packet\_plan/} (43 packets, $\sim$11.9\,h):
+\begin{itemize}
+\item \textbf{Session A} (14 packets, 3.8\,h): timing only. delayInt in a \emph{shuffled} order (1500, 300, 3000, 500, 2000, 700), so a slow
+  drift during the session is not aliased with the strongest noise knob; delay\_H and delayRGH between them; nominal packets at the
+  start, middle and end; a replicate of delayInt 300 late in the session.
+\item \textbf{Session B} (18 packets, 4.9\,h): one voltage group at a time, one step either way, the two signs far apart in time; a
+  replicate of delayInt 3000.
+\item \textbf{Session C} (11 packets, 3.1\,h): joint changes (Latin hypercube) and a final nominal: the held-out prospective test.
+\end{itemize}
+Sessions B and C use placeholder voltage windows until the group's windows are confirmed; session A can be taken now.
+
+\subsection{Trace features and feature sets}
+\label{sec:lvl1feat}
+
+\paragraph{141 features.} On 21 October the trace features grew from 85 scalars and 14 curves to 141 scalars and 18 curves
+(\code{src/trace\_features\_extra.py}): 49 from a literature search across 21 fields (start-of-pixel transient, telegraph steps, jump-robust
+noise, noise shape, pickup lines, noise budget), 5 for the clocking regions and 2 for the dip before the per-cycle pulse. The full
+description is in \code{docs/trace\_features\_and\_tiers.md} and \code{docs/overleaf\_feature\_tiers\_2026-10-21}.
+
+\paragraph{Tiers.} Each feature has an \emph{implementation tier} (0 = original, 1, 2 = new) and an \emph{evidence tier} from 59 real
+traces of 2026-10-12, without labels (\code{lvl1/feature\_study.py}): A1 37, A2 36, B 33, C 35, by how well the feature separates
+settings or amplifiers, how repeatable it is and whether it duplicates another. Because separating traces is not the same as
+predicting the labels, a \textbf{protected tier P} of 8 direct physical estimators is given to every model: for $\sigma_e$ the CDS rms
+(detrended), the white noise per skip, the jump-robust sigma, the null-CDS noise and the Allan deviation at $n = 50$; for the gain the
+reset-level scatter, the pulse per volt RG and the dip per volt SW. Without P the label-free tiers put the CDS rms and the reset-level
+scatter in B.
+
+\paragraph{How many columns can a model take?} \code{lvl1/feature\_tolerance.py} added 20, 50 or 100 uninformative columns to three
+synthetic 41-packet sets (\code{lvl1/feature\_study/README.md}, step 2). Change in error, percentage points:
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lcc}
+\toprule
+model & $\sigma_e$ at +20 / +50 / +100 & $\lambda$ at +20 / +50 / +100 \\
+\midrule
+gp (plain) & +51 / +51 / +51 & +21 / +21 / +21 \\
+nn & +2 / +7 / +15 & +3 / +5 / +8 \\
+ridge & +2 / +4 / +5 & +6 / +8 / +14 \\
+cnn & 0 / +1 / +4 & +1 / +3 / +5 \\
+physics & 0 / 0 / 0 & 0 / +2.5 / +7 \\
+physics\_joint & 0 / 0 / 0 & +1 / +2 / +3 \\
+sets & 0 / 0 / 0 & +2.5 / +3.5 / +4 \\
+trees & 0 / 0 / 0 & 0 / 0 / 0 \\
+\bottomrule
+\end{tabular}
+\caption{The plain GP collapses to ``predict the average'' with only 20 uninformative columns.}
+\end{table}
+
+\paragraph{Learned importance} (\code{lvl1/feature\_importance.py}): stability selection (elastic net on packet-bootstrap resamples) and
+permutation importance (boosted trees), each compared with row-shuffled ``shadow'' copies of every column. Tier L1 (both methods beat
+the shadows by more than 1.5$\times$) held none of 20 added noise columns in five synthetic datasets; L2 (a candidate) held 4--8 of them.
+It is a diagnostic only: features are never chosen by the labels, because ranking $\sim$140 features by the labels of $\sim$30 packets
+is noisy and flatters the chosen set.
+
+\subsection{The feature ladder}
+\label{sec:lvl1ladder}
+
+\code{train\_lvl1.py --feature-ladder} trains every model on a nested series of feature sets and reports the error against the number of
+features. The orders use the features only, never the labels: \code{tiers} (settings only $\to$ P $\to$ P+A1 $\to$ P+A $\to$ P+A+B $\to$
+all), \code{cover} (after P, always the feature least explained by those already taken), \code{random} (the control) and \code{groups}
+(P + one physics group). The suggested set per model and target is the smallest step within one standard error of its best step.
+
+On synthetic data (the three 41-packet sets with the 120 other real features added as uninformative columns with their real names,
+short training; \code{lvl1/feature\_study/ladder\_synthetic/}):
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+model & settings only & P (8) & P + A1 (44) & all (137) \\
+\midrule
+gp & 57.5 / 21.5 / 31.3 & 9.6 / 22.0 / 0.9 & collapsed & collapsed \\
+gp\_dim & 57.0 / 21.3 / 31.2 & 9.0 / 22.2 / 1.1 & 8.4 / 22.1 / 1.4 & 9.4 / 19.1 / 1.6 \\
+gp\_saas & 57.2 / 19.4 / 31.3 & 8.9 / 19.4 / 0.9 & 9.0 / 28.1 / 1.0 & 10.6 / 29.5 / 0.9 \\
+nn & 57.5 / 19.3 / 31.4 & 12.9 / 18.6 / 6.3 & 17.2 / 20.5 / 8.0 & 26.6 / 23.5 / 13.8 \\
+ridge & 57.4 / 17.2 / 31.3 & 12.2 / 17.0 / 6.3 & 10.5 / 18.5 / 1.3 & 14.9 / 21.7 / 4.7 \\
+trees & 57.0 / 21.0 / 31.2 & 9.3 / 21.0 / 1.3 & 10.0 / 21.0 / 1.3 & 9.9 / 20.5 / 1.4 \\
+physics\_joint & 36.0 / 15.7 / 31.3 & 9.3 / 5.0 / 1.0 & 8.8 / 5.8 / 1.0 & 9.0 / 7.5 / 1.7 \\
+sets & 32.0 / 20.7 / 31.3 & 5.8 / 9.3 / 1.0 & 6.2 / 12.6 / 1.0 & 6.6 / 15.6 / 1.7 \\
+\bottomrule
+\end{tabular}
+\caption{Error \% ($\sigma_e$ / $\lambda$ / gain), mean of three datasets, order \code{tiers}. ``Collapsed'' = no better than the mean.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{ml_lvl1_ladder.png}
+\caption{The ladder for 8 models; red: \code{tiers}, blue: \code{cover}, grey dashed: \code{random} (mean of three random orders).}
+\label{fig:lvl1ladder}
+\end{figure}
+
+\begin{itemize}
+\item The plain GP is best at 8--15 features and collapses beyond 15--25 in every order. \code{gp\_dim} stays flat up to all 137: its
+  prior does what it is meant to. \code{gp\_saas} keeps $\sigma_e$ and the gain but its $\lambda$ gets worse with every step.
+\item nn gets worse with every step; ridge is best around 25--45 features; trees are flat; \code{physics\_joint} and \code{sets} are flat
+  for $\sigma_e$ and the gain but lose on $\lambda$ as features are added.
+\item The cover order did not beat the random control, as expected here: without labels no order can know which of these columns are
+  informative. In this test two of P's eight features carry information and everything outside the 17 synthetic features is noise, so P
+  looks better than it will on real data.
+\end{itemize}
+
+\paragraph{Default feature sets} (\code{MODEL\_TIERS}, used with \code{--feature-tiers auto}; the default \code{--feature-tiers all}
+gives every model every feature): \code{gp} and \code{gp\_saas} P; \code{gp\_dim} P + A1; \code{nn} and \code{ridge} P + A; \code{trees}
+all; the baselines none; every other model P + A + B. They are starting points: the ladder on sessions A + B decides, and session C
+confirms.
+
+\subsection{Why the dark charge is the hard label}
+\label{sec:lvl1lambda}
+
+\begin{itemize}
+\item \textbf{A trace holds almost no dark charge.} It is 10 pixels read in $\sim$0.2\,s; $\lambda$ is $\sim$0.08\,e$^-$ per pixel collected
+  over a 4.8-minute image. No trace feature measures $\lambda$ directly, so P has no $\lambda$ estimator.
+\item \textbf{$\lambda$ follows a hidden state.} In the synthetic world the dark-current part is multiplied by $\exp(0.35\,z)$, with $z$ a
+  slowly drifting state ($\pm35$\,\% at fixed settings; \code{src/ml/synthetic.py}). The state leaks only weakly into a few trace features,
+  so per-amplifier models stay near the settings-only error ($\sim$20\,\% in the ladder), and extra features only add variance.
+\item \textbf{Structure helps.} \code{physics\_joint} models $\lambda$ as dark current (growing with the row) plus CIC (the same in every row),
+  learned from the per-row line fits with their known covariance: about 5\,\% in the ladder.
+\item \textbf{What would help on the real CCD:} record the CCD temperature and the time since the last clear or erase with every packet
+  (the \code{.meta} files have no temperature), and test whether the new clock-feedthrough features predict the CIC part.
+\end{itemize}
+
+
+\clearpage
+%======================================================================
 \section{Testing every model on real data}
 \label{sec:realtest}
 
@@ -1413,6 +1740,11 @@ traces and binned 20$\times$20 images (500 skips) at the same five settings.
   curves matter (saliency).
 \end{itemize}
 
+\noindent\textit{(Updated 22 October.)} For level 1, the packet-grouped splits, the scores (with conformal calibration) and a held-out
+session are implemented in \code{lvl1/train\_lvl1.py}, together with packet-bootstrap intervals and paired comparisons
+(Section~\ref{sec:lvl1val}). The blocked-in-time split, the leave-one-parameter-out split and the learning curves are not built yet;
+the level-1 plan instead shuffles session A and repeats nominal packets, so that drift and settings are not aliased.
+
 \paragraph{Stage 2 -- a second module (when one is available).} Train on module 1 plus $k = 0, 1, 2, 5, 10, 20$ packets of module 2;
 test on its other packets (the \code{newmodule} experiment). This decides B against the first round and how many packets a new module needs.
 
@@ -1440,7 +1772,8 @@ would make the models clearly better, and one choice in the scan design matters 
 Change & Why (which model) & Cost \\
 \midrule
 \textbf{Per-row $\lambda$ from WADERs} (and per-row $\sigma$) & splits dark current from CIC (A); 16 constraints per image instead of 1; was already an
-  open item (WADERs JSON with per-row dark current) & none (analysis only) \\
+  open item (WADERs JSON with per-row dark current). \textit{Done 15 October}: \code{src/image\_rows.py} fits $\lambda$ row by row after WADERs
+  (from 16 rows each part is known to only $\sim$20--40\,\%) & none (analysis only) \\
 \textbf{Keep the un-averaged skips of the image}, or of a few of its rows, if the DAQ can save them & the image's own $\sigma(N)$ curve: $\sigma_1$,
   floor and the image-only noise measured on the image, not inferred (A; stage 0) & disk (tens of MB per channel for 16 rows; check that cdaq can save them) \\
 \textbf{A scan design with joint changes}: random/Sobol points inside the limits, or half one-at-a-time and half random & the
@@ -1450,7 +1783,8 @@ Change & Why (which model) & Cost \\
   multi-fidelity BO (F), and many more $\theta$ points for the trace physics $a(\theta), b(\theta)$ (A) & minutes each, no image \\
 \textbf{Record the conditions}: CCD and board temperatures, time since the last flush/erase, vacuum, the complete parameter set of every pin
   (not only the scanned ones), software versions & the drifting state is today inferred from the reference traces; measured temperatures
-  make it direct (all models; B for modules) & none \\
+  make it direct (all models; B for modules). \textit{Still open (22 October)}, and the most useful addition for $\lambda$
+  (Section~\ref{sec:lvl1lambda}) & none \\
 \textbf{Nominal image packets at intervals} (the scan already has \code{reference\_every = 5}) & labeled drift anchors: they measure the
   state's effect on the labels directly & already planned \\
 \textbf{A few packets of every new module}, at nominal and around it & B needs $\gtrsim$2--5 imaged packets per new module before its gain
@@ -1529,26 +1863,24 @@ include the group's safe-operation rules (\code{docs/voltage\_rules.txt}) and th
 %======================================================================
 \section{Plan}
 
+\textit{(Updated 22 October.)}
 \begin{enumerate}
-\item \textbf{Now (no labels yet):} the pipeline runs end to end on synthetic data (\code{python -m ml.benchmark}). The real
-  \code{dataset.csv} loads with \code{ml.data.load\_dataset}, and the curves with \code{curves\_from\_processed}.
-\item \textbf{First real packets:} check the label noise and the repeat scatter; fit the GP surrogate on the first tens of packets;
-  check the coverage on held-out packets.
-\item \textbf{First scan (241 packets):}
-  \begin{itemize}
-  \item compare ridge, trees, GP and the neural-net ensemble on the hand-made features (grouped CV and a second night);
-  \item read the GP relevances;
-  \item test the held-out amplifier.
-  \end{itemize}
-\item \textbf{CNN on curves:} train it on the same scan; pre-train an encoder on all unlabeled traces; compare; look at what it uses.
-\item \textbf{Next models:} all candidates are implemented (Sections~\ref{sec:proto} and \ref{sec:rest}). On real data, C+D and E
-  need the unlabeled traces and the individual trace sets. The real-data test plan is in Section~\ref{sec:realtest}.
-\item \textbf{Optimization:} Bayesian optimization in the screened parameters, with the limits and relations encoded
-  (Section~\ref{sec:safety}; the windows still to be replaced by the group's voltage limits), small steps and human approval of each
-  proposal at first.
+\item \textbf{Now (no labels yet):} the level-1 pipeline runs end to end on simulated packets (\code{lvl1/rehearse\_lvl1.py}) and on
+  synthetic model inputs (\code{lvl1/make\_test\_data.py}); every model trains on the processed output.
+\item \textbf{Session A} (14 packets, timing only; can be taken now): process the packets; rerun the label-free feature study on them
+  (\code{lvl1/feature\_study.py}); fix the feature-ladder orders \emph{before} looking at the labels; then train every model with
+  \code{--feature-ladder}. A first answer to level 1 needs only session A.
+\item \textbf{Session B} (18 packets, after the group's voltage windows are confirmed): train on A + B; choose the model(s) and each model's
+  feature set on the cross-validation and the paired comparisons; freeze the choice.
+\item \textbf{Session C} (11 packets): score the frozen choice once (\code{--holdout-session C}).
+\item \textbf{Record the conditions} (CCD temperature, time since the last clear) with every packet, for $\lambda$.
+\item \textbf{Level 2}: the surrogate and Bayesian optimization in the screened parameters, with the limits and relations encoded
+  (Section~\ref{sec:safety}), small steps and human approval of each proposal at first. The 241-packet scan of Section~\ref{sec:data}
+  and the data-hungry models (C, D, E with the unlabeled traces) follow after level 1.
 \end{enumerate}
 
 \paragraph{Software.}
+\begin{raggedright}
 \begin{itemize}
 \item \code{src/ml/}:
   \begin{itemize}
@@ -1557,12 +1889,18 @@ include the group's safe-operation rules (\code{docs/voltage\_rules.txt}) and th
   \item remaining models: \code{deep.py}, \code{setmodels.py}, \code{bo\_advanced.py}, \code{benchmark\_advanced.py};
   \end{itemize}
 \item real-data check: \code{src/stage0\_trace\_vs\_image.py}.
+\item level 1 (since 15 October): \code{lvl1/train\_lvl1.py} (training and validation), \code{lvl1/make\_packet\_plan.py},
+  \code{lvl1/feature\_study.py}, \code{lvl1/feature\_tolerance.py}, \code{lvl1/feature\_importance.py}, \code{lvl1/make\_test\_data.py},
+  \code{lvl1/rehearse\_lvl1.py}; in \code{src/}: \code{process\_packet.py}, \code{image\_rows.py}, \code{ml/real\_inputs.py},
+  \code{ml/bogp.py}, \code{trace\_features\_extra.py}. Options and the report are described in \code{lvl1/README.md}.
 \item Notebooks in \code{notebooks/}:
   \begin{itemize}
   \item first round: \code{ml\_models\_walkthrough.ipynb};
-  \item second round: \code{ml\_structured\_models.ipynb}.
+  \item second round: \code{ml\_structured\_models.ipynb};
+  \item one tutorial per model: \code{notebooks/model\_tutorials/} (16 notebooks, from the basics);
+  \item level 1: \code{lvl1/lvl1\_walkthrough.ipynb}, \code{lvl1/new\_trace\_features.ipynb}.
   \end{itemize}
-\item Environment (numpy, scipy, pandas, scikit-learn, PyTorch, matplotlib):\\
+\item Environment (numpy, scipy, pandas, scikit-learn, PyTorch, matplotlib; BoTorch with its fully Bayesian extra for the SAAS GPs):\\
   \code{python3 -m venv .venv \&\& .venv/bin/pip install -r requirements-ml.txt}.
 \item The benchmarks, from \code{src/}:
   \begin{itemize}
@@ -1571,5 +1909,6 @@ include the group's safe-operation rules (\code{docs/voltage\_rules.txt}) and th
   \item \code{../.venv/bin/python -m ml.benchmark\_advanced}.
   \end{itemize}
 \end{itemize}
+\end{raggedright}
 
 \end{document}
