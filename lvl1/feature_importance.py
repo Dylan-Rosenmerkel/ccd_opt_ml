@@ -161,8 +161,8 @@ def main():
     margins = table[[c for c in table.columns if c.endswith("/ shadow 95 %")]].replace(np.inf, 1e6)
     table["best margin over shadows"] = margins.max(axis=1)
     # learned tiers: L1 = both methods confirm, each by more than MARGIN x the shadows' 95th percentile; L2 = a
-    # candidate (one method, or both but narrowly); L3 = not shown to matter.  On synthetic data (3 datasets, 20 noise
-    # columns) no noise column reached L1, but 5-6 of the 20 reached L2: L2 is a list to look at, not a feature set.
+    # candidate (one method, or both but narrowly); L3 = not shown to matter.  On synthetic data (5 datasets, 20 noise
+    # columns each) 1 of 100 noise columns reached L1 (at 13 packets) and 3-6 of 20 reached L2: diagnostics only.
     strong = np.minimum(win_margin["stability"], win_margin["permutation"]) > MARGIN
     table["learned tier"] = np.select([strong, n_hits >= 1], ["L1", "L2"], "L3")
     tiers_file = ROOT / "lvl1" / "feature_study" / "evidence_tiers.json"

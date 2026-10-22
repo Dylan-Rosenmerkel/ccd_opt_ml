@@ -219,20 +219,21 @@ shadows' 95th percentile in most of 5 rounds with fresh shadows.
 - **L2, candidate:** one method only, or both but narrowly.
 - **L3:** not shown to matter.
 
-**Check on synthetic data.** Three 41-packet datasets (td41_s0/1/2), with 20 pure-noise columns added:
+**Check on synthetic data.** Three 41-packet datasets (td41_s0/1/2), with 20 pure-noise columns added (the "current"
+row is the 2026-10-22 rerun with packet-grouped folds for the elastic net's alpha):
 
 | rule | noise columns in L1 | noise columns in L2 | real features in L1 |
 |---|---|---|---|
 | L1 = both methods win (no margin) | 0 / 0 / 2 | 6 / 6 / 3 | 5 / 4 / 8 |
-| L1 = both win by > 1.5 × (current) | **0 / 0 / 0** | 6 / 6 / 5 | 5 / 4 / 8 |
+| L1 = both win by > 1.5 × (current) | **0 / 0 / 0** | 6 / 5 / 5 | 5 / 4 / 8 |
 
 The features in L1 in all three datasets: reset-level scatter, detrended CDS rms, dip recovery time, horizontal minimum or maximum.
 
 **What this means.**
 
-- L1 is trustworthy on this check; L2 is not, because about 30 % of the noise columns reach it. Use L2 as a list to
-  look at, not as a feature set.
-- The 1.5 margin was chosen on these three runs. **Confirmed on two unseen datasets:** td100_s0 has 0 of 20 noise
-  columns in L1 (4 in L2) and 3 real features in L1; td13_s0 has 0 in L1 (8 in L2) and 5 real features in L1.
-- On real data, run it on session A after the evidence tiers, and compare: features in evidence tier A but in learned
-  L3 are candidates to drop; features in L1 but not in tier A are candidates to promote.
+- L2 is not trustworthy: 25–30 % of the noise columns reach it. Use it as a list to look at.
+- The 1.5 margin was chosen on these three runs. On two unseen datasets: td100_s0 has 0 of 20 noise columns in L1
+  (3 in L2) and 3 real features in L1; **td13_s0 (13 packets) has 1 of 20 in L1** (6 in L2) and 6 real features in L1.
+  So L1 is reliable at 41–100 packets, but at the size of session A (~14 packets) about 1 noise column in 20 can reach it.
+- The learned tiers are diagnostics only (docs/trace_features_and_tiers.md §6.1): features in L1 but not in tier A, and
+  tier-A features in L3, are the ones to look at physically; they never choose a model's features.

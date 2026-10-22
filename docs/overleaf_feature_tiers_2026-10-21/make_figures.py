@@ -34,9 +34,10 @@ plt.rcParams.update({"font.size": 12, "axes.spines.top": False, "axes.spines.rig
 #: notebook cell -> figure name
 NOTEBOOK = {3: "nb_differentiator", 7: "nb_null_cds", 9: "nb_jumps", 11: "nb_allan", 15: "nb_noise_budget"}
 
-#: learned tiers per synthetic dataset: (noise columns in L1, noise columns in L2, real features in L1), of 20 noise columns
-LEARNED = {"td41_s0": (0, 6, 5), "td41_s1": (0, 6, 4), "td41_s2": (0, 5, 8),          # the margin was chosen on these
-           "td100_s0": (0, 4, 3), "td13_s0": (0, 8, 5)}                               # unseen confirmation sets
+#: learned tiers per synthetic dataset: (noise columns in L1, noise columns in L2, real features in L1), of 20 noise columns;
+#: rerun 2026-10-22 with packet-grouped ElasticNetCV (lvl1/feature_importance.py)
+LEARNED = {"td41_s0": (0, 6, 5), "td41_s1": (0, 5, 4), "td41_s2": (0, 5, 8),          # the margin was chosen on these
+           "td100_s0": (0, 3, 3), "td13_s0": (1, 6, 6)}                               # unseen confirmation sets
 
 
 def top_new_features():

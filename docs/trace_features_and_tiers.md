@@ -396,9 +396,10 @@ importances. Every feature is therefore compared with **shadow features**, row-s
 - **L2:** a candidate (one method, or both narrowly);
 - **L3:** not shown to matter.
 
-**Synthetic check** (td41_s0/1/2, 20 pure-noise columns added): no noise column reached L1, but 5–6 of the 20 reached
-L2. So L1 can be used as a feature set and L2 only as a list to look at. The 1.5 margin was chosen on these runs and then
-confirmed on two unseen datasets (td100_s0, td13_s0): again no noise column in L1. Details: `lvl1/feature_study/README.md`, step 3.
+**Synthetic check** (td41_s0/1/2, 20 pure-noise columns added; rerun 2026-10-22 with packet-grouped folds for the elastic
+net): no noise column reached L1, but 5–6 of the 20 reached L2. The 1.5 margin was chosen on these runs; on two unseen
+datasets it held at 100 packets (td100_s0: 0 in L1) but let 1 of 20 noise columns into L1 at 13 packets (td13_s0), the
+size of session A. L2 is only a list to look at, and L1 is a diagnostic, not a guarantee. Details: `lvl1/feature_study/README.md`, step 3.
 
 **Use on real data:** after session A, beside §6.1, as a **diagnostic**: features in L1 but not in tier A, and tier-A
 features in L3, are the ones to look at physically. Learned importance does not choose any model's features (§6.1).

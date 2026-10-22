@@ -300,3 +300,18 @@ Make sure everything done so far is accurate and validated."
   Allan NaN filled with the global median in _physics_X; NN early stopping validates on rows not packets; per-volt H/SW
   features always use the side-A (H1_A / SW_1) swing.
 - Lambda inputs: log CCD temperature and time since clear/erase per packet; per-target feature sets.
+
+## 12. Resumed after the reset (2026-10-22): the interrupted items are done
+
+1. Importance re-check with packet-grouped ElasticNetCV (scratchpad imp2/): (noise in L1, noise in L2, real in L1)
+   td41_s0 (0, 6, 5), td41_s1 (0, 5, 4), td41_s2 (0, 5, 8), td100_s0 (0, 3, 3), td13_s0 (1, 6, 6). So 1 of 100 noise
+   columns reached L1, on the 13-packet set (the size of session A). Same real L1 features as before (CDS rms,
+   reset-level scatter in 5/5; dip recovery 4/5). All docs that said "no noise column in L1" corrected (feature_tiers
+   LaTeX + figure, ml_models.tex, ml_models_technical.tex, trace_features_and_tiers.md, feature_study/README.md,
+   feature_importance.py comment). Learned tiers stay diagnostics only.
+2. Full-model rerun on lvl1/test_data with the fixed (amplifier-centred) packet state: every number identical to the
+   pre-fix run (all synthetic packets have 4 amplifiers, so centring shifts the state by a constant). lvl1/README.md
+   results table updated (physics 5.3 / 3.9 / 0.9; calibrated 68 % coverage 0.67-0.69 for every model).
+3. All LaTeX docs recompiled with 0 warnings and re-zipped: trace_features 38 p, trace_features_technical 23 p,
+   ml_models 45 p, ml_models_technical 14 p, feature_tiers_2026-10-21 16 p.
+Open decisions for the user: unchanged (section 11).

@@ -534,7 +534,8 @@ method for a target when it wins in more than half the rounds; its margin is its
 among the targets it confirms exceeds 1.5 (\code{MARGIN}; the two methods may confirm it for different targets); L2 =
 confirmed by at least one method otherwise; L3 = neither. Optional
 \code{--saas}: the median inverse length scale of a SAAS GP (NUTS 96/48/8). Output: \code{feature\_importance.csv}.
-Synthetic check (5 datasets, 20 noise columns): no noise column in L1; 4--8 of 20 in L2. The learned tiers are a
+Synthetic check (5 datasets, 20 noise columns each; rerun 2026-10-22 with grouped folds): 1 of 100 noise columns in L1
+(on the 13-packet dataset), 3--6 of 20 in L2. The learned tiers are a
 diagnostic only; they never choose features.
 
 %======================================================================

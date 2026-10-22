@@ -1601,7 +1601,7 @@ trees & 0 / 0 / 0 & 0 / 0 / 0 \\
 
 \paragraph{Learned importance} (\code{lvl1/feature\_importance.py}): stability selection (elastic net on packet-bootstrap resamples) and
 permutation importance (boosted trees), each compared with row-shuffled ``shadow'' copies of every column. Tier L1 (both methods beat
-the shadows by more than 1.5$\times$) held none of 20 added noise columns in five synthetic datasets; L2 (a candidate) held 4--8 of them.
+the shadows by more than 1.5$\times$) held 1 of 100 added noise columns over five synthetic datasets (on the 13-packet one); L2 (a candidate) held 3--6 of 20.
 It is a diagnostic only: features are never chosen by the labels, because ranking $\sim$140 features by the labels of $\sim$30 packets
 is noisy and flatters the chosen set.
 

@@ -44,7 +44,7 @@ features are therefore sorted into tiers: an implementation tier (where a featur
 label-free orders (\code{--feature-ladder}). Because the label-free tiers can demote the most direct noise estimators,
 a protected set of eight physical estimators is now given to every model. Finally, a learned importance method
 (stability selection and permutation importance against shadow features) was built and checked on five synthetic
-datasets: none of 100 added noise columns reached its top tier L1.
+datasets: 1 of 100 added noise columns reached its top tier L1, on the smallest (13-packet) dataset.
 \end{abstract}
 
 \tableofcontents
@@ -82,8 +82,9 @@ datasets: none of 100 added noise columns reached its top tier L1.
   \item \textbf{Feature ladder.} On synthetic data the plain GP is best with 8--15 features and collapses beyond;
         \code{gp\_dim} stays flat up to all features; \code{gp\_saas} loses $\lambda$ with more features; nn degrades with
         every added step, ridge is best near 25--45, trees are flat.
-  \item \textbf{Learned tiers.} L1 (both methods confirm, by a margin) contained no noise column in five synthetic
-        datasets. L2 (a candidate) contained 4--8 of 20 noise columns, so it is a list to look at, not a feature set.
+  \item \textbf{Learned tiers.} L1 (both methods confirm, by a margin) contained 1 of 100 noise columns over five
+        synthetic datasets (on the 13-packet one). L2 (a candidate) contained 3--6 of 20 noise columns, so it is a list
+        to look at, not a feature set. The learned tiers are diagnostics only.
 \end{itemize}
 
 %======================================================================
@@ -498,21 +499,24 @@ rule puts none of them in L1.
 dataset & noise in L1, no margin & noise in L1, margin 1.5 & noise in L2 & real features in L1 \\
 \midrule
 td41\_s0 & 0 & 0 & 6 & 5 \\
-td41\_s1 & 0 & 0 & 6 & 4 \\
+td41\_s1 & 0 & 0 & 5 & 4 \\
 td41\_s2 & 2 & 0 & 5 & 8 \\
 \midrule
-td100\_s0 (unseen) & --- & 0 & 4 & 3 \\
-td13\_s0 (unseen) & --- & 0 & 8 & 5 \\
+td100\_s0 (unseen) & --- & 0 & 3 & 3 \\
+td13\_s0 (unseen) & --- & \textbf{1} & 6 & 6 \\
 \bottomrule
 \end{tabular}
-\caption{Learned tiers on synthetic data, 20 noise columns each. The margin was chosen on the first three datasets and
-then confirmed on two it had not seen.}
+\caption{Learned tiers on synthetic data, 20 noise columns each, rerun on 2026-10-22 with the elastic net's
+regularization chosen by packet-grouped folds (row-wise before; ``no margin'' column from the first run). The margin was
+chosen on the first three datasets; on the two unseen ones it held at 100 packets but let one noise column into L1 at 13
+packets, the size of session A. L1 is therefore a diagnostic, not a guarantee.}
 \end{table}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.8\textwidth]{fig_learned_tiers.png}
-\caption{Real features and noise columns per learned tier. No noise column reached L1 in any of the five datasets.}
+\caption{Real features and noise columns per learned tier (grouped-CV rerun): 1 of 100 noise columns reached L1, on the
+13-packet dataset.}
 \label{fig:learned}
 \end{figure}
 
