@@ -617,8 +617,9 @@ packet-bootstrap resamples; error \% (68\,\% interval in brackets where useful).
 0.67--0.69 for every model and target. Paired against \code{physics} (95\,\% intervals): for $\lambda$ every other
 model is worse with the interval excluding 0, except \code{physics\_joint} ($+0.4$ points, $[-0.1, +1.1]$) and \code{gp}
 ($+0.4$, $[-0.0, +1.0]$); for $\se$ no model is better (\code{sets} $-0.4$, $[-1.2, +0.6]$; \code{pretrained} $+0.4$,
-$[-1.4, +2.2]$; \code{cnn} $+1.4$, $[-0.2, +3.1]$). Raw report:
-scratchpad run \code{mltech/full100}; it supersedes the 2026-10-15 table in \code{lvl1/README.md}.}
+$[-1.4, +2.2]$; \code{cnn} $+1.4$, $[-0.2, +3.1]$). Rerun after the 2026-10-22 fixes (amplifier-centred packet state; scratchpad run \code{mltech/full100\_v2}): every number
+identical, as expected, since every synthetic packet has all four amplifiers and the centring then only shifts the state
+by a constant. The same table is now in \code{lvl1/README.md}.}
 \label{tab:full100}
 \end{table}
 
