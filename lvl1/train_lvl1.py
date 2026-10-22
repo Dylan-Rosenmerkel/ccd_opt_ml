@@ -118,7 +118,9 @@ TIER_FILE = ROOT / "lvl1" / "feature_study" / "evidence_tiers.json"
 #: protected physical estimators, given to every model that takes trace features: the label-free evidence tiers can put
 #: the most direct sigma_e and gain estimators in B (lvl1/feature_study/README.md, "Caveat").  The plain gp gets P only:
 #: in the synthetic feature ladder (lvl1/feature_study/ladder_synthetic) it collapsed beyond 15-25 features in every order.
-MODEL_TIERS = {"gp": "P", "gp_dim": "P+A1", "gp_saas": "P+A1", "nn": "P+A", "ridge": "P+A", "settings": "none",
+#: gp_dim stayed flat up to all 137 features (best sigma_e at P+A1); gp_saas kept sigma_e and gain but its lambda got
+#: worse with every step (19 % at P, 30 % with all), so it gets P only.
+MODEL_TIERS = {"gp": "P", "gp_dim": "P+A1", "gp_saas": "P", "nn": "P+A", "ridge": "P+A", "settings": "none",
                "mean": "none", "trees": "all"}
 DEFAULT_MODEL_TIERS = "P+A+B"
 #: the feature sets tried by --tier-ablation (by default); "none" = settings only, "impl0" = the original 85 features

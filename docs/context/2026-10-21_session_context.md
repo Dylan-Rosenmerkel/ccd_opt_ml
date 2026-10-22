@@ -1,7 +1,44 @@
 # Session context, 2026-10-21
 
 Continues `2026-10-19_session_context.md` (it also covers 10-20: SAAS defaults, slide deck, model summary PDF).
-**If the session reset: read section 3 ("Status") first; it says exactly where the work stopped.**
+The session ran past midnight; the last items (section 10) are from 2026-10-22.
+**If the session reset: read section 0 first.** Sections 1-10 are the history, in order.
+
+## 0. Where things stand (end of the session, 2026-10-22)
+
+**Trace features** (`src/trace_features.py` + `src/trace_features_extra.py`): 141 scalars + 18 curves per trace,
+1.2 s per trace; 85 original (implementation tier 0), 29 tier 1, 27 tier 2. New today: start-of-pixel transient,
+telegraph/jump, noise shape, pickup lines, noise budget (from the literature search); the `clock:` group (user's idea:
+second V block slope, V peak-to-peak, H/V ratio, first-H-block excess; leading V-block slope stored only); the pre-pulse
+dip (user's question: depth and dip/pulse ratio). 18 + 15 unit tests pass (`tests/`).
+
+**Tiers** (`lvl1/feature_study.py` -> `lvl1/feature_study/evidence_tiers.json`, from the 59 traces of 2026-10-12):
+- P, protected (guard a): 8 direct sigma_e/gain estimators, given to every model;
+- A1 37 / A2 36 / B 33 / C 35 evidence tiers (label-free: separation, repeatability, redundancy);
+- learned tiers L1/L2/L3 (`lvl1/feature_importance.py`): diagnostics only, they never choose features.
+Guards b-d were prototyped (scratchpad) and NOT adopted; the labels never order the features.
+
+**Training** (`lvl1/train_lvl1.py`): `--feature-tiers auto` uses MODEL_TIERS: gp P, gp_saas P, gp_dim P+A1, nn/ridge P+A,
+trees all, everything else P+A+B. `--tier-ablation [SET ...]`. `--feature-ladder [tiers cover random groups]` feeds every
+model more and more features in label-free orders and suggests the smallest step within 1 SE of the best.
+
+**Synthetic ladder** (`lvl1/feature_study/ladder_synthetic/`, 8 models): plain gp collapses beyond 15-25 features;
+gp_dim flat up to 137; gp_saas loses lambda with more features; nn degrades every step; ridge best ~25-45; trees,
+physics_joint, sets flat for sigma_e/gain, lose on lambda.
+
+**Write-up:** `docs/overleaf_feature_tiers_2026-10-21/` (LaTeX, 16 pages, compiles without warnings; zip
+`docs/overleaf_feature_tiers_2026-10-21.zip`). Markdown: `docs/trace_features_and_tiers.md`, `lvl1/feature_study/README.md`,
+`lvl1/README.md`.
+
+**Open / next:**
+1. Session A data: run process_packet, rerun `lvl1/feature_study.py` on the real packets (label-free), freeze the ladder
+   orders BEFORE looking at labels, then `train_lvl1.py --feature-ladder tiers cover random groups` on A (+B later);
+   confirm once on session C (`--holdout-session C`).
+2. Label relevance as a reported-only column of `feature_study.py` (not built).
+3. Session B RG_H/RG_L/SW_L packets: identify which clock edge makes the pre-pulse dip.
+4. The trace-acquisition start is random inside the first V block; if it can be synchronized, the leading V-block slope
+   becomes usable.
+5. Open from before: the trace-settings decision (BOOLCLR/NDCMPRE); the slides still show 41 packets.
 
 ## 1. Done earlier today (all pushed)
 
@@ -128,7 +165,7 @@ Status of this request: see section 5 below (updated as the work goes).
 - Figures shown to the user today (scratchpad, not in the repo): top 16 new features (settings F vs amplifier F), start
   transient (lever arm + H-rail dependence), ch2 telegraph, jump share, noise budget, tolerance curves.
 
-## 6. User idea (2026-10-21, late): clocking-region features (pilot done, not implemented)
+## 6. User idea (2026-10-21, late): clocking-region features (pilot, then implemented)
 
 User: the first V-clock block has a clear upward slope, the second is flat; the ADU difference between H and V
 clocking; the first H/V clocks after coming off a row look different. Pilot on the 59 traces:
@@ -149,7 +186,7 @@ tier 2, evidence B); ctx gets regions + trace; test_clock_regions; oct12 CSV reg
 139 scalars, A1 36 / A2 36 / B 32 / C 35. LaTeX doc docs/overleaf_feature_tiers_2026-10-21/ updated (section 3.5, 13
 pages, no warnings) and re-zipped; README and trace_features_and_tiers.md updated.
 
-## 7. User question: the dip just before the per-cycle (reset) pulse (pilot done, not implemented)
+## 7. User question: the dip just before the per-cycle (reset) pulse (pilot, then implemented)
 
 Never measured as a number before: it sits inside the `edge: equivalent-time pulse` curve (from -15 samples) and
 inside the window of `edge: cycle variation at reset`, but no scalar measures it. Pilot on the 59 traces
@@ -170,7 +207,7 @@ tiers A1 37 / A2 36 / B 33 / C 35; LaTeX section 3.6 + tier caveat + proposed gu
 dip recovery time B. With --feature-tiers auto, gp/nn/ridge (tier A) would not see them. Proposed guards, waiting for
 the user's go-ahead: (a) protected physical-estimator set always included; (b) clusters within amplifier; (c) no
 repeat-share penalty until compared with the labels' repeat scatter; (d) label relevance + learned L1 on all features
-override the evidence tier once labels exist.
+override the evidence tier once labels exist. OUTCOME: only (a) adopted (section 9).
 Guards PROTOTYPED IN THE SCRATCHPAD ONLY (user: "implement the guards on a scratchpad and test them, then I make the
 call whether to change fully"): `<scratchpad>/guards/guarded_study.py` (guards a-c + label_relevance) and
 `build_and_run.py` (test). Repo code unchanged. Results:
@@ -195,3 +232,13 @@ call whether to change fully"): `<scratchpad>/guards/guarded_study.py` (guards a
   Cover order did not beat random (expected with all-junk extras).
 - Docs: trace_features_and_tiers.md (sec 3 tiers with P, 6.1-6.3 rewritten, ladder results), lvl1/README.md,
   lvl1/feature_study/README.md, LaTeX (16 pages: P, sec 7.1 guards, 7.2 ladder + figure, plan rewritten), zip rebuilt.
+
+## 10. Ladder of gp_dim and gp_saas (user, 2026-10-22: "run the ladder on gp_saas and gp_dim too")
+
+Same synthetic test (td41_s0/1/2 + 120 uninformative real-named columns, `--quick`), error % mean of 3
+(sigma_e / lambda / gain):
+- gp_dim: settings only 57.0/21.3/31.2; P 9.0/22.2/1.1; P+A1 8.4/22.1/1.4; all 9.4/19.1/1.6 -> flat everywhere, no
+  collapse (dimension-scaled prior works); default stays P+A1.
+- gp_saas: P 8.9/19.4/0.9; P+A1 9.0/28.1/1.0; all 10.6/29.5/0.9 -> sigma_e and gain nearly flat, lambda worse with every
+  step; default changed to P. gp_saas took ~2-4 min per set (NUTS); gp_dim seconds.
+Results merged into lvl1/feature_study/ladder_synthetic/ladder_all.csv and the figure (8 models); docs and LaTeX updated.

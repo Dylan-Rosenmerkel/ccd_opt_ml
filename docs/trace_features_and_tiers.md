@@ -216,7 +216,7 @@ percentage points:
 
 | model | σe at +20 / +50 / +100 | λ at +20 / +50 / +100 | suggested feature set |
 |---|---|---|---|
-| gp (plain) | **+51 / +51 / +51** | +21 / +21 / +21 | **P only** (the ladder: collapse beyond 15–25 features); `gp_saas`, `gp_dim`: P + A1 until their tolerance is tested |
+| gp (plain) | **+51 / +51 / +51** | +21 / +21 / +21 | **P only** (the ladder: collapse beyond 15–25 features); `gp_dim`: P + A1 (flat up to all features); `gp_saas`: P (its λ degrades with more features) |
 | nn | +2 / +7 / +15 | +3 / +5 / +8 | P + A |
 | ridge | +2 / +4 / +5 | +6 / +8 / +14 | P + A |
 | cnn | 0 / +1 / +4 | +1 / +3 / +5 | P + A + B |
@@ -347,11 +347,14 @@ added as uninformative real-named columns; `--quick`; error %, mean of 3, σe / 
 | trees | 57.0 / 21.0 / 31.2 | 9.3 / 21.0 / 1.3 | 10.0 / 21.0 / 1.3 | 9.9 / 20.5 / 1.4 | flat |
 | physics_joint | 36.0 / 15.7 / 31.3 | **9.3 / 5.0 / 1.0** | 8.8 / 5.8 / 1.0 | 9.0 / 7.5 / 1.7 | flat for σe and gain; λ worse with more features |
 | sets | 32.0 / 20.7 / 31.3 | **5.8 / 9.3 / 1.0** | 6.2 / 12.6 / 1.0 | 6.6 / 15.6 / 1.7 | flat for σe and gain; λ clearly worse with more features |
+| gp_dim | 57.0 / 21.3 / 31.2 | 9.0 / 22.2 / 1.1 | **8.4 / 22.1 / 1.4** | 9.4 / 19.1 / 1.6 | **flat up to all 137 features**: the dimension-scaled prior prevents the collapse; λ never better than settings only |
+| gp_saas | 57.2 / 19.4 / 31.3 | **8.9 / 19.4 / 0.9** | 9.0 / 28.1 / 1.0 | 10.6 / 29.5 / 0.9 | σe and gain nearly flat; λ worse with every step (19 → 30 %) |
 
 What it shows:
 - **P carries almost everything here**, because two of its features (CDS rms, reset-level scatter) are informative in
   the synthetic world; on real data A and B features will carry more than in this all-junk test.
-- **gp must stay small** (now `MODEL_TIERS`: P only). Even the "robust" models lose on λ as features are added
+- **gp must stay small** (now `MODEL_TIERS`: P only); **gp_dim can take everything** without collapsing (default
+  P + A1, its best σe); **gp_saas** keeps σe and gain but loses λ with more features (default P). Even the "robust" models lose on λ as features are added
   (sets 9.3 → 15.6), so their default A+B is to be checked on real data.
 - **The cover order did not beat the random control** here, as expected: without labels no order can know which of
   these columns carry information. On real data, the comparison of `tiers`, `cover` and `random` is the point.
@@ -366,7 +369,7 @@ What it shows:
    default set; `--feature-ladder` with the four label-free orders, the one-standard-error suggestion and the plot;
    unit tests in `tests/test_lvl1_validation.py`.
 4. **Not started:** label relevance as a *reported* column of `lvl1/feature_study.py` (§6.1).
-5. **Not started:** the tolerance test of `gp_saas` and `gp_dim`.
+5. **Done:** the ladder of `gp_saas` and `gp_dim` on synthetic data (results in §6.2).
 
 ### 6.4 Learned tiers: let trained models say which features matter (`lvl1/feature_importance.py`)
 

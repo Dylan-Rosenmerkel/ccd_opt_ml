@@ -78,8 +78,9 @@ datasets: none of 100 added noise columns reached its top tier L1.
   \item \textbf{Guarding the tiers.} The label-free tiers put the most direct $\se$ estimator and the kTC noise in B. A
         protected set P of eight physical estimators now goes to every model; on synthetic data this alone took the
         plain GP from collapsed to 9.6\,\% ($\se$) and 0.9\,\% (gain). Features are never ordered by the labels.
-  \item \textbf{Feature ladder.} On synthetic data the plain GP is best with 8--15 features and collapses beyond, nn
-        degrades with every added step, ridge is best near 25--45, trees are flat.
+  \item \textbf{Feature ladder.} On synthetic data the plain GP is best with 8--15 features and collapses beyond;
+        \code{gp\_dim} stays flat up to all features; \code{gp\_saas} loses $\lambda$ with more features; nn degrades with
+        every added step, ridge is best near 25--45, trees are flat.
   \item \textbf{Learned tiers.} L1 (both methods confirm, by a margin) contained no noise column in five synthetic
         datasets. L2 (a candidate) contained 4--8 of 20 noise columns, so it is a list to look at, not a feature set.
 \end{itemize}
@@ -401,8 +402,7 @@ features were judged by amplifier separation alone.
 
 \paragraph{Layer 3: model feature sets.} These come from the tolerance test (Section~\ref{sec:tolerance}) and are the
 defaults of \code{--feature-tiers auto} (\code{MODEL\_TIERS} in \code{lvl1/train\_lvl1.py}): P only for the plain
-\code{gp} (the feature ladder, Section~\ref{sec:ladder}); P + A1 for \code{gp\_dim} and \code{gp\_saas} until their tolerance is
-tested; P + A for \code{nn} and \code{ridge}; everything for \code{trees}; settings only for the \code{settings} and
+\code{gp} and \code{gp\_saas}, P + A1 for \code{gp\_dim} (the feature ladder, Section~\ref{sec:ladder}); P + A for \code{nn} and \code{ridge}; everything for \code{trees}; settings only for the \code{settings} and
 \code{mean} baselines; P + A + B for all other models. They are starting points: the ladder on real data decides.
 
 %======================================================================
@@ -603,7 +603,9 @@ datasets; short training).}
 \end{figure}
 
 On this all-junk test (Figure~\ref{fig:ladder}): the plain GP is best at 8--15 features and collapses beyond 15--25 in
-every order, so its default is now P only; nn gets steadily worse with every step; ridge is best around 25--45 features;
+every order, so its default is now P only; \code{gp\_dim} stays flat up to all 137 features (its dimension-scaled prior
+prevents the collapse; best $\se$ 8.4\,\% at P + A1, its default); \code{gp\_saas} keeps $\se$ and the gain but its
+$\lambda$ gets worse with every step (19\,\% at P, 30\,\% with all), so its default is P; nn gets steadily worse with every step; ridge is best around 25--45 features;
 trees are flat; physics\_joint and sets are flat for $\se$ and the gain but lose on $\lambda$ as features are added
 (sets 9.3\,\% at P, 15.6\,\% with all). The cover order did not beat the random control, as expected: without labels no
 order can know which of these columns carry information. On real data, where many A and B features carry information,
@@ -628,8 +630,7 @@ comparing the orders is the point.
         number of steps fixed in advance: picking the best of many on about 30 packets is optimistic \cite{cawley2010}.
 \end{enumerate}
 
-\paragraph{Open items.} Label relevance as a reported column of \code{feature\_study.py}; the tolerance test (or the
-ladder) of \code{gp\_saas} and \code{gp\_dim}, which may take more features than the plain GP; the ladder on real data.
+\paragraph{Open items.} Label relevance as a reported column of \code{feature\_study.py}; the ladder on real data.
 
 %======================================================================
 \section{Files}
