@@ -199,9 +199,11 @@ class _MeanVarHead:
         Without ``groups``: ``val_fraction`` of the rows are held out, and the network of the best validation epoch is
         kept.  With ``groups`` (packet ids): ``val_fraction`` of the GROUPS are held out, because the rows of one packet
         share its noise and settings, so a row split validates on near-copies of training rows.  Holding out whole
-        packets removes their settings from training, which cost the networks a lot on lambda (a packet-level label:
-        nn 10.5 -> 15.3 % on lvl1/test_data), so the packet split only chooses the NUMBER of epochs; the network is then
-        retrained from the same initial weights on all rows for that many epochs (2026-10-23)."""
+        packets removes their settings from training, so the packet split only chooses the NUMBER of epochs; the network
+        is then retrained from the same initial weights on all rows for that many epochs.  The stopping criterion is the
+        validation mean squared error (``stop_metric``, default "mse"; "nll" = the Gaussian NLL): on unseen packets the
+        NLL rises early, as the variance becomes overconfident, while the mean is still improving, and NLL stopping cost
+        nn 10.5 -> 15.3 % on lambda (lvl1/test_data); with MSE it is 10.6 %, pretrained 11.6 -> 10.3 % (2026-10-23)."""
         torch = _torch()
         torch.manual_seed(seed)
         self._y_range = (np.nanmin(Y, 0), np.nanmax(Y, 0))          # standardized training labels
@@ -242,7 +244,7 @@ class _MeanVarHead:
                 if len(val_idx):
                     net.eval()
                     with torch.no_grad():
-                        if getattr(self, "stop_metric", "nll") == "mse":
+                        if getattr(self, "stop_metric", "mse") == "mse":
                             m_, _ = net(*[t[val_idx] if t is not None else None for t in inputs])
                             v = float(((y[val_idx] - m_) ** 2).mean())
                         else:
