@@ -90,7 +90,7 @@ full details of every model are in the technical reference (\code{docs/overleaf\
 \item \textbf{Real data} (Sections~\ref{sec:realtest}--\ref{sec:format}): a staged test plan; the packets need no extra time, but per-row
   $\lambda$ from WADERs, a scan design with joint changes, trace-only packets, recorded conditions and 2--5 packets per new module would help;
   and a set of linked tables (per trace set, curves, labels with errors, image rows) instead of one flat \code{dataset.csv}.
-\item \textbf{Level 1 (updated 22 October, Section~\ref{sec:lvl1}).} 12 models and 2 baselines (plus 9 variants on request) train in one
+\item \textbf{Level 1 (updated 22 October, Section~\ref{sec:lvl1}).} 12 models and 2 baselines (plus 10 variants on request) train in one
   command on the processed packets, without amplifier labels. The default is still model A (\code{physics}); its $\lambda$ is now fitted by a SAAS GP, and
   \code{physics\_joint} (dark current + CIC) is the strongest $\lambda$ model on synthetic data (4.6\,\% at 41 packets). Every score
   has a packet-bootstrap interval, models are compared in pairs, and session C of the 43-packet plan is held out once.
@@ -140,7 +140,9 @@ of 15--21 October, and the git history):
   feature sets (Section~\ref{sec:lvl1ladder}).
 \item \textbf{23 October -- \code{sets} gets the SAAS GP for $\lambda$} (as \code{physics}; $\lambda$ 15.5 $\to$ 10.9,
   10.9 $\to$ 7.4, 4.9 $\to$ 3.9\,\% at 13 / 41 / 100 synthetic packets; \code{sets\_gp\_lambda} is the old version), and the
-  \code{clock:} trace features work at the 1$\times$1 binning of the matched traces.
+  \code{clock:} trace features work at the 1$\times$1 binning of the matched traces. The networks (\code{nn}, \code{cnn},
+  \code{pretrained}, the set network) now stop early on a split by packet, as described in the model-family section (before:
+  by rows); \code{--quick} shortens \code{sets}; the physics family fits the Allan curves up to $n = N/5$ only.
 \end{itemize}
 
 %======================================================================
@@ -1447,6 +1449,7 @@ model & reads & what it is \\
 \code{gp\_dim}, \code{gp\_saas} & features & on request: \code{gp} with a dimension-scaled prior / as a SAAS GP (\code{src/ml/bogp.py}) \\
 7 more variants & physics & on request: \code{physics\_dim}, \code{physics\_saas}, \code{physics\_gp\_lambda}, \code{physics\_joint\_weak},
   \code{physics\_joint\_select}, \code{physics\_saasmap\_lambda}, \code{physics\_saasfull\_lambda} (the comparisons of Section~\ref{sec:lvl1saas}) \\
+\code{sets\_gp\_lambda} & sets & on request: \code{sets} with the weak-prior $\lambda$ GP (before 23 October) \\
 \bottomrule
 \end{tabularx}
 \caption{The level-1 models (\code{ALL\_MODELS} and \code{EXTRA\_MODELS} in \code{lvl1/train\_lvl1.py}). ``reads'': the model-input file
@@ -1706,7 +1709,7 @@ traces and binned 20$\times$20 images (500 skips) at the same five settings.
 \begin{itemize}
 \item \textbf{The traces' noise is white up to $n = 100$ skips}: the Allan deviation divided by CDS rms$/\sqrt n$ is 0.92--1.15 on ch0, ch1 and ch3.
 \item \textbf{The $n = 160$ point is biased low} (about 0.43): 500 skips make only 3 blocks. \code{allan\_fit} therefore takes
-  \code{max\_n} $= N/5$ for real data. With that cut, the single-skip noise $a$ equals the CDS rms, and small floors (up to 0.24\,ADU)
+  \code{max\_n} $= N/5$ for real data (in \code{train\_lvl1.py}'s physics family since 23 October). With that cut, the single-skip noise $a$ equals the CDS rms, and small floors (up to 0.24\,ADU)
   appear in some sets.
 \item \textbf{The trace features computed the Allan deviation on the detrended CDS}, which removes the slowest noise; with the
   detrended curve, the image's overscan noise is 1.2--2.4 times the trace prediction $\sqrt{a^2/500 + b^2}$ on ch0.

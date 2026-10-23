@@ -81,6 +81,7 @@ WADERS_DEFAULT_BOUNDS = {"mu": (-1.0, 1.0), "sigma": (0.001, 100.0), "dc": (0.00
 
 @dataclass
 class ProcessingConfig:
+    """Settings of processing (paths, WADERs command and timeout, what to save); read from a TOML file by ``load``."""
     out_dir: Path
     path_map: dict[str, str]
     save_raw: bool = True
@@ -103,6 +104,7 @@ class ProcessingConfig:
 
     @classmethod
     def load(cls, path: str | Path) -> "ProcessingConfig":
+        """Read the TOML configuration; relative paths are relative to the configuration file."""
         path = Path(path).resolve()
         with open(path, "rb") as handle:
             data = tomllib.load(handle)

@@ -430,7 +430,6 @@ def origin_table() -> str:
 
 
 def model_tier_rows() -> str:
-    default_models = sorted(m for m in train_lvl1.FAMILY if m not in MODEL_TIERS)
     rows = [rf"\code{{{tex(m)}}} & \code{{{tex(v)}}} \\" for m, v in MODEL_TIERS.items()]
     rows.append(rf"all other models & \code{{{tex(DEFAULT_MODEL_TIERS)}}} \\")
     return "\n".join(rows)

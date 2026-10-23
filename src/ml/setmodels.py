@@ -130,6 +130,8 @@ class SetStructured(st.PhysicsStructured):
         return 0.5 * np.log(np.maximum(a ** 2 / n + b ** 2, 1e-30))
 
     def physics_log_sigma_adu(self, X):
+        """The trace-physics term from the trace sets: a fixed combination of their Allan curves, or the set
+        network's correction of the median curve."""
         if self.combiner != "learned":
             return self._fixed(X["sets"], self.combiner, X)
         return self.pool.predict(X["sets"], self._fixed(X["sets"], "median", X))[0]

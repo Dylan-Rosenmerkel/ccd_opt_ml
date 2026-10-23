@@ -101,7 +101,6 @@ def main():
     for p in images:
         h = open_fits(p)
         na = n_active(h[0].header)
-        meta_path = run / (p.name[4:].split(".fits")[0] + ".meta")
         for ch in range(4):
             d = h[ch + 1].data.astype(float)
             ped = np.median(d[:, na + 8:], 1)

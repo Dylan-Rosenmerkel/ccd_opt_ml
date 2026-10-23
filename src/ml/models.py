@@ -5,6 +5,9 @@ models.py -- the model types compared in docs/ml_models.tex, all with the same i
                                      Y: targets (n, T), e.g. log sigma_e, log lambda, log gain
     mean, std = model.predict(X)     both (n, T); std is the model's own uncertainty (1 sigma)
 
+The networks (MLPEnsemble, CurveCNN; also setmodels.SetPooling, deep.PretrainedCNN) take ``fit(X, Y, groups=...)``:
+with group ids (packet ids) their early-stopping split holds out whole groups.
+
 | class          | what it is                                      | strength                         |
 |----------------|-------------------------------------------------|----------------------------------|
 | BayesRidge     | linear in the inputs, Bayesian                  | baseline; tiny data; readable    |
@@ -48,6 +51,7 @@ def take(X, idx):
 
 
 def n_rows(X) -> int:
+    """Number of rows of an input (array, or dict of arrays with optional None entries)."""
     if isinstance(X, dict):
         return len(X["curves"]) if "curves" in X else len(next(v for v in X.values() if v is not None))
     return len(X)
@@ -190,9 +194,14 @@ class _MeanVarHead:
     INPUT_CLIP, OUTPUT_MARGIN = 10.0, 3.0
 
     def _train_one(self, net, inputs, Y, seed, groups=None):
-        """Train one network; early stopping on an internal validation split of ``val_fraction`` of the rows, or, when
-        ``groups`` (e.g. packet ids) is given, of the GROUPS: the rows of one packet share its noise, so a split by rows
-        would validate on near-copies of training rows and stop too late."""
+        """Train one network with the Gaussian NLL and early stopping on an internal validation split.
+
+        Without ``groups``: ``val_fraction`` of the rows are held out, and the network of the best validation epoch is
+        kept.  With ``groups`` (packet ids): ``val_fraction`` of the GROUPS are held out, because the rows of one packet
+        share its noise and settings, so a row split validates on near-copies of training rows.  Holding out whole
+        packets removes their settings from training, which cost the networks a lot on lambda (a packet-level label:
+        nn 10.5 -> 15.3 % on lvl1/test_data), so the packet split only chooses the NUMBER of epochs; the network is then
+        retrained from the same initial weights on all rows for that many epochs (2026-10-23)."""
         torch = _torch()
         torch.manual_seed(seed)
         self._y_range = (np.nanmin(Y, 0), np.nanmax(Y, 0))          # standardized training labels
@@ -211,31 +220,47 @@ class _MeanVarHead:
             val = np.zeros(n, bool)
         tr_idx, va_idx = np.flatnonzero(~val), np.flatnonzero(val)
         net = net.to(self.device)
-        opt = torch.optim.AdamW(net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        init_state = {k: x.clone() for k, x in net.state_dict().items()}
         y = torch.tensor(Y, dtype=torch.float32, device=self.device)
-        best, best_state, patience = np.inf, None, 0
-        for epoch in range(self.epochs):
-            net.train()
-            perm = rng.permutation(tr_idx)
-            for start in range(0, len(perm), self.batch):
-                b = perm[start:start + self.batch]
-                mean, logvar = net(*[t[b] if t is not None else None for t in inputs])
-                loss = 0.5 * (logvar + (y[b] - mean) ** 2 / logvar.exp()).mean()
-                opt.zero_grad()
-                loss.backward()
-                opt.step()
-            if len(va_idx):
-                net.eval()
-                with torch.no_grad():
-                    mean, logvar = net(*[t[va_idx] if t is not None else None for t in inputs])
-                    v = float((0.5 * (logvar + (y[va_idx] - mean) ** 2 / logvar.exp())).mean())
-                if v < best - 1e-4:
-                    best, best_state, patience = v, {k: x.clone() for k, x in net.state_dict().items()}, 0
-                else:
-                    patience += 1
-                    if patience >= self.patience:
-                        break
-        if best_state is not None:
+
+        def nll(idx):
+            mean, logvar = net(*[t[idx] if t is not None else None for t in inputs])
+            return 0.5 * (logvar + (y[idx] - mean) ** 2 / logvar.exp()).mean()
+
+        def train(idx, n_epochs, val_idx):
+            """Train on rows ``idx``; with ``val_idx`` stop early and return (best epoch, its weights)."""
+            opt = torch.optim.AdamW(net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            best, best_epoch, best_state, patience = np.inf, n_epochs - 1, None, 0
+            for epoch in range(n_epochs):
+                net.train()
+                perm = rng.permutation(idx)
+                for start in range(0, len(perm), self.batch):
+                    loss = nll(perm[start:start + self.batch])
+                    opt.zero_grad()
+                    loss.backward()
+                    opt.step()
+                if len(val_idx):
+                    net.eval()
+                    with torch.no_grad():
+                        if getattr(self, "stop_metric", "nll") == "mse":
+                            m_, _ = net(*[t[val_idx] if t is not None else None for t in inputs])
+                            v = float(((y[val_idx] - m_) ** 2).mean())
+                        else:
+                            v = float(nll(val_idx))
+                    if v < best - 1e-4:
+                        best, best_epoch, best_state, patience = v, epoch, {k: x.clone() for k, x in net.state_dict().items()}, 0
+                    else:
+                        patience += 1
+                        if patience >= self.patience:
+                            break
+            return best_epoch, best_state
+
+        best_epoch, best_state = train(tr_idx, self.epochs, va_idx)
+        if groups is not None and len(va_idx):
+            net.load_state_dict(init_state)                        # refit on all rows for the chosen number of epochs
+            torch.manual_seed(seed)
+            train(np.arange(n), best_epoch + 1, np.array([], int))
+        elif best_state is not None:
             net.load_state_dict(best_state)
         net.eval()
         return net

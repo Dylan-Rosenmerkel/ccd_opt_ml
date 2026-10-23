@@ -49,6 +49,7 @@ MARGIN = 1.5        # L1 needs both methods to beat the shadows' 95th percentile
 
 
 def prepare(X: np.ndarray) -> np.ndarray:
+    """Fill NaN with the column median and standardize every column (no labels involved)."""
     X = np.asarray(X, float).copy()
     med = np.nanmedian(X, axis=0)
     med[~np.isfinite(med)] = 0
@@ -58,6 +59,7 @@ def prepare(X: np.ndarray) -> np.ndarray:
 
 
 def stability(X, y, packets, n_boot, rng) -> np.ndarray:
+    """Stability selection: the fraction of packet-bootstrap resamples in which an elastic net keeps each column."""
     from sklearn.linear_model import ElasticNet, ElasticNetCV
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -75,6 +77,8 @@ def stability(X, y, packets, n_boot, rng) -> np.ndarray:
 
 
 def permutation(X, y, packets, repeats, rng) -> np.ndarray:
+    """Permutation importance of boosted trees on packet-grouped folds: the rise of the held-out squared error when a
+    column is shuffled."""
     from sklearn.ensemble import HistGradientBoostingRegressor
     folds = grouped_folds(packets, min(5, len(np.unique(packets))), seed=0)
     imp = np.zeros(X.shape[1])
@@ -91,6 +95,7 @@ def permutation(X, y, packets, repeats, rng) -> np.ndarray:
 
 
 def saas_relevance(X, y) -> np.ndarray:
+    """Median inverse length scale of a SAAS GP per column (slow; only with --saas)."""
     from ml.bogp import BoTorchGP
     gp = BoTorchGP("saas", warmup=96, num_samples=48, thinning=8).fit(X, y)
     return gp.relevance(0)

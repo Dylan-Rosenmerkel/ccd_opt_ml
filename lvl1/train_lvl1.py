@@ -346,6 +346,8 @@ def packet_state(packet_id: np.ndarray, X_ref: np.ndarray, amp: np.ndarray | Non
 
 
 def scalars(d: dict, with_features: bool, with_state: bool) -> np.ndarray:
+    """The scalar input block of a family: settings, optionally the own-trace and reference features, optionally the
+    packet state."""
     blocks = [d["theta"]]
     if with_features:
         blocks += [d["X_trace"], d["X_ref"]]
@@ -423,6 +425,8 @@ class Runner:
         return part(train, xtr), part(test, xte)
 
     def trace_physics(self, train, test):
+        """No learning: the trace physics of sigma_e in ADU divided by the training mean gain; lambda and gain are
+        the training means."""
         d = self.f("physics")
         Xtr, Xte = self._physics_X(d, train, test)
         A = st.PhysicsStructured()
@@ -434,11 +438,16 @@ class Runner:
 
     @staticmethod
     def _allan_max_n(d) -> float | None:
-        """The largest Allan n that is not biased: n_skips / 5 (the smallest trace of the selection decides)."""
-        n = np.asarray(d.get("n_skips", []), float)
-        return float(np.nanmin(n)) / 5 if n.size and np.isfinite(n).any() else None
+        """The largest Allan n used in the fit, or None for all.  Only the detrended Allan curve is biased low at
+        n > n_skips / 5 (structured.allan_fit); real data use the overlapping, common-pattern-removed curve
+        (st.REAL_ALLAN, no polynomial removed), which needs no cut, as in StructuredPrep, and the synthetic curves are
+        unbiased.  So no cut is made: cutting the synthetic n = 160 point raised the physics sigma_e error 5.3 -> 5.8 %
+        (2026-10-23).  Kept as one place to change if a detrended curve is ever used on real data."""
+        return None
 
     def physics(self, train, test, joint=False, **joint_kw):
+        """A (physics-structured outputs); lambda by the SAAS GP, or by the joint dark-current / CIC model if
+        ``joint``."""
         d = self.f("physics")
         Xtr, Xte = self._physics_X(d, train, test)
         if joint:
@@ -475,16 +484,20 @@ class Runner:
         return dict(warmup=96, num_samples=48, thinning=8) if self.quick else dict(warmup=256, num_samples=128, thinning=16)
 
     def physics_dim(self, train, test):
+        """physics with its GPs replaced by the dimension-scaled-prior GP."""
         d = self.f("physics")
         Xtr, Xte = self._physics_X(d, train, test)
         return st.PhysicsStructured(kind="dim").fit(Xtr, self.Y[train]).predict(Xte)
 
     def physics_saas(self, train, test):
+        """physics with its GPs replaced by SAAS GPs."""
         d = self.f("physics")
         Xtr, Xte = self._physics_X(d, train, test)
         return st.PhysicsStructured(kind="saas", **self._saas_kw()).fit(Xtr, self.Y[train]).predict(Xte)
 
     def physics_joint(self, train, test):
+        """physics with lambda from the joint dark-current / CIC model of the per-row line fits (SAAS length-scale
+        prior)."""
         # the SAAS sparsity prior (MAP) on the joint model's length scales: lambda 17.3 -> 16.9 %, 5.2 -> 4.6 %,
         # 4.6 -> 4.4 % at 13 / 41 / 100 synthetic packets, at no extra cost (2026-10-20; physics_joint_weak: before)
         return self.physics(train, test, joint=True, joint_prior="saas")
@@ -494,6 +507,8 @@ class Runner:
         return self.physics(train, test, joint=True)
 
     def physics_joint_select(self, train, test):
+        """physics_joint on the inputs that a SAAS GP on log lambda finds relevant (>= 10 % of the largest
+        relevance)."""
         return self.physics(train, test, joint=True, joint_select=0.1)
 
     def physics_hier(self, train, test):
@@ -525,10 +540,12 @@ class Runner:
 
     # -- the baselines (no trace) ----------------------------------------------------
     def mean(self, train, test):
+        """Baseline: the training mean of every target, with the training spread as its error bar."""
         Y = self.Y[train]
         return np.tile(Y.mean(0), (len(test), 1)), np.tile(Y.std(0, ddof=1), (len(test), 1))
 
     def settings(self, train, test):
+        """Baseline: a GP on the settings alone (no trace)."""
         th = self.f("features")["theta"]
         xtr, xte, keep = prep_columns(th[train], th[test])
         if not keep.any():                      # every training packet at the same settings: nothing to learn
@@ -543,28 +560,34 @@ class Runner:
         return xtr, xte
 
     def ridge(self, train, test):
+        """Bayesian ridge on the settings and the trace features."""
         xtr, xte = self._features(train, test)
         return models.BayesRidge().fit(xtr, self.Y[train]).predict(xte)
 
     def trees(self, train, test):
+        """Gradient-boosted trees on the settings and the trace features."""
         xtr, xte = self._features(train, test)
         return models.GBT(max_iter=100 if self.quick else 300).fit(xtr, self.Y[train]).predict(xte)
 
     def gp(self, train, test):
+        """Plain GP (one length scale per input) on the settings and the trace features."""
         xtr, xte = self._features(train, test)
         return models.GP(max_iter=60 if self.quick else 150).fit(xtr, self.Y[train]).predict(xte)
 
     def gp_dim(self, train, test):
+        """GP with the dimension-scaled length-scale prior (BoTorch) on the settings and the trace features."""
         from ml.bogp import BoTorchGP
         xtr, xte = self._features(train, test)
         return BoTorchGP("dim").fit(xtr, self.Y[train]).predict(xte)
 
     def gp_saas(self, train, test):
+        """SAAS GP (sparsity prior, NUTS) on the settings and the trace features."""
         from ml.bogp import BoTorchGP
         xtr, xte = self._features(train, test)
         return BoTorchGP("saas", **self._saas_kw()).fit(xtr, self.Y[train]).predict(xte)
 
     def nn(self, train, test):
+        """Ensemble of small networks (mean and variance) on the settings and the trace features."""
         xtr, xte = self._features(train, test)
         groups = self.f("features")["packet_id"][train]           # early stopping by packet
         return models.MLPEnsemble(n_models=2 if self.quick else 5, epochs=100 if self.quick else 600).fit(
@@ -580,6 +603,7 @@ class Runner:
         return {"curves": c[train], "scalars": str_}, {"curves": c[test], "scalars": ste}
 
     def cnn(self, train, test):
+        """1D CNN on the trace curves (own and reference) plus the settings and reference features."""
         Xtr, Xte = self._curves(train, test)
         groups = self.f("curves")["packet_id"][train]             # early stopping by packet
         return models.CurveCNN(n_models=2 if self.quick else 3, epochs=60 if self.quick else 400).fit(
@@ -599,6 +623,7 @@ class Runner:
         return self.pretrainer
 
     def pretrained(self, train, test):
+        """D: a network on the curve encoder pre-trained on unlabeled traces, plus the scalar inputs."""
         from ml import deep
         pre = self._pretrained()
         Xtr, Xte = self._curves(train, test, both=False)
@@ -607,6 +632,7 @@ class Runner:
             Xtr, self.Y[train], groups=groups).predict(Xte)
 
     def deep_kernel(self, train, test):
+        """C: a GP whose kernel works on the pre-trained curve encoding plus the scalar inputs."""
         from ml import deep
         pre = self._pretrained()
         Xtr, Xte = self._curves(train, test, both=False)
@@ -615,6 +641,8 @@ class Runner:
 
 
 class SkipModel(Exception):
+    """Raised by a model that cannot run on these inputs (e.g. a file or the per-row lambda is missing); the run is
+    reported as skipped."""
     pass
 
 
@@ -624,6 +652,7 @@ class SkipModel(Exception):
 
 
 def conformal_q(z: np.ndarray, c: float) -> float:
+    """The c-quantile of |z| with the finite-sample conformal correction (rank ceil((n + 1) c))."""
     z = np.sort(z[np.isfinite(z)])
     if not len(z):
         return np.nan
@@ -655,6 +684,7 @@ def row_terms(Y, mean, std, folds=None, cal_z=None) -> list[dict]:
 
 
 def scores(Y, Y_err, mean, std, amp, folds, cal_z=None) -> dict:
+    """Every score of one model's out-of-fold (or held-out) predictions, per target (see the module docstring)."""
     with warnings.catch_warnings():                          # Spearman of a near-constant prediction
         warnings.simplefilter("ignore")
         return _scores(Y, Y_err, mean, std, amp, folds, cal_z)
@@ -807,6 +837,7 @@ def paired_vs(preds: dict, Y, ref: str, W, sel=None) -> dict:
 # -- report ---------------------------------------------------------------------------------------------------------
 
 def fmt(v, pct=True):
+    """Format a score for the report: a percentage (pct) or a plain number; '–' for missing."""
     if v is None or (isinstance(v, float) and not np.isfinite(v)):
         return "–"
     return f"{100 * v:.1f} %" if pct else f"{v:.2f}"
@@ -821,6 +852,7 @@ def fmt_iv(iv, pct=True, level="68"):
 
 
 def fmt_pp(v):
+    """Format a difference in percentage points with its sign; '–' for missing."""
     return "–" if v is None or not np.isfinite(v) else f"{100 * v:+.1f}"
 
 
@@ -898,6 +930,7 @@ def _paired_table(paired: dict, ref: str) -> list[str]:
 
 
 def report_md(results: dict, info: dict, holdout: dict | None = None, loao: dict | None = None) -> str:
+    """The Markdown report: data and folds, the score tables, the paired comparisons, the prospective test, LOAO."""
     grouping = ("grouped by setting (packets at identical settings share a fold)" if info.get("group_by") == "setting"
                 else "grouped by packet")
     lines = [f"# Level 1 results ({info['date']})", "",
@@ -951,7 +984,7 @@ def report_md(results: dict, info: dict, holdout: dict | None = None, loao: dict
                   "| model | " + " | ".join(f"{t} error | {t} vs mean" for t in TARGETS) + " |", "|---|" + "---|---|" * len(TARGETS)]
         for m, r in loao["results"].items():
             if "skipped" in r:
-                lines.append(f"| {m} | " + " | ".join(["–"] * 2 * len(TARGETS)) + f" |")
+                lines.append(f"| {m} | " + " | ".join(["–"] * 2 * len(TARGETS)) + " |")
                 continue
             lines.append(f"| {m}{_tag(m)} | " + " | ".join(f"{fmt(r['scores'][t]['error'])} | {fmt(vs_mean(loao['results'], m, t), False)}" for t in TARGETS) + " |")
         lines.append("")

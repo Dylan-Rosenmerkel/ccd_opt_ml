@@ -63,6 +63,7 @@ class Conformal:
         return m, s * self.factors[0.68]
 
     def interval(self, X, coverage: float = 0.95):
+        """Mean and the conformally calibrated half-width (model std times the factor) for ``coverage``."""
         m, s = self.model.predict(X)
         return m, s * self.factors[coverage]
 

@@ -191,7 +191,7 @@ model & family & what it is & quick / full \\
 \code{physics} & physics & A: trace physics + GP gain + GP correction; $\lambda$ by a SAAS GP & NUTS 96/48/8 always \\
 \code{physics\_joint} & physics & A with $\lambda$ = DC + CIC fitted jointly (\code{JointLambdaGP}, SAAS prior by MAP) & L-BFGS 120 \\
 \code{physics\_hier} & physics & A+B: A on hierarchical GPs with module and amplifier levels (\textbf{uses labels}) & L-BFGS 120 \\
-\code{sets} & physics + sets & E: A with the trace sets combined by a learned set network & 5 nets, 400 epochs always \\
+\code{sets} & physics + sets & E: A with the trace sets combined by a learned set network & 5 / 2 nets, 400 / 100 epochs \\
 \code{ridge} & features & Bayesian ridge per target & -- \\
 \code{trees} & features & gradient-boosted trees + quantile trees for the error bar & 100 / 300 trees \\
 \code{gp} & features & ARD Mat\'ern-5/2 GP, maximum likelihood & L-BFGS 60 / 150 \\
@@ -209,6 +209,7 @@ model & family & what it is & quick / full \\
 \code{physics\_saasfull\_lambda} & physics & A, $\lambda$ by the SAAS GP with NUTS 256/128/16 & -- \\
 \code{physics\_joint\_weak} & physics & \code{physics\_joint} with the weak length-scale prior & -- \\
 \code{physics\_joint\_select} & physics & \code{physics\_joint} on the inputs a SAAS GP on $\log\lambda$ finds relevant & NUTS as \code{gp\_saas} \\
+\code{sets\_gp\_lambda} & physics + sets & \code{sets} as before 2026-10-23 ($\lambda$ by the weak-prior GP) & as \code{sets} \\
 \bottomrule
 \end{tabularx}
 \caption{Every model of \code{lvl1/train\_lvl1.py} (\code{ALL\_MODELS}, \code{EXTRA\_MODELS}, \code{FAMILY}).
@@ -261,7 +262,10 @@ are left out of the fit (only relevant inside \code{PhysicsStructured}).
 $x \to$ Linear($p$, 64) -- SiLU -- Linear(64, 64) -- SiLU $\to$ two heads: mean $(3)$ and $\log$-variance $(3)$, the
 latter clamped to $[-12, 6]$. Inputs standardized and clipped to $\pm10$; targets standardized. Loss: Gaussian negative
 log-likelihood $\tfrac12[\log v + (y - m)^2/v]$; AdamW (lr $3\times10^{-3}$, weight decay $10^{-3}$), batch 64, up to
-600 epochs (quick 100), early stopping with patience 60 on a random 15\,\% internal validation split (best weights kept).
+600 epochs (quick 100), early stopping with patience 60 on an internal validation split of about 15\,\% of the
+training \emph{packets} (\code{\_MeanVarHead.\_train\_one} with \code{groups} = packet ids, at least one packet; since
+2026-10-23, a random 15\,\% of the rows before), best weights kept. The same split by packet is used by \code{cnn},
+\code{pretrained} and the set network of \code{sets}.
 Network $k$ uses seed $k$. Prediction: $m = \bar m_k$, $v = \overline{v_k} + \mathrm{Var}_k(m_k)$; a mean beyond the
 standardized training-label range by more than 3 is pulled back to that edge and the distance squared added to $v$
 (\code{OUTPUT\_MARGIN}).
@@ -272,7 +276,10 @@ standardized training-label range by more than 3 is pulled back to that edge and
 \paragraph{Inputs} (\code{Runner.\_physics\_X}): $x$ = the physics scalar block of Section~\ref{sec:prep};
 $(a, b)$ = the fit of $\sigma_A(n)^2 = a^2/n + b^2$ to the Allan curve (\code{allan\_fit}: weighted least squares in
 $\sigma_A^2$ with weights $1/(2\cdot0.03\,\sigma_A^2)^2$, i.e.\ a constant 3\,\% relative scatter per point; if
-$b^2 < 0$ the fit is redone with $b = 0$; NaN in the curve replaced by the curve array's overall median); $N$ =
+$b^2 < 0$ the fit is redone with $b = 0$; only $n \le N_{\min}/5$ is used, with $N_{\min}$ the smallest \code{n\_skips}
+of the selection (\code{Runner.\_allan\_max\_n}: the $n = 160$ point of a 500-skip trace comes from 3 blocks and is biased
+low on real traces); a missing point is replaced by the median of the same $n$ over all rows; both since 2026-10-23,
+before: all $n$, and one overall median); $N$ =
 \code{n\_skips} (500 if missing); \code{y\_var} $= Y_{\rm err}^2$; integer \code{module} and \code{amp} ids (used only by
 \code{physics\_hier}); \code{lambda\_parts}, \code{lambda\_cov} when present.
 
@@ -336,8 +343,9 @@ as \code{physics} (\code{SAAS\_LAMBDA\_KW}; since 2026-10-23, \code{sets\_gp\_la
 with base = the physics term of the median curve over the sets. \code{SetPooling}: per set $\psi$ = Linear(13, 64) --
 SiLU -- Linear(64, 64) -- SiLU; pooled by the mean and by attention (softmax over the sets of a linear score); $\rho$ =
 Linear(129, 64) -- SiLU $\to$ mean and log-variance; trained on $\log\se + \log g$ (the labelled gain) with the Gaussian
-NLL of \code{\_MeanVarHead}: 5 networks, 400 epochs, AdamW lr $2\times10^{-3}$, weight decay $10^{-3}$, batch 64,
-patience 40 (not shortened by \code{--quick}). Missing sets are filled with copies of existing ones (\code{fill\_sets},
+NLL of \code{\_MeanVarHead}: 5 networks, 400 epochs (quick: 2 and 100, since 2026-10-23), AdamW lr $2\times10^{-3}$,
+weight decay $10^{-3}$, batch 64, patience 40, early stopping on a split by packet. Its Allan fits use the same
+$n \le N_{\min}/5$ cut as \code{physics}. Missing sets are filled with copies of existing ones (\code{fill\_sets},
 seed 0). The set network's std is added in quadrature to the $\se$ std.
 
 \subsection{Curve models (\code{src/ml/models.py}, \code{src/ml/deep.py})}
@@ -731,15 +739,8 @@ model and target; held-out rows from the single fit), and \code{feature\_ladder.
 now amplifier-centred; the \code{ElasticNetCV} of \code{feature\_importance.py} uses packet-grouped folds; the Hadamard
 deviation and the structure function are taken in log; the \code{process\_trace} docstring and the results table of
 \code{lvl1/README.md} are updated; on 2026-10-23 \code{sets} got the SAAS GP for $\lambda$ ($\lambda$ 15.5 $\to$ 10.9,
-10.9 $\to$ 7.4, 4.9 $\to$ 3.9\,\% at 13 / 41 / 100 packets, now equal to \code{physics}). Still open (behaviour changes, to decide):
-\begin{enumerate}
-  \item \textbf{\code{--quick} does not shorten \code{sets}} (\code{SetPooling}: 5 networks, 400 epochs) nor the SAAS chains
-        of \code{physics} (fixed 96/48/8, by design).
-  \item \textbf{Missing Allan curves:} \code{\_physics\_X} replaces NaN in the Allan array by the median of the
-        \emph{whole} array (all rows, all $n$); a row with no curve then gets a flat curve and meaningless $(a, b)$
-        instead of being flagged.
-  \item \textbf{Early stopping of the networks} (\code{\_MeanVarHead}) uses a random 15\,\% of the training \emph{rows},
-        not packets, as its validation split.
-\end{enumerate}
+10.9 $\to$ 7.4, 4.9 $\to$ 3.9\,\% at 13 / 41 / 100 packets, now equal to \code{physics}). Fixed on 2026-10-23 as well: the networks stop early on a split by packet; \code{--quick} shortens \code{sets}; the
+Allan fits of the physics family use $n \le N_{\min}/5$ and fill missing points per $n$. Still open: the SAAS chains
+of \code{physics} are not shortened by \code{--quick} (fixed 96/48/8, by design).
 
 \end{document}

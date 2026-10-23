@@ -19,7 +19,8 @@ code = lambda s: cells.append(nbf.v4.new_code_cell(s.strip("\n")))
 md(r"""
 # The new trace features (2026-10-21)
 
-On 2026-10-21, 49 scalar features and 4 curves were added to the 85 + 14 of `src/trace_features.py`. They are computed
+On 2026-10-21, 49 scalar features and 4 curves were added to the 85 + 14 of `src/trace_features.py` (7 more followed the same
+day, the `clock:` group and the pre-pulse dip: 141 scalars and 18 curves in all; this notebook covers the first 49). They are computed
 in `src/trace_features_extra.py`, and every feature now has a **tier**:
 
 * 0: the original set;
@@ -293,7 +294,8 @@ plt.show()
 md(r"""
 ## 7. All 59 traces: what separates settings, what separates amplifiers, what is redundant
 
-`lvl1/feature_study.py` scores every one of the 134 features:
+`lvl1/feature_study.py` scores every one of the 134 features (141 since the `clock:` and pre-pulse features; the outputs
+below are from the 134-feature run):
 
 * **settings F**: ANOVA F over the 4 changed settings (all taken with the same NCOLPRE), per amplifier ch0/1/3;
 * **amplifier F**: ANOVA F over the 4 amplifiers, within each setting;

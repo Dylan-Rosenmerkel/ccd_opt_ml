@@ -400,7 +400,6 @@ def slow_figures(e: Example, out: Path) -> None:
     e.shade_windows(axes[1])
     axes[1].set(xlabel="sample in the cycle", title="component shapes")
     axes[1].legend()
-    n_first = len(e.res[e.good[0]])
     axes[2].plot(np.arange(100) + e.first, U[:100, 0] * sv[0], "o-", ms=1.5, lw=0.5)
     axes[2].set(xlabel="skip", title="PC1 score, first 100 skips")
     fig.tight_layout()

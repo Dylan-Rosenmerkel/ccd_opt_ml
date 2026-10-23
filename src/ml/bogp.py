@@ -36,6 +36,8 @@ def _x(X):
 
 
 class BoTorchGP:
+    """A BoTorch GP per target with a high-dimension length-scale prior: 'dim' (dimension-scaled, fitted by maximum
+    likelihood) or 'saas' (sparsity prior, hyperparameters sampled by NUTS); see the module docstring."""
     def __init__(self, kind: str = "dim", warmup: int = 256, num_samples: int = 128, thinning: int = 16, seed: int = 0,
                  **_ignored):
         if kind not in ("dim", "saas"):

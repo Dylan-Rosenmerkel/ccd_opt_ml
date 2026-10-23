@@ -10,7 +10,7 @@ sequencer formulas). That formula reproduces the 2026-10-12 trace files exactly:
 | part | purpose | requirement |
 |---|---|---|
 | image | the **labels**: σe, gain, λ from WADERs | photon counting: most pixels hold 0 or 1 e⁻, and the 0 and 1 e⁻ peaks are separated |
-| traces | the **inputs**: 85 features per channel | describe the readout that produced the image; repeatable; small files |
+| traces | the **inputs**: 141 features and 18 curves per channel (85 + 14 when this was written) | describe the readout that produced the image; repeatable; small files |
 | both | ~6 packets per hour | image ≈ 5 min, packet ≈ 10–12 min |
 
 The 2026-10-12 run showed why the image part matters. Its 20×20 binned images held 20–35 e⁻ per bin, so
@@ -177,6 +177,10 @@ packet's trace and image differ, `plan_packet` logs a warning listing the keys.
 * **The analysis handles this layout:** `trace_regions` now accepts the row-start pixels that carry the
   prescan transfers (`NSBIN·(NCOLPRE+1)`), and `check_trace_analysis.py` has a "matched to a 1x1 image
   (prescan 100)" case. All 27 configurations pass.
+* **The `clock:` features (added 2026-10-21) work at this binning** (adapted 2026-10-23): the V peak-to-peak from the
+  single V transfer before row 2, the H/V ratio from the single H transfer per pixel, and the first-H excess from the
+  100-transfer prescan burst. Only the V-block level slope needs several V transfers per row and is NaN here. No 5×5
+  traces are planned; a later scan of the binning would change what these features measure.
 
 ## 7. The recommended packet
 

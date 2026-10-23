@@ -18,12 +18,13 @@ It builds on [`trace_feature_candidates.md`](trace_feature_candidates.md) (the c
 ## 1. Summary
 
 - **Every trace now gives 141 numbers and 18 curves**, where it gave 85 and 14. The new ones are in
-  `src/trace_features_extra.py`; 18 tests cover them in `tests/test_trace_features_new.py`; a trace takes about 1.2 s.
+  `src/trace_features_extra.py`; 19 tests cover them in `tests/test_trace_features_new.py`; a trace takes about 1.2 s.
   Processing (`process_packet.py`) writes them into `model_inputs/` without any further change; this was checked on
   simulated packets. At the planned 1×1 trace binning all `clock:` features exist except the V-block level slope (§2.7).
 - **Every feature has two labels:**
   - an *implementation tier* (0 / 1 / 2): where it came from;
-  - an *evidence tier* (A / B / C): what the data say about it.
+  - an *evidence tier* (A1 / A2 / B / C): what the data say about it, without labels.
+  Eight direct σe and gain estimators are also *protected* (tier P) and go to every model (§3).
 - **Each model gets the evidence tiers it can cope with.** A synthetic test showed how many uninformative inputs each
   model tolerates; the plain Gaussian process tolerates almost none.
 - **The most interesting results:**
@@ -413,7 +414,7 @@ features in L3, are the ones to look at physically. Learned importance does not 
 |---|---|
 | `src/trace_features_extra.py` | the 56 new features and 4 curves (registry `EXTRA`, `extra_features`) |
 | `src/trace_features.py` | the `tier` attribute and `names_by_tier()`; calls the new block |
-| `tests/test_trace_features_new.py` | 18 tests: synthetic signals with known answers, plus the pilot numbers on one real trace |
+| `tests/test_trace_features_new.py` | 19 tests (incl. the 1×1 trace geometry): synthetic signals with known answers, plus the pilot numbers on one real trace |
 | `docs/slides/oct12_features.py` → `docs/slides/data/oct12_trace_features.csv` | all 141 features of the 59 real traces |
 | `lvl1/feature_study.py` → `lvl1/feature_study/` | separation, stability and redundancy per feature; evidence tiers; results README |
 | `lvl1/feature_tolerance.py` → `lvl1/feature_study/tolerance_*.csv` | the synthetic tolerance test |

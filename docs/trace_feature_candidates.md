@@ -9,7 +9,8 @@ adding them. Sources:
   (skip-cycle mode decomposition, finance jump statistics, censored labels).
 - A settings-separation test run today on all 59 real traces of the 2026-10-12 packet tests (Section 2).
 
-The current set is 85 numbers and 14 curves (`trace_features.FEATURES`).
+The set was 85 numbers and 14 curves when this was written (`trace_features.FEATURES`); the tier 1 and 2 candidates below
+were implemented on 2026-10-21 (141 numbers and 18 curves; `src/trace_features_extra.py`, `docs/trace_features_and_tiers.md`).
 
 ---
 

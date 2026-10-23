@@ -127,8 +127,8 @@ from the examples is called \textbf{training} or \textbf{fitting}.
 \begin{ours}
 \begin{itemize}
 \item \textbf{One example} is one amplifier in one packet. A packet read out by 4 amplifiers gives 4 examples.
-\item \textbf{Inputs} $x$ (\code{src/ml/data.py}): the settings $\theta$; the hand-made trace features at $\theta$ (85 numbers such as the
-  CDS rms); the same features of the \emph{reference} traces taken minutes earlier in the same packet (they show which amplifier
+\item \textbf{Inputs} $x$ (\code{src/ml/data.py}): the settings $\theta$; the hand-made trace features at $\theta$ (141 numbers since 21 October, 85 before, such as the
+  CDS rms; in level 1 each model sees the feature tiers set for it in \code{lvl1/train\_lvl1.py}); the same features of the \emph{reference} traces taken minutes earlier in the same packet (they show which amplifier
   this is and how the CCD is behaving today); and the trace \emph{curves} (noise spectra, Allan deviation, pulse shapes).
 \item \textbf{Targets} $y$: three numbers from the image's WADERs fit: $\log\sigma_e$, $\log\lambda$ and $\log g$.
 \end{itemize}

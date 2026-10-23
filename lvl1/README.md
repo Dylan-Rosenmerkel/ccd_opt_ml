@@ -147,7 +147,7 @@ The result is in [`rehearsal_report/REHEARSAL.md`](rehearsal_report/REHEARSAL.md
 | File | Models | Contains (besides ids, settings, labels and label errors) |
 |---|---|---|
 | `features.npz` | Bayesian ridge, boosted trees, GP, NN ensemble | own trace features, own reference features |
-| `curves.npz` | CNN on curves; D (pre-trained); C (deep kernel) | 14 trace curves and 14 reference curves, 256 points each, log scales applied |
+| `curves.npz` | CNN on curves; D (pre-trained); C (deep kernel) | the 18 trace curves and 18 reference curves, 256 points each, log scales applied |
 | `physics.npz` | A, physics-structured (+ joint dark current / CIC) | own features, the Allan curve (common pattern removed), skips, per-row λ fit |
 | `sets.npz` | E, set model | every trace set's Allan curve, separately |
 | `pretrain.npz` | D's pre-training | the curves of every usable trace, no labels |
@@ -162,7 +162,7 @@ training folds, so test packets never influence training.
 | `mean` | **baseline**: always the training mean of each target (its error bar: the training spread) | features |
 | `settings` | **baseline**: a GP on the settings alone, no trace and no amplifier label | features |
 | `trace_physics` | no learning: the noise measured on the trace's Allan curve, divided by the training mean gain (the baseline: how far the trace alone gets) | physics |
-| `physics` | **A, the default**: trace physics plus a learned gain and a learned correction (GPs on settings + packet state + own features); λ by a SAAS GP (since 2026-10-19) | physics |
+| `physics` | **A, the default**: trace physics plus a learned gain and a learned correction (GPs on settings + packet state + own features); λ by a SAAS GP (since 2026-10-20) | physics |
 | `physics_joint` | A with λ from the joint dark-current / CIC fit of the per-row λ, with the SAAS sparsity prior on its length scales (since 2026-10-20) | physics |
 | `physics_hier` | **A+B, a reference WITH labels**: A on hierarchical GPs told the module and amplifier; marked "(labels)" in the report. Comparing it with `physics` measures what amplifier labels add on the real CCD | physics |
 | `sets` | E: A with the 10 trace sets combined by a learned set network (λ by the SAAS GP, as physics) | sets |
@@ -206,6 +206,11 @@ not beat it has not shown that the traces help.
 * `cnn`, `pretrained`, `nn`, and the set network: standardized inputs are clipped to ±10, and a prediction more than 3
   training standard deviations beyond the training labels is pulled back to that edge, with the distance added to
   its error bar. With 6 packets the CNN had predicted σe 1300 % off; now 12 %. On 100 packets nothing changes.
+* Since 2026-10-23: the networks (`nn`, `cnn`, `pretrained`, the set network of `sets`) stop early on a validation
+  split of whole **packets** (rows of one packet share its noise; a split by rows stopped too late); `--quick` also
+  shortens `sets`; the physics family fits the Allan curves only up to n = n_skips / 5 (the n = 160 point of a
+  500-skip trace is biased low on real traces) and fills a missing Allan point with the median of the same n; the
+  packet state is centred per amplifier (2026-10-22).
 
 Options:
 
@@ -228,6 +233,7 @@ Options:
 | `--tier-ablation [SET ...]` | off | train every model with each feature set (default `none P P+A1 P+A P+A+B all impl0`) on the same folds and compare each with its own `--ablation-ref` run (default `all`), with paired bootstrap intervals; adds a "Tier ablation" section to the report |
 | `--feature-ladder [ORDER ...]` | off | feed every model more and more features in label-free orders (default `tiers cover random`; also `groups`); reports error against the number of features, the one-standard-error suggestion per model, and `feature_ladder.png`; compares against `P` (docs/trace_features_and_tiers.md §6.2) |
 | `--ladder-steps`, `--ladder-random` | 15 25 40 60 90; 3 | feature counts of the cover and random ladders; number of random orders |
+| `--ablation-ref` | `all` (`P` with `--feature-ladder`) | the feature set each model is compared against in the ablation and the ladder |
 | `--tier-file` | `lvl1/feature_study/evidence_tiers.json` | the evidence tiers |
 | `--out` | `<processed>/lvl1_results/<date>/` | where to write the results |
 

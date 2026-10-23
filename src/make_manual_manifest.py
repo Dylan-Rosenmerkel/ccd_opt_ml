@@ -44,14 +44,17 @@ TRACE_RE = re.compile(r"_ch(\d)_(\d+)_\d{8}_\d{6}_\d+$")
 
 
 def is_theta_key(key: str) -> bool:
+    """True if a .meta key is an operating parameter (a voltage or a timing of THETA_PATTERNS)."""
     return any(re.match(p, key) for p in THETA_PATTERNS)
 
 
 def theta_of(meta: dict) -> dict[str, float]:
+    """The operating parameters of a .meta (numeric values of the theta keys)."""
     return {k: v for k, v in meta.items() if is_theta_key(k) and isinstance(v, (int, float)) and not isinstance(v, bool)}
 
 
 def config_id(theta: dict) -> str:
+    """A short stable hash of a setting (sorted theta): packets at identical settings share it."""
     return hashlib.sha1(json.dumps(theta, sort_keys=True).encode()).hexdigest()[:10]
 
 
@@ -72,6 +75,7 @@ def read_metas(run_dir: Path) -> list[dict]:
 
 
 def trace_entry(e: dict, repeat: int) -> dict:
+    """The manifest entry of one trace: board, channel, repeat (trace set) and file stem."""
     m = TRACE_RE.search(e["name"])
     return {"board": e["board"], "channel": int(m.group(1)), "repeat": repeat, "stem": str(e["stem"])}
 
@@ -100,6 +104,7 @@ def _consistent(entries: list[dict], label: str, warnings: list[str]) -> dict[st
 
 
 def manifest_from_record(record: dict, run_dir: Path, metas: list[dict]) -> dict:
+    """The packet manifest from a manual_packet.sh record and the run's .meta files (see the module docstring)."""
     pid = record["packet_id"]
     warnings: list[str] = []
     ref = [e for e in metas if e["name"].startswith(record["trace_prefix_ref"]) and TRACE_RE.search(e["name"])]

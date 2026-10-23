@@ -318,7 +318,6 @@ def pareto(out):
     F = pts[front]
     ref = np.array([1.05, 1.15])
     fig, ax = plt.subplots(figsize=(8.5, 4.6))
-    xs, ys = [], []
     for k, (x, y) in enumerate(F):
         x_next = F[k + 1, 0] if k + 1 < len(F) else ref[0]
         ax.fill_between([x, x_next], y, ref[1], color="C2", alpha=0.18, lw=0)

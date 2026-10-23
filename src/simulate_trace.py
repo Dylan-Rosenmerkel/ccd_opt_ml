@@ -119,7 +119,7 @@ def simulate_trace(stem: str | Path, seed: int = 0, charge_per_pixel: float = 5.
     def span(a, b):
         return int(np.floor(a * SAMPLES_PER_TICK)), int(np.floor(b * SAMPLES_PER_TICK))
 
-    gain, n_ped = 1.34, p["delayInt"] * SAMPLES_PER_TICK
+    gain = 1.34
     charge = {}                                               # electrons per pixel
     baseline0 = -20000.0
     level = baseline0

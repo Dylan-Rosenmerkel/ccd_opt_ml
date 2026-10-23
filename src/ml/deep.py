@@ -82,6 +82,7 @@ class Pretrainer:
         self.device = _device(prefer_gpu=True)
 
     def standardize(self, curves):
+        """Curves standardized with the pre-training mean and sd of every channel and position."""
         return (curves - self.c_mean) / self.c_sd
 
     def _augment(self, c):
@@ -153,6 +154,7 @@ class Pretrainer:
         return self
 
     def encode(self, curves: np.ndarray) -> np.ndarray:
+        """The encoder's representation of the curves (no gradients; in chunks of 2048)."""
         torch = _torch()
         with torch.no_grad():
             ct = torch.tensor(self.standardize(curves), dtype=torch.float32, device=self.device)

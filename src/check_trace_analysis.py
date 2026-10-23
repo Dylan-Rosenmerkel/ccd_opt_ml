@@ -29,7 +29,7 @@ import numpy as np
 from decode_trace import decode_trace
 from simulate_trace import DEFAULTS, simulate_trace
 from trace_features import trace_features
-from trace_geometry import SAMPLES_PER_TICK, TraceGeometry
+from trace_geometry import TraceGeometry
 from trace_regions import split_regions
 
 #: name -> parameters that differ from the reference (2x5 pixels, 500 skips, 20x20, reference timing)

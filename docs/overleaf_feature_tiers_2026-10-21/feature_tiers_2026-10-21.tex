@@ -93,7 +93,7 @@ datasets: 1 of 100 added noise columns reached its top tier L1, on the smallest 
 
 Two literature searches looked for hand-computable features in other fields: \code{signal\_analysis\_features.md}
 (21 fields, 49 candidates) and \code{landscape\_exploratory.md}, both in \code{docs/literature/}. Each candidate was piloted on real traces
-before it was implemented. The new code is \code{src/trace\_features\_extra.py}; 18 unit tests with known answers are in
+before it was implemented. The new code is \code{src/trace\_features\_extra.py}; 19 unit tests with known answers are in
 \code{tests/test\_trace\_features\_new.py}. Computing all features takes about 1.2\,s per trace.
 
 \begin{table}[H]
@@ -663,7 +663,7 @@ file & what \\
 \code{lvl1/feature\_study/clock\_pilot/} & the clocking-region pilot (script, numbers, figure) \\
 \code{lvl1/feature\_study/ladder\_synthetic/} & the synthetic feature-ladder results and figure \\
 \code{src/trace\_features.py} & the \code{tier} attribute and \code{names\_by\_tier()} \\
-\code{tests/test\_trace\_features\_new.py} & 18 tests with known answers \\
+\code{tests/test\_trace\_features\_new.py} & 19 tests with known answers \\
 \code{lvl1/feature\_study.py} & evidence tiers; results in \code{lvl1/feature\_study/README.md} \\
 \code{lvl1/feature\_tolerance.py} & the synthetic tolerance test \\
 \code{lvl1/feature\_importance.py} & learned tiers L1/L2/L3 \\

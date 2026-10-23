@@ -333,3 +333,51 @@ Open decisions for the user: unchanged (section 11).
   ml_models 45 p, ml_models_technical 14 p, feature_tiers 16 p; all 0 warnings, re-zipped).
 - Still open for the user: binning scan (would change the clock features' meaning); network early stopping on rows;
   Allan NaN fill; --quick for sets; per-volt features use side-A swings; lambda inputs (temperature, time since clear).
+
+## 14. RESTART HERE (2026-10-23, stopped for the usage limit)
+
+**User request in progress:** "fix the network early stopping to validate on packets and [the other open behaviour
+changes] that will be important; have an agent check all documents; another agent check code redundancy/correctness/
+efficiency/comments; then give a thorough pedagogical explanation of how the tiers are set up, how training works with
+them, and how they were chosen."
+
+**Done (committed in this push):**
+- `--quick` now shortens `sets` (2 nets, 100 epochs); sets networks get the packet ids (`X["packet"]`).
+- Missing Allan points are filled with the per-n median over all rows (was one global median).
+- The Allan cut at n_skips/5 that I added in `_physics_X` was REVERTED (`Runner._allan_max_n` returns None): real data
+  use the overlapping common-pattern-removed curve (st.REAL_ALLAN), which is not biased (as StructuredPrep already
+  assumed); the cut only hurt synthetic data (physics sigma_e 5.3 -> 5.8 % on lvl1/test_data).
+- Docs audit agent: ~15 docs/notebooks fixed (counts 141/18, paths, model lists, 10-23 changes); LaTeX recompiled;
+  ml_guide.tex (22 warnings) and packet_tests_2026-10-12.tex (28) still have OLD warnings (not from today).
+- Code audit agent: dead code / unused imports removed, ETS_BINS shared constant, robust_spread reused, ~70 docstrings;
+  behaviour identical (141 features identical on 2 real traces; quick scores identical; 34 tests pass). Its open
+  findings: per-volt H/SW features use side-A swings; minor inefficiencies (Lee-Mykland loop, sample-entropy n x n,
+  Runner.f mask recomputed) not worth changing.
+
+**UNDECIDED (state of src/ml/models.py `_train_one` as committed):** early stopping with `groups` (packet ids, passed by
+nn, cnn, pretrained, sets) holds out val_fraction of PACKETS, then REFITS from the initial weights on all rows for the
+chosen number of epochs; optional `self.stop_metric = "mse"` (default "nll"; only set by the scratchpad test).
+Results on lvl1/test_data, full training, lambda error % (sigma_e and gain ~unchanged everywhere):
+  nn: row split 10.5 | packet split 15.3 | packet + patience 150 15.4 | packet val 0.25 17.3 | packet + refit 14.9
+  pretrained: rows 11.6 | packets 15.0 | p150 12.2 | v0.25 19.4 | packet + refit 13.7;  cnn: 9.3 -> 9.5 (no change)
+Interpretation so far: not data loss (refit barely helps); the honest packet validation stops earlier, probably
+because the NLL on unseen packets rises (overconfidence) while the mean error still improves. NEXT TEST (was running):
+stop on validation MSE with the packet split (`packets_mse`) and with the row split (`rows_mse`):
+  `.venv/bin/python -W ignore <scratchpad>/es_test.py packets_mse <scratchpad>/es/packets_mse` (and rows_mse)
+  (es_test.py monkeypatches _train_one; scratchpad = /private/tmp/claude-501/-Users-dylanrosenmerkel-Documents-Software-ccd-opt-ml/0face8dd-3b86-44b8-b894-2b5f02a97511/scratchpad).
+Then decide with the user: packet split + MSE stopping (if it recovers lambda), or packet split as is (honest, costs
+nn/pretrained ~4 points on lambda), or back to rows. Remove `stop_metric` if unused.
+
+**After that:**
+1. Full rerun of all models on lvl1/test_data (command in section 11, out mltech/full100_v4) and update the results
+   tables: lvl1/README.md "Testing without real data", ml_models_technical.tex tab:full100 (and its caption), recompile
+   + re-zip. (full100_v3 had the now-reverted Allan cut: do not use it.)
+2. Give the user the pedagogical explanation of the tiers (not yet written): implementation tiers 0/1/2; protected P
+   (8 estimators, why: CDS rms and reset scatter were in B); evidence A1/A2/B/C from feature_study.py (settings F over
+   the 4 NCOLPRE-185 settings per ch0/1/3 min; amplifier F median over 5 settings; repeat share; NaN <= 20 %; Spearman
+   clusters |rho| > 0.95 avg linkage, representative = most informative; C if constant/NaN/both F < 4; A if F > 10,
+   repeat < 0.5, representative; else B; A split in halves A1/A2); learned L1/L2/L3 (diagnostic only; 1/100 noise in
+   L1 at 13 packets); MODEL_TIERS (gp/gp_saas P, gp_dim P+A1, nn/ridge P+A, trees all, rest P+A+B; ONLY with
+   --feature-tiers auto, the CLI default is all); masks apply to X_trace and X_ref; training modes --feature-tiers,
+   --tier-ablation, --feature-ladder (tiers/cover/random/groups, one-SE rule); plan: freeze orders before labels,
+   session A -> rerun feature_study label-free -> ladder on A(+B) -> confirm once on C.

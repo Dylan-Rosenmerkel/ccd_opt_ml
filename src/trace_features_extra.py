@@ -13,6 +13,10 @@ Groups:
   jump-robust noise (finance), noise shape (1/f corner, Hadamard, DFA, entropies, ...), pickup lines (multitaper
   F-test and their phase), and the skip-cycle noise budget (which waveform modes reach the CDS).
 * ``level:`` additions -- the slope-corrected CDS rise, the coupling of each pixel to the common CDS pattern.
+* ``edge:`` additions (2026-10-21) -- the dip just before the per-cycle pulse, from the equivalent-time pulse.
+* ``clock:`` (new, 2026-10-21/23) -- the vertical-clock block before row 2 (level slope, peak-to-peak), the H/V
+  peak-to-peak ratio, the settling at the start of each row's first H burst, and the (stored only) slope of the block
+  the trace starts in; all but the level slope work at the 1x1 binning of the matched traces.
 
 Every function is numpy/scipy only and returns NaN where the trace is too short.
 """
@@ -166,6 +170,7 @@ def slopes(W: np.ndarray) -> np.ndarray:
 
 
 def kurtosis(x: np.ndarray) -> float:
+    """Excess kurtosis (0 for a Gaussian); NaN for fewer than 4 values or zero variance."""
     x = np.asarray(x, float)
     return float(((x - x.mean()) ** 4).mean() / x.var() ** 2 - 3) if len(x) > 3 and x.var() > 0 else float("nan")
 
@@ -181,6 +186,8 @@ def med_rv(e: np.ndarray) -> float:
 
 
 def lee_mykland_count(e: np.ndarray, K: int = 20, alpha: float = 0.01) -> float:
+    """Number of skips flagged as jumps by the Lee & Mykland (2008) test with a K-skip bipower volatility (a relative
+    count; see the comment inside)."""
     e = np.asarray(e, float)
     n = len(e)
     if n < 3 * K:
@@ -206,6 +213,8 @@ def lee_mykland_count(e: np.ndarray, K: int = 20, alpha: float = 0.01) -> float:
 
 
 def sta_lta(x: np.ndarray, ns: int = 5, nl: int = 50) -> float:
+    """Maximum over the series of the short-term (ns) over long-term (nl, preceding) average of the squared values
+    (seismology trigger)."""
     e = np.asarray(x, float) ** 2
     if len(e) < nl + ns + 1:
         return float("nan")
@@ -216,6 +225,7 @@ def sta_lta(x: np.ndarray, ns: int = 5, nl: int = 50) -> float:
 
 
 def ljung_box_sq(x: np.ndarray, h: int = 10) -> float:
+    """Ljung-Box Q of the squared values over h lags: volatility clustering."""
     e = np.asarray(x, float) ** 2
     e = e - e.mean()
     n, d = len(e), np.dot(e, e)
@@ -225,6 +235,8 @@ def ljung_box_sq(x: np.ndarray, h: int = 10) -> float:
 
 
 def whitened_kurtosis(x: np.ndarray, smooth: int = 9) -> float:
+    """Kurtosis after dividing the spectrum by its smoothed amplitude: non-Gaussianity without the colour of the
+    noise."""
     x = np.asarray(x, float) - np.mean(x)
     if len(x) < 32:
         return float("nan")
@@ -237,6 +249,8 @@ def whitened_kurtosis(x: np.ndarray, smooth: int = 9) -> float:
 
 
 def spectral_kurtosis_max(W: np.ndarray) -> float:
+    """Largest spectral kurtosis over frequency of the windows (rows of W, Hann-tapered): the band of impulsive
+    noise."""
     if W.shape[0] < 10:
         return float("nan")
     X = np.abs(np.fft.rfft(W * np.hanning(W.shape[1]), axis=1)) ** 2
@@ -245,6 +259,8 @@ def spectral_kurtosis_max(W: np.ndarray) -> float:
 
 
 def structure_function(W: np.ndarray, block: int = 15, max_lag: int = 9) -> np.ndarray:
+    """sqrt of the mean squared difference of block means L blocks apart, L = 1..max_lag, inside every window (rows
+    of W)."""
     m = W.shape[1] // block
     if m < 2:
         return np.full(max_lag, np.nan)
@@ -253,6 +269,7 @@ def structure_function(W: np.ndarray, block: int = 15, max_lag: int = 9) -> np.n
 
 
 def hadamard_deviation(x: np.ndarray, ns) -> np.ndarray:
+    """Hadamard deviation (third difference of n-sample means) for every n; NaN where fewer than 4 means exist."""
     out = []
     for n in ns:
         m = len(x) // n
@@ -265,6 +282,7 @@ def hadamard_deviation(x: np.ndarray, ns) -> np.ndarray:
 
 
 def modified_allan(x: np.ndarray, ns) -> np.ndarray:
+    """Modified Allan deviation of a series (frequency-type data) for every n; NaN where it cannot be formed."""
     x = np.asarray(x, float)
     c = np.r_[0.0, np.cumsum(x)]
     out = []
@@ -281,6 +299,7 @@ def modified_allan(x: np.ndarray, ns) -> np.ndarray:
 
 
 def dfa_alpha(x: np.ndarray, scales=(4, 6, 8, 12, 16, 24, 32, 48)) -> float:
+    """Detrended-fluctuation-analysis exponent (log-log slope of the fluctuation against the scale)."""
     y = np.cumsum(np.asarray(x, float) - np.mean(x))
     F, used = [], []
     for s in scales:
@@ -297,10 +316,12 @@ def dfa_alpha(x: np.ndarray, scales=(4, 6, 8, 12, 16, 24, 32, 48)) -> float:
 
 
 def psd(x: np.ndarray) -> np.ndarray:
+    """Periodogram of the Hann-tapered, mean-removed series, without the zero-frequency bin."""
     return (np.abs(np.fft.rfft((x - np.mean(x)) * np.hanning(len(x)))) ** 2)[1:]
 
 
 def spectral_slope(x: np.ndarray) -> float:
+    """Slope of log power against log frequency index: the colour of the noise."""
     S = psd(x)
     f = np.arange(1, len(S) + 1)
     ok = S > 0
@@ -308,12 +329,14 @@ def spectral_slope(x: np.ndarray) -> float:
 
 
 def spectral_centroid(x: np.ndarray) -> float:
+    """Power-weighted mean frequency of the periodogram, as a fraction of the Nyquist frequency."""
     S = psd(x)
     f = np.arange(1, len(S) + 1) / len(S)
     return float((f * S).sum() / S.sum()) if S.sum() > 0 else float("nan")
 
 
 def sample_entropy(x: np.ndarray, m: int = 2, r: float = 0.2) -> float:
+    """Sample entropy (template length m, tolerance r standard deviations); NaN for short or constant series."""
     x = np.asarray(x, float)
     if len(x) < 20 or x.std() == 0:
         return float("nan")
@@ -329,6 +352,7 @@ def sample_entropy(x: np.ndarray, m: int = 2, r: float = 0.2) -> float:
 
 
 def permutation_entropy(x: np.ndarray, m: int = 4) -> float:
+    """Normalized permutation entropy of order m (1 = all ordinal patterns equally likely)."""
     x = np.asarray(x, float)
     if len(x) < 10 * math.factorial(m):
         return float("nan")
@@ -340,6 +364,7 @@ def permutation_entropy(x: np.ndarray, m: int = 4) -> float:
 
 
 def red_noise_beta(x: np.ndarray, n: int = 50) -> float:
+    """Scatter of n-sample block means over the white-noise expectation (astronomy beta factor)."""
     x = np.asarray(x, float)
     m = len(x) // n
     if m < 3:
@@ -349,6 +374,7 @@ def red_noise_beta(x: np.ndarray, n: int = 50) -> float:
 
 
 def lag1_of_block_means(x: np.ndarray, n: int = 10) -> float:
+    """Lag-1 autocorrelation of disjoint n-sample block means."""
     m = len(x) // n
     if m < 5:
         return float("nan")
@@ -379,6 +405,7 @@ def fit_one_over_f(f: np.ndarray, S: np.ndarray) -> tuple[float, float]:
 
 
 def fit_lorentzian(f: np.ndarray, S: np.ndarray) -> float:
+    """Corner frequency f_L of S = W + B / (1 + (f/f_L)^2) fitted in log space; NaN if the fit fails."""
     from scipy.optimize import curve_fit
     ok = np.isfinite(S) & (S > 0) & (f > 0)
     f, S = f[ok], S[ok]
@@ -663,10 +690,9 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
         common = ctx["common"][first:] - ctx["common"][first:].mean()
         cc = np.dot(common, common)
         a = [float(np.dot(Cm[p, first:] - Cm[p, first:].mean(), common) / cc) for p in good] if cc > 0 else []
+        from trace_features import detrend, robust_spread
         if a:
-            x = np.asarray(a)
-            S["level: common-pattern amplitude spread"] = float(1.4826 * np.median(np.abs(x - np.median(x))))
-        from trace_features import detrend
+            S["level: common-pattern amplitude spread"] = robust_spread(np.asarray(a))
         PP["noise: baseline-CDS residual correlation"] = [
             float(np.corrcoef(detrend(cyc[p][first:n, :n_ped].mean(1)), det[p])[0, 1]) for p in good]
     block("levels", levels)
@@ -676,8 +702,9 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
         e = ctx.get("curves", {}).get("edge: equivalent-time pulse")
         if e is None:
             return
+        from trace_features import ETS_BINS
         e = np.asarray(e, float)
-        c = np.arange(-15, 60.05, 0.1)[:-1] + 0.05                 # the bin centres of that curve (samples from the edge)
+        c = ETS_BINS[:-1] + 0.05                                    # the bin centres of that curve (samples from the edge)
         base = np.nanmean(e[(c > -15) & (c < -8)])
         win = np.flatnonzero((c > -6) & (c < 0) & np.isfinite(e))
         if not len(win) or not np.isfinite(base):

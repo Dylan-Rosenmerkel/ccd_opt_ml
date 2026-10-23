@@ -1,5 +1,6 @@
 """
-oct12_features.py -- the 85 trace numbers of every board-101 trace of the 2026-10-12 packet tests, for the slides.
+oct12_features.py -- every scalar trace feature (141 since 2026-10-23) of every board-101 trace of the 2026-10-12 packet
+tests: the slides and lvl1/feature_study.py use it.  Traces with quality problems are skipped (as in processing).
 
 5 setting groups (reference; VDD -20.5 V; V low rails + TG; all H low rails 6.2 V; H3_A_L 6.2 V) x 3 repeats x 4 amplifiers.
 Each acquisition traces one amplifier (FILTER selects it); its data file is the non-empty RJ45ADCDATA<c>.
@@ -11,7 +12,6 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]

@@ -37,6 +37,8 @@ REAL = ROOT / "docs" / "slides" / "data" / "oct12_trace_features.csv"
 
 
 def extra_columns(kind: str, k: int, X: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """k uninformative columns of one kind: Gaussian noise, near-copies of existing columns, or real feature values
+    drawn at random."""
     n = len(X)
     if kind == "noise":
         return rng.normal(0, 1, (n, k))
@@ -58,6 +60,7 @@ def extra_columns(kind: str, k: int, X: np.ndarray, rng: np.random.Generator) ->
 
 
 def make_copy(src: Path, dst: Path, kind: str, k: int, seed: int) -> None:
+    """Copy a model_inputs directory and append k extra columns to X_trace and X_ref of features.npz and physics.npz."""
     if dst.exists():
         shutil.rmtree(dst)
     shutil.copytree(src, dst)
@@ -80,6 +83,7 @@ def make_copy(src: Path, dst: Path, kind: str, k: int, seed: int) -> None:
 
 
 def run(job) -> dict:
+    """Train lvl1/train_lvl1.py on one copy (a subprocess) and return its report.json."""
     data, out, models, quick = job
     cmd = [PY, "-W", "ignore", str(ROOT / "lvl1" / "train_lvl1.py"), "--inputs", str(data), "--out", str(out),
            "--models", *models, "--n-boot", "200"] + (["--quick"] if quick else [])

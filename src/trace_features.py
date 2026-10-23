@@ -243,7 +243,12 @@ def residual_cycles(cycles: np.ndarray, first_skip: int = FIRST_SKIP, degree: in
     return Y - X @ coef
 
 
+#: bins of the equivalent-time pulse (samples from the reset edge, 0.1-sample steps); also used by
+#: trace_features_extra (the pre-pulse dip)
+ETS_BINS = np.arange(-15, 60.05, 0.1)
+
 def robust_spread(x: np.ndarray) -> float:
+    """Robust standard deviation (1.4826 x the median absolute deviation) of the finite values; NaN for fewer than 2."""
     x = np.asarray(x, float)
     x = x[np.isfinite(x)]
     return float(1.4826 * np.median(np.abs(x - np.median(x)))) if len(x) > 1 else float("nan")
@@ -261,6 +266,8 @@ ALLAN_N = np.array([1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100, 160])
 
 
 def allan_deviation(x: np.ndarray, ns=ALLAN_N) -> np.ndarray:
+    """Allan deviation (scatter between consecutive n-sample means / sqrt 2) for every n; NaN where fewer than 2
+    means exist."""
     out = []
     for n in ns:
         m = len(x) // n
@@ -329,6 +336,7 @@ def largest_step(x: np.ndarray, window: int = 20) -> float:
 
 
 def count_lines(S: np.ndarray, factor: float = 5, half_width: int = 5) -> int:
+    """Number of spectral bins more than ``factor`` times the median of their neighbours (narrow lines)."""
     n = 0
     for i in range(half_width, len(S) - half_width):
         local = np.median(np.r_[S[i - half_width:i], S[i + 1:i + half_width + 1]])
@@ -633,7 +641,7 @@ def _trace_features(trace: DecodedTrace, meta: dict | None, regions: TraceRegion
                 taus.append(tau[sel]); vals.append((cyc[p][k] - cyc[p][k, :n_ped].mean())[sel])
         if taus:
             taus, vals = np.concatenate(taus), np.concatenate(vals)
-            bins = np.arange(-15, 60.05, 0.1); idx = np.digitize(taus, bins)
+            bins = ETS_BINS; idx = np.digitize(taus, bins)
             sums = np.bincount(idx, weights=vals, minlength=len(bins) + 1)[1:len(bins)]
             counts = np.bincount(idx, minlength=len(bins) + 1)[1:len(bins)]
             ets = np.where(counts > 0, sums / np.maximum(counts, 1), np.nan)

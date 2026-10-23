@@ -94,6 +94,7 @@ def allan_fit(allan: np.ndarray, ns: np.ndarray, rel_sd: float = 0.03, max_n: fl
 
 
 def amplifier_key(df: pd.DataFrame) -> np.ndarray:
+    """Per row the amplifier key '<board>_ch<channel>'."""
     return (df["board"].astype(str) + "_ch" + df["channel"].astype(str)).to_numpy()
 
 
@@ -159,6 +160,8 @@ class StructuredPrep:
         return np.array(out)
 
     def transform(self, df: pd.DataFrame, curves: dict) -> dict:
+        """The model inputs of the rows of ``df``: x = [settings, packet state, own features], the Allan fit (a, b),
+        the amplifier and module ids, the amplifier one-hot, and the per-row lambda parts if the dataset has them."""
         theta = df[self.theta_cols].to_numpy(float)
         x = np.hstack([theta, self.state_vector(df)] + [df[data.columns(df, g)].to_numpy(float) for g in self.own_features])
         # real traces: the curve that keeps slow pixel-to-pixel noise (trace_features, 2026-10-14); the detrended
@@ -496,7 +499,6 @@ class JointLambdaGP:
     def predict_parts(self, X):
         """Posterior means (n, 2) of (DC, CIC) -- in e-/pixel, or their logs if space == "log" -- and covariance (n, 2, 2)."""
         torch = _torch()
-        n = self.n
         with torch.no_grad():
             xs = torch.tensor(self.sx(X["x"]), dtype=torch.float64)
             ids = self.kernel._ids(X)

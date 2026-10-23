@@ -129,7 +129,7 @@ md(r"""
 ## 3. Processing: `dataset.csv` and one input file per model family
 
 `python src/process_packet.py <manifest> ...` decodes every trace, checks it, and computes:
-* the 85 trace features and 14 curves;
+* the trace features and curves (85 and 14 when this walkthrough was written; 141 and 18 since 2026-10-21);
 * for the image: the WADERs fit, the labels (σe, λ, gain with their errors), and λ **row by row** (section 4).
 
 It then writes:

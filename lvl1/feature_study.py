@@ -2,7 +2,7 @@
 feature_study.py -- how informative, stable and redundant is every trace feature?  (Step 1 of the feature plan.)
 
 Uses the 59 usable board-101 traces of the 2026-10-12 packet tests (5 settings x 3 repeats x 4 amplifiers; one damaged
-ch3 trace left out), with all 134 scalar features (docs/slides/data/oct12_trace_features.csv, made by
+ch3 trace left out), with all 141 scalar features (docs/slides/data/oct12_trace_features.csv, made by
 docs/slides/oct12_features.py).  For every feature:
 
 * settings F   one-way ANOVA F over the 4 CHANGED settings (all taken with NCOLPRE 185, so the reference's different
@@ -57,6 +57,7 @@ GROUPS = ["reference"] + CHANGED
 
 
 def anova_F(groups) -> float:
+    """One-way ANOVA F of the groups (NaN removed; groups with fewer than 2 values dropped)."""
     groups = [np.asarray(g, float) for g in groups]
     groups = [g[np.isfinite(g)] for g in groups]
     groups = [g for g in groups if len(g) >= 2]
@@ -72,6 +73,8 @@ def anova_F(groups) -> float:
 
 
 def study(df: pd.DataFrame) -> pd.DataFrame:
+    """Per feature: settings F, amplifier F, repeat share, NaN share, redundancy cluster, informativeness and
+    evidence tier."""
     feats = [n for n in tf.scalar_names() if n in df.columns]
     rows = []
     for f in feats:

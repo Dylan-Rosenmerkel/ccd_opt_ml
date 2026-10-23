@@ -90,7 +90,7 @@ Uses `process_packet.py`, `configs/processing.toml` and WADERs (`panaSKImg`, run
 **Writes:** `../rehearsal/processed/`.
 
 Step 2 uses the general region splitter (any geometry, `.meta` cross-check) and `trace_features`:
-85 numbers and 14 curves per trace.
+85 numbers and 14 curves per trace when the notebook was run (2026-10-13; since 2026-10-21 there are 141 and 18).
 
 ## `advanced_trace_features.ipynb`: brainstormed features, one by one (reference)
 
@@ -112,9 +112,10 @@ is `trace_features.py`.
 
 ## `trace_features_walkthrough.ipynb`: all features in one function
 
-Uses `src/trace_features.py`: `trace_features(trace)` returns 85 numbers (the 39 comparison tools
-plus the advanced features), their pixel spread, and 14 curves. The `FEATURES` registry describes
-each one.
+Uses `src/trace_features.py`: `trace_features(trace)` returned 85 numbers (the 39 comparison tools
+plus the advanced features), their pixel spread, and 14 curves when this notebook was run. Since 2026-10-21 it returns
+141 numbers and 18 curves (`src/trace_features_extra.py`); the new ones are walked through in
+`../lvl1/new_trace_features.ipynb`. The `FEATURES` registry describes each one.
 
 1. The registry: groups and counts.
 2. Every feature of one trace, with units and pixel spread.
@@ -127,7 +128,7 @@ each one.
    21 pixels, 1×1 to 20×20 binning and different clock delays, all decoded correctly. The full test
    is `python src/check_trace_analysis.py`.
 
-The full list of features is in `../docs/trace_features.tex`.
+The full list of features is in `../docs/overleaf_trace_features/trace_features.tex`.
 
 ## `packet_tests_2026-10-12.ipynb`: what the parameter changes did
 
@@ -204,6 +205,7 @@ Uses `src/ml/structured.py`, `calibrate.py` and the results of `python -m ml.ben
 ## Related documents
 
 * `../docs/trace_fit_tools.tex`: the 39 comparison tools.
-* `../docs/trace_features.tex`: every feature of `trace_features.py`.
+* `../docs/overleaf_trace_features/trace_features.tex`: every feature of `trace_features.py`, with tiers;
+  `../docs/overleaf_trace_features_technical/`: their exact definitions.
 * `../docs/ml_training_plan.tex`: the ML plan.
 * `../docs/context/`: session records and the handoff for the data-taking and processing scripts.

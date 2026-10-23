@@ -129,7 +129,7 @@ Status board (build as a 3-column slide table with coloured ticks):
 
 | ✅ Ready | 🟡 To decide | ⏭ Next |
 |---|---|---|
-| Packet script → manifest → processing → training: one command each | Trace settings (BOOLCLR, NDCMPRE, row-start pixels) | Take session A: 13 timing packets, ~3.6 h |
+| Packet script → manifest → processing → training: one command each | Trace settings (BOOLCLR, NDCMPRE, row-start pixels) | Take session A: 14 timing packets, ~3.8 h (43-packet plan) |
 | Drift detection and correction in processing | Confirm the voltage windows | First real lvl-1 report: do traces beat the settings-only baseline? |
 | Rehearsal passes end to end; all models train | Ask a front-end expert about the drift | Packet-aware error-bar calibration; flag unusual traces |
 | Literature review; SAAS GPs adopted for λ | | Lvl 2: suggest settings (step-limited, safe Bayesian optimization) |
