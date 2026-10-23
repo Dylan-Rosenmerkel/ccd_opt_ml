@@ -95,10 +95,12 @@ class SetPooling(_MeanVarHead):
         bt = torch.tensor(self.sb(base[:, None]), dtype=torch.float32)
         return st_, bt
 
-    def fit(self, sets, base, y):
+    def fit(self, sets, base, y, groups=None):
+        """``groups``: optional group id per row (packet ids) for the early-stopping split (``_train_one``)."""
         self.sy = _Scaler().fit(y[:, None])
         st_, bt = self._prep(sets, base, fit=True)
-        self.nets = [self._train_one(self._net(sets.shape[2]), [st_, bt], self.sy(y[:, None]), seed) for seed in range(self.n_models)]
+        self.nets = [self._train_one(self._net(sets.shape[2]), [st_, bt], self.sy(y[:, None]), seed, groups)
+                     for seed in range(self.n_models)]
         return self
 
     def predict(self, sets, base):
@@ -112,14 +114,18 @@ class SetStructured(st.PhysicsStructured):
     X needs "sets" (n, n_sets, 13): every set's Allan deviation (synthetic: curves["sets: noise: Allan deviation"]).
     """
 
-    def __init__(self, combiner: str = "learned", kind: str = "hier", allan_ns=None, **kw):
+    def __init__(self, combiner: str = "learned", kind: str = "hier", allan_ns=None, allan_max_n: float | None = None,
+                 pool_kw: dict | None = None, **kw):
+        """allan_max_n: fit the Allan curves only up to this n (real traces: n_skips / 5, see structured.allan_fit);
+        pool_kw: arguments of the set network (SetPooling), e.g. fewer networks and epochs for a quick run."""
         super().__init__(kind=kind, use_components=False, **kw)
         from . import synthetic
         self.combiner, self.allan_ns = combiner, synthetic.ALLAN_N if allan_ns is None else np.asarray(allan_ns)
+        self.allan_max_n, self.pool_kw = allan_max_n, pool_kw or {}
         self.name = f"A+B, sets combined: {combiner}"
 
     def _fixed(self, sets, how, X=None):
-        a, b = st.allan_fit(combine_sets(sets, how), self.allan_ns)
+        a, b = st.allan_fit(combine_sets(sets, how), self.allan_ns, max_n=self.allan_max_n)
         n = self.skips(X) if X is not None else self.n_skips
         return 0.5 * np.log(np.maximum(a ** 2 / n + b ** 2, 1e-30))
 
@@ -130,7 +136,8 @@ class SetStructured(st.PhysicsStructured):
 
     def fit(self, X, Y, components=None):
         if self.combiner == "learned":
-            self.pool = SetPooling().fit(X["sets"], self._fixed(X["sets"], "median", X), Y[:, 0] + Y[:, 2])
+            self.pool = SetPooling(**self.pool_kw).fit(X["sets"], self._fixed(X["sets"], "median", X), Y[:, 0] + Y[:, 2],
+                                                       groups=X.get("packet"))
         return super().fit(X, Y, components)
 
     def predict(self, X):

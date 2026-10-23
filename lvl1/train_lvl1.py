@@ -405,7 +405,14 @@ class Runner:
     def _physics_X(self, d, train, test):
         xs = scalars(d, True, True)
         xtr, xte, _ = prep_columns(xs[train], xs[test])
-        a, b = st.allan_fit(np.nan_to_num(d["allan"], nan=np.nanmedian(d["allan"])), d["allan_ns"])
+        # the Allan curves -> (a, b) of sigma_A(n)^2 = a^2/n + b^2, fitted only up to n = n_skips / 5 (the n = 160 point
+        # of a 500-skip trace comes from 3 blocks and is biased low, structured.allan_fit); a missing point is filled
+        # with the median of the same n over all rows (features only, no labels), not with one value for every n
+        allan = np.asarray(d["allan"], float)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            allan = np.where(np.isnan(allan), np.nanmedian(allan, axis=0), allan)
+        a, b = st.allan_fit(allan, d["allan_ns"], max_n=self._allan_max_n(d))
         def part(idx, x):
             X = {"x": x, "a": a[idx], "b": b[idx], "n_skips": d["n_skips"][idx], "y_var": self.Y_err[idx] ** 2,
                  # module and amplifier ids: used ONLY by the labelled reference physics_hier (kind "hier")
@@ -424,6 +431,12 @@ class Runner:
         s = np.column_stack([np.full(len(test), self.Y[train, 2].std()), np.full(len(test), self.Y[train, 1].std()),
                              np.full(len(test), self.Y[train, 2].std())])
         return m, s
+
+    @staticmethod
+    def _allan_max_n(d) -> float | None:
+        """The largest Allan n that is not biased: n_skips / 5 (the smallest trace of the selection decides)."""
+        n = np.asarray(d.get("n_skips", []), float)
+        return float(np.nanmin(n)) / 5 if n.size and np.isfinite(n).any() else None
 
     def physics(self, train, test, joint=False, **joint_kw):
         d = self.f("physics")
@@ -499,8 +512,11 @@ class Runner:
         if not np.isfinite(S).all():
             raise SkipModel("some rows have no usable trace set")
         Xtr["sets"], Xte["sets"] = S[train], S[test]
+        Xtr["packet"] = d["packet_id"][train]                        # early stopping of the set network by packet
         lam = dict(lambda_kind="saas", lambda_kw=SAAS_LAMBDA_KW) if saas_lambda else {}
-        model = setmodels.SetStructured(combiner="learned", kind="none", allan_ns=ds["allan_ns"], **lam)
+        pool = dict(n_models=2, epochs=100) if self.quick else {}
+        model = setmodels.SetStructured(combiner="learned", kind="none", allan_ns=ds["allan_ns"],
+                                        allan_max_n=self._allan_max_n(d), pool_kw=pool, **lam)
         return model.fit(Xtr, self.Y[train]).predict(Xte)
 
     def sets_gp_lambda(self, train, test):
@@ -550,7 +566,9 @@ class Runner:
 
     def nn(self, train, test):
         xtr, xte = self._features(train, test)
-        return models.MLPEnsemble(n_models=2 if self.quick else 5, epochs=100 if self.quick else 600).fit(xtr, self.Y[train]).predict(xte)
+        groups = self.f("features")["packet_id"][train]           # early stopping by packet
+        return models.MLPEnsemble(n_models=2 if self.quick else 5, epochs=100 if self.quick else 600).fit(
+            xtr, self.Y[train], groups=groups).predict(xte)
 
     # -- the curves family -------------------------------------------------------------
     def _curves(self, train, test, both=True):
@@ -563,7 +581,9 @@ class Runner:
 
     def cnn(self, train, test):
         Xtr, Xte = self._curves(train, test)
-        return models.CurveCNN(n_models=2 if self.quick else 3, epochs=60 if self.quick else 400).fit(Xtr, self.Y[train]).predict(Xte)
+        groups = self.f("curves")["packet_id"][train]             # early stopping by packet
+        return models.CurveCNN(n_models=2 if self.quick else 3, epochs=60 if self.quick else 400).fit(
+            Xtr, self.Y[train], groups=groups).predict(Xte)
 
     def _pretrained(self):
         if self.pretrainer is None:
@@ -582,7 +602,9 @@ class Runner:
         from ml import deep
         pre = self._pretrained()
         Xtr, Xte = self._curves(train, test, both=False)
-        return deep.PretrainedCNN(pre, n_models=2 if self.quick else 3, epochs=60 if self.quick else 400).fit(Xtr, self.Y[train]).predict(Xte)
+        groups = self.f("curves")["packet_id"][train]             # early stopping by packet
+        return deep.PretrainedCNN(pre, n_models=2 if self.quick else 3, epochs=60 if self.quick else 400).fit(
+            Xtr, self.Y[train], groups=groups).predict(Xte)
 
     def deep_kernel(self, train, test):
         from ml import deep

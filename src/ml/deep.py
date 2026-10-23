@@ -175,8 +175,8 @@ class PretrainedHead:
         z = self.pre.encode(X["curves"])
         return np.hstack([z, X["scalars"]]) if X.get("scalars") is not None else z
 
-    def fit(self, X, Y):
-        self.mlp.fit(self._inputs(X), Y)
+    def fit(self, X, Y, groups=None):
+        self.mlp.fit(self._inputs(X), Y, groups=groups)
         return self
 
     def predict(self, X):

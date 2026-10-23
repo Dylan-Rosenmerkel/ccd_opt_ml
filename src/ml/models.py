@@ -189,13 +189,24 @@ class _MeanVarHead:
     #: back to that edge and the distance added to its sd (with very few rows a network can extrapolate wildly)
     INPUT_CLIP, OUTPUT_MARGIN = 10.0, 3.0
 
-    def _train_one(self, net, inputs, Y, seed):
+    def _train_one(self, net, inputs, Y, seed, groups=None):
+        """Train one network; early stopping on an internal validation split of ``val_fraction`` of the rows, or, when
+        ``groups`` (e.g. packet ids) is given, of the GROUPS: the rows of one packet share its noise, so a split by rows
+        would validate on near-copies of training rows and stop too late."""
         torch = _torch()
         torch.manual_seed(seed)
         self._y_range = (np.nanmin(Y, 0), np.nanmax(Y, 0))          # standardized training labels
         n = len(Y)
         rng = np.random.default_rng(seed)
-        val = rng.random(n) < self.val_fraction                    # internal early-stopping split
+        if groups is not None:
+            groups = np.asarray(groups)
+            ug = np.unique(groups)
+            pick = rng.random(len(ug)) < self.val_fraction
+            if not pick.any() and len(ug) > 2:
+                pick[rng.integers(len(ug))] = True                 # at least one validation group
+            val = np.isin(groups, ug[pick])
+        else:
+            val = rng.random(n) < self.val_fraction                # internal early-stopping split
         if val.sum() < 2 or (~val).sum() < 2:
             val = np.zeros(n, bool)
         tr_idx, va_idx = np.flatnonzero(~val), np.flatnonzero(val)
@@ -277,12 +288,13 @@ class MLPEnsemble(_MeanVarHead):
                 return s.mean(z), s.logvar(z).clamp(-12, 6)
         return Net()
 
-    def fit(self, X, Y):
+    def fit(self, X, Y, groups=None):
+        """``groups``: optional group id per row (packet ids) for the early-stopping split (``_train_one``)."""
         torch = _torch()
         self.sx, self.sy = _Scaler().fit(X), _Scaler().fit(Y)
         x = torch.tensor(np.clip(self.sx(X), -self.INPUT_CLIP, self.INPUT_CLIP), dtype=torch.float32)
         y = self.sy(Y)
-        self.nets = [self._train_one(self._net(X.shape[1], Y.shape[1]), [x, None], y, seed) for seed in range(self.n_models)]
+        self.nets = [self._train_one(self._net(X.shape[1], Y.shape[1]), [x, None], y, seed, groups) for seed in range(self.n_models)]
         return self
 
     def predict(self, X):
@@ -344,11 +356,12 @@ class CurveCNN(_MeanVarHead):
               if self.sx is not None else None)
         return ct, xt
 
-    def fit(self, X, Y):
+    def fit(self, X, Y, groups=None):
+        """``groups``: optional group id per row (packet ids) for the early-stopping split (``_train_one``)."""
         self.sy = _Scaler().fit(Y)
         ct, xt = self._prep(X, fit=True)
         p = 0 if xt is None else xt.shape[1]
-        self.nets = [self._train_one(self._net(ct.shape[1], p, Y.shape[1]), [ct, xt], self.sy(Y), seed)
+        self.nets = [self._train_one(self._net(ct.shape[1], p, Y.shape[1]), [ct, xt], self.sy(Y), seed, groups)
                      for seed in range(self.n_models)]
         return self
 
