@@ -264,7 +264,10 @@ latter clamped to $[-12, 6]$. Inputs standardized and clipped to $\pm10$; target
 log-likelihood $\tfrac12[\log v + (y - m)^2/v]$; AdamW (lr $3\times10^{-3}$, weight decay $10^{-3}$), batch 64, up to
 600 epochs (quick 100), early stopping with patience 60 on an internal validation split of about 15\,\% of the
 training \emph{packets} (\code{\_MeanVarHead.\_train\_one} with \code{groups} = packet ids, at least one packet; since
-2026-10-23, a random 15\,\% of the rows before), best weights kept. The same split by packet is used by \code{cnn},
+2026-10-23, a random 15\,\% of the rows before). The criterion is the validation mean squared error of the mean
+(\code{stop\_metric} ``mse''; the Gaussian NLL on unseen packets rises too early, as the variance gets overconfident:
+$\lambda$ 15.3\,\% instead of 10.6\,\% for \code{nn}); the split only chooses the number of epochs, and the network is then
+retrained from its initial weights on all training rows for that many epochs. The same is used by \code{cnn},
 \code{pretrained} and the set network of \code{sets}.
 Network $k$ uses seed $k$. Prediction: $m = \bar m_k$, $v = \overline{v_k} + \mathrm{Var}_k(m_k)$; a mean beyond the
 standardized training-label range by more than 3 is pulled back to that edge and the distance squared added to $v$
@@ -609,13 +612,13 @@ model & $\se$ & $\lambda$ & gain & note \\
 \textbf{\code{physics}} & \textbf{5.3} [4.6--5.9] & \textbf{3.9} [3.7--4.2] & \textbf{0.9} & default \\
 \code{physics\_joint} & 5.3 & 4.4 [3.8--4.9] & 0.9 & \\
 \code{physics\_hier} & 5.3 & 4.9 & 0.8 & uses amplifier labels \\
-\code{sets} & 4.9 & 3.9 & 0.9 & $\lambda$ by SAAS (before: 4.9) \\
+\code{sets} & 5.9 & 3.9 & 0.9 & $\lambda$ by SAAS \\
 \code{ridge} & 11.5 & 11.8 & 0.8 & \\
 \code{trees} & 10.6 & 21.4 & 3.6 & \\
 \code{gp} & 11.0 & 4.4 & 0.8 & \\
-\code{nn} & 10.5 & 10.6 & 1.1 & \\
-\code{cnn} & 6.8 & 9.3 & 1.2 & \\
-\code{pretrained} & 5.8 & 11.6 & 1.2 & \\
+\code{nn} & 10.5 & 11.0 & 1.0 & \\
+\code{cnn} & 7.7 & 8.5 & 3.0 & \\
+\code{pretrained} & 5.1 & 10.3 & 1.3 & \\
 \code{deep\_kernel} & 10.8 & 5.0 & 0.9 & \\
 \code{gp\_dim} & 14.4 & 5.0 & 0.9 & \\
 \bottomrule
@@ -626,9 +629,9 @@ packet-bootstrap resamples; error \% (68\,\% interval in brackets where useful).
 0.67--0.69 for every model and target. Paired against \code{physics} (95\,\% intervals): for $\lambda$ every other
 model is worse with the interval excluding 0, except \code{physics\_joint} ($+0.4$ points, $[-0.1, +1.1]$) and \code{gp}
 ($+0.4$, $[-0.0, +1.0]$); for $\se$ no model is better (\code{sets} $-0.4$, $[-1.2, +0.6]$; \code{pretrained} $+0.4$,
-$[-1.4, +2.2]$; \code{cnn} $+1.4$, $[-0.2, +3.1]$). Rerun after the 2026-10-22 fixes (amplifier-centred packet state; scratchpad run \code{mltech/full100\_v2}): every number
-identical, as expected, since every synthetic packet has all four amplifiers and the centring then only shifts the state
-by a constant. The same table is now in \code{lvl1/README.md}.}
+$[-1.4, +2.2]$; \code{cnn} $+1.4$, $[-0.2, +3.1]$). Rerun on 2026-10-23 (scratchpad \code{mltech/full100\_v4}) after the network early stopping moved to a packet split
+with MSE stopping and a refit, and \code{sets} got the SAAS $\lambda$ GP; all other models unchanged. The same table is in
+\code{lvl1/README.md}.}
 \label{tab:full100}
 \end{table}
 

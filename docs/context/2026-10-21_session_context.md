@@ -381,3 +381,14 @@ nn/pretrained ~4 points on lambda), or back to rows. Remove `stop_metric` if unu
    --feature-tiers auto, the CLI default is all); masks apply to X_trace and X_ref; training modes --feature-tiers,
    --tier-ablation, --feature-ladder (tiers/cover/random/groups, one-SE rule); plan: freeze orders before labels,
    session A -> rerun feature_study label-free -> ladder on A(+B) -> confirm once on C.
+
+## 15. 2026-10-23 (resumed): early stopping decided; tables updated
+
+- MSE test: packet split + validation-MSE stopping recovers lambda (nn 10.6 %, pretrained 10.3 % vs 15.3 / 15.0 with NLL).
+  Adopted as default (`stop_metric` "mse", packet split, refit on all rows).
+- Full rerun (scratchpad mltech/full100_v4) vs before: pretrained 5.8/11.6/1.2 -> 5.1/10.3/1.3; nn 10.5/10.6/1.1 ->
+  10.5/11.0/1.0; sets 5.0/4.9/0.9 -> 5.9/3.9/0.9 (lambda from SAAS; sigma_e worse, paired vs physics +0.6 [-0.5, +1.7]);
+  cnn 6.8/9.3/1.2 -> 7.7/8.5/3.0 (gain clearly worse). Others unchanged; coverage 0.67-0.70.
+  OPEN for the user: cnn gain and sets sigma_e got worse with the new stopping; option: per-model stop_metric (cnn/sets
+  "nll") — test before deciding.
+- lvl1/README.md and ml_models_technical.tex (tab:full100, nn paragraph) updated; recompiled, re-zipped.

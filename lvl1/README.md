@@ -327,7 +327,9 @@ model that fails it is not wrong for level 1. It costs amplifiers × folds fits 
 damaged trace sets) in exactly the `model_inputs` format, with the label errors WADERs would give. They go to
 `lvl1/test_data/`, which is not in the repository; regenerate them with the command below. On 100 such packets (400
 examples), the full run gives these errors (labels carry 1.5 / 3 / 0.8 %; current code, 2026-10-22, 5 setting-grouped
-folds, 1000 packet-bootstrap resamples; calibrated 68 % coverage 0.67–0.69 for every model and target):
+folds, 1000 packet-bootstrap resamples; networks stop early on a packet split by validation MSE and are refitted on all
+rows (2026-10-23: cnn gain 1.2 → 3.0 %, sets σe 5.0 → 5.9 %, pretrained 5.8 / 11.6 → 5.1 / 10.3 %); calibrated 68 %
+coverage 0.67–0.70 for every model and target):
 
 | model | σe | λ | gain |
 |---|---|---|---|
@@ -336,11 +338,11 @@ folds, 1000 packet-bootstrap resamples; calibrated 68 % coverage 0.67–0.69 for
 | **physics (A, default; λ by SAAS)** | **5.3 %** | **3.9 %** | **0.9 %** |
 | physics_joint | 5.3 % | 4.4 % | 0.9 % |
 | physics_hier (A+B, **with labels**) | 5.3 % | 4.9 % | 0.8 % |
-| sets (E; λ by SAAS since 2026-10-23, before 4.9 %) | 4.9 % | 3.9 % | 0.9 % |
-| ridge / trees / gp / nn | 10.5–11.5 % | 4.4–21.4 % | 0.8–3.6 % |
+| sets (E; λ by SAAS since 2026-10-23) | 5.9 % | 3.9 % | 0.9 % |
+| ridge / trees / gp / nn | 10.5–11.5 % | 4.4–21.4 % | 0.8–3.6 % (nn 10.5 / 11.0 / 1.0) |
 | gp_dim | 14.4 % | 5.0 % | 0.9 % |
-| cnn | 6.8 % | 9.3 % | 1.2 % |
-| pretrained (D) | 5.8 % | 11.6 % | 1.2 % |
+| cnn | 7.7 % | 8.5 % | 3.0 % |
+| pretrained (D) | 5.1 % | 10.3 % | 1.3 % |
 | deep_kernel (C) | 10.8 % | 5.0 % | 0.9 % |
 
 Paired against physics (95 % intervals): for λ every other model is worse with the interval excluding 0, except
