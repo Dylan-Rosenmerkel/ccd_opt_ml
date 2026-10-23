@@ -88,7 +88,7 @@ the first H block after coming off a row looks different. Pilot: [`clock_pilot/`
 |---|---|---|---|---|---|
 | clock: H/V peak-to-peak ratio | 879 | 1093 | 0.00 | A1 | 2.7 with V rails low, 3.3 with H rails low, else 3.0–3.1 |
 | clock: V-transfer peak-to-peak (ADU) | 544 | 1240 | 0.00 | A1 | 46.1 k with V rails low, else 41.8–42.3 k |
-| clock: first H block of a row, excess (ADU) | 172 | 173 | 0.01 | A1 | 3.0 k with H rails low, else 1.9–2.2 k |
+| clock: first H block of a row, excess (ADU) | 13183 | 1458 | 0.00 | A1 | −8.0 k with H rails low, −3.0 k H3 low, −0.6 k VDD, +0.6 k V rails low |
 | clock: V-block level slope (ADU/transfer) | 45 | 65 | 0.03 | A1 | −173 with V rails low, else −113 to −123 |
 | clock: leading V-block level slope (ADU/transfer) | 1.5 | 8.4 | 0.30 | B | not repeatable |
 
@@ -96,6 +96,14 @@ None is in a redundancy cluster (closest existing |ρ| 0.71–0.84). The leading
 does climb by 300–1,200 ADU per transfer, but the trace starts at a random point in it (14–19 of 20 transfers
 recorded) and what came before is not controlled, so it is stored as tier 2 only. Dropped: the H − V level difference
 (flips sign with NCOLPRE) and the dip at the second H transfer (|ρ| 0.98 with `fit: baseline droop amplitude`).
+
+The first-H excess was redefined on 2026-10-23 so that it works at the 1×1 binning of the matched traces: the first 5
+transfers of the row-start H block (the prescan burst) against the settled second half of the same block, instead of
+against the other pixels' blocks (which needs ≥ 5 H transfers per pixel; the old version had settings F 172). `daq_scripts/manual_packet.sh`; docs/packet_design.md §6): the V peak-to-peak from the single V transfer before row 2,
+the H/V ratio from the single H transfer per pixel, and the first-H excess from the 100-transfer prescan burst at each
+row start (first 5 transfers against the settled second half of the same burst). Only the V-block level slope needs
+several V transfers per row (NPBIN ≥ 4), so it is NaN at 1×1. Checked on simulated 1×1, 5×5 and 20×20 traces
+(`tests/test_trace_features_new.py`, MatchedTraceGeometry). No 5×5 traces are planned.
 
 ## The dip before the per-cycle pulse (`edge: pre-pulse dip …`, added 2026-10-21 evening)
 

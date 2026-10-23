@@ -20,7 +20,7 @@ It builds on [`trace_feature_candidates.md`](trace_feature_candidates.md) (the c
 - **Every trace now gives 141 numbers and 18 curves**, where it gave 85 and 14. The new ones are in
   `src/trace_features_extra.py`; 18 tests cover them in `tests/test_trace_features_new.py`; a trace takes about 1.2 s.
   Processing (`process_packet.py`) writes them into `model_inputs/` without any further change; this was checked on
-  simulated packets. Caveat: the five `clock:` features are NaN with the planned trace geometry (NPBIN = NSBIN = 1, §2.7).
+  simulated packets. At the planned 1×1 trace binning all `clock:` features exist except the V-block level slope (§2.7).
 - **Every feature has two labels:**
   - an *implementation tier* (0 / 1 / 2): where it came from;
   - an *evidence tier* (A / B / C): what the data say about it.
@@ -149,17 +149,18 @@ occur equally up and down: the signature of random telegraph switching in the ou
 |---|---|---|---|---|
 | clock: H/V peak-to-peak ratio | 1 | A1 | 879 | H- relative to V-clock feedthrough |
 | clock: V-transfer peak-to-peak (ADU) | 1 | A1 | 544 | V-clock feedthrough; larger with the V rails low |
-| clock: first H block of a row, excess (ADU) | 1 | A1 | 172 | memory of the V clocking in the first H transfers; largest with the H rails low |
+| clock: first H block of a row, excess (ADU) | 1 | A1 | 13183 | settling at the start of the H burst after coming off a row (first 5 transfers vs the burst's settled half); −8.0 k with the H rails low |
 | clock: V-block level slope (ADU/transfer) | 1 | A1 | 45 | output-level relaxation in the V block before row 2; steeper with the V rails low |
 | clock: leading V-block level slope (ADU/transfer) | 2 | B | 1.5 | the climb in the block the trace starts in: real, but not repeatable (random start point) |
 
 Details and figure: `lvl1/feature_study/README.md` and `lvl1/feature_study/clock_pilot/`.
 
-**Caveat: trace geometry.** These need ≥ 3 vertical transfers per row and ≥ 5 horizontal transfers per pixel; the
-2026-10-12 traces had 20 of each. The planned packets' traces (`daq_scripts/manual_packet.sh`: NPBIN = 1, NSBIN = 1,
-NCOLPRE = 100) have one of each, so all five `clock:` features are NaN there (seen on simulated packets of that
-geometry; processing drops such columns). They return if the trace binning goes back to 20 × 20, or if the features are
-adapted to single transfers.
+**Trace geometry (2026-10-23).** The features work at the binning of the matched traces (1×1, prescan 100,
+`daq_scripts/manual_packet.sh`; docs/packet_design.md §6): the V peak-to-peak from the single V transfer before row 2,
+the H/V ratio from the single H transfer per pixel, and the first-H excess from the 100-transfer prescan burst at each
+row start (first 5 transfers against the settled second half of the same burst). Only the V-block level slope needs
+several V transfers per row (NPBIN ≥ 4), so it is NaN at 1×1. Checked on simulated 1×1, 5×5 and 20×20 traces
+(`tests/test_trace_features_new.py`, MatchedTraceGeometry). No 5×5 traces are planned.
 
 ### 2.8 The dip before the per-cycle pulse
 

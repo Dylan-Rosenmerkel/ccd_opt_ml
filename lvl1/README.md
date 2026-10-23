@@ -141,7 +141,7 @@ The result is in [`rehearsal_report/REHEARSAL.md`](rehearsal_report/REHEARSAL.md
 
   `--legacy-run DIR --board 101` does the same for older runs without records, grouping files by identical settings (used for the 2026-10-12 packet tests).
 * **`src/process_packet.py`** writes, in the output directory:
-  * `dataset.csv`: one row per packet × board × channel: settings, the 85 trace features (mean over the trace sets and their scatter), the reference features, the labels with WADERs' errors, the image geometry, and the per-row λ split into dark current and CIC (`src/image_rows.py`);
+  * `dataset.csv`: one row per packet × board × channel: settings, the 141 trace features (mean over the trace sets and their scatter), the reference features, the labels with WADERs' errors, the image geometry, and the per-row λ split into dark current and CIC (`src/image_rows.py`);
   * `model_inputs/*.npz`: one file per model family (table below). Load one with `ml.real_inputs.load(path)`.
 
 | File | Models | Contains (besides ids, settings, labels and label errors) |
@@ -165,7 +165,7 @@ training folds, so test packets never influence training.
 | `physics` | **A, the default**: trace physics plus a learned gain and a learned correction (GPs on settings + packet state + own features); λ by a SAAS GP (since 2026-10-19) | physics |
 | `physics_joint` | A with λ from the joint dark-current / CIC fit of the per-row λ, with the SAAS sparsity prior on its length scales (since 2026-10-20) | physics |
 | `physics_hier` | **A+B, a reference WITH labels**: A on hierarchical GPs told the module and amplifier; marked "(labels)" in the report. Comparing it with `physics` measures what amplifier labels add on the real CCD | physics |
-| `sets` | E: A with the 10 trace sets combined by a learned set network | sets |
+| `sets` | E: A with the 10 trace sets combined by a learned set network (λ by the SAAS GP, as physics) | sets |
 | `ridge`, `trees`, `gp`, `nn` | the first-round models on settings + own trace + own reference features | features |
 | `cnn` | 1D CNN on the trace and reference curves + settings | curves |
 | `pretrained` | D: the CNN with its encoder pre-trained on every unlabeled trace, then fine-tuned | curves + pretrain |
@@ -187,7 +187,7 @@ switches inputs off unless the data need them. On synthetic data it helps λ onl
 
 (3 datasets each at 13 and 41 packets, 1 at 100.) σe and gain are unchanged. Neither SAAS nor the dimension-scaled prior
 (`gp_dim`) improved the features GP (`gp`). Extra models for these comparisons, run only when named in `--models`:
-`gp_dim`, `gp_saas`, `physics_dim`, `physics_saas`, `physics_gp_lambda`, `physics_joint_weak`, `physics_joint_select`,
+`gp_dim`, `gp_saas`, `physics_dim`, `physics_saas`, `physics_gp_lambda`, `physics_joint_weak`, `physics_joint_select`, `sets_gp_lambda` (sets with the old weak-prior λ GP),
 `physics_saasmap_lambda`, `physics_saasfull_lambda`. Run times: `physics` 75 s and `physics_joint` 11 s for 5 folds
 at 100 packets on this Mac.
 
@@ -330,7 +330,7 @@ folds, 1000 packet-bootstrap resamples; calibrated 68 % coverage 0.67–0.69 for
 | **physics (A, default; λ by SAAS)** | **5.3 %** | **3.9 %** | **0.9 %** |
 | physics_joint | 5.3 % | 4.4 % | 0.9 % |
 | physics_hier (A+B, **with labels**) | 5.3 % | 4.9 % | 0.8 % |
-| sets (E) | 5.0 % | 4.9 % | 0.9 % |
+| sets (E; λ by SAAS since 2026-10-23, before 4.9 %) | 4.9 % | 3.9 % | 0.9 % |
 | ridge / trees / gp / nn | 10.5–11.5 % | 4.4–21.4 % | 0.8–3.6 % |
 | gp_dim | 14.4 % | 5.0 % | 0.9 % |
 | cnn | 6.8 % | 9.3 % | 1.2 % |

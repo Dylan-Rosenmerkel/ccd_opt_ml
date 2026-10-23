@@ -68,7 +68,7 @@ datasets: 1 of 100 added noise columns reached its top tier L1, on the smallest 
         modes on ch0, ch1, ch3). On ch2 only about 8 modes carry 90\,\%: its excess noise sits in a few large modes.
   \item \textbf{The clocking regions carry setting information.} The V-transfer peak-to-peak (settings $F = 544$), the
         H/V peak-to-peak ratio ($F = 879$), the level slope in the V block before row 2 ($F = 45$, steeper with the V
-        rails low) and the excess of the first H block after the V clocking ($F = 172$, largest with the H rails low)
+        rails low) and the settling at the start of the first H burst after the V clocking ($F \approx 1.3\times10^4$, largest with the H rails low)
         are all repeatable (repeat share $\le 0.03$) and not redundant with any existing feature. The steep climb in
         the first V block is real but not repeatable: the trace starts at a random point in that block.
   \item \textbf{The dip before the pulse is an amplifier fingerprint.} A dip 120--130\,ns before the per-cycle pulse is
@@ -286,7 +286,8 @@ the first H block after coming off a row looks different from the others (Figure
 \caption{Top left: median level per V transfer, ch0, for the leading block (solid, aligned at its end) and the block
 before row 2 (dashed). Top right: the two level slopes per setting; the leading block (grey) scatters, the second is
 repeatable. Bottom left: peak-to-peak per H transfer within each H block, ch0 reference; red are the first blocks of a
-row. Bottom right: the excess of the first H block of row 2 over the other blocks.}
+row. Bottom right: the excess of the first H block of row 2 over the other blocks (the pilot's definition; the feature now compares the first
+transfers with the same block's settled half, see the text).}
 \label{fig:clock}
 \end{figure}
 
@@ -298,7 +299,7 @@ feature & settings $F$ & amp.\ $F$ & repeat & tier & reading \\
 \midrule
 clock: H/V peak-to-peak ratio & 879 & 1093 & 0.00 & A1 & H relative to V feedthrough; 2.7 with V rails low, 3.3 with H rails low \\
 clock: V-transfer peak-to-peak & 544 & 1240 & 0.00 & A1 & V feedthrough; 46.1\,kADU with V rails low vs 41.8--42.3 \\
-clock: first H block of a row, excess & 172 & 173 & 0.01 & A1 & memory of the V clocking; 3.0\,kADU with H rails low vs 1.9--2.2 at the other NCOLPRE-185 settings (1.6 at the reference, NCOLPRE 0) \\
+clock: first H block of a row, excess & 13183 & 1458 & 0.00 & A1 & settling at the start of the H burst after coming off a row; $-8.0$\,kADU with H rails low, $-3.0$ with H3 low, $-0.6$ to $+0.6$ otherwise \\
 clock: V-block level slope & 45 & 65 & 0.03 & A1 & $-173$\,ADU/transfer with V rails low vs $-113$ to $-123$ \\
 clock: leading V-block level slope & 1.5 & 8.4 & 0.30 & B & not repeatable (see text) \\
 \bottomrule
@@ -315,12 +316,13 @@ and becomes useful if the acquisition is made to start at a fixed point, for exa
 The level \emph{difference} between the H and V regions was dropped too: it flips sign with NCOLPRE. The dip at the
 second H transfer of an ordinary block is strong but duplicates \code{fit: baseline droop amplitude} ($|\rho| = 0.98$).
 
-\paragraph{Caveat: the planned trace geometry.} These features need at least 3 vertical transfers per row and 5
-horizontal transfers per pixel; the 2026-10-12 traces had 20 of each (NPBIN = NSBIN = 20). The traces of the planned
-packets (\code{daq\_scripts/manual\_packet.sh}: NPBIN = 1, NSBIN = 1, NCOLPRE = 100) have one V transfer per row and one H
-transfer per pixel, so all five \code{clock:} features are NaN there (checked on simulated packets of that geometry);
-processing drops such columns. They come back if the trace binning returns to 20 $\times$ 20, or if they are adapted to
-single transfers.
+\paragraph{The planned trace geometry (updated 2026-10-23).} The matched traces of the packets are 1$\times$1 with a
+100-pixel prescan (\code{daq\_scripts/manual\_packet.sh}; one V transfer per row, one H transfer per pixel). The features
+were adapted to work there: the V peak-to-peak from the single V transfer before row 2, the H/V ratio from the single H
+transfer per pixel, and the first-H excess redefined as the first 5 transfers of the row-start H block (the prescan
+burst) against the settled second half of the same block (before: against the other pixels' blocks, settings $F = 172$;
+now $F = 13\,183$ on the 59 traces). Only the V-block level slope needs several V transfers per row, so it is NaN at
+1$\times$1. Checked on simulated 1$\times$1, 5$\times$5 and 20$\times$20 traces. No 5$\times$5 traces are planned.
 
 \subsection{The dip before the per-cycle pulse}
 \label{sec:prepulse}

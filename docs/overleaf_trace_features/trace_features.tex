@@ -656,9 +656,9 @@ From the vertical-transfer block before the second row (its first transfer, whic
 \toprule Feature & Unit & What is computed & Possible link & Tier \\ \midrule \endhead
 \bottomrule \endfoot
 \texttt{clock: V-block level slope (ADU/transfer)} & ADU/\allowbreak{}transfer & Slope of the median level per vertical transfer against the transfer number, in the V block before the second row (regions.v; its first transfer, which follows the skip region, is left out). & relaxation of the output level during the V clocking; steeper with the V rails low (pilot settings F 45) & 1/A1 \\
-\texttt{clock: V-transfer peak-to-peak (ADU)} & ADU & Median over the vertical transfers of that block of the peak-to-peak of one transfer. & V-clock feedthrough amplitude (pilot settings F 544) & 1/A1 \\
-\texttt{clock: H/V peak-to-peak ratio} &  & Median peak-to-peak of the H transfers of the pixels that do not start a row, divided by the V-transfer peak-to-peak. & H-clock relative to V-clock feedthrough (pilot settings F 879) & 1/A1 \\
-\texttt{clock: first H block of a row, excess (ADU)} & ADU & Mean over H transfers 0-4 of the peak-to-peak in the H block of a row-start pixel (not pixel 0), minus the median over the other pixels of the same; mean over those row starts. & memory of the V clocking in the first H transfers after coming off a row (pilot settings F 172) & 1/A1 \\
+\texttt{clock: V-transfer peak-to-peak (ADU)} & ADU & Median over the vertical transfers of that block (regions.v) of the peak-to-peak of one transfer; at 1x1 binning the block is the single V transfer before row 2. & V-clock feedthrough amplitude (pilot settings F 544) & 1/A1 \\
+\texttt{clock: H/V peak-to-peak ratio} &  & Median peak-to-peak of every H transfer of the pixels that do not start a row (1 per pixel at 1x1 binning), divided by the V-transfer peak-to-peak. & H-clock relative to V-clock feedthrough (pilot settings F 879) & 1/A1 \\
+\texttt{clock: first H block of a row, excess (ADU)} & ADU & In the H block of a row-start pixel (not pixel 0; at least 10 transfers: the prescan burst, NSBIN (NCOLPRE + 1)), the mean peak-to-peak of transfers 0-4 minus the median peak-to-peak of the second half of the same block; mean over those row starts. Works at any binning that has a prescan burst (since 2026-10-23; before: against the other pixels' blocks, which needs NSBIN \textgreater{}= 5). & memory of the V clocking in the first H transfers after coming off a row (pilot settings F 172) & 1/A1 \\
 \texttt{clock: leading V-block level slope (ADU/transfer)} & ADU/\allowbreak{}transfer & Slope of the median level per vertical transfer over the last 12 transfers of the V block that the trace starts in (before pixel 0), aligned at the block end. & recovery from what preceded the trace; NOT repeatable while the trace starts at a random point in this block (pilot: 14-19 of 20 transfers recorded, repeat share 0.3) & 2/B \\
 \end{longtable}
 
@@ -829,13 +829,13 @@ and to the image labels.
 \texttt{skip: noise of 10-skip average} & 6 & 9.5 \\
 \texttt{start: slope-explained fraction} & 4 & 8.6 \\
 \texttt{slow: H-transfer first-to-last change (ADU)} & 5 & 8.5 \\
+\texttt{clock: first H block of a row, excess (ADU)} & 5 & 7.6 \\
 \texttt{skip: noise of 50-skip average} & 4 & 7.1 \\
 \texttt{fit: baseline droop amplitude} & 5 & 7.1 \\
 \texttt{edge: cycle variation after reset (ADU)} & 4 & 6.9 \\
 \texttt{discrete: strongest line amplitude (ADU)} & 3 & 6.4 \\
 \texttt{noise: Allan deviation n=50 (ADU)} & 4 & 6.3 \\
 \texttt{noise: within-cycle power 0.1-0.3 MHz} & 5 & 5.8 \\
-\texttt{clock: first H block of a row, excess (ADU)} & 4 & 5.7 \\
 \texttt{slow: PC1 variance fraction} & 4 & 5.5 \\
 \texttt{skip: end-of-cycle tail level} & 4 & 5.3 \\
 \texttt{noise: Hadamard deviation n=50 (ADU)} & 4 & 5.2 \\
@@ -932,7 +932,7 @@ and to the image labels.
 
 \section{Nearly redundant features}
 
-Pairs of features whose values are correlated with $|r|>0.98$ across the same 19 traces (188 pairs;
+Pairs of features whose values are correlated with $|r|>0.98$ across the same 19 traces (189 pairs;
 the 30 strongest are listed). With 19 traces from 4 amplifiers, such correlations mostly mean that both features follow the same
 amplifier difference; they suggest redundancy, but only a parameter scan shows whether they also move together with $\theta$.
 Some pairs are redundant by construction (e.g.\ the signal-window level and the CDS mean; the dip height and the dip per volt at a

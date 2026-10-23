@@ -123,13 +123,17 @@ EXTRA = [
      "Slope of the median level per vertical transfer against the transfer number, in the V block before the second row "
      "(regions.v; its first transfer, which follows the skip region, is left out).",
      "relaxation of the output level during the V clocking; steeper with the V rails low (pilot settings F 45)", "scalar", 1),
-    ("clock: V-transfer peak-to-peak (ADU)", "clock", "ADU", "Median over the vertical transfers of that block of the peak-to-peak of one transfer.",
+    ("clock: V-transfer peak-to-peak (ADU)", "clock", "ADU", "Median over the vertical transfers of that block (regions.v) of the "
+     "peak-to-peak of one transfer; at 1x1 binning the block is the single V transfer before row 2.",
      "V-clock feedthrough amplitude (pilot settings F 544)", "scalar", 1),
-    ("clock: H/V peak-to-peak ratio", "clock", "", "Median peak-to-peak of the H transfers of the pixels that do not start a row, divided by the V-transfer peak-to-peak.",
+    ("clock: H/V peak-to-peak ratio", "clock", "", "Median peak-to-peak of every H transfer of the pixels that do not start a row "
+     "(1 per pixel at 1x1 binning), divided by the V-transfer peak-to-peak.",
      "H-clock relative to V-clock feedthrough (pilot settings F 879)", "scalar", 1),
     ("clock: first H block of a row, excess (ADU)", "clock", "ADU",
-     "Mean over H transfers 0-4 of the peak-to-peak in the H block of a row-start pixel (not pixel 0), minus the median "
-     "over the other pixels of the same; mean over those row starts.",
+     "In the H block of a row-start pixel (not pixel 0; at least 10 transfers: the prescan burst, NSBIN (NCOLPRE + 1)), the "
+     "mean peak-to-peak of transfers 0-4 minus the median peak-to-peak of the second half of the same block; mean over "
+     "those row starts. Works at any binning that has a prescan burst (since 2026-10-23; before: against the other pixels' "
+     "blocks, which needs NSBIN >= 5).",
      "memory of the V clocking in the first H transfers after coming off a row (pilot settings F 172)", "scalar", 1),
     # ------------------------------------------------------------------ the dip before the per-cycle pulse (user question, 2026-10-21)
     ("edge: pre-pulse dip depth (ADU)", "edge", "ADU",
@@ -697,19 +701,23 @@ def extra_features(ctx: dict) -> tuple[dict, dict, dict]:
         # regions.v falls back to the leading block (the trace starts inside it at a random point) when no later
         # pixel starts a row; that block is not repeatable, so the V features need a row start after pixel 0
         later_row = any(p > 0 for p in r.row_starts)
-        if later_row and r.v is not None and len(r.v) >= 3:
-            S["clock: V-block level slope (ADU/transfer)"] = level_slope(r.v)
+        # every clock feature but the level slope works at 1x1 binning (one V transfer per row, one H transfer per pixel,
+        # plus the prescan burst at each row start), the binning of the matched traces (docs/packet_design.md section 6)
+        if later_row and r.v is not None and r.v.ndim == 2 and len(r.v) >= 1:
+            if len(r.v) >= 3:                                  # needs several V transfers per row (NPBIN >= 4)
+                S["clock: V-block level slope (ADU/transfer)"] = level_slope(r.v)
             pp_v = float(np.median(np.ptp(r.v, axis=1)))
             S["clock: V-transfer peak-to-peak (ADU)"] = pp_v
-        inner = [p for p in range(len(r.h)) if p not in r.row_starts and r.h[p].ndim == 2 and len(r.h[p]) >= 5]
+        inner = [p for p in range(len(r.h)) if p not in r.row_starts and r.h[p].ndim == 2 and len(r.h[p]) >= 1]
         if inner and np.isfinite(pp_v) and pp_v > 0:
             S["clock: H/V peak-to-peak ratio"] = float(np.median(np.concatenate([np.ptp(r.h[p], axis=1) for p in inner])) / pp_v)
-        if inner:
-            base = np.median([np.ptp(r.h[p][:5], axis=1) for p in inner], axis=0)
-            ex = [float(np.mean(np.ptp(r.h[p][:5], axis=1) - base)) for p in r.row_starts
-                  if p > 0 and r.h[p].ndim == 2 and len(r.h[p]) >= 5]
-            if ex:
-                S["clock: first H block of a row, excess (ADU)"] = float(np.mean(ex))
+        ex = []
+        for p in r.row_starts:
+            if p > 0 and r.h[p].ndim == 2 and len(r.h[p]) >= 10:
+                pp = np.ptp(r.h[p], axis=1)
+                ex.append(float(np.mean(pp[:5]) - np.median(pp[len(pp) // 2:])))
+        if ex:
+            S["clock: first H block of a row, excess (ADU)"] = float(np.mean(ex))
         trace = ctx.get("trace")
         if trace is not None and r.v_period and np.isfinite(r.v_period) and r.ped_starts:
             from trace_regions import _rising

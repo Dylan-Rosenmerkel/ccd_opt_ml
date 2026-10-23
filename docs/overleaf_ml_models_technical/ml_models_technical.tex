@@ -330,8 +330,8 @@ $\log\lambda$ and $\mathrm{sd}/\lambda$. $\se$ and $g$ are exactly those of A wi
 \textbf{\code{physics\_joint\_select}}: a SAAS GP on $\log\lambda$ (NUTS as \code{gp\_saas}) first keeps the inputs whose
 relevance (median inverse length scale) is at least 0.1 of the largest; the joint model sees only those.
 
-\paragraph{\code{sets} (\code{setmodels.SetStructured}, model E).} A with kind ``none'' and \emph{the weak-prior GP for
-$\lambda$} (not the SAAS GP of \code{physics}), in which the trace physics term is replaced by a set network:
+\paragraph{\code{sets} (\code{setmodels.SetStructured}, model E).} A with kind ``none'' and the same SAAS GP for $\lambda$
+as \code{physics} (\code{SAAS\_LAMBDA\_KW}; since 2026-10-23, \code{sets\_gp\_lambda} keeps the weak-prior GP), in which the trace physics term is replaced by a set network:
 \[ \tfrac12\log(a^2/N + b^2) \ \to\ \mathrm{SetPooling}\big(\{\log\sigma_{A,k}(n)\}_{k=1}^{S},\ \text{base}\big), \]
 with base = the physics term of the median curve over the sets. \code{SetPooling}: per set $\psi$ = Linear(13, 64) --
 SiLU -- Linear(64, 64) -- SiLU; pooled by the mean and by attention (softmax over the sets of a linear score); $\rho$ =
@@ -601,7 +601,7 @@ model & $\se$ & $\lambda$ & gain & note \\
 \textbf{\code{physics}} & \textbf{5.3} [4.6--5.9] & \textbf{3.9} [3.7--4.2] & \textbf{0.9} & default \\
 \code{physics\_joint} & 5.3 & 4.4 [3.8--4.9] & 0.9 & \\
 \code{physics\_hier} & 5.3 & 4.9 & 0.8 & uses amplifier labels \\
-\code{sets} & 5.0 [4.2--5.6] & 4.9 & 0.9 & $\lambda$ by the weak-prior GP \\
+\code{sets} & 4.9 & 3.9 & 0.9 & $\lambda$ by SAAS (before: 4.9) \\
 \code{ridge} & 11.5 & 11.8 & 0.8 & \\
 \code{trees} & 10.6 & 21.4 & 3.6 & \\
 \code{gp} & 11.0 & 4.4 & 0.8 & \\
@@ -730,11 +730,9 @@ model and target; held-out rows from the single fit), and \code{feature\_ladder.
 \paragraph{Inconsistencies and possible bugs noticed while writing this reference.} Fixed on 2026-10-22: the packet state is
 now amplifier-centred; the \code{ElasticNetCV} of \code{feature\_importance.py} uses packet-grouped folds; the Hadamard
 deviation and the structure function are taken in log; the \code{process\_trace} docstring and the results table of
-\code{lvl1/README.md} are updated. Still open (behaviour changes, to decide):
+\code{lvl1/README.md} are updated; on 2026-10-23 \code{sets} got the SAAS GP for $\lambda$ ($\lambda$ 15.5 $\to$ 10.9,
+10.9 $\to$ 7.4, 4.9 $\to$ 3.9\,\% at 13 / 41 / 100 packets, now equal to \code{physics}). Still open (behaviour changes, to decide):
 \begin{enumerate}
-  \item \textbf{\code{sets} fits $\lambda$ with the old weak-prior GP}, not the SAAS GP that \code{physics} uses since
-        2026-10-20 (\code{SetStructured} passes no \code{lambda\_kind}); \code{sets} and \code{physics} therefore differ in
-        $\lambda$ for a reason unrelated to the set network.
   \item \textbf{\code{--quick} does not shorten \code{sets}} (\code{SetPooling}: 5 networks, 400 epochs) nor the SAAS chains
         of \code{physics} (fixed 96/48/8, by design).
   \item \textbf{Missing Allan curves:} \code{\_physics\_X} replaces NaN in the Allan array by the median of the

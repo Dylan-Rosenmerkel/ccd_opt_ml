@@ -781,17 +781,19 @@ the leading block; the \code{clock:} V features are then NaN (since 2026-10-22),
 
 Write $\ell_m = \med_\tau V_{m,\tau}$ (the level of transfer $m$) and $a(T_m) = \max_\tau T_{m,\tau} - \min_\tau T_{m,\tau}$ (peak-to-peak
 of one transfer, no baseline removed). Let $\mathcal I = \{p \notin \mathcal S : M_p \ge 5\}$ (pixels that do not start a row, with at
-least 5 horizontal transfers; charged pixels are not excluded).
+least 1 horizontal transfer; charged pixels are not excluded).
 \feat{clock: V-block level slope (ADU/transfer)}{ADU/transfer}
-Least-squares slope of $\ell_m$ against $m$ (needs $\ge 3$ transfers).
+Least-squares slope of $\ell_m$ against $m$ (needs $\ge 3$ transfers in $V$, i.e.\ NPBIN $\ge 4$; NaN at 1$\times$1).
 \feat{clock: V-transfer peak-to-peak (ADU)}{ADU}
-$a_V = \med_m a(V_m)$.
+$a_V = \med_m a(V_m)$ (needs $\ge 1$ transfer: at 1$\times$1 binning the single V transfer before row 2).
 \feat{clock: H/V peak-to-peak ratio}{---}
 $\med\{a(H^{(p)}_m) : p\in\mathcal I,\ \text{all } m\}/a_V$.
 \feat{clock: first H block of a row, excess (ADU)}{ADU}
-$\bar a_m = \med_{p\in\mathcal I} a(H^{(p)}_m)$ for $m = 0\dots4$; for every row-start pixel $p > 0$ with $\ge 5$ transfers,
-$\tfrac15\sum_{m<5}\bigl(a(H^{(p)}_m) - \bar a_m\bigr)$; the mean over those pixels. With a prescan (\code{NCOLPRE} $> 0$) the first
-transfers of a row-start pixel are the first prescan transfers.
+For every row-start pixel $p > 0$ whose H block has $M_p \ge 10$ transfers (the prescan burst,
+$\code{NSBIN}\,(\code{NCOLPRE}+1)$ transfers), $\tfrac15\sum_{m<5} a(H^{(p)}_m) - \med_{m \ge \lfloor M_p/2\rfloor} a(H^{(p)}_m)$: the
+first five transfers after coming off the row against the settled second half of the same block; the mean over those pixels.
+(Since 2026-10-23, so that it works at 1$\times$1 binning; before, the first five transfers were compared with the other pixels'
+blocks, which needs $\ge 5$ H transfers per pixel.)
 \feat{clock: leading V-block level slope (ADU/transfer)}{ADU/transfer}
 The block the trace starts in: the rising edges of flag bit 7 (bit 5 if bit 7 has fewer than two), lasting $\ge 10$ samples, before the
 first rising edge of bit 6 in the trace (else before the first pedestal window). Transfers $v_{t:t+\mathrm{round}(P_V)}$ that end before that

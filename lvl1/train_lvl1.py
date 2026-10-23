@@ -55,7 +55,7 @@ Models (family file in brackets; see lvl1/README.md):
     physics         [physics]   A: trace physics + learned gain and correction (the default model); lambda by a SAAS GP
     physics_joint   [physics]   A with the joint dark-current / CIC fit of lambda (needs per-row lambda); SAAS prior
     physics_hier    [physics]   A+B, REFERENCE WITH LABELS: A on hierarchical GPs told the module and amplifier
-    sets            [sets]      E: A with the trace sets combined by a learned set network
+    sets            [sets]      E: A with the trace sets combined by a learned set network (lambda by SAAS, as physics)
     ridge           [features]  Bayesian ridge on settings + own trace + own reference features
     trees           [features]  gradient-boosted trees, same inputs
     gp              [features]  Gaussian process, same inputs
@@ -74,6 +74,7 @@ GP-prior variants (not run by default; the literature review's item 3, src/ml/bo
     physics_joint_select [physics]  physics_joint on the inputs a SAAS GP (NUTS) on log lambda finds relevant
     physics_saasmap_lambda  [physics]  physics with lambda by our GP with the SAAS prior fitted by MAP (fast, weaker)
     physics_saasfull_lambda [physics]  physics with lambda by the SAAS GP with full-length NUTS chains (slow)
+    sets_gp_lambda  [sets]      sets as before 2026-10-23 (lambda by the weak-prior GP instead of the SAAS GP)
 """
 
 from __future__ import annotations
@@ -99,7 +100,7 @@ from ml.evaluate import bootstrap_weights, crps_gaussian, grouped_folds, percent
 TARGETS = ("sigma_e", "lambda", "gain")
 ALL_MODELS = ("mean", "settings", "trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
 #: GP-prior variants: run only when named in --models
-EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_gp_lambda", "physics_joint_weak", "physics_joint_select", "physics_saasmap_lambda", "physics_saasfull_lambda")
+EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_gp_lambda", "physics_joint_weak", "physics_joint_select", "physics_saasmap_lambda", "physics_saasfull_lambda", "sets_gp_lambda")
 #: baselines that see no trace: every report compares the models with them
 BASELINES = ("mean", "settings")
 #: models told which module and amplifier they see (references only; see the module docstring)
@@ -107,7 +108,7 @@ USES_LABELS = ("physics_hier",)
 FAMILY = {"mean": "features", "settings": "features", "trace_physics": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
           "ridge": "features", "trees": "features", "gp": "features", "nn": "features",
           "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves",
-          "gp_dim": "features", "gp_saas": "features", "physics_dim": "physics", "physics_saas": "physics", "physics_gp_lambda": "physics",
+          "gp_dim": "features", "gp_saas": "features", "physics_dim": "physics", "physics_saas": "physics", "physics_gp_lambda": "physics", "sets_gp_lambda": "sets",
           "physics_joint_weak": "physics", "physics_joint_select": "physics",
           "physics_saasmap_lambda": "physics", "physics_saasfull_lambda": "physics"}
 MAX_NAN_FRACTION = 0.2
@@ -488,7 +489,9 @@ class Runner:
         Xtr, Xte = self._physics_X(d, train, test)
         return st.PhysicsStructured(kind="hier").fit(Xtr, self.Y[train]).predict(Xte)
 
-    def sets(self, train, test):
+    def sets(self, train, test, saas_lambda: bool = True):
+        """E: the physics model with the trace sets combined by a learned set network; lambda by the same SAAS GP as
+        ``physics`` (since 2026-10-23; ``sets_gp_lambda`` is the previous version with the weak-prior GP)."""
         from ml import setmodels
         d, ds = self.f("physics"), self.f("sets")
         Xtr, Xte = self._physics_X(d, train, test)
@@ -496,8 +499,13 @@ class Runner:
         if not np.isfinite(S).all():
             raise SkipModel("some rows have no usable trace set")
         Xtr["sets"], Xte["sets"] = S[train], S[test]
-        model = setmodels.SetStructured(combiner="learned", kind="none", allan_ns=ds["allan_ns"])
+        lam = dict(lambda_kind="saas", lambda_kw=SAAS_LAMBDA_KW) if saas_lambda else {}
+        model = setmodels.SetStructured(combiner="learned", kind="none", allan_ns=ds["allan_ns"], **lam)
         return model.fit(Xtr, self.Y[train]).predict(Xte)
+
+    def sets_gp_lambda(self, train, test):
+        """sets before 2026-10-23: lambda by the weak-prior GP."""
+        return self.sets(train, test, saas_lambda=False)
 
     # -- the baselines (no trace) ----------------------------------------------------
     def mean(self, train, test):

@@ -315,3 +315,21 @@ Make sure everything done so far is accurate and validated."
 3. All LaTeX docs recompiled with 0 warnings and re-zipped: trace_features 38 p, trace_features_technical 23 p,
    ml_models 45 p, ml_models_technical 14 p, feature_tiers_2026-10-21 16 p.
 Open decisions for the user: unchanged (section 11).
+
+## 13. 2026-10-23: sets lambda by SAAS; clock features at 1x1 (user decisions)
+
+- User: "sets fits lambda with the old prior, not SAAS => fix this". Done: `Runner.sets` passes lambda_kind="saas",
+  SAAS_LAMBDA_KW to SetStructured; the old version is the extra model `sets_gp_lambda`. Synthetic (full training):
+  sets lambda 15.5 -> 10.9 (13 packets), 10.9 -> 7.4 (41, mean of 3), 4.9 -> 3.9 % (100), now equal to physics;
+  sigma_e and gain unchanged; coverage 0.63-0.71. lvl1/README and the technical reference updated.
+- User: adapt the clock features to 1x1 (matched traces, NCOLPRE 100), do NOT add 5x5 traces ("if we eventually do a
+  scan on binning we may mess with this, though I need to think about this one more"). Done in trace_features_extra.py:
+  V peak-to-peak from >= 1 V transfer; H/V ratio from >= 1 H transfer per pixel; first-H excess REDEFINED as the first 5
+  transfers of the row-start block (prescan burst, >= 10 transfers) minus the median of the same block's second half
+  (was: minus the other pixels' blocks, needed NSBIN >= 5). V-block level slope still needs >= 3 transfers (NaN at 1x1).
+  Simulated 1x1 (prescan 100) / 5x5 / 20x20: all three features finite; new test MatchedTraceGeometry (34 tests pass).
+  59 real traces: first-H excess settings F 172 -> 13183, amp F 1458, repeat 0.00, still A1; no tier changes.
+  All docs updated (trace_features_and_tiers.md 2.7, feature_study README, LaTeX: trace_features 39 p, technical 23 p,
+  ml_models 45 p, ml_models_technical 14 p, feature_tiers 16 p; all 0 warnings, re-zipped).
+- Still open for the user: binning scan (would change the clock features' meaning); network early stopping on rows;
+  Allan NaN fill; --quick for sets; per-volt features use side-A swings; lambda inputs (temperature, time since clear).

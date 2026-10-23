@@ -147,11 +147,13 @@ class RealTrace(unittest.TestCase):
         self.assertTrue(6 < s["noise: null-CDS noise (ADU)"] < 9)
 
     def test_clock_regions(self):
-        s = self.r.scalars                              # pilot (lvl1/feature_study/clock_pilot): -160, 40951, 3.08, 2381
+        s = self.r.scalars                              # pilot (lvl1/feature_study/clock_pilot): -160, 40951, 3.08
         self.assertTrue(-250 < s["clock: V-block level slope (ADU/transfer)"] < -80)
         self.assertTrue(38000 < s["clock: V-transfer peak-to-peak (ADU)"] < 48000)
         self.assertTrue(2.5 < s["clock: H/V peak-to-peak ratio"] < 3.5)
-        self.assertTrue(1000 < s["clock: first H block of a row, excess (ADU)"] < 4000)
+        # since 2026-10-23 against the same block's settled second half (the reference trace's row-start block has 20
+        # transfers: first five 126.6 kADU vs 126.8 kADU settled)
+        self.assertTrue(-600 < s["clock: first H block of a row, excess (ADU)"] < 200)
         self.assertGreater(s["clock: leading V-block level slope (ADU/transfer)"], 0)   # the first V block climbs
 
     def test_prepulse_dip(self):
@@ -162,6 +164,23 @@ class RealTrace(unittest.TestCase):
     def test_curves(self):
         self.assertEqual(len(self.r.curves["start: mean transient"]), 30)
         self.assertEqual(len(self.r.curves["noise: Hadamard deviation"]), len(tf.ALLAN_N))
+
+
+class MatchedTraceGeometry(unittest.TestCase):
+    """The clock features at the binning of the matched traces (1x1, prescan 100; docs/packet_design.md section 6)."""
+    def test_clock_features_at_1x1(self):
+        import json, tempfile
+        from simulate_trace import simulate_trace
+        from decode_trace import decode_trace
+        from trace_regions import split_regions
+        with tempfile.TemporaryDirectory() as tmp:
+            f = simulate_trace(Path(tmp) / "m", charge_per_pixel=0.0, NSBIN=1, NPBIN=1, NCOLPRE=100, NROW=2, NCOL=5, NDCM=100)
+            t = decode_trace(f)
+            m = json.loads(Path(str(f).rsplit(".", 1)[0] + ".meta").read_text())
+            s = tf.trace_features(t, meta=m, regions=split_regions(t, m)).scalars
+        for name in ("clock: V-transfer peak-to-peak (ADU)", "clock: H/V peak-to-peak ratio", "clock: first H block of a row, excess (ADU)"):
+            self.assertTrue(math.isfinite(s[name]), name)
+        self.assertTrue(math.isnan(s["clock: V-block level slope (ADU/transfer)"]))      # one V transfer per row
 
 
 if __name__ == "__main__":
