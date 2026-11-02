@@ -78,6 +78,8 @@ _BIAS_CIRCUIT = {
     "VR1": (-1.175, 2.0, 50.0e3, 4.00e3),
     "VR2": (-1.175, 2.0, 50.0e3, 4.00e3),
 }
+#: Names of the 7 bias outputs.
+BIAS_PINS = tuple(_BIAS_CIRCUIT)
 _POT_RAB = 20e3          # digital potentiometer end-to-end resistance
 _POT_CODES = 1024        # 10-bit potentiometer
 BIAS_GROUPS = {"VDD": ("VDD1", "VDD2"), "VDRAIN": ("VDRAIN1", "VDRAIN2"), "VR": ("VR1", "VR2")}

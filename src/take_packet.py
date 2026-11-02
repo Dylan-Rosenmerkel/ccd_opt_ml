@@ -31,18 +31,21 @@ next step.
 
 Order of the steps (default counts; the reasons are in the walkthrough notebook)
 -------------------------------------------------------------------------------
-     0. checks on this computer: limits of every board's theta and theta_ref, of the image and
-        trace parameters, and of every intermediate voltage of the ramps.  Nothing is sent if
-        any check fails.
+     0. checks on this computer: theta and theta_ref are COMPLETED (every voltage and timing
+        constant the packet file does not give takes its nominal value, see
+        :func:`complete_theta`), then the limits of every board's theta and theta_ref, of the
+        image and trace parameters, and of every intermediate voltage of the ramps.  Nothing is
+        sent if any check fails.
      1. status         (pool)           read run directory, loaded sequencer, sync/clock bits
      2. standalone     (pool)           daq.standalone(); external clock set if not yet set
-     3. apply_ref      (each board)     ramp to that board's theta_ref
+     3. apply_ref      (each board)     ramp to that board's theta_ref, then read every value back
+                                        (a mismatch stops the packet: :func:`readback_problems`)
         [erase_ref]    (theta boards)   only if the erase policy asks (default: never)
      4. flush x3       (pool)           daq.flush_ccd() three times
      5. ref_traces 1   (each traced board)  one trace per channel
      6. flush          (pool)
      7. ref_traces 2, flush, ref_traces 3
-     8. apply          (each board)     ramp theta_ref -> theta
+     8. apply          (each board)     ramp theta_ref -> theta, then read every value back
         [erase]        (theta boards)   only if the erase policy asks
      9. flush          (pool)
     10. traces 1, flush, traces 2, flush, traces 3
@@ -115,7 +118,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Mapping
 
-from ccd_limits import SEQUENCER_KEYS, Limits, LimitsError, split_theta
+from ccd_limits import BIAS_PINS, DAC_PINS, SEQUENCER_KEYS, Limits, LimitsError, expand_key, split_theta
 import daq_commands as cmd
 from daq_control import StepError, repeat_queue_suspended, wait_for_receipts
 
@@ -135,6 +138,20 @@ _SEQ_DEFAULTS = {
     "delayOGL": 48, "delayOGH": 3, "delayDGL": 27, "delayDGH": 47, "delayInt": 1000,
     "delay_Va": 6000, "delay_Vb": 6000, "delay_Ha": 1800, "delay_Hb": 1800, "delay_Hc": 1800,
 }
+
+
+#: The timing constants every packet sets (reference_v5_pumping.seq, 10 ns cycles); with the
+#: voltages of limits.toml [nominal] they are the values a parameter missing from a packet takes.
+NOMINAL_TIMING = {k: v for k, v in _SEQ_DEFAULTS.items() if k.startswith("delay")}
+
+#: Every parameter a complete theta sets: 7 biases, 40 DAC rails, 14 timing constants.  (The clock
+#: rail offsets OFS_* are not parameters: they stay at the .bcf value.)
+COMPLETE_KEYS = frozenset(BIAS_PINS) | frozenset(DAC_PINS) | frozenset(NOMINAL_TIMING)
+
+#: Readback tolerances: a bias reads back within one potentiometer step or so (45 V reads 45.095 V);
+#: a DAC rail within a few mV; timing constants exactly.
+READBACK_TOL_BIAS_V = 0.3
+READBACK_TOL_RAIL_V = 0.05
 
 
 class PacketError(RuntimeError):
@@ -245,6 +262,7 @@ class PlannedStep:
     timeout_s: float             # give up waiting for the receipts after this long
     purpose: str
     repeat: int = 0              # trace set number (1, 2, 3) for trace steps
+    expected: dict | None = None # apply steps: the values the board must read back
 
     def code(self, step_id: str, receipt_dir: str) -> str:
         return cmd.wrap_step(step_id, self.lines, receipt_dir)
@@ -383,6 +401,63 @@ def voltages_differ(theta: Mapping[str, float], theta_prev: Mapping[str, float] 
     return any(abs(now[k] - before.get(k, float("inf"))) > 1e-9 for k in now)
 
 
+def _primitive_keys(theta: Mapping[str, float]) -> set[str]:
+    """The pins and timing constants a theta sets (groups such as VDD expanded to VDD1, VDD2)."""
+    sequencer, pins = split_theta(theta)
+    return set(sequencer) | set(pins)
+
+
+def complete_theta(theta: Mapping[str, float], nominal: Mapping[str, float]) -> dict[str, float]:
+    """
+    ``theta`` plus every parameter of :data:`COMPLETE_KEYS` it does not set, at its nominal value
+    (``nominal`` = limits.toml [nominal] for the voltages, :data:`NOMINAL_TIMING` for the timing).
+
+    Why: a packet only sets what its theta holds, and acmpy keeps every value until it is set
+    again.  A parameter that one packet changes and the next packet's theta_ref does not hold
+    (e.g. delayInt or RG_1_H, missing from the example tables) would stay changed for the next
+    packet's reference traces, and its manifest would not say so.  With complete thetas every
+    packet sets all of them.  Raises ValueError if a parameter has no nominal value.
+    """
+    covered = set()
+    for key in theta:
+        covered |= {key} if key in SEQUENCER_KEYS else set(expand_key(key))
+    full = dict(theta)
+    defaults = {**nominal, **NOMINAL_TIMING}
+    missing = sorted(k for k in COMPLETE_KEYS - covered if k not in defaults)
+    if missing:
+        raise ValueError(f"theta does not set {missing} and there is no nominal value for them "
+                         "(limits.toml [nominal])")
+    full.update({k: defaults[k] for k in sorted(COMPLETE_KEYS - covered)})
+    return full
+
+
+def readback_problems(expected: Mapping[str, float], readback: Mapping[str, Any] | None) -> list[str]:
+    """
+    Compare an apply step's readback (``_r['readback']``: ``daq[key]`` for every key set) with the
+    values it set.  A DAC pin may read back as ``[side A, side B]``: both must match.  Empty = fine.
+    """
+    if readback is None:
+        return ["the receipt has no readback"]
+    problems = []
+    for name, want in expected.items():
+        if name not in readback:
+            problems.append(f"{name}: not read back")
+            continue
+        got = readback[name]
+        try:
+            if name in SEQUENCER_KEYS:
+                ok = int(got) == int(want)
+            else:
+                tol = READBACK_TOL_BIAS_V if name in BIAS_PINS else READBACK_TOL_RAIL_V
+                values = got if isinstance(got, (list, tuple)) else [got]
+                ok = all(abs(float(v) - float(want)) <= tol for v in values)
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            problems.append(f"{name} reads {got}, set {want}")
+    return problems
+
+
 def theta_difference(theta: Mapping[str, float], theta_ref: Mapping[str, float]) -> dict[str, float]:
     """Parameters that differ from the reference: ``{name: theta - theta_ref}``."""
     return {k: float(v) - float(theta_ref[k]) for k, v in theta.items()
@@ -422,6 +497,14 @@ def plan_packet(request: PacketRequest, setup: DaqSetup, limits: Limits,
     geometry) or ``ValueError`` (inconsistent request).
     """
     # ---- checks ---------------------------------------------------------------------------
+    # every packet sets EVERY voltage and timing constant (complete_theta), the reference too
+    request.theta = {b: complete_theta(t, limits.nominal) for b, t in request.theta.items()}
+    if request.theta_ref is not None:
+        request.theta_ref = {b: complete_theta(t, limits.nominal) for b, t in request.theta_ref.items()}
+        for board in request.theta:
+            if board in request.theta_ref and \
+                    _primitive_keys(request.theta[board]) != _primitive_keys(request.theta_ref[board]):
+                raise ValueError(f"theta and theta_ref of board {board} set different parameters")
     if set(request.theta) != set(setup.theta_boards):
         raise ValueError(f"theta is given for boards {sorted(request.theta)}, "
                          f"theta_boards is {setup.theta_boards}")
@@ -478,7 +561,8 @@ def plan_packet(request: PacketRequest, setup: DaqSetup, limits: Limits,
             seconds = len(ramp) * request.ramp_settle_s + 1
             add("apply", name, setup.client_name(board), [board],
                 cmd.apply_lines(sequencer, ramp, request.ramp_settle_s), seconds, seconds,
-                f"{purpose} (acm{board}, {len(ramp)} ramp step(s))")
+                f"{purpose} (acm{board}, {len(ramp)} ramp step(s)), then read back")
+            steps[-1].expected = {**sequencer, **ramp[-1]}
 
     def erase(name, thetas, starts):
         """Erase on the theta boards if the policy asks for it (default policy: never)."""
@@ -707,6 +791,13 @@ def take_packet(controller, request: PacketRequest, setup: DaqSetup, limits: Lim
                         raise PacketError(f"acm{board} has sequencer {loaded} loaded, "
                                           f"this packet expects {request.sequencer}")
                 manifest["run_directories"] = {b: r.get("directory") for b, r in receipts.items()}
+
+            elif step.kind == "apply":
+                for board, receipt in receipts.items():
+                    problems = readback_problems(step.expected or {}, receipt.get("readback"))
+                    if problems:
+                        raise PacketError(f"acm{board} {step.name}: the readback differs from what was set: "
+                                          + "; ".join(problems))
 
             elif step.kind == "standalone":
                 manifest["external_clock_set_by_packet"] = [

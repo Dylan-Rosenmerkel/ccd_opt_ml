@@ -421,3 +421,17 @@ nn/pretrained ~4 points on lambda), or back to rows. Remove `stop_metric` if unu
   ordering rules on the way back). First real packet: watch for `readback: nominal OK` twice.
 * **Not checked**: `src/take_packet.py` / `scan_packets.py` apply θ only; whether they reset the
   parameters a previous packet changed was not re-checked.
+* **take_packet.py / scan_packets.py had the same leak (fixed, 2026-11-02):** they set only the keys of
+  θ / θ_ref, and every config table (packet_*.toml, scan_*.toml) held 36 of the 61 parameters (no
+  SW/OG/RG/DG rails, no CDS delays: exactly what the 43-packet plan changes). A key in θ but not in θ_ref
+  (or a scan design parameter missing from the reference) stayed changed for the next packet's reference.
+  * `plan_packet` now completes θ and θ_ref (`complete_theta`: limits.toml [nominal] voltages +
+    `NOMINAL_TIMING`; OFS_* are not parameters) and refuses θ / θ_ref with different keys.
+  * every apply step ends with `daq.load_sequencer()` and `_r['readback']` (all keys it set);
+    `readback_problems` compares (bias 0.3 V, rail 0.05 V, A/B sides both, timing exact); a mismatch
+    raises `PacketError` (the scan stops).
+  * fake boards: `load_sequencer()` (recorded), `ignore_sets` (a board that does not apply a key).
+  * `tests/test_packet_reset.py` (4 tests): complete θ/θ_ref; a fake scan changing delayInt and RG_1_H is
+    restored by the next packet's apply_ref (readback and board state); a board that ignores delayInt
+    stops the packet; tolerances. Full suite 38 tests OK (`.venv/bin/python`). Scan dry runs still valid.
+  * notebooks/take_packet_walkthrough.ipynb still shows the old apply text in its saved outputs (not rerun).

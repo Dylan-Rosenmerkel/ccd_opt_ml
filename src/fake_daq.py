@@ -103,6 +103,7 @@ class FakeDAQ:
         self._trace_index: dict[int, int] = {}   # which example file the next trace of a channel copies
         self.require_sync = True              # images must be taken in leader/follower mode
         self.calls: list[tuple] = []
+        self.ignore_sets: set[str] = set()   # keys this board silently does not apply (tests of the readback)
         self._counter = 0
         self.time_scale = float(time_scale)   # fraction of the real durations to sleep (0 = none)
         self.log_callback = None              # set by FakeController: (who, level, message)
@@ -130,10 +131,15 @@ class FakeDAQ:
         self.calls.append(("set", key, value))
         if key in ("acq_level", "level"):
             self.acquire.level = [int(value)] * 4 if isinstance(value, int) else list(value)
-        self.state[key] = value
+        if key not in self.ignore_sets:
+            self.state[key] = value
 
     def __getitem__(self, key):
         return self.state[key]
+
+    def load_sequencer(self, seqfile=None):
+        """acmpy: compile the edited sequencer text and upload it (here: only recorded)."""
+        self.calls.append(("load_sequencer", seqfile))
 
     # -- synchronisation -------------------------------------------------------
     def master(self, masterid: int):

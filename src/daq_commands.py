@@ -211,10 +211,15 @@ def standalone_lines(standalone_command: str, clock_command: str = "") -> list[s
 def apply_lines(sequencer: Mapping[str, int], ramp: list[dict[str, float]],
                 settle_s: float) -> list[str]:
     """
-    Set the sequencer constants of theta, then walk the voltages through the ramp steps.
+    Set the sequencer constants of theta, then walk the voltages through the ramp steps, then
+    read every one of them back into the receipt (``_r['readback']``; take_packet compares it).
 
     ``ramp`` comes from ``Limits.ramp_plan`` (every step already checked against the limits);
     the board waits ``settle_s`` seconds after every step except the last.
+
+    acmpy (checked 2026-11-02): ``daq['delayInt'] = v`` only edits the cached sequencer text;
+    ``daq.load_sequencer()`` compiles and uploads it (otherwise the next trace would), and only
+    then does ``daq['delayInt']`` read the new value.  The board is in standalone mode here.
     """
     lines = [f"daq[{key!r}] = {int(value)!r}" for key, value in sequencer.items()]
     for index, step in enumerate(ramp):
@@ -222,6 +227,9 @@ def apply_lines(sequencer: Mapping[str, int], ramp: list[dict[str, float]],
         if index < len(ramp) - 1:
             lines.append(f"_time.sleep({settle_s!r})")
     lines.append(f"_r['ramp_steps'] = {len(ramp)}")
+    lines.append("daq.load_sequencer()")
+    keys = list(sequencer) + list(ramp[-1] if ramp else {})
+    lines.append(f"_r['readback'] = {{_k: daq[_k] for _k in {keys!r}}}")
     return lines
 
 

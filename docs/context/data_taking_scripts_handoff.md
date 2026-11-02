@@ -58,13 +58,13 @@ Correspondence with the group's routine:
 
 | # | step | target | notes |
 |---|---|---|---|
-| 0 | checks | this computer | θ/θ_ref per board (no geometry allowed in θ), limits, image/trace windows, every ramp point; nothing is sent on failure |
+| 0 | checks | this computer | θ/θ_ref per board **completed** (every one of the 61 voltages and timing constants a table does not give takes its nominal value: limits.toml [nominal], reference_v5_pumping.seq; θ and θ_ref must then set the same keys), no geometry allowed in θ, limits, image/trace windows, every ramp point; nothing is sent on failure |
 | 1 | status | pool | run directory, loaded sequencer (must equal `reference_v5_pumping.seq`), sync/clock bits |
 | 2 | standalone | pool | `daq.standalone()`, 0.1 s; external clock if not already set |
-| 3 | apply_ref | each θ board | that board's θ_ref: timing constants, then voltages in steps ≤ max_step, 0.5 s apart |
+| 3 | apply_ref | each θ board | that board's θ_ref: timing constants, then voltages in steps ≤ max_step, 0.5 s apart, `daq.load_sequencer()`, then every value read back into the receipt; a mismatch (bias > 0.3 V, rail > 0.05 V, timing ≠) stops the packet (`PacketError`) |
 | 4 | flush_x3 | pool | 3 × `daq.flush_ccd()` (blocks; about 27 s + margin each) |
 | 5 | ref_traces_1..3 | each traced board | 4 channels per set; a flush between sets; decoded right away, a damaged set is retaken once |
-| 6 | apply | each θ board | θ_ref → that board's θ |
+| 6 | apply | each θ board | θ_ref → that board's θ, with the same readback |
 | 7 | flush_x1 | pool | after the change |
 | 8 | traces_1..3 | each traced board | a flush between sets |
 | 9 | image | pool | ONE queue entry: `daq.master(leader)`; `take_image` with the complete `[image]` table, **`acq_level` always given**; `daq.standalone()` (in a `finally`); `n_final_flushes` × flush (default 1). Then waits for `avg_<image>.fits*` per board |
