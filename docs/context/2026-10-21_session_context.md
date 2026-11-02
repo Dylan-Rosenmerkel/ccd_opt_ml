@@ -392,3 +392,32 @@ nn/pretrained ~4 points on lambda), or back to rows. Remove `stop_metric` if unu
   OPEN for the user: cnn gain and sets sigma_e got worse with the new stopping; option: per-model stop_metric (cnn/sets
   "nll") — test before deciding.
 - lvl1/README.md and ml_models_technical.tex (tab:full100, nn paragraph) updated; recompiled, re-zipped.
+
+## 16. 2026-11-02: manual_packet.sh did not reset the boards (fixed)
+
+* **Found** (acmpy source, local copy f5365b7, read with `git show` only):
+  * `daq.read_config(bcf)` only parses the file into `daq.config`; nothing is sent to the board.
+    Voltages are applied only by `control.restore_defaults()` / `set_voltages(...)` (or `startup_ccd`).
+  * `daq['delayInt'] = v` edits the cached sequencer text (state MODIFIED); the next trace/image
+    recompiles and uploads it. Nothing reverts it.
+  * So the old `nominal()` (read_config only) left every voltage AND timing change of a packet on the
+    boards, while `daq.config` (and the files' config hash) said nominal: the next packet's reference
+    traces would have been taken at the previous packet's settings, mislabelled.
+  * `daq.restore_defaults()` does not exist on ACM (`__getattr__` forwards only dac/VSUB/VDD.../VR...):
+    the call is `daq.control.restore_defaults()`.
+* **Fix** (`daq_scripts/manual_packet.sh`, `nominal()`, at the start and the end of every packet, in
+  standalone): `read_config` per board -> `daq.control.restore_defaults()` ->
+  `daq.sequencer.restore_defaults()` -> `daq.load_sequencer()` (compile + upload now) -> a readback
+  command. The readback compares every bias (0.3 V: potentiometer steps), offset and rail (0.05 V) with
+  the board's .bcf, every timing constant with the reference_v5_pumping.seq values (NOMINAL table), and
+  the loaded sequencer's name; on a mismatch it raises `AssertionError: NOT NOMINAL ...` (shown in
+  `cdaq print logs`), otherwise logs `readback: nominal OK`. Step 0 now sets standalone BEFORE nominal.
+* **Tested**: dry run (exit 0, the commands print); the readback command exec'd against a mock board built
+  from ccd_PQ04.bcf: passes at nominal (VSUB readback 45.095), and reports a leftover H1_A_L, delayInt and
+  a split V1_B_L (A/B sides).
+* **Not yet known**: whether the DAQ machine's acmpy matches f5365b7; whether the cdaq queue continues
+  after the readback raises (it should log and go on; then the packet must be discarded by hand);
+  `restore_defaults` sets rails one by one without ramping (a TG/H-low change could briefly break the
+  ordering rules on the way back). First real packet: watch for `readback: nominal OK` twice.
+* **Not checked**: `src/take_packet.py` / `scan_packets.py` apply θ only; whether they reset the
+  parameters a previous packet changed was not re-checked.

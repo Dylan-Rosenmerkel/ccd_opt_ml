@@ -2,8 +2,8 @@
 # =============================================================================
 # manual_packet.sh -- one packet by hand, with the group's cdaq commands
 #
-#   start from nominal -> standalone -> reference traces -> change parameters ->
-#   traces -> master/slave -> image (img.toml) -> back to nominal -> standalone
+#   standalone -> nominal (reset + readback) -> reference traces -> change parameters ->
+#   traces -> master/slave -> image (img.toml) -> standalone -> nominal (reset + readback)
 #
 # Every line below is a plain `cdaq qadd "..." <target>` (or take_image.py), the same
 # commands typed by hand.  The cdaq queue runs them ONE AFTER THE OTHER in the order
@@ -32,7 +32,8 @@
 # Duration with the defaults: 18 flushes (~30 s each: 3 initial, one between trace sets, one after
 # the change, one at the end) = 9 min, 60 traces (~2 min), the img.toml image (16x1000x500,
 # 4.8 min readout + its EXPOSURE): about 16 min.
-# The nominal .bcf files are read at the start too, so every packet starts from the same state.
+# Every packet starts AND ends by restoring the .bcf voltages and the sequencer's timing on the boards, then
+# reading them back (see nominal() below): a failed reset shows as "NOT NOMINAL" in cdaq print logs.
 # =============================================================================
 set -euo pipefail
 
@@ -84,8 +85,9 @@ if [[ -n ${CHANGES_FILE:-} ]]; then
   [[ ${#CHANGES[@]} -gt 0 ]] || { echo "ERROR: no changes in $CHANGES_FILE"; exit 1; }
 fi
 
-# Nominal configuration files, read at the start and at the end:  board=file
+# Nominal configuration files, restored at the start and at the end:  board=file
 BCF="acm101=module_PA03.bcf acm102=ccd_PQ04.bcf"
+SEQ="reference_v5_pumping.seq"   # the sequencer the boards must run (checked by the readback, not loaded)
 # -----------------------------------------------------------------------------
 
 # Nominal values (the .bcf content shown on 2026-10-14), used only for the checks below.
@@ -188,7 +190,31 @@ traces() {   # traces <prefix> <number of sets>: one trace per channel per set, 
     done
   done
 }
-nominal() { for pair in $BCF; do q "daq.read_config('${pair#*=}')" "${pair%%=*}"; done; }
+# nominal: put each board back to its .bcf and the sequencer back to its file, then read everything back.
+# (acmpy, checked 2026-11-02: read_config ONLY parses the file into daq.config -- nothing is sent to the
+#  board; voltages are applied by control.restore_defaults(); daq['delay...'] = v only edits the cached
+#  sequencer text, which the next trace recompiles; sequencer.restore_defaults() returns that text to the
+#  file read at startup and load_sequencer() compiles and uploads it now, so the readback sees it.)
+# The readback compares every bias, offset and rail with the board's .bcf (bias readback within 0.3 V:
+# potentiometer steps; rails within 0.05 V), every timing constant with $SEQ's values (NOMINAL table), and
+# the loaded sequencer's name with $SEQ.  On a mismatch the command raises: the cdaq log shows
+# "Could not execute ... AssertionError: NOT NOMINAL ..." with the offending values; otherwise it logs
+# "readback: nominal OK".
+TIMING_NOMINAL=$(echo $NOMINAL | awk '{ s = ""; for (i = 1; i < NF; i += 2) if ($i ~ /^delay/) s = s (s == "" ? "" : ", ") "'"'"'" $i "'"'"': " $(i+1); print "{" s "}" }')
+READBACK="_f = lambda z: [float(x) for x in (z if isinstance(z, (tuple, list)) else (z, z))]; \
+_bad = [k + ' ' + str(daq[k]) + ' (file ' + v + ')' for s, t in (('bias', 0.3), ('clock_offsets', 0.05), ('clock_rails', 0.05)) \
+for k, v in daq.config[s].items() if any(abs(a - b) > t for a, b in zip(_f(daq[k]), _f(__import__('ast').literal_eval(v))))] \
++ [k + ' ' + str(daq[k]) + ' (seq ' + str(v) + ')' for k, v in ${TIMING_NOMINAL}.items() if daq[k] != v] \
++ ([] if daq.sequencer.seqfile.name == '$SEQ' else ['sequencer ' + daq.sequencer.seqfile.name + ' (expected $SEQ)']); \
+assert not _bad, 'NOT NOMINAL after the reset: ' + ', '.join(_bad); daq.logger.info('readback: nominal OK')"
+READBACK=${READBACK//\\$'\n'/}
+nominal() {
+  for pair in $BCF; do q "daq.read_config('${pair#*=}')" "${pair%%=*}"; done
+  q "daq.control.restore_defaults()" "$POOL"
+  q "daq.sequencer.restore_defaults()" "$POOL"
+  q "daq.load_sequencer()" "$POOL"
+  q "$READBACK" "$POOL"
+}
 
 # ------------------------------ packet record --------------------------------
 # A JSON record of what this packet does, read by src/make_manual_manifest.py.  No numbers are parsed from
@@ -239,9 +265,9 @@ fi
 
 write_record
 
-# 0. start from the nominal configuration, standalone mode, external clock
-nominal
+# 0. standalone mode, then the nominal configuration (the sequencer is uploaded in standalone), external clock
 q "daq.set_standalone()" "$POOL"
+nominal
 q "daq.use_external_clock()" "$POOL"          # set once per session; harmless if already set
 
 # 1. reference traces at nominal
