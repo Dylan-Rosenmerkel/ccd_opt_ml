@@ -1,0 +1,205 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{graphicx,booktabs,amsmath,hyperref,xcolor,enumitem}
+\usepackage[T1]{fontenc}
+\setlist{itemsep=2pt,topsep=3pt}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\title{Level 1, first real data: can the traces predict the image?\\[2pt]
+\large Packets L1\_01--L1\_43, 2026-11-02/03, board 101 (PA03)}
+\author{ccd\_opt\_ml}
+\date{2026-11-03}
+
+\begin{document}
+\maketitle
+
+\section*{The answer in short}
+
+\begin{itemize}
+\item \textbf{Yes, the traces predict something, and more than the first cross-validation suggested.} On the held-out
+  session C (8 packets with usable traces, 32 amplifier rows), the physics-structured model predicts $\lambda$ to 5--7\,\%
+  (settings + amplifier identity without any trace: 23\,\%), the gain to 0.6\,\% (1.4\,\%) and $\sigma_e$ to 5--7\,\%
+  (10\,\%). The $\lambda$ and gain differences are significant; the $\sigma_e$ one is not (only 8 packets).
+\item \textbf{The model chosen and frozen on sessions A+B failed for $\sigma_e$} (gp\_dim, 13.5\,\% on C, worse than
+  the no-trace baselines) and was only marginal for $\lambda$ (pretrained CNN, 19.7\,\%). The A+B packets change one
+  knob at a time, so every held-out packet in their cross-validation was an extreme the model had not seen: the
+  cross-validation measured extrapolation and favoured flexible models; session C (joint changes inside the same box)
+  measures interpolation, where the physics-structured model generalises best.
+\item \textbf{$\sigma_e$ is the hard target:} the trace's noise follows the image's noise only partly, and the
+  mismatch is concentrated in the timing packets (Fig.~\ref{fig:pkt}, \ref{fig:tvi}). The traces read 10 pixels after a
+  100-column burst; the image reads $10^4$ pixels after a 5300-column prescan and a register clear.
+\item \textbf{Several problems were data and processing, not models}, and are fixed: the drift correction corrupted
+  the session-A labels; three session-C packets lost every trace at their own settings; $\lambda$ carries the CCD's
+  history (overnight drift, time since the last flush).
+\item \textbf{Next:} the v2 packets (joint design, flush before the image, safeguards for damaged traces, 32-row
+  image) plus a \emph{level-1 strip} in every packet, so the same packets answer: what do the traces predict, what does
+  the level-1 strip predict, and both together (Section~\ref{sec:next}).
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/fig1_traces_help.png}
+\caption{Typical error (RMS of $\log$(predicted/true)) of the two baselines and two trace models, on the A+B
+cross-validation and on the held-out session C. Frozen choice (made on A+B before C was looked at): $\sigma_e$
+gp\_dim [P+A1], $\lambda$ pretrained [all], gain gp\_dim [P]. Physics-structured: physics\_white [P+A] for
+$\sigma_e$, physics [P+A] for $\lambda$, physics [P+A1] for the gain. Dashed: the label noise (repeat scatter of the
+labels over the four nominal packets).}
+\label{fig:help}
+\end{figure}
+
+\section{The data}
+
+\begin{itemize}
+\item 43 planned packets in one night (sessions A: timing, B: one voltage at a time, C: joint changes), each with 5
+  reference and 10 new trace sets ($2\times5$ pixels, 500 skips, 4 channels) and one $16\times1000\times500$ image.
+\item \textbf{Settings:} every packet's reference traces were at nominal (the board-reset fix worked) and every
+  requested change arrived in the traces and the image (VSUB reads back the potentiometer step, $\sim$0.2\,V high).
+\item \textbf{Traces:} 2370 of 2580 board-101 traces usable ($\sim$8\,\% damaged). L1\_37, L1\_40 and L1\_41
+  (session C) lost \emph{all} 40 traces at their own settings; such rows are now excluded automatically
+  (\texttt{trace\_ok}, a rule on the traces only). Session C is reported both without them (main numbers) and with them.
+\item \textbf{Labels} (run\_WADERs; \texttt{--all-ext} so ch3 is fitted too): 127 of 128 A+B labels usable. Repeat
+  scatter at nominal (4 packets): $\sigma_e$ 2.2\,\%, gain 0.6\,\%, $\lambda$ 11\,\% (it drifted down over the night,
+  Fig.~\ref{fig:night}).
+\item \textbf{Drift correction (found and fixed):} the along-row drift correction, calibrated on the October images,
+  inflated session-A $\sigma_e$ labels up to $\times3$ (L1\_06 ch0 0.145\,$\to$\,0.348\,e$^-$) and raised $\lambda$ by
+  7--10\,\% on every channel; the raw images fit well ($\chi^2$/ndf 0.8--1.3), and the replicate pair L1\_06/L1\_23
+  agrees on them (0.145/0.144). It is off for these data.
+\end{itemize}
+
+\section{Method}
+
+\begin{itemize}
+\item No model is told which amplifier it sees (label-free), except the references marked as such.
+\item \textbf{Baselines:} the training average; a GP on the settings; and new, \emph{settings + amplifier identity}
+  (GP or boosted trees on the settings and a one-hot of the amplifier, no trace). A trace model that does not beat the
+  last one has learned nothing from the traces beyond which amplifier they come from.
+\item \textbf{Validation:} cross-validation on A+B grouped by setting (packets at identical settings share a fold),
+  packet bootstrap for intervals and paired comparisons; feature tiers frozen (label-free) before training; the model
+  choice frozen in git (commit 25384b9) before session C was scored once.
+\item \textbf{New:} \texttt{physics\_white}, the physics-structured model with the trace's white noise per skip as its
+  noise term instead of the Allan-curve floor, which jumped between packets at the same setting ($\times1.45$ vs
+  $\times1.17$).
+\end{itemize}
+
+\section{Results}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/fig2_session_c.png}
+\caption{Session C, predicted vs true. Top: the frozen choice; bottom: the physics-structured models. Grey: the A+B
+rows (cross-validation); coloured: the held-out session C, one marker per amplifier. Band: $\pm$ the label noise.}
+\label{fig:c}
+\end{figure}
+
+\paragraph{Session C, paired against settings + amplifier (trees), packet bootstrap (8 packets).}
+$\lambda$: physics [P+A] 5.3 vs 23.2\,\%, $-17.9$ [$-25.4$, $-10.3$]; frozen pretrained $-3.6$ [$-14.1$, $+7.7$].
+Gain: physics [P+A1] 0.6 vs 1.4\,\%, $-0.8$ [$-1.3$, $-0.3$]; trees [P+A] $-0.4$ [$-0.5$, $-0.1$]; frozen gp\_dim
+$-0.6$ [$-1.3$, $+0.1$]. $\sigma_e$: physics\_white [P+A] 7.3 vs 10.2\,\%, $-2.9$ [$-9.5$, $+2.9$]; nn [P+A1] $-4.3$
+[$-10.7$, $+1.0$]; frozen gp\_dim $+3.3$ [$-2.8$, $+10.2$]. With the three packets without usable traces included,
+physics\_white's $\sigma_e$ error is 27.5\,\% (51\,\% on those three packets alone): a model cannot predict from traces
+that do not exist.
+
+\paragraph{On A+B (cross-validation),} against settings + amplifier: $\lambda$ improves by 7--15 points for every
+trace model (significant), $\sigma_e$ by 2--5 points (significant for gp\_dim only), the gain not at all (0.8 vs
+0.8\,\%): on A+B the traces act for the gain as an amplifier fingerprint.
+
+\begin{table}[h]
+\centering\small
+\caption{Session C error (\%) of every model at every trace-feature set (trained once on A+B; 8 packets, 32 rows).
+Bold: each model's best set (chosen after the fact, so optimistic).}
+\label{tab:c}
+\input{table_sessionC.tex}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/fig6_ladder.png}
+\caption{Error against the number of trace features given (A+B cross-validation, the evidence-tier order). The plain
+models gain little beyond the 8 protected estimators (P) for the gain; $\sigma_e$ and $\lambda$ improve up to
+$\sim$50--140 features for trees and the networks; with 32 packets the differences between sets are within the noise.}
+\label{fig:ladder}
+\end{figure}
+
+\section{Where the errors come from}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/fig3_sigma_error_by_packet.png}
+\caption{$\sigma_e$ error of gp\_dim [P+A1] per A+B packet. Session A (timing) is 43\,\% of the rows but 76\,\% of
+the squared error.}
+\label{fig:pkt}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/fig4_trace_vs_image.png}
+\caption{The trace's own noise estimate (white noise per skip $/\sqrt{N}/$gain) against the image's $\sigma_e$, per
+amplifier. Voltage packets (blue) sit on the nominal proportionality; timing packets (orange) scatter off it: for them
+the image's noise changes in ways the trace does not show.}
+\label{fig:tvi}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig5_lambda_night.png}
+\caption{$\lambda$ over the night. The nominal packets (lines) drift down by $\sim$20\,\%; the outliers near 00:50 are
+L1\_18, whose queue stalled 38 minutes before its image with no flush in between.}
+\label{fig:night}
+\end{figure}
+
+\begin{table}[h]
+\centering\small
+\caption{Assessment by cause.}
+\label{tab:causes}
+\begin{tabular}{p{2.3cm}p{6.6cm}p{6.3cm}}
+\toprule
+cause & what we found & status / remedy \\
+\midrule
+labels & drift correction corrupted session-A $\sigma_e$ and shifted $\lambda$ by 7--10\,\%; the ``CIC'' part of the
+per-row split mixes serial-register charge (the overscan holds 70--85\,\% of the active $\lambda$) and charge collected
+before the readout & correction off (fixed); the total $\lambda$ from WADERs stays the target; split into serial and
+array parts tested and \emph{not} adopted (not better than direct) \\
+data & 8\,\% of traces damaged; 3 C packets without any usable trace at their settings & excluded by rule; v2
+safeguards retake damaged traces and restart a packet with more than 5 \\
+procedure & $\lambda$ carries the CCD's history (night drift; time since the last flush, L1\_18); no flush between
+traces and image & v2: flush right before the image, fixed timeline, nominal every 7 packets, 32-row image; log
+temperature and time since clear \\
+inputs (traces) & for timing changes the image's $\sigma_e$ moves in ways the $2\times5$-pixel trace does not follow;
+10 pixels measure the pixel-to-pixel noise only to $\sim\pm24$\,\% & level-1 strips read like the image
+(Section~\ref{sec:next}) \\
+models & the Allan-floor noise term was unstable (fixed: physics\_white); CV on one-at-a-time packets chose flexible
+models that did not generalise to joint changes & physics-structured model as default for $\lambda$ and gain;
+choose models on joint-design data (v2) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{How to proceed}
+\label{sec:next}
+
+\begin{enumerate}
+\item \textbf{Take the v2 plan} (\texttt{lvl1/packet\_plan\_v2/}, \texttt{daq\_scripts/run\_plan.sh}): 76 packets in a
+  joint Sobol design over 12 knob groups, so model choice and test both see joint changes; nominal every 7 packets;
+  3 + 5 trace sets with automatic retakes and restarts; flush before and after the image; 32-row image.
+\item \textbf{Three input sources on the same packets} (user, 2026-11-03): every packet also takes a level-1 strip
+  (every skip of every pixel, all four channels, read exactly like the image: prescan 5300, register clear, 500
+  skips) at the reference and at the new settings. The pipeline (reader \texttt{src/decode\_l1.py}, features
+  \texttt{src/l1\_features.py}, and the input folders \texttt{model\_inputs}, \texttt{model\_inputs\_l1} and
+  \texttt{model\_inputs\_both}) scores every model on (1) the traces, (2) the strip, (3) both, on the same rows and
+  folds. Before the first v2
+  night: a short DAQ test of the strip sizes ($1\times500$, $1\times1000$, $2\times1000$).
+\item \textbf{Models:} the physics-structured model (white-noise term) as the default for $\lambda$ and gain; gp\_dim,
+  trees and nn as challengers for $\sigma_e$; choose again on v2 with setting-grouped CV, freeze, and score session E
+  once.
+\item \textbf{After v2:} pool with these 40 packets (differences between nights as inputs), measure a learning curve
+  (25--100\,\% of the packets) to see whether more packets still help.
+\end{enumerate}
+
+\appendix
+\section{Cross-validation on A+B at every feature set}
+\begin{table}[h]
+\centering\small
+\caption{A+B cross-validation error (\%) of every model at every trace-feature set (32 packets, 127 rows).}
+\input{table_cv.tex}
+\end{table}
+
+\end{document}

@@ -298,3 +298,26 @@ then see what both of them can predict together; model the new packet designs af
   (3) simulated L1 strips for tests; (4) manual_packet.sh strip steps + checks; (5) make_manual_manifest finds them;
   (6) process_packet features -> dataset `l1.*`, `l1ref.*`; (7) real_inputs families per source; (8) train_lvl1
   `--source trace|l1|both`; (9) v2 plan with strips, rehearsal end to end. DAQ test of strip sizes pending (user).
+
+## 14. Session C scored (frozen choice, commit 25384b9) and the report
+
+* Bug found and fixed while scoring: under an explicit `--feature-tiers <set>` the prospective test and LOAO refit
+  every model with ALL features (run keys carry no set); now each refit uses its run's set (`run_spec`).
+* Data rule added (label-free): `trace_ok` = at least one usable trace at the packet's own settings. L1_37/40/41 lost all
+  40 new traces; with them in, physics_white sigma_e on C was 27.5 % (51 % on those 3 alone). Results with them kept in
+  `processed/lvl1_results/2026-11-03_holdoutC_with_damaged/`; main results `2026-11-03_holdoutC/` (8 packets, 32 rows;
+  `summary.csv`).
+* Session C vs settings + amplifier (trees), paired packet bootstrap: lambda physics [P+A] 5.3 vs 23.2 % (-17.9
+  [-25.4, -10.3] *); frozen pretrained [all] 19.7 (-3.6, n.s.); gain physics [P+A1] 0.6 vs 1.4 (*), trees [P+A] 1.1 (*),
+  frozen gp_dim [P] 0.9 (n.s.); sigma_e physics_white [P+A] 7.3 vs 10.2 (-2.9 [-9.5, +2.9]), nn [P+A1] 5.9 (n.s.),
+  frozen gp_dim [P+A1] 13.5 (worse). Frozen choice: sigma_e FAILED, lambda marginal, gain passed. Lesson: CV on
+  one-at-a-time packets measures extrapolation (favours flexible models); C (joint changes) measures interpolation, where
+  the physics-structured model generalises best.
+* Report: `docs/overleaf_first_data_2026-11-03/first_data.tex` (8 pages, 0 warnings; zip
+  `docs/overleaf_first_data_2026-11-03.zip`), figures by `lvl1/plot_first_data.py` (6 figures), tables generated from
+  the result files.
+* Level-1 implementation done (section 13 steps 1-2, 4-8): decode_l1.py + tests, l1_features.py + test, manual_packet.sh
+  strips (+ check, retake), manifest (strips never the image), process_packet (l1.* / l1ref.*), real_inputs
+  (model_inputs, model_inputs_l1, model_inputs_both on the same rows), train_lvl1 (strip features kept by every set;
+  strip white noise for physics_white). Plumbing-tested with synthetic strips. Still to do: v2 plan text with strips,
+  rehearsal with simulated strips, the DAQ strip-size test (user).
