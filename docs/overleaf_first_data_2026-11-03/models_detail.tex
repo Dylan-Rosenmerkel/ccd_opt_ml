@@ -1,0 +1,312 @@
+% The models one by one: exact definitions (hand-written) and, per model, the generated tables
+% (models/<model>.tex, lvl1/report_models.py, from lvl1/explain_models.py).
+
+\section{The models in detail}
+\label{app:models}
+
+\subsection{Common notation}
+
+\paragraph{Rows and targets.} One row $i$ is one amplifier $a(i)$ of board 101 in one packet $p(i)$. Each model predicts
+three numbers per row, always in log space,
+\[
+y_i = \big(\log\sigma_{e,i},\ \log\lambda_i,\ \log g_i\big),
+\]
+with $\sigma_e$ in e$^-$, $\lambda$ in e$^-$/pixel and the gain $g$ in ADU/e$^-$, all from WADERs on the packet's image.
+WADERs also gives each label's error $\delta_i$ (relative, so a variance $\delta_i^2$ in log units); only the
+physics-structured models use it.
+
+\paragraph{Inputs.} Four blocks exist; each model uses some of them:
+\begin{itemize}
+\item $\theta_i\in\mathbb R^{67}$: the packet's settings as the boards report them (sequencer delays, NPSD, NVWAIT,
+  clock highs and lows, VSUB, VDD, VDRAIN, VR, offsets).
+\item $u_i$: the \emph{own-trace} features: the trace features of amplifier $a(i)$ at the packet's settings, each the
+  robust mean over the packet's new trace sets (values beyond $5\times1.4826$\,MAD of the median dropped).
+\item $v_i$: the \emph{reference-trace} features: the same features of the same amplifier from the packet's reference
+  trace sets, taken at nominal settings a few minutes earlier. They measure the amplifier and the CCD's state at that
+  moment, not the setting.
+\item $s_i$: the \emph{packet state} (physics models only): the reference features averaged over the amplifiers of the
+  packet, each amplifier's own average removed first,
+  \[ s_i=\frac{1}{|p(i)|}\sum_{j\in p(i)}\big(v_j-\bar v_{a(j)}\big),\qquad \bar v_a=\text{mean of }v\text{ over the rows of amplifier }a. \]
+  It is the common, amplifier-free part of the reference traces: the CCD's drifting state.
+\end{itemize}
+A \emph{feature set} (P, P+A1, P+A, P+A+B, all; Section~\ref{sec:next} and the frozen tiers) chooses which trace
+features enter $u_i$ and $v_i$; ``none'' leaves only $\theta_i$. Before any fit, on the training rows only: a column
+with more than 20\,\% missing values or no variation is dropped (in A+B this drops every knob that changed only in the
+test fold), and missing values are filled with the training median.
+
+\paragraph{The amplifier.} No trace model is told which amplifier a row comes from: it sees that amplifier's own
+traces. The exceptions are the references \texttt{settings\_amp}, \texttt{settings\_amp\_trees} and
+\texttt{physics\_hier}.
+
+\paragraph{Error.} With $\hat y_i$ the predicted log value of one target, the error is
+$100\sqrt{\tfrac1n\sum_i(\hat y_i-y_i)^2}$\,\%, the typical relative error. \emph{A+B CV}: 5 folds of the 32 A+B
+packets, packets at identical settings in the same fold, each fold predicted by a fit on the other four.
+\emph{Session C}: one fit on all A+B rows, 32 C rows predicted. \emph{Paired difference}: the C error minus that of
+settings + amplifier (trees), with a 95\,\% interval from 1000 bootstrap resamples of the 8 C packets (the same
+resamples for both models); bold if it excludes zero.
+
+\paragraph{Which feature set.} Each model is reported at the set with the lowest A+B CV error, separately per target
+(chosen without looking at C). The frozen choice is marked $\dagger$.
+
+\paragraph{What a model relies on} (lvl1/explain\_models.py). The model is fitted once on A+B and predicts every row.
+Then one input, or one group $G$ of inputs, is shuffled: its values are moved between rows by a random permutation
+$\pi$, the other inputs stay, and the model predicts again (no refit). Three numbers per group and target, each the
+mean over 20 shuffles:
+\[
+S_G=100\sqrt{\tfrac1n\textstyle\sum_i\big(\hat y_i^{(\pi_G)}-\hat y_i\big)^2}\ \%,\qquad
+L_G=\text{err}_C^{(\pi_G)}-\text{err}_C ,
+\]
+and $S_G^{\text{amp}}$, the same as $S_G$ with $\pi$ moving values only among rows of the same amplifier.
+$S_G$ is how far the predictions move: what the model \emph{uses}, right or wrong. $S^{\text{amp}}_G$ keeps every
+row's values within its own amplifier, so it removes what the inputs say about \emph{which} amplifier this is: if
+$S^{\text{amp}}\ll S$, the model uses the group as an amplifier fingerprint. $L_G$ (shuffled among the C rows) is how
+much the group \emph{helps} on new packets; it can be negative when a group misleads. Correlated inputs share credit:
+shuffling one of two near-copies changes little, which is why groups are shuffled together.
+
+\paragraph{Fitted parameters.} Where a model has interpretable parameters they are listed: for a GP the inverse length
+scale $1/\ell_j$ of each input (on standardized inputs; ARD relevance: the larger, the faster the prediction changes
+along that input), for ridge the coefficients, for boosted trees each input's share of the total split gain.
+
+% ------------------------------------------------------------------------------------------------------------------
+\subsection{The building blocks}
+\label{app:blocks}
+
+\paragraph{GP (scikit-learn; \texttt{settings}, \texttt{settings\_amp}, \texttt{gp}).} One GP per target on inputs
+$x$. The inputs are standardized, $\tilde x_{ij}=(x_{ij}-m_j)/s_j$, and the target too, $\tilde y=(y-\bar y)/s_y$:
+\[
+\tilde y_i=f(\tilde x_i)+\varepsilon_i,\quad f\sim\mathcal{GP}(0,k),\quad \varepsilon_i\sim\mathcal N(0,\sigma_n^2),
+\]
+\[
+k(x,x')=c\,\big(1+\sqrt5\,r+\tfrac53r^2\big)e^{-\sqrt5\,r},\quad r=\sqrt{\textstyle\sum_j (x_j-x'_j)^2/\ell_j^2}.
+\]
+The hyperparameters $\phi=(c,\ell_1\ldots\ell_d,\sigma_n^2)$ maximize the log marginal likelihood
+\[
+\log p(\tilde y\mid\phi)=-\tfrac12\tilde y^\top K_y^{-1}\tilde y-\tfrac12\log|K_y|-\tfrac n2\log2\pi,\qquad K_y=K+(\sigma_n^2+10^{-10})I,
+\]
+by L-BFGS-B (at most 150 steps, one start at $c=1$, $\ell_j=1$, $\sigma_n^2=0.01$) within the box
+$c\in[10^{-3},10^3]$, $\ell_j\in[10^{-2},10^3]$, $\sigma_n^2\in[10^{-6},10]$: a flat prior inside the box, nothing else.
+Prediction at $x_*$ with $\mathbf k_*=[k(x_*,x_i)]_i$:
+\[
+\hat y_*=\bar y+s_y\,\mathbf k_*^\top K_y^{-1}\tilde y,\qquad s_*^2=s_y^2\big(c+\sigma_n^2-\mathbf k_*^\top K_y^{-1}\mathbf k_*\big):
+\]
+a weighted average of the training labels, weighted by closeness in the inputs.
+
+\paragraph{Boosted trees (\texttt{settings\_amp\_trees}, \texttt{trees}).} scikit-learn's
+HistGradientBoostingRegressor, one per target. Inputs are binned (at most 255 bins per input; no scaling needed).
+Starting from $F_0=\bar y$, 300 trees are added,
+\[
+F_m(x)=F_{m-1}(x)+\nu\,h_m(x),\qquad \nu=0.05,\qquad h_m\ \text{fitted to}\ r_i=y_i-F_{m-1}(x_i),
+\]
+each grown best-first to at most 15 leaves with at least 10 rows per leaf, every split the one that most reduces the
+squared error, every leaf predicting the mean residual of its rows (no L2 penalty, no early stopping); $\hat
+y=F_{300}(x)$. The error bar comes from two more boosted models with the pinball loss
+$L_\tau(y,q)=\max(\tau(y-q),(\tau-1)(y-q))$ at $\tau=0.16$ and $0.84$: $s_*=|q_{0.84}-q_{0.16}|/2$.
+\emph{Consequence of the 10-row minimum:} a split needs at least 10 rows on each side, so a knob that changed in only
+one or two A+B packets (4--8 rows) can never be split on; the trees can use only knobs that changed in at least three
+packets, and the amplifier columns.
+
+\paragraph{ARD GP with a weak prior (inside the physics models: $\hat g$, $r$).} \texttt{structured.HierGP} with no
+levels: the same Mat\'ern-5/2 kernel with one length scale per standardized input, plus a constant mean $\mu$,
+\[
+\tilde y_i=\mu+f(\tilde x_i)+\varepsilon_i,\qquad \varepsilon_i\sim\mathcal N\big(0,\ \sigma_n^2+\delta_i^2/s_y^2+e_i\big),
+\]
+where $\delta_i^2$ is the label's own WADERs variance (known, not fitted) and $e_i$ an extra variance for outlier rows
+(below). The hyperparameters are a MAP estimate (L-BFGS, 120 iterations, PyTorch float64) with the weak prior
+$\log\ell_j\sim\mathcal N(\log\sqrt d,\,3^2)$ (it only stops extreme length scales), starting at $\ell_j=\sqrt d$,
+$s=0.7$, $\sigma_n=0.1$; log parameters are clamped to $[-7,4]$. Prediction as above, with the typical label variance
+added to the predictive variance.
+
+\paragraph{SAAS GP (inside the physics models: $\lambda$).} BoTorch's \texttt{SaasFullyBayesianSingleTaskGP}: inputs
+scaled to the unit cube by the training range, target standardized, Mat\'ern-5/2 kernel with
+\[
+\tau\sim\text{HalfCauchy}(0.1),\qquad \rho_j=1/\ell_j^2\sim\text{HalfCauchy}(\tau),
+\]
+so every input is switched off (long length scale) unless the data need it (Eriksson \& Jankowiak 2021). All
+hyperparameters are sampled by NUTS (96 warm-up steps, 48 samples, every 8th kept: 6 samples) and the prediction is the
+mixture over the samples. Its relevance is the median $1/\ell_j$ over the samples.
+
+\paragraph{Network ensembles (\texttt{nn}, \texttt{cnn}, \texttt{pretrained}).} Each network outputs, for all three
+standardized targets at once, a mean $\mu_k(x)$ and a log variance $\log\sigma_k^2(x)$ (clamped to $[-12,6]$) and is
+trained on the Gaussian negative log likelihood
+$\tfrac12\big[\log\sigma_k^2+(\tilde y-\mu_k)^2/\sigma_k^2\big]$ with AdamW. Early stopping: 15\,\% of the training
+\emph{packets} are held out, the epoch with the lowest validation MSE (patience: no improvement for 60 / 50 epochs) is
+found, and the network is retrained from the same start on all rows for that many epochs. The ensemble of $K$ networks
+(different seeds) predicts $\hat\mu=\tfrac1K\sum_k\mu_k$, $\hat\sigma^2=\tfrac1K\sum_k\sigma_k^2+\mathrm{Var}_k(\mu_k)$,
+and a mean more than 3 training standard deviations outside the training labels is pulled back to that edge.
+Standardized inputs are clipped to $\pm10$.
+
+% ------------------------------------------------------------------------------------------------------------------
+\subsection{Baselines and references (no trace)}
+
+\subsubsection{\texttt{mean}: always the average}
+\[ \hat y_*=\tfrac1n\textstyle\sum_{i\in\text{train}}y_i\ \ (\text{the geometric mean of the labels}),\qquad s_*=\text{sd of the training }y. \]
+No inputs; every row gets the same prediction. It is the floor every model has to beat.
+\input{models/mean.tex}
+
+\subsubsection{\texttt{settings}: GP on the settings}
+The scikit-learn GP (Section~\ref{app:blocks}) on $x_i=\theta_i$ alone: the settings, no trace, no amplifier. It can
+learn how each knob moves the targets, but every amplifier gets the same prediction.
+\input{models/settings.tex}
+
+\subsubsection{\texttt{settings\_amp}: GP on the settings and the amplifier (reference, told the amplifier)}
+The scikit-learn GP on $x_i=[\theta_i;\,\mathbf 1_{a(i)}]$, $\mathbf 1_a$ the one-hot code of the amplifier (4 columns).
+A small length scale on an amplifier column lets that amplifier have its own level.
+\input{models/settings_amp.tex}
+
+\subsubsection{\texttt{settings\_amp\_trees}: boosted trees on the settings and the amplifier (the reference of the paired comparisons)}
+The boosted trees (Section~\ref{app:blocks}) on $x_i=[\theta_i;\,\mathbf 1_{a(i)}]$. A split on an amplifier column gives
+that amplifier its own level, a split on a knob a step in that knob.
+\input{models/settings_amp_trees.tex}
+
+% ------------------------------------------------------------------------------------------------------------------
+\subsection{Models on the trace features}
+
+All take $x_i=[\theta_i;\,u_i;\,v_i]$ with the trace features of their feature set.
+
+\subsubsection{\texttt{ridge}: Bayesian linear regression}
+scikit-learn's BayesianRidge, one per target, on standardized inputs:
+\[
+y_i=b+w^\top\tilde x_i+\varepsilon_i,\qquad \varepsilon_i\sim\mathcal N(0,\alpha^{-1}),\qquad w\sim\mathcal N(0,\lambda_w^{-1}I),
+\qquad \alpha,\lambda_w\sim\text{Gamma}(10^{-6},10^{-6}),
+\]
+$\alpha$ and $\lambda_w$ chosen by maximizing the evidence (iterative updates, at most 300). The posterior mean
+$w=\alpha\,(\alpha\tilde X^\top\tilde X+\lambda_w I)^{-1}\tilde X^\top(y-b)$ gives the prediction $\hat y_*=b+w^\top\tilde
+x_*$; its variance is $\alpha^{-1}+\tilde x_*^\top\Sigma_w\tilde x_*$. $w_j$ is the change of the log target per standard
+deviation of input $j$, all else fixed.
+\input{models/ridge.tex}
+
+\subsubsection{\texttt{trees}: boosted trees on settings and trace features}
+The boosted trees of Section~\ref{app:blocks} on $[\theta;u;v]$.
+\input{models/trees.tex}
+
+\subsubsection{\texttt{gp}: GP on settings and trace features}
+The scikit-learn GP of Section~\ref{app:blocks} on $[\theta;u;v]$ (one free length scale per input, no prior).
+\input{models/gp.tex}
+
+\subsubsection{\texttt{gp\_dim}: GP with the dimension-scaled prior (frozen choice for $\sigma_e$ and the gain)}
+BoTorch's \texttt{SingleTaskGP}, one per target: inputs scaled to the unit cube by the training range, target
+standardized, the RBF kernel with one length scale per input,
+\[
+k(x,x')=\exp\Big(-\tfrac12\textstyle\sum_j(x_j-x'_j)^2/\ell_j^2\Big),\qquad \ell_j\sim\text{LogNormal}\big(\sqrt2+\tfrac12\log d,\ \sqrt3\big),
+\]
+and BoTorch's default log-normal prior on the noise. With $d$ inputs the typical length scale grows like $\sqrt d$, as
+the distance between points does, so the GP does not treat every point as unrelated in high dimension (Hvarfner et
+al.\ 2024). The hyperparameters are the MAP estimate (L-BFGS on marginal likelihood $\times$ prior); the prediction is
+the GP posterior with the observation noise.
+\input{models/gp_dim.tex}
+
+\subsubsection{\texttt{nn}: network ensemble}
+5 networks (Section~\ref{app:blocks}), each
+\[
+h=\mathrm{SiLU}\big(W_2\,\mathrm{SiLU}(W_1\tilde x+b_1)+b_2\big)\in\mathbb R^{64},\qquad \mu=W_\mu h+b_\mu,\quad \log\sigma^2=W_v h+b_v,
+\]
+trained with AdamW (learning rate $3\times10^{-3}$, weight decay $10^{-3}$, batches of 64, at most 600 epochs,
+patience 60).
+\input{models/nn.tex}
+
+% ------------------------------------------------------------------------------------------------------------------
+\subsection{Models on the trace curves}
+
+Each trace gives 16 curves of 256 points (Allan deviation with and without the common pattern, modified Allan and Hadamard deviations, CDS spectrum in linear and
+log frequency, CDS autocorrelation, noise against window length, within-cycle spectrum and structure function, mean
+skip shape, droop curve, start transient, equivalent-time pulse, variation along the cycle, common CDS pattern), each
+standardized per position. The scalar inputs of these models are $[\theta_i;\,v_i]$ (settings and reference features).
+
+\subsubsection{\texttt{cnn}: 1-D convolutional network}
+Input: the 16 own and 16 reference curves as 32 channels $c\in\mathbb R^{32\times256}$. Three ensemble members, each
+\[
+z=\mathrm{Pool}_8\Big(\sigma\big(\mathrm{Conv}_{5}^{32\to32}\,\mathrm{MaxPool}_2\,\sigma(\mathrm{Conv}_{7}^{16\to32}\,\mathrm{MaxPool}_2\,\sigma(\mathrm{Conv}_{7}^{32\to16}c))\big)\Big)\in\mathbb R^{32\times8},
+\]
+($\sigma$=SiLU, $\mathrm{Pool}_8$ adaptive average pooling to 8 positions), then $h=\sigma(W[z;\tilde x]+b)\in\mathbb
+R^{64}$ and the mean and log-variance heads. AdamW (learning rate $2\times10^{-3}$, weight decay $10^{-3}$, at most 400
+epochs, patience 50). The filters learn which curve shapes matter; nobody tells them where the reset pulse or the
+noise floor is.
+\input{models/cnn.tex}
+
+\subsubsection{\texttt{pretrained}: encoder pre-trained without labels, then fine-tuned (frozen choice for $\lambda$)}
+\emph{Pre-training} (no labels): an encoder $E$ (the CNN's convolution stack, then a linear map to 16 numbers) is
+trained on the 16 own-type curves of every usable board-101 trace (reference and new, every set; about 2400 traces,
+including session C's traces but none of its labels) on three tasks at once,
+\[
+\mathcal L=\underbrace{\frac{\sum M\odot(D(E(c\odot(1-M)))-c)^2}{\sum M}}_{\text{masked reconstruction}}
++\underbrace{\big\|H_\theta E(c)-\tilde\theta\big\|^2}_{\text{settings}}
++0.3\,\underbrace{\mathcal L_{\text{InfoNCE}}\big(P E(\text{aug}_1 c),\,P E(\text{aug}_2 c)\big)}_{\text{contrastive}},
+\]
+where the mask $M$ hides blocks of 32 positions (each with probability 0.25) or, in half of the examples, one whole
+curve; $D$ is a decoder ($16\to256\to16{\cdot}256$); $H_\theta$ a linear map to the 67 standardized settings; the
+augmentations scale each curve by $1+0.05\,\epsilon$, add noise $0.05\,\epsilon$ and shift by up to 2 positions; $P$ a
+projection $16\to32\to32$; InfoNCE with temperature 0.2 makes two noisy copies of the same traces close and different
+traces far apart. AdamW, learning rate $2\times10^{-3}$, 40 epochs. \emph{Fine-tuning} (labels): three networks start
+from $E$, $h=\sigma(W[E(c);\tilde x]+b)\in\mathbb R^{64}$ and the mean and log-variance heads, all weights trained
+(learning rate $5\times10^{-4}$, otherwise as \texttt{cnn}).
+\input{models/pretrained.tex}
+
+\subsubsection{\texttt{deep\_kernel}: GP on the pre-trained embedding}
+The pre-trained encoder is frozen; each row becomes $z_i=[\text{std}(E(c_i));\,\tilde x_i]$ (the 16 embedding numbers,
+standardized, and the scalar inputs). One GP per target, $k(z,z')=s^2\,M_{5/2}(z,z';\ell)$ with one length scale per
+component, constant mean and noise, all fitted by Adam (learning rate 0.03, 250 steps) on the summed negative log
+marginal likelihood, starting at $\ell_j=\sqrt d$. No amplifier term.
+\input{models/deep_kernel.tex}
+
+% ------------------------------------------------------------------------------------------------------------------
+\subsection{Physics-structured models}
+
+These do not learn $\sigma_e$ from scratch. A skipper pixel averaged over $N$ skips has, in ADU,
+$\sigma_{\text{ADU}}^2=\sigma_1^2/N+\sigma_{\text{floor}}^2$ ($\sigma_1$ the single-skip noise, $\sigma_{\text{floor}}$
+what does not average down), and $\sigma_e=\sigma_{\text{ADU}}/g$. The trace measures $\sigma_1$ in ADU, so only the
+gain and a correction are learned:
+\[
+\log\hat\sigma_{e,*}=T_*-\log\hat g(x_*)+\hat r(x_*),\qquad \log\hat g_*=\log\hat g(x_*),\qquad \log\hat\lambda_*=\hat f_\lambda(x_*),
+\]
+with $N$ the image's number of skips (500) and $x=[\theta;u;v;s]$ (settings, own and reference features, packet state).
+\begin{itemize}
+\item $\hat g$: the weak-prior ARD GP on $\log g_i$ (label variances on the diagonal).
+\item $\hat r$: the same kind of GP on the residuals $r_i=\log\sigma_{e,i}-(T_i-\log g_i)$, computed with the
+  \emph{labelled} gain: what the image sees that the trace term does not (0 if the physics were complete). Rows with
+  $|r_i-\mathrm{med}(r)|>4\times1.4826\,\mathrm{MAD}(r)$ get the extra variance $e_i=(r_i-\mathrm{med}(r))^2$, so each counts
+  as about one ordinary point.
+\item $\hat f_\lambda$: the SAAS GP on $\log\lambda_i$.
+\end{itemize}
+The variants differ in the trace term $T$ and the $\lambda$ model. The $\lambda$ and gain parts of \texttt{physics} and
+\texttt{physics\_white} are identical.
+
+\subsubsection{\texttt{physics}: Allan-curve trace term}
+$T_i=\tfrac12\log(a_i^2/N+b_i^2)$, where $(a_i,b_i)\ge0$ fit the trace's Allan deviation (common pattern removed),
+$\sigma_A(n)^2=a^2/n+b^2$, by weighted least squares in $\sigma_A^2$ with weights for a constant 3\,\% relative scatter
+of every point ($b=0$ refitted if $b^2<0$).
+\input{models/physics.tex}
+
+\subsubsection{\texttt{physics\_white}: white-noise trace term}
+$T_i=\tfrac12\log(w_i^2/N)$, $w_i$ the trace's white noise per skip (``fit: white noise per skip (ADU)''), the Allan
+term where $w_i$ is missing. No floor: the correction $\hat r$ carries what does not average down. Added on 2026-11-03
+because the Allan floor extrapolated to $N=500$ jumped between packets at the same setting.
+\input{models/physics_white.tex}
+
+\subsubsection{\texttt{physics\_joint}: dark current and CIC fitted jointly}
+$\sigma_e$ and the gain as \texttt{physics}. For $\lambda$, each image's per-row line fit gives a dark-current and a
+CIC estimate $(\widehat{DC}_i,\widehat{CIC}_i)$ with a known $2\times2$ covariance $\Sigma_i$; in log space
+\[
+\begin{pmatrix}\log\widehat{DC}_i\\ \log\widehat{CIC}_i\end{pmatrix}\sim\mathcal N\left(\begin{pmatrix}f_{DC}(x_i)\\ f_{CIC}(x_i)\end{pmatrix},\
+J_i\Sigma_iJ_i+\Sigma_{\text{noise}}\right),\quad J_i=\mathrm{diag}(1/\widehat{DC}_i,1/\widehat{CIC}_i),
+\]
+$f_{DC},f_{CIC}$ two GPs (Mat\'ern-5/2, ARD, own constant means) with the SAAS prior fitted by MAP; prediction
+$\log\hat\lambda=\log(e^{\hat f_{DC}}+e^{\hat f_{CIC}})$.
+\input{models/physics_joint.tex}
+
+\subsubsection{\texttt{sets}: the trace sets combined by a learned network}
+As \texttt{physics}, but $T_i$ comes from a set network that reads every trace set's Allan curve separately (log,
+standardized): per set $e=\psi(\text{curve})\in\mathbb R^{64}$ (two SiLU layers), pooled by the mean and
+by attention (softmax over the sets of a learned score), joined with the median-curve physics term, then
+$\rho\to(\mu,\log\sigma^2)$; 5 networks trained on $\log\sigma_{e,i}+\log g_i$ (the labelled gain), i.e.\ on the image's
+noise in ADU. It learns how to combine the sets (ignore a damaged one, average a varying one), the same for every
+setting.
+\input{models/sets.tex}
+
+\subsubsection{\texttt{physics\_hier}: told the module and the amplifier (labelled reference)}
+\texttt{physics} with every GP ($\hat g$, $\hat r$ and a direct GP on $\log\lambda$) replaced by the hierarchical kernel
+\[
+k(i,j)=s^2M(x_i,x_j)+[\text{same module}]\big(c_m^2+s_m^2M(x_i,x_j)\big)+[\text{same amplifier}]\big(c_a^2+s_a^2M(x_i,x_j)\big),
+\]
+$M$ the Mat\'ern-5/2 ARD kernel: a shared function, plus each module's and each amplifier's own offset ($c$) and shape
+($s$). Hyperparameters by MAP with the weak prior.
+\input{models/physics_hier.tex}

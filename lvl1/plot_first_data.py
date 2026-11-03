@@ -40,8 +40,10 @@ INK, INK2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
 TARGETS = {"sigma_e": "σe (read noise)", "lambda": "λ (dark charge)", "gain": "gain"}
 #: the label noise: repeat scatter of the labels over the 4 nominal packets (sd of log), median over the amplifiers
 FROZEN = {"sigma_e": ("gp_dim", "P+A1"), "lambda": ("pretrained", "all"), "gain": ("gp_dim", "P")}
-#: the physics-structured model (physics_white: white-noise trace term; its lambda and gain are physics')
-PHYS = {"sigma_e": ("physics_white", "P+A"), "lambda": ("physics", "P+A"), "gain": ("physics", "P+A1")}
+#: the physics-structured model (physics_white: white-noise trace term; its lambda and gain are physics') at the feature
+#: set the A+B cross-validation chose for each target (before 2026-11-04 lambda and gain were shown at P+A and P+A1,
+#: sets picked after looking at session C)
+PHYS = {"sigma_e": ("physics_white", "P+A"), "lambda": ("physics", "all"), "gain": ("physics", "P")}
 
 
 def style(ax, ylabel=None):

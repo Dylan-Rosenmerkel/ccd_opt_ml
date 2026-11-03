@@ -1,0 +1,51 @@
+\paragraph{Performance.}
+$\sigma_e$: set P+A, CV 12.3\,\%, session C 7.3\,\% (-2.9 vs settings + amplifier, 95\,\% [-9.3, +3.1]); $\lambda$: set all, CV 30.1\,\%, session C 5.3\,\% (-17.9 vs settings + amplifier, 95\,\% [-25.8, -10.1], significant); gain: set P, CV 1.1\,\%, session C 0.9\,\% (-0.5 vs settings + amplifier, 95\,\% [-1.3, +0.3]).
+\paragraph{What the predictions rely on.} Change of the prediction (RMS, \% of the target) when an input group is shuffled across all rows (\emph{all}) or only among the rows of the same amplifier (\emph{in amp.}), and the increase of the session C error (percentage points) when it is shuffled among the C rows (\emph{C loss}). Number of inputs in brackets.
+\begin{center}\footnotesize
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+ & \multicolumn{3}{c}{$\sigma_e$} & \multicolumn{3}{c}{$\lambda$} & \multicolumn{3}{c}{gain} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+input group & all & in amp. & C loss & all & in amp. & C loss & all & in amp. & C loss \\
+\midrule
+settings (37) & 1.7 & 1.7 & +0.4 & 6.5 & 6.2 & +3.0 & 1.0 & 1.0 & +1.0 \\
+own trace (125) & 8.3 & 8.5 & +0.5 & 21.6 & 21.6 & +18.0 & 0.4 & 0.3 & +0.0 \\
+reference trace (123) & 4.4 & 0.7 & +1.5 & 45.7 & 6.1 & +45.9 & 3.5 & 0.6 & +2.6 \\
+packet state (124) & 1.3 & 1.3 & +0.0 & 37.1 & 37.3 & -0.1 & 0.4 & 0.4 & -0.0 \\
+trace noise term (1) & 15.9 & 14.9 & +5.0 & 0.0 & 0.0 & +0.0 & 0.0 & 0.0 & +0.0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Single inputs that move the prediction most} (shuffled one at a time across all rows; RMS change, \%):
+\begin{center}\footnotesize
+\begin{tabular}{rp{0.29\textwidth}p{0.29\textwidth}p{0.29\textwidth}}
+\toprule
+ & $\sigma_e$ & $\lambda$ & gain \\
+\midrule
+1 & trace noise term (white noise / Allan fit) (16.1) & ref edge: jitter (ns) (58.5) & ref noise: jump-robust CDS sigma (ADU) (3.1) \\
+2 & own discrete: line frequency, whole trace (kHz) (5.3) & ref noise: within-cycle power 0.1-0.3 MHz (46.6) & ref noise: null-CDS noise (ADU) (1.0) \\
+3 & own noise: permutation entropy (m=4) (4.1) & state skip: signal-window level (32.1) & setting VDD2 (0.3) \\
+4 & own start: transient time constant (us) (3.9) & own slow: row-start recovery time (skips) (20.4) & setting VDD1 (0.3) \\
+5 & own start: row-start/inner first-skip ratio (3.6) & state start: first-skip excess per volt H (ADU/V) (16.8) & setting VR1 (0.3) \\
+6 & ref fit: white noise per skip (ADU) (2.3) & setting H1\_A\_L (4.8) & setting VR2 (0.3) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Fitted parameters:} inverse length scales $1/\ell_j$ of the GP that carries the target: $\sigma_e$, the correction $r(x)$; $\lambda$, the $\lambda$ GP; gain, the gain GP $\hat g(x)$.
+\begin{center}\footnotesize
+\begin{tabular}{rp{0.29\textwidth}p{0.29\textwidth}p{0.29\textwidth}}
+\toprule
+ & $\sigma_e$ & $\lambda$ & gain \\
+\midrule
+1 & own noise: permutation entropy (m=4) (0.82) & state start: first-skip excess per volt H (ADU/V) (0.57) & ref noise: jump-robust CDS sigma (ADU) (1.1) \\
+2 & own discrete: line frequency, whole trace (kHz) (0.69) & setting H1\_A\_L (0.47) & ref noise: null-CDS noise (ADU) (0.42) \\
+3 & own start: row-start/inner first-skip ratio (0.67) & state skip: signal-window level (0.42) & setting VDRAIN1 (0.13) \\
+4 & own start: transient time constant (us) (0.41) & ref edge: jitter (ns) (0.34) & setting V3\_A\_H (0.13) \\
+5 & own noise: null-CDS autocorrelation at lag 1 (0.24) & setting VSUB (0.23) & setting V1\_A\_H (0.13) \\
+6 & own discrete: CDS spectrum lines (0.19) & own slow: row-start recovery time (skips) (0.23) & setting VDRAIN2 (0.13) \\
+\bottomrule
+\end{tabular}
+\end{center}
+{\footnotesize $\sigma_e$ GP: amplitude 0.48, noise 0.00091; gain GP: amplitude 0.71, noise 0.00091.}
+\paragraph{The three terms.}
+Over all rows the three terms of $\log\sigma_e$ vary by (sd): trace term 11.4\,\%, $-\log\hat g$ 2.6\,\%, correction $r$ 6.4\,\% (mean -18\,\%: the image's noise relative to the trace's); the labels vary by 15.9\,\%. Session C error with the trace term and the average gain only: 8.8\,\%; with the learned gain: 7.6\,\%; with the correction (the model): 7.3\,\%. Rows down-weighted as outliers in the correction fit: 19 of 127.

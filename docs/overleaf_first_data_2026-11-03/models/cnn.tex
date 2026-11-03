@@ -1,0 +1,33 @@
+\paragraph{Performance.}
+$\sigma_e$: set P+A+B, CV 16.6\,\%, session C 10.0\,\% (-0.2 vs settings + amplifier, 95\,\% [-3.5, +4.4]); $\lambda$: set all, CV 29.4\,\%, session C 12.9\,\% (-10.3 vs settings + amplifier, 95\,\% [-18.9, -1.6], significant); gain: set P+A+B, CV 0.8\,\%, session C 1.2\,\% (-0.3 vs settings + amplifier, 95\,\% [-0.7, +0.3]).
+\paragraph{What the predictions rely on.} Change of the prediction (RMS, \% of the target) when an input group is shuffled across all rows (\emph{all}) or only among the rows of the same amplifier (\emph{in amp.}), and the increase of the session C error (percentage points) when it is shuffled among the C rows (\emph{C loss}). Number of inputs in brackets.
+\begin{center}\footnotesize
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+ & \multicolumn{3}{c}{$\sigma_e$} & \multicolumn{3}{c}{$\lambda$} & \multicolumn{3}{c}{gain} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+input group & all & in amp. & C loss & all & in amp. & C loss & all & in amp. & C loss \\
+\midrule
+settings (37) & 5.7 & 5.6 & -0.6 & 10.1 & 10.2 & +3.0 & 0.9 & 0.9 & +0.8 \\
+reference trace (123) & 10.5 & 7.6 & +2.8 & 38.8 & 21.3 & +27.9 & 2.6 & 0.5 & +1.7 \\
+own curves (16) & 8.7 & 8.8 & +0.3 & 13.3 & 13.0 & +5.1 & 0.5 & 0.5 & +0.1 \\
+reference curves (16) & 5.3 & 2.4 & +1.6 & 14.2 & 6.9 & +6.1 & 0.7 & 0.2 & +0.3 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Single inputs that move the prediction most} (shuffled one at a time across all rows; RMS change, \%):
+\begin{center}\footnotesize
+\begin{tabular}{rp{0.29\textwidth}p{0.29\textwidth}p{0.29\textwidth}}
+\toprule
+ & $\sigma_e$ & $\lambda$ & gain \\
+\midrule
+1 & own curve skip: baseline droop curve (4.0) & ref curve level: common CDS pattern (5.1) & setting VR2 (0.3) \\
+2 & own curve noise: within-cycle structure function (3.1) & setting delayInt (4.6) & setting VDD1 (0.3) \\
+3 & ref curve noise: within-cycle structure function (2.4) & own curve skip: baseline droop curve (3.9) & setting VR1 (0.2) \\
+4 & ref noise: baseline coupling (1e-3) (1.6) & setting delayRGH (3.5) & ref skip: noise power 0.1-1 MHz (0.2) \\
+5 & ref noise: lag-1 autocorrelation of 10-skip means (1.5) & setting VSUB (3.5) & ref edge: rise time (ns) (0.2) \\
+6 & ref start: row-start/inner first-skip ratio (1.5) & ref curve edge: equivalent-time pulse (3.3) & setting VDD2 (0.2) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Fitted parameters:} network weights, with no per-input meaning; the shuffles above are the summary of what it uses.

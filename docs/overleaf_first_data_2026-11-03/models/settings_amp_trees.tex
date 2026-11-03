@@ -1,0 +1,44 @@
+\paragraph{Performance.}
+$\sigma_e$: set none, CV 15.7\,\%, session C 10.2\,\%; $\lambda$: set none, CV 36.1\,\%, session C 23.2\,\%; gain: set none, CV 0.8\,\%, session C 1.4\,\%.
+\paragraph{What the predictions rely on.} Change of the prediction (RMS, \% of the target) when an input group is shuffled across all rows (\emph{all}) or only among the rows of the same amplifier (\emph{in amp.}), and the increase of the session C error (percentage points) when it is shuffled among the C rows (\emph{C loss}). Number of inputs in brackets.
+\begin{center}\footnotesize
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+ & \multicolumn{3}{c}{$\sigma_e$} & \multicolumn{3}{c}{$\lambda$} & \multicolumn{3}{c}{gain} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+input group & all & in amp. & C loss & all & in amp. & C loss & all & in amp. & C loss \\
+\midrule
+settings (37) & 16.0 & 16.1 & +5.3 & 24.5 & 24.8 & +11.9 & 0.3 & 0.3 & +0.1 \\
+amplifier identity (4) & 10.6 & 0.0 & +5.1 & 42.0 & 0.0 & +26.6 & 3.6 & 0.0 & +2.5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Single inputs that move the prediction most} (shuffled one at a time across all rows; RMS change, \%):
+\begin{center}\footnotesize
+\begin{tabular}{rp{0.29\textwidth}p{0.29\textwidth}p{0.29\textwidth}}
+\toprule
+ & $\sigma_e$ & $\lambda$ & gain \\
+\midrule
+1 & setting delayInt (16.0) & amp ch2 (32.0) & amp ch0 (3.0) \\
+2 & amp ch3 (10.3) & setting delayInt (24.8) & amp ch1 (2.2) \\
+3 & amp ch2 (6.3) & amp ch3 (21.7) & amp ch2 (0.4) \\
+4 & amp ch0 (1.2) & amp ch0 (9.9) & setting delayInt (0.3) \\
+5 & amp ch1 (0.7) & amp ch1 (2.8) & amp ch3 (0.1) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Fitted parameters:} share of the total squared-error reduction of all splits made on the input.
+\begin{center}\footnotesize
+\begin{tabular}{rp{0.29\textwidth}p{0.29\textwidth}p{0.29\textwidth}}
+\toprule
+ & $\sigma_e$ & $\lambda$ & gain \\
+\midrule
+1 & setting delayInt (0.68) & amp ch2 (0.41) & amp ch0 (0.53) \\
+2 & amp ch3 (0.18) & amp ch3 (0.30) & amp ch1 (0.45) \\
+3 & amp ch2 (0.13) & setting delayInt (0.22) & amp ch2 (0.01) \\
+4 & amp ch0 (0.01) & amp ch0 (0.05) & setting delayInt (0.01) \\
+5 & amp ch1 (0.00) & amp ch1 (0.03) & amp ch3 (0.00) \\
+\bottomrule
+\end{tabular}
+\end{center}
+{\footnotesize $\sigma_e$: 5 inputs used in any split; $\lambda$: 5 inputs used in any split; gain: 5 inputs used in any split.}

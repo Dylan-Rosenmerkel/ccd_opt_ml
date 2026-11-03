@@ -321,3 +321,24 @@ then see what both of them can predict together; model the new packet designs af
   (model_inputs, model_inputs_l1, model_inputs_both on the same rows), train_lvl1 (strip features kept by every set;
   strip white noise for physics_white). Plumbing-tested with synthetic strips. Still to do: v2 plan text with strips,
   rehearsal with simulated strips, the DAQ strip-size test (user).
+
+## 15. Every model explained (2026-11-04)
+
+* Correction: the physics model's lambda and gain were shown at P+A / P+A1, sets picked after looking at session C.
+  At the sets the A+B CV chose (lambda all, gain P): lambda 5.3 % (-17.9 [-25.8, -10.1] * vs settings_amp_trees),
+  gain 0.9 % (-0.5 [-1.3, +0.3], n.s.). Significant gain winners on C: ridge [P+A1] 0.8, deep_kernel [P+A1] 0.7, trees
+  [P+A+B] 1.1. fig1/fig2 (`PHYS` in plot_first_data.py) and the report text fixed.
+* `lvl1/explain_models.py`: every model refitted once on A+B (as the session C fit) at its CV-chosen set per target,
+  captured at its final predict; native parameters (GP 1/l, SAAS relevance, ridge coefficients, tree split gains,
+  deep-kernel relevance, physics terms) and shuffle importance (input groups and single inputs; across all rows,
+  within amplifier, session C loss). Output `processed/lvl1_results/2026-11-03_explain/explain.json` (+ run.log).
+* `lvl1/report_models.py`: `models_performance.tex`, `models/<model>.tex`, fig7 (all models CV vs C), fig8 (reliance
+  heatmap), fig9 (physics sigma_e term by term). Report now 34 pages: section 4 "Every model at a glance", appendix A
+  "The models in detail" (`models_detail.tex`: exact math of every model).
+* Findings: the gain comes from recognising the amplifier (reference-trace noise features move it 3.5 %, within an
+  amplifier 0.5 %); lambda (physics family) = amplifier recognition from the reference trace (C loss 46 points) + own
+  trace (18 points, also within amplifier); the packet state moves lambda 37 % but gives nothing on C; one feature
+  (ref edge jitter) moves lambda 58 % (fragile). sigma_e: physics_white rests on the measured white noise (trace term
+  alone 8.8 % on C, + learned gain 7.6, + correction 7.3); flexible models use timing proxies (row-start recovery,
+  skips 1-4 ringing) and fail on C. settings_amp_trees uses 5 inputs (delayInt + 4 amplifier columns): the 10-row
+  leaf minimum cannot split on knobs changed in 1-2 packets.

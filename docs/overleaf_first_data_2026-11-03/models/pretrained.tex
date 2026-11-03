@@ -1,0 +1,32 @@
+\paragraph{Performance.}
+$\sigma_e$: set P+A+B, CV 11.7\,\%, session C 12.2\,\% (+2.0 vs settings + amplifier, 95\,\% [-2.0, +7.3]); $\lambda$: set all, CV 27.0\,\%, session C 19.7\,\% (-3.6 vs settings + amplifier, 95\,\% [-14.4, +7.4]); gain: set P+A, CV 1.0\,\%, session C 1.3\,\% (-0.2 vs settings + amplifier, 95\,\% [-0.5, +0.3]).
+\paragraph{What the predictions rely on.} Change of the prediction (RMS, \% of the target) when an input group is shuffled across all rows (\emph{all}) or only among the rows of the same amplifier (\emph{in amp.}), and the increase of the session C error (percentage points) when it is shuffled among the C rows (\emph{C loss}). Number of inputs in brackets.
+\begin{center}\footnotesize
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+ & \multicolumn{3}{c}{$\sigma_e$} & \multicolumn{3}{c}{$\lambda$} & \multicolumn{3}{c}{gain} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+input group & all & in amp. & C loss & all & in amp. & C loss & all & in amp. & C loss \\
+\midrule
+settings (37) & 2.6 & 2.6 & -0.7 & 7.0 & 6.7 & +0.1 & 0.7 & 0.7 & +0.6 \\
+reference trace (123) & 9.6 & 4.8 & +3.1 & 32.4 & 14.4 & +23.3 & 2.3 & 0.4 & +1.8 \\
+own curves (16) & 15.9 & 15.7 & +4.2 & 21.2 & 20.8 & +4.9 & 0.6 & 0.5 & +0.3 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Single inputs that move the prediction most} (shuffled one at a time across all rows; RMS change, \%):
+\begin{center}\footnotesize
+\begin{tabular}{rp{0.29\textwidth}p{0.29\textwidth}p{0.29\textwidth}}
+\toprule
+ & $\sigma_e$ & $\lambda$ & gain \\
+\midrule
+1 & own curve skip: baseline droop curve (8.1) & own curve skip: baseline droop curve (6.4) & setting VR2 (0.3) \\
+2 & own curve noise: within-cycle structure function (4.8) & own curve noise: within-cycle structure function (6.1) & setting VDD2 (0.3) \\
+3 & own curve noise: CDS spectrum, log frequency (3.7) & own curve noise: CDS spectrum (5.1) & setting VR1 (0.2) \\
+4 & own curve skip: mean shape (3.0) & own curve noise: CDS spectrum, log frequency (4.5) & own curve edge: equivalent-time pulse (0.2) \\
+5 & own curve start: mean transient (1.8) & own curve edge: equivalent-time pulse (3.4) & ref skip: CDS rms (detrended) (0.2) \\
+6 & own curve noise: within-cycle spectrum (1.8) & own curve edge: variation along the cycle (3.0) & ref slow: row-start recovery amplitude (ADU) (0.2) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Fitted parameters:} network weights, with no per-input meaning; the shuffles above are the summary of what it uses.

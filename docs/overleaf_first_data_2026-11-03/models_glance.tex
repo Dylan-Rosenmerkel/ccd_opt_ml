@@ -1,0 +1,73 @@
+\section{Every model at a glance}
+\label{sec:glance}
+
+Each model's exact definition, its fitted parameters and what it relies on are in Appendix~\ref{app:models}; this
+section summarizes them. Every model is shown at the trace-feature set its A+B cross-validation chose, per target.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/fig7_all_models.png}
+\caption{Every model's error: A+B cross-validation (open) and session C (filled, with the 68\,\% packet-bootstrap
+interval), log scale. Vertical lines: settings + amplifier (trees) on session C, and the label noise. $\dagger$: the
+frozen choice. The physics models share their $\lambda$ and gain parts.}
+\label{fig:all}
+\end{figure}
+
+\begin{table}[h]
+\centering\scriptsize\renewcommand{\arraystretch}{0.92}
+\caption{Every model at the feature set chosen on A+B: errors (\%) and the paired session C difference from settings
++ amplifier (trees), in percentage points with its 95\,\% packet-bootstrap interval (bold: excludes zero), and the
+fraction of resamples in which the model is better. $\dagger$: frozen choice.}
+\label{tab:all}
+\input{models_performance.tex}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/fig8_reliance.png}
+\caption{What every model's predictions move with: the RMS change of the prediction (\% of the target) when one group
+of inputs is shuffled across all rows (A+B and C), the model fitted once on A+B. Blank: the model does not see that
+group. The trace noise term is used only for $\sigma_e$ by construction.}
+\label{fig:reliance}
+\end{figure}
+
+\paragraph{What the models rely on} (Fig.~\ref{fig:reliance}; per model, Appendix~\ref{app:models}).
+\begin{itemize}
+\item \textbf{The gain comes from recognising the amplifier.} Every trace model's gain rests on the reference trace's
+  noise features (jump-robust CDS $\sigma$, white noise per skip, null-CDS noise). Shuffled across all rows they move
+  the gain by about 3.5\,\%; shuffled only among rows of the same amplifier, by about 0.5\,\%. So the traces tell the
+  models \emph{which amplifier} this is, and the gain follows. The settings move it by about 1\,\% (VDD, VR, VDRAIN). The
+  gain varies little within an amplifier (repeat scatter 0.6\,\%), so this is most of what there is to learn.
+\item \textbf{$\lambda$: the amplifier, the own trace, and the CCD's state.} In the physics family's $\lambda$ GP (the
+  best $\lambda$ model, 5.3\,\%) the reference trace moves $\lambda$ by 46\,\% but by only 6\,\% within an amplifier: it
+  identifies the amplifier, and shuffling it costs 46 points on C. The own trace moves it by 22\,\% also within an
+  amplifier and costs 18 points on C: it carries information about this packet beyond the amplifier. The packet state
+  moves the predictions by 37\,\% but costs nothing on C: what it learned about the CCD's drift in A+B does not carry
+  over to session C. The settings move $\lambda$ by 6\,\%. The SAAS prior keeps few inputs, and a single one (the
+  reference trace's edge jitter) moves $\lambda$ by 58\,\%: a fragile point for a new night.
+\item \textbf{$\sigma_e$: the measured noise versus proxies.} \texttt{physics\_white}'s $\sigma_e$ rests on the trace's
+  white noise (moves 16\,\%, costs 5 points on C when shuffled); its correction uses own-trace features
+  (permutation entropy, line frequency, row-start ratio, transient time constant). The flexible models (gp\_dim,
+  trees, nn) rely instead on own-trace timing proxies (row-start recovery time, CDS ringing in skips 1--4) and the
+  settings, and never on a noise measurement directly; they fit the A+B timing packets and fail on C. \texttt{physics}
+  leans on the Allan floor (42\,\%), the unstable term that gives it 29\,\%.
+\item \textbf{The references.} The settings-only GP moves $\lambda$ with delayInt and the RG low levels and does not
+  move the gain at all. settings + amplifier (trees) uses only five inputs: delayInt and the four amplifier columns.
+  With at least 10 rows per leaf, a knob changed in one or two A+B packets can never be split on. The labelled
+  \texttt{physics\_hier} predicts $\lambda$ from the amplifier identity (45\,\%) and the settings (32\,\%) and is worse on C
+  (16.6\,\%) than the label-free physics model, which identifies the amplifier from its traces and also reads its state.
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/fig9_physics_terms.png}
+\caption{The physics-structured $\sigma_e$ (physics\_white [P+A]) built up term by term: the trace's white noise
+$/\sqrt N$ divided by the average gain, then by the learned gain, then with the learned correction. Most of the
+session C accuracy comes from the measured noise. In A+B (grey; training rows, so the right panel is in-sample) the
+trace term alone misses the timing packets; the correction pulls them in.}
+\label{fig:terms}
+\end{figure}
+
+\paragraph{Caveats.} Shuffling measures what a fitted model uses, not what is causally true; correlated inputs share
+credit (hence the group shuffles). The network models were refitted for this analysis, and with their random starts
+their session C errors differ from the scored run by up to 2 points (the tables report the scored run).

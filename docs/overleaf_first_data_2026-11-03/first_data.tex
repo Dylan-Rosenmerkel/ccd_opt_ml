@@ -1,7 +1,8 @@
 \documentclass[11pt]{article}
 \usepackage[margin=2.2cm]{geometry}
-\usepackage{graphicx,booktabs,amsmath,hyperref,xcolor,enumitem}
+\usepackage{graphicx,booktabs,amsmath,amssymb,hyperref,xcolor,enumitem}
 \usepackage[T1]{fontenc}
+\usepackage[section]{placeins}
 \setlist{itemsep=2pt,topsep=3pt}
 \hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
 \title{Level 1, first real data: can the traces predict the image?\\[2pt]
@@ -16,9 +17,11 @@
 
 \begin{itemize}
 \item \textbf{Yes, the traces predict something, and more than the first cross-validation suggested.} On the held-out
-  session C (8 packets with usable traces, 32 amplifier rows), the physics-structured model predicts $\lambda$ to 5--7\,\%
-  (settings + amplifier identity without any trace: 23\,\%), the gain to 0.6\,\% (1.4\,\%) and $\sigma_e$ to 5--7\,\%
-  (10\,\%). The $\lambda$ and gain differences are significant; the $\sigma_e$ one is not (only 8 packets).
+  session C (8 packets with usable traces, 32 amplifier rows), the physics-structured model, at the feature sets
+  chosen on A+B, predicts $\lambda$ to 5.3\,\% (settings + amplifier identity without any trace: 23\,\%; significant),
+  $\sigma_e$ to 7.3\,\% (10.2\,\%; not significant with 8 packets) and the gain to 0.9\,\% (1.4\,\%; not significant).
+  For the gain, ridge, trees and the deep-kernel GP are significantly better than settings + amplifier (0.7--1.1\,\%).
+  (An earlier version quoted 0.6\,\% for the gain: that feature set had been picked after looking at session C.)
 \item \textbf{The model chosen and frozen on sessions A+B failed for $\sigma_e$} (gp\_dim, 13.5\,\% on C, worse than
   the no-trace baselines) and was only marginal for $\lambda$ (pretrained CNN, 19.7\,\%). The A+B packets change one
   knob at a time, so every held-out packet in their cross-validation was an extreme the model had not seen: the
@@ -41,7 +44,9 @@
 \caption{Typical error (RMS of $\log$(predicted/true)) of the two baselines and two trace models, on the A+B
 cross-validation and on the held-out session C. Frozen choice (made on A+B before C was looked at): $\sigma_e$
 gp\_dim [P+A1], $\lambda$ pretrained [all], gain gp\_dim [P]. Physics-structured: physics\_white [P+A] for
-$\sigma_e$, physics [P+A] for $\lambda$, physics [P+A1] for the gain. Dashed: the label noise (repeat scatter of the
+$\sigma_e$, physics [all] for $\lambda$, physics [P] for the gain, the sets the A+B cross-validation chose (one model:
+the $\lambda$ and gain parts of physics and physics\_white are the same). Light blue: the better of the GP and the
+boosted trees on the settings and the amplifier's one-hot code (definitions in Appendix~\ref{app:models}). Dashed: the label noise (repeat scatter of the
 labels over the four nominal packets).}
 \label{fig:help}
 \end{figure}
@@ -91,10 +96,12 @@ rows (cross-validation); coloured: the held-out session C, one marker per amplif
 \end{figure}
 
 \paragraph{Session C, paired against settings + amplifier (trees), packet bootstrap (8 packets).}
-$\lambda$: physics [P+A] 5.3 vs 23.2\,\%, $-17.9$ [$-25.4$, $-10.3$]; frozen pretrained $-3.6$ [$-14.1$, $+7.7$].
-Gain: physics [P+A1] 0.6 vs 1.4\,\%, $-0.8$ [$-1.3$, $-0.3$]; trees [P+A] $-0.4$ [$-0.5$, $-0.1$]; frozen gp\_dim
-$-0.6$ [$-1.3$, $+0.1$]. $\sigma_e$: physics\_white [P+A] 7.3 vs 10.2\,\%, $-2.9$ [$-9.5$, $+2.9$]; nn [P+A1] $-4.3$
-[$-10.7$, $+1.0$]; frozen gp\_dim $+3.3$ [$-2.8$, $+10.2$]. With the three packets without usable traces included,
+Each model at the feature set chosen on A+B (all models: Table~\ref{tab:all}).
+$\lambda$: physics [all] 5.3 vs 23.2\,\%, $-17.9$ [$-25.8$, $-10.1$]; cnn [all] $-10.3$ [$-18.9$, $-1.6$]; frozen
+pretrained $-3.6$ [$-14.4$, $+7.4$]. Gain: physics [P] 0.9 vs 1.4\,\%, $-0.5$ [$-1.3$, $+0.3$]; ridge [P+A1] $-0.7$
+[$-1.1$, $-0.1$]; deep\_kernel [P+A1] $-0.7$ [$-1.3$, $-0.1$]; trees [P+A+B] $-0.4$ [$-0.6$, $-0.1$]; frozen gp\_dim
+$-0.6$ [$-1.2$, $+0.1$]. $\sigma_e$: physics\_white [P+A] 7.3 vs 10.2\,\%, $-2.9$ [$-9.3$, $+3.1$]; frozen gp\_dim
+$+3.3$ [$-2.9$, $+10.4$]. With the three packets without usable traces included,
 physics\_white's $\sigma_e$ error is 27.5\,\% (51\,\% on those three packets alone): a model cannot predict from traces
 that do not exist.
 
@@ -118,6 +125,8 @@ models gain little beyond the 8 protected estimators (P) for the gain; $\sigma_e
 $\sim$50--140 features for trees and the networks; with 32 packets the differences between sets are within the noise.}
 \label{fig:ladder}
 \end{figure}
+
+\input{models_glance.tex}
 
 \section{Where the errors come from}
 
@@ -195,6 +204,8 @@ choose models on joint-design data (v2) \\
 \end{enumerate}
 
 \appendix
+\input{models_detail.tex}
+
 \section{Cross-validation on A+B at every feature set}
 \begin{table}[h]
 \centering\small
