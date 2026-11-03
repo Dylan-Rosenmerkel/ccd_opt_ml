@@ -815,7 +815,8 @@ def dataset_rows(result: dict, manifest: dict) -> list[dict[str, Any]]:
             for key in ("gain_adu_per_e", "gain_err", "sigma_e", "sigma_e_err", "lambda_e_per_bin",
                         "lambda_err", "sigma_adu", "sigma_err", "dc_adu", "dc_err", "mu_adu", "included_fraction",
                         "lambda_dark", "lambda_cic", "lambda_dark_err", "lambda_cic_err", "lambda_dark_cic_cov",
-                        "rows_chi2_dof", "n_rows_fit", "drift_corrected", "drift_cut", "drift_warning"):
+                        "rows_chi2_dof", "n_rows_fit", "drift_corrected", "drift_cut", "drift_warning",
+                        "lambda_overscan", "lambda_overscan_err", "lambda_active", "lambda_active_err"):
                 row[f"label.{key}"] = label.get(key)
             for key, value in (image.get("image_header") or {}).items():
                 row[f"image.{key}"] = value

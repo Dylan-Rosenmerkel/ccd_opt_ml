@@ -116,5 +116,30 @@ def image_rows(fits_path, labels: list[dict], meta: dict, reverse: bool = False)
             lam = np.array([f[0] for f in fits_rows])
             err = np.array([f[1] for f in fits_rows])
             out[ch] = {"rows_lambda": lam.tolist(), "rows_lambda_err": err.tolist(),
-                       "n_active_columns": int(cols.sum()), **line_fit(lam, err)}
+                       "n_active_columns": int(cols.sum()), **line_fit(lam, err), **overscan_lambda(data, cols, g, s)}
     return out
+
+
+def overscan_lambda(data: np.ndarray, cols: np.ndarray, gain: float, sigma: float, skip: int = 4) -> dict:
+    """
+    The charge in the OVERSCAN: the columns read after the last active column are empty serial-register cells, so
+    the charge they hold was made in the serial register (its dark current and horizontal-clock CIC; or charge
+    trailing behind the real pixels), not in the pixel array.  On the 2026-11-02 images it was 70-85 % of the active
+    area's lambda.  Each row's pixels are taken relative to that row's pedestal (the median of the 0-electron core of
+    its active pixels), pooled over the rows, and lambda fitted with the gain and noise fixed (as ``row_lambda``); the
+    first ``skip`` overscan columns are left out.  Also the active area's pooled lambda on the same pedestal.
+    """
+    idx = np.flatnonzero(cols)
+    if not len(idx) or idx[-1] + 1 + skip >= data.shape[1]:
+        return {}
+    over, act = [], []
+    for row in data:
+        a = row[cols]
+        core = a[np.abs(a - np.median(a)) < 3 * sigma]
+        mu = float(np.median(core)) if len(core) > 10 else float(np.median(a))
+        over.append(row[idx[-1] + 1 + skip:] - mu)
+        act.append(a - mu)
+    lo, eo = row_lambda(np.concatenate(over), gain, sigma)
+    la, ea = row_lambda(np.concatenate(act), gain, sigma)
+    return {"lambda_overscan": lo, "lambda_overscan_err": eo, "lambda_active": la, "lambda_active_err": ea,
+            "n_overscan_columns": int(data.shape[1] - idx[-1] - 1 - skip)}

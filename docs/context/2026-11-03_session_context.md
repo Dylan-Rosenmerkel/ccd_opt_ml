@@ -202,3 +202,21 @@ orders tiers cover random; n-boot 300; out processed_AB/lvl1_results/2026-11-03_
   only to 8-25 % (ch2 0.40-0.69; quoted 3 %), about its whole spread over the packets on ch2/ch3 (18-24 %): with 16
   rows the dark-current / CIC split is unreliable (slope and intercept trade off; rows chi2/dof median 4.4). Total
   lambda (2 % quoted, 10-14 % repeat) is the better target now; 32 rows should help the split.
+
+## 9. How lambda is labelled, and the serial / array split test (not adopted)
+
+* sigma_e, gain and total lambda: run_WADERs (unchanged). The dark-current / CIC split is ours (src/image_rows.py,
+  per-row lambda with WADERs' gain and sigma fixed, straight line over rows): its "CIC" intercept is everything common
+  to all rows, i.e. also serial-register charge and charge collected before the readout. Evidence: the OVERSCAN (empty
+  serial-register cells) holds 70-85 % of the active lambda (median ch0 0.20 vs 0.28); lambda rises ~x1.5 along the
+  row (serial-register wait); L1_18 (queue stalled 38 min before its image, no flush) active 0.67, overscan 0.22.
+* `image_rows.overscan_lambda` now records `label.lambda_overscan` (and `lambda_active`) for every label (relabelled;
+  recorded only, no model uses it).
+* Test (scratchpad data1103/components.py; `lvl1_results/2026-11-03_serial`, `_ratio`): log lambda = log overscan +
+  log(lambda / overscan), each part predicted, summed, vs the direct lambda prediction, packet bootstrap:
+  trees 28.8 (direct) vs 30.8 % (sum) [+2.0, CI -0.5..+6.4]; physics_white 37.0 vs 33.7 [-3.3, -11.7..+6.1]; nn, cnn
+  ~0; no model significantly better -> NOT adopted. The serial part is predictable (physics/sets 20.5 % vs mean 39.8 %);
+  the array ratio is not (best ~29-32 % vs mean 34.5 %): lambda's unpredictable part is in the array (CCD state,
+  time since the last flush), which the v2 procedure (flush right before the image, fixed timeline, more nominal
+  packets, 32 rows) addresses. The parts' nominal repeatability (overscan 14-37 %, ratio 19-31 %) is worse than the
+  total's (10-14 %).
