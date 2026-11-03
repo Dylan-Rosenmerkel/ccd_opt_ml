@@ -611,8 +611,11 @@ def extract_labels(header: dict[str, Any], bounds: dict[str, tuple[float, float]
 # The whole packet                                                             #
 # --------------------------------------------------------------------------- #
 
-def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders: bool = False) -> dict:
-    """Run steps 1-4 for one packet and write its results; returns the result summary."""
+def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders: bool = False,
+                   reuse_traces: bool = False) -> dict:
+    """Run steps 1-4 for one packet and write its results; returns the result summary.  ``reuse_traces``: take the
+    traces' results from the packet's existing features.json (written by an earlier run) and redo only the images
+    and labels (e.g. after a change of the image processing)."""
     manifest = json.loads(Path(manifest_path).read_text())
     out = cfg.out_dir / manifest["packet_id"]
     out.mkdir(parents=True, exist_ok=True)
@@ -623,11 +626,15 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
     files = packet_files(manifest, cfg)
 
     # -- traces ----------------------------------------------------------------
-    traces = [process_trace(entry, out, cfg) for entry in files["traces"]]
-    combined = combine_repeats(traces)
-    differences = trace_differences(combined)
-    (out / "features.json").write_text(json.dumps(_json_safe(
-        {"traces": traces, "combined": combined, "differences": differences}), indent=1))
+    if reuse_traces and (out / "features.json").exists():
+        done = json.loads((out / "features.json").read_text())
+        traces, combined, differences = done["traces"], done["combined"], done["differences"]
+    else:
+        traces = [process_trace(entry, out, cfg) for entry in files["traces"]]
+        combined = combine_repeats(traces)
+        differences = trace_differences(combined)
+        (out / "features.json").write_text(json.dumps(_json_safe(
+            {"traces": traces, "combined": combined, "differences": differences}), indent=1))
 
     # -- images and labels -------------------------------------------------------
     images = []
@@ -807,6 +814,8 @@ def main() -> None:
     parser.add_argument("--path-map", action="append", default=[], metavar="OLD=NEW",
                         help="map a DAQ path prefix to a local one (repeatable)")
     parser.add_argument("--skip-waders", action="store_true", help="traces only")
+    parser.add_argument("--reuse-traces", action="store_true",
+                        help="keep each packet's trace results (features.json) and redo only the images and labels")
     args = parser.parse_args()
 
     cfg = ProcessingConfig.load(args.config)
@@ -828,7 +837,7 @@ def main() -> None:
         parser.error("give manifest files or --packets-dir")
 
     for path in manifests:
-        result = process_packet(path, cfg, args.skip_waders)
+        result = process_packet(path, cfg, args.skip_waders, args.reuse_traces)
         n_ok = sum(1 for t in result["traces"] if t.get("usable"))
         labels = [l for im in result["images"] for l in im.get("labels", [])]
         print(f"{result['packet_id']}: {n_ok}/{len(result['traces'])} traces usable, "

@@ -111,3 +111,31 @@ the image pixels see clocking the 2 x 5 trace pixels do not; WADERs' sigma_e aff
 
 Run 2 (feature ladder; models settings physics physics_joint sets ridge trees gp gp_dim nn cnn pretrained deep_kernel;
 orders tiers cover random; n-boot 300; out processed_AB/lvl1_results/2026-11-03_ladder; log train_ladder.log): running.
+
+## 5. User questions (2026-11-03): why does the learned correction not fix the physics term; try the adjustment
+
+* physics predicts log sigma_e = trace term - learned gain + learned correction (GP on settings, packet state and
+  features). The correction can only learn what is a repeatable function of its inputs; the Allan-floor term jumped
+  randomly between packets (x1.45 vs x1.17 at the same setting), which no input explains.
+* **`PhysicsStructured(noise_source="white")`** (src/ml/structured.py): trace term = (white noise per skip)^2 / N,
+  `X["white"]` from the physics file before any feature selection (train_lvl1 `_physics_X`; it is the physics term, not
+  an input). New models (extra): `physics_white`, `trace_physics_white`; `NO_FEATURES` replaces the hard-coded
+  ("mean", "trace_physics"). On the (drift-corrected) A+B labels: physics sigma_e 27.8 -> **17.9 %** (paired -9.9 pp
+  [-18.5, -1.8], P 0.99); trace_physics 68.7 -> 22.7 %; lambda and gain unchanged. Synthetic: identical (no white
+  feature there, falls back to the Allan term).
+
+## 6. FOUND: the drift correction corrupted the session-A labels (data processing problem, fixed)
+
+* Image sigma_e in session B (voltages) is steady (ch0 ~0.150); in session A (timing) it jumped incoherently between
+  amplifiers (delay_Ha 900: ch0 0.694, ch1 0.342), and the replicate pair L1_06 / L1_23 (delayInt 3000) disagreed by
+  60 % while their traces agreed.
+* run_WADERs on the RAW vs the drift-corrected images (scratchpad `data1103/rawwaders/`), sigma_e ch0..ch3:
+  L1_14 raw .148/.155/.168/.179, corr the same; L1_06 raw .145/.159/.186/.195, corr .348/.227/.184/.258;
+  L1_23 raw .144/.144/.180/.181 (= L1_06 raw: the replicates agree); L1_03 raw .238/.221/.374/.247, corr .694/.342/.404/
+  .348; L1_02 ch1 .183 -> .278; L1_05 ch1 .179 -> .267; L1_09 ch3 .236 -> .416; L1_08 the same. Raw chi2/ndf 0.8-1.3 at
+  nominal: this night's images have little drift. Real effects that remain on the raw images: delayInt 500 (.232),
+  delay_Ha 3600 (.227), delay_Ha 900 (.238) raise sigma_e.
+* **`[drift] enabled = false`** (configs/processing.toml, with the evidence). `process_packet.py --reuse-traces`: keeps
+  features.json and redoes only images + labels (~1 min per packet). Relabelling all 43 (scratchpad `relabel.sh`,
+  6 workers, then processed/ and processed_AB/ rebuilt). The ladder run (section 4) was stopped: its labels were the
+  corrupted ones. Everything is rerun after the relabel.

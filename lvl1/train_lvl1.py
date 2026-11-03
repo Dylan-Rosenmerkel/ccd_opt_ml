@@ -100,12 +100,15 @@ from ml.evaluate import bootstrap_weights, crps_gaussian, grouped_folds, percent
 TARGETS = ("sigma_e", "lambda", "gain")
 ALL_MODELS = ("mean", "settings", "trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
 #: GP-prior variants: run only when named in --models
-EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_gp_lambda", "physics_joint_weak", "physics_joint_select", "physics_saasmap_lambda", "physics_saasfull_lambda", "sets_gp_lambda")
+EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_gp_lambda", "physics_joint_weak", "physics_joint_select", "physics_saasmap_lambda", "physics_saasfull_lambda", "sets_gp_lambda",
+                "physics_white", "trace_physics_white")
+#: models that use no trace features at all (they keep their plain names in every run)
+NO_FEATURES = ("mean", "trace_physics", "trace_physics_white")
 #: baselines that see no trace: every report compares the models with them
 BASELINES = ("mean", "settings")
 #: models told which module and amplifier they see (references only; see the module docstring)
 USES_LABELS = ("physics_hier",)
-FAMILY = {"mean": "features", "settings": "features", "trace_physics": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
+FAMILY = {"mean": "features", "settings": "features", "trace_physics": "physics", "trace_physics_white": "physics", "physics_white": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
           "ridge": "features", "trees": "features", "gp": "features", "nn": "features",
           "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves",
           "gp_dim": "features", "gp_saas": "features", "physics_dim": "physics", "physics_saas": "physics", "physics_gp_lambda": "physics", "sets_gp_lambda": "sets",
@@ -415,8 +418,14 @@ class Runner:
             warnings.simplefilter("ignore")
             allan = np.where(np.isnan(allan), np.nanmedian(allan, axis=0), allan)
         a, b = st.allan_fit(allan, d["allan_ns"], max_n=self._allan_max_n(d))
+        # the trace's white noise per skip (for noise_source "white"; NaN where the feature is missing).  Like the Allan
+        # curve it is the physics term, not an input, so it comes from the family file before any feature selection.
+        full = self.files["physics"]
+        names = list(full["feature_names"]) if "feature_names" in full else []
+        white = (np.asarray(full["X_trace"], float)[self.rows][:, names.index(st.WHITE_FEATURE)]
+                 if st.WHITE_FEATURE in names else np.full(len(a), np.nan))
         def part(idx, x):
-            X = {"x": x, "a": a[idx], "b": b[idx], "n_skips": d["n_skips"][idx], "y_var": self.Y_err[idx] ** 2,
+            X = {"x": x, "a": a[idx], "b": b[idx], "white": white[idx], "n_skips": d["n_skips"][idx], "y_var": self.Y_err[idx] ** 2,
                  # module and amplifier ids: used ONLY by the labelled reference physics_hier (kind "hier")
                  "module": self.module_id[idx], "amp": self.amp_id[idx]}
             if "lambda_parts" in d:
@@ -424,12 +433,12 @@ class Runner:
             return X
         return part(train, xtr), part(test, xte)
 
-    def trace_physics(self, train, test):
+    def trace_physics(self, train, test, noise_source="allan"):
         """No learning: the trace physics of sigma_e in ADU divided by the training mean gain; lambda and gain are
         the training means."""
         d = self.f("physics")
         Xtr, Xte = self._physics_X(d, train, test)
-        A = st.PhysicsStructured()
+        A = st.PhysicsStructured(noise_source=noise_source)
         g, lam = self.Y[train, 2].mean(), self.Y[train, 1].mean()
         m = np.column_stack([A.physics_log_sigma_adu(Xte) - g, np.full(len(test), lam), np.full(len(test), g)])
         s = np.column_stack([np.full(len(test), self.Y[train, 2].std()), np.full(len(test), self.Y[train, 1].std()),
@@ -460,6 +469,18 @@ class Runner:
             # 11 -> 7.4 %, 4.9 -> 3.9 % at 13 / 41 / 100 packets, sigma_e and gain unchanged, ~1 min per run at 100
             # packets (full chains: 13.5 / 7.3 / 3.9 % but 19 min; 2026-10-20; physics_gp_lambda is the previous version)
             model = st.PhysicsStructured(lambda_kind="saas", lambda_kw=SAAS_LAMBDA_KW)
+        return model.fit(Xtr, self.Y[train]).predict(Xte)
+
+    def trace_physics_white(self, train, test):
+        """trace_physics with the white-noise term (white noise per skip / sqrt(N)) instead of the Allan fit."""
+        return self.trace_physics(train, test, noise_source="white")
+
+    def physics_white(self, train, test):
+        """physics with the white-noise trace term instead of the Allan fit (PhysicsStructured noise_source "white";
+        added 2026-11-03 after the first real packets)."""
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        model = st.PhysicsStructured(lambda_kind="saas", lambda_kw=SAAS_LAMBDA_KW, noise_source="white")
         return model.fit(Xtr, self.Y[train]).predict(Xte)
 
     def physics_saasmap_lambda(self, train, test):
@@ -1165,10 +1186,10 @@ def main():
         if args.ablation_ref not in sets:
             sets.append(args.ablation_ref)
         # the baselines without trace features keep their plain names (the vs-mean scores look for "mean")
-        runs = [(m, m, "none") if m in ("mean", "trace_physics") else (f"{m} [{s}]", m, s) for m in args.models
-                for s in ([None] if m in ("mean", "trace_physics") else sets)]
+        runs = [(m, m, "none") if m in NO_FEATURES else (f"{m} [{s}]", m, s) for m in args.models
+                for s in ([None] if m in NO_FEATURES else sets)]
     elif args.feature_tiers == "auto":
-        runs = [(m, m, "none") if m in ("mean", "trace_physics") else
+        runs = [(m, m, "none") if m in NO_FEATURES else
                 (f"{m} [{MODEL_TIERS.get(m, DEFAULT_MODEL_TIERS)}]", m, MODEL_TIERS.get(m, DEFAULT_MODEL_TIERS)) for m in args.models]
     else:
         runs = [(m, m, args.feature_tiers) for m in args.models]

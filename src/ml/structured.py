@@ -100,6 +100,8 @@ def amplifier_key(df: pd.DataFrame) -> np.ndarray:
 
 #: The Allan curve of real traces that model A uses when present (see StructuredPrep.transform).
 REAL_ALLAN = "noise: Allan deviation, common pattern removed"
+#: The trace feature behind ``PhysicsStructured(noise_source="white")``: the single-skip white noise in ADU.
+WHITE_FEATURE = "fit: white noise per skip (ADU)"
 
 
 class StructuredPrep:
@@ -604,7 +606,8 @@ class PhysicsStructured:
 
     def __init__(self, kind: str = "none", n_skips: int = 500, use_components: bool = False, use_floor: bool = True,
                  lambda_model: str | None = None, outlier_z: float | None = 4.0, lambda_kind: str | None = None,
-                 lambda_kw: dict | None = None, joint_prior: str = "weak", joint_select: float | None = None, **kw):
+                 lambda_kw: dict | None = None, joint_prior: str = "weak", joint_select: float | None = None,
+                 noise_source: str = "allan", **kw):
         """kind: "none" (default: no amplifier identity; give the amplifier's own features through StructuredPrep),
         "hier" (A+B: amplifier and module levels) or "plain" (ordinary GP + amplifier one-hot).
         lambda_model: "direct" (a GP on log lambda), "split" (two separate GPs on log DC, log CIC) or "joint"
@@ -618,6 +621,11 @@ class PhysicsStructured:
         # least this fraction of the largest, and the joint model sees only those
         self.joint_prior, self.joint_select = joint_prior, joint_select
         self.lambda_model = lambda_model or ("split" if use_components else "direct")
+        # the trace term of sigma_e: "allan" = a^2/N + b^2 from the Allan fit; "white" = (white noise per skip)^2 / N,
+        # X["white"] (no floor; the learned correction carries what does not average down).  On the first real packets
+        # (2026-11-03, A+B) the Allan floor extrapolated to N = 500 jumped between packets at the same setting
+        # (x1.45 vs x1.17), noise the correction cannot learn; the white-noise term scatters about half as much.
+        self.noise_source = noise_source
         self.name = ("A+B" if kind == "hier" else "A") + ": physics-structured"
 
     def _lambda_inputs(self, X):
@@ -645,9 +653,15 @@ class PhysicsStructured:
         return np.where(np.isfinite(n) & (n > 0), n, self.n_skips)
 
     def physics_log_sigma_adu(self, X) -> np.ndarray:
-        """1/2 log(a^2/N + b^2): the read noise after N skips, in ADU, measured on the trace (b = 0 if not use_floor)."""
+        """1/2 log(a^2/N + b^2): the read noise after N skips, in ADU, measured on the trace (b = 0 if not use_floor);
+        with noise_source "white": 1/2 log(w^2/N), w = X["white"], falling back to the Allan term where w is missing."""
         b2 = X["b"] ** 2 if self.use_floor else 0.0
-        return 0.5 * np.log(np.maximum(X["a"] ** 2 / self.skips(X) + b2, 1e-30))
+        allan = 0.5 * np.log(np.maximum(X["a"] ** 2 / self.skips(X) + b2, 1e-30))
+        if self.noise_source != "white":
+            return allan
+        w = np.asarray(X.get("white", np.full(len(allan), np.nan)), float)
+        ok = np.isfinite(w) & (w > 0)
+        return np.where(ok, 0.5 * np.log(np.maximum(np.where(ok, w, 1.0) ** 2 / self.skips(X), 1e-30)), allan)
 
     def fit(self, X, Y, components=None):
         """X["y_var"] (optional, (n, 3)): the labels' known variances in log units (WADERs' errors); the GPs then
