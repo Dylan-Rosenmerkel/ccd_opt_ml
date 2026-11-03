@@ -342,3 +342,18 @@ then see what both of them can predict together; model the new packet designs af
   alone 8.8 % on C, + learned gain 7.6, + correction 7.3); flexible models use timing proxies (row-start recovery,
   skips 1-4 ringing) and fail on C. settings_amp_trees uses 5 inputs (delayInt + 4 amplifier columns): the 10-row
   leaf minimum cannot split on knobs changed in 1-2 packets.
+
+## 16. Board 102 as a test set (2026-11-04, user request; trained on 101 only)
+
+* `lvl1/test_new_module.py`: every model fitted on board-101 A+B (as for session C), predicts board-102 rows
+  (`processed/lvl1_results/2026-11-04_board102/results.json`). Board 102 rows get own packet ids (packet state per board).
+* Board 102 sat at NOMINAL settings all night (its theta never changes: the packets changed acm101 only), so it tests
+  only a new amplifier's level, not the settings dependence. Its trace white noise is constant (sd 0-1 %) while its
+  image sigma_e labels scatter 9-13 % at nominal (101: 1-3 %).
+* Channels: ch0, ch1 dead (no charge, flat). ch2, ch3 show charge but their column profiles ramp 0 -> 2.4 ADU along
+  the row (not like 101); ch2's profile is the same in every packet, ch3's changes (up to 9 ADU) and its labels are
+  noisier; the 2026-10-12 note says only ch2 showed charge -> ch2 taken as the working one (user does not remember).
+* ch2 (41 rows): sigma_e best ~10.8 % (mean, ridge, gp) = label scatter; physics_white -30 % biased (image/trace-white
+  ratio 1.06 on 102 vs 0.82 on 101). lambda 1.11 vs 101's 0.27-0.61: most models ~-90 % (predict ~0.4); gp_dim 10.3 %,
+  deep_kernel 13.6 %. gain: +2 to +8 % biased (settings_amp_trees 2.0, gp_dim 2.4). After one image (first nominal
+  offset removed) every model is at the label scatter: sigma_e ~11 %, lambda ~8 %, gain 0.3 %.
