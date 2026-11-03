@@ -389,3 +389,10 @@ then see what both of them can predict together; model the new packet designs af
 * Overview deck (41 slides, pedagogical, with math, flow charts, results up to here):
   https://claude.ai/artifact/KrzAfKm1qzchrDqXSdwCwG ; equations and new figures by `docs/slides/make_deck_2026_11_04.py`
   into `docs/slides/deck_2026-11-04/`.
+
+## 19. Learning curve (2026-11-04)
+
+* `lvl1/learning_curve.py`: random subsets of 8/16/24/32 A+B packets (5 draws each; 32 = all), without 101 ch2 and
+  without the eta90 fingerprints, scored on session C (`processed/lvl1_results/2026-11-04_learning_curve/`).
+* physics_white: sigma_e 9.7 / 7.9 / 7.5 / 5.9 %, lambda 19.0 / 12.8 / 12.1 / 10.4 %; cnn lambda 22.6 -> 12.7 %;
+  gain flattens near 1.0-1.2 % (cnn, nn). sigma_e and lambda still improving at 32 packets: more packets help.
