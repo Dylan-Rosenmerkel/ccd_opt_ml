@@ -88,6 +88,14 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../src" && pwd)"
 # Every cut is given, so nothing is inherited from the last image.
 # If the image's NDCM / NSBIN / NPBIN change, change them here too.
 TRACE_ARGS="subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=100, NCOLPOST=0"
+# Level-1 STRIPS (2026-11-03): a small image with every skip kept (acq_level 1, all 4 channels at once), read like the
+# image (its prescan NCOLPRE 5300, register clear BOOLCLR 1, NDCM 500, 1x1), one at the reference after the reference
+# traces and one at the new settings after the new traces, so the same packets answer: what do the traces predict,
+# what does the strip predict, and both together (docs/context/2026-11-03, section 13).  Named <PACKET_ID>_l1ref /
+# <PACKET_ID>_l1new; checked like the traces (src/check_trace_files.py --l1) and retaken once if incomplete.
+# If the image's NDCM / binning / prescan / clear change, change them here too.  L1_STRIP=0: no strips.
+L1_STRIP="${L1_STRIP:-1}"
+L1_ARGS="subroutine='AcquireImage', EXPOSURE=0, NROW=${L1_NROW:-2}, NCOL=${L1_NCOL:-1000}, NPBIN=1, NSBIN=1, NDCM=500, BOOLCLR=1, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=5300, NCOLPOST=0"
 # The group's earlier trace command (2x5, 5x5 binning, 100 skips), with the cuts set to 0:
 # TRACE_ARGS="subroutine='AcquireImage', EXPOSURE=0, NROW=2, NCOL=5, NPBIN=5, NSBIN=5, NDCM=100, BOOLCLR=0, NDCMPRE=0, NROWPRE=0, NROWPOST=0, NCOLPRE=0, NCOLPOST=0"
 
@@ -278,6 +286,11 @@ write_record() {
     printf '  "n_settle_traces": %d,\n' "$N_SETTLE_TRACES"
     printf '  "pause_s": %s,\n' "$PAUSE_S"
     printf '  "trace_boards": %s,\n' "$(json_list $TRACE_BOARDS)"
+    if [[ $L1_STRIP == 1 ]]; then
+      printf '  "l1_prefix_ref": "%s_l1ref",\n' "$PACKET_ID"
+      printf '  "l1_prefix_new": "%s_l1new",\n' "$PACKET_ID"
+      printf '  "l1_args": "%s",\n' "${L1_ARGS//\'/}"
+    fi
     printf '  "image_toml": "%s",\n' "$IMAGE_TOML"
     printf '  "leader": %d\n' "$LEADER"
     printf '}\n'
@@ -340,6 +353,25 @@ check_phase() {   # check_phase <prefix> <number of sets>: wait for the phase, c
   echo "  $prefix: all traces checked ($DAMAGED damaged in this packet so far)"
   return 0
 }
+strip() {   # strip <name>: a level-1 strip on both boards (standalone), then a pause; waited for, checked, retaken once
+  [[ $L1_STRIP == 1 ]] || return 0
+  local name=$1 lines dir attempt
+  for attempt in 1 2; do
+    q "daq.take_image(fname='$name', acq_level=1, $L1_ARGS)" "$POOL"
+    pause
+    if [[ ${DRY_RUN:-0} == 1 || $CHECK_TRACES != 1 ]]; then
+      [[ $CHECK_TRACES == 1 ]] && echo "(here the script waits for the strip $name and checks it)"
+      return 0
+    fi
+    marker "${name}_check$attempt"; wait_marker "${name}_check$attempt" || return 1
+    dir=$(cat "$MARK_DIR/${name}_check$attempt.${CHECK_BOARDS%% *}")
+    lines=$($PYTHON "$SRC_DIR/check_trace_files.py" --dir "$dir" --prefix "$name" --l1 --boards $CHECK_BOARDS) || return 1
+    if [[ -z $lines ]]; then echo "  $name: level-1 strip checked"; return 0; fi
+    printf '%s\n' "$lines" | sed "s/^/  incomplete level-1 strip ($name): /"
+  done
+  echo "  $name: still incomplete after a retake; going on without it"
+  return 0
+}
 
 # --------------------------------- the plan ----------------------------------
 [[ $PACKET_ID =~ ^[A-Za-z0-9_-]+$ ]] || { echo "ERROR: PACKET_ID may only contain letters, digits, _ and -"; exit 1; }
@@ -349,6 +381,7 @@ echo "Traces: $N_REF_SETS reference + $N_SETS new sets x channels [$TRACE_CHANNE
 echo "Flushes: before ref $FLUSH_BEFORE_REF, after ref $FLUSH_AFTER_REF, before image $FLUSH_BEFORE_IMAGE, after image $FLUSH_AFTER_IMAGE; pause ${PAUSE_S} s after every trace and the image"
 echo "Trace: $TRACE_ARGS"
 echo "Image: $IMAGE_TOML"
+[[ $L1_STRIP == 1 ]] && echo "Level-1 strips (reference and new): $L1_ARGS"
 case $FLUSH_BETWEEN in trace|set|none) ;; *) echo "ERROR: FLUSH_BETWEEN must be trace, set or none"; exit 1;; esac
 if [[ ${DRY_RUN:-0} != 1 ]]; then
   read -r -p "Start the packet now? (with CHECK_TRACES=1 the script runs until the image is queued) [y/N] " answer
@@ -365,6 +398,7 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
   flushes "$FLUSH_BEFORE_REF"
   traces "${PACKET_ID}_ref" "$N_REF_SETS"
   check_phase "${PACKET_ID}_ref" "$N_REF_SETS" || return $?
+  strip "${PACKET_ID}_l1ref" || return $?
   flushes "$FLUSH_AFTER_REF"
 
   # 2. change the parameters
@@ -379,6 +413,7 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
   if (( N_SETTLE_TRACES > 0 )); then traces "${PACKET_ID}_settle" "$N_SETTLE_TRACES" "${TRACE_CHANNELS%% *}"; fi
   traces "${PACKET_ID}_new" "$N_SETS"
   check_phase "${PACKET_ID}_new" "$N_SETS" || return $?
+  strip "${PACKET_ID}_l1new" || return $?
   flushes "$FLUSH_BEFORE_IMAGE"
 
   # 4. master/slave mode and the image (take_image.py queues the take_image call itself)

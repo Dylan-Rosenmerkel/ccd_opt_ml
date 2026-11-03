@@ -14,6 +14,7 @@ Output: one line per damaged trace, ``<board> <channel> <set> <reason>``; nothin
 
     python src/check_trace_files.py --dir RUN_DIR --prefix L2_05_ref --sets 1 2 3 --channels 0 1 2 3 --boards 101
     python src/check_trace_files.py --dir RUN_DIR --prefix L2_05_new --expect 101:2:6 101:0:7
+    python src/check_trace_files.py --dir RUN_DIR --prefix L2_05_l1new --l1 --boards 101      # a level-1 strip
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from decode_l1 import read_l1  # noqa: E402
 from decode_trace import decode_trace  # noqa: E402
 
 
@@ -50,6 +52,31 @@ def trace_problem(run_dir: Path, prefix: str, board: int, channel: int, set_no: 
     return "; ".join(problems) if problems else None
 
 
+def strip_problem(run_dir: Path, prefix: str, board: int) -> str | None:
+    """None if the newest level-1 strip ``<prefix>*_L1_<board>_*`` finished and every channel file decodes with all its
+    rows complete (src/decode_l1.py layout checks); else a short reason."""
+    metas = sorted(run_dir.glob(f"{prefix}*_L1_{board}_*.meta"), key=lambda p: p.stat().st_mtime)
+    if not metas:
+        return "missing"
+    try:
+        meta = json.loads(metas[-1].read_text())
+    except (json.JSONDecodeError, OSError):
+        return "unreadable .meta"
+    if not meta.get("DATEend"):
+        return "not finished (no DATEend)"
+    for ch in range(4):
+        data = metas[-1].with_suffix(f".RJ45ADCDATA{ch}")
+        if not data.exists():
+            return f"no data file for channel {ch}"
+        try:
+            im = read_l1(data, int(meta["NCOL"]), int(meta["NDCM"]))
+        except Exception as err:                # noqa: BLE001 - an undecodable file is damaged
+            return f"channel {ch}: {err}"
+        if im.complete_rows < int(meta["NROW"]) or im.problems:
+            return f"channel {ch}: {im.complete_rows} of {meta['NROW']} rows complete" + (f"; {im.problems[0]}" if im.problems else "")
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--dir", required=True, help="run directory (where cdaq writes the traces)")
@@ -58,11 +85,18 @@ def main() -> int:
     parser.add_argument("--channels", type=int, nargs="*", default=[0, 1, 2, 3])
     parser.add_argument("--boards", type=int, nargs="*", default=[101])
     parser.add_argument("--expect", nargs="*", default=[], help="explicit board:channel:set triples (retakes)")
+    parser.add_argument("--l1", action="store_true", help="check the level-1 strip <prefix>* of each board instead")
     args = parser.parse_args()
     run_dir = Path(args.dir)
     if not run_dir.is_dir():
         print(f"no such run directory: {run_dir}", file=sys.stderr)
         return 2
+    if args.l1:
+        for board in args.boards:
+            problem = strip_problem(run_dir, args.prefix, board)
+            if problem:
+                print(f"{board} l1 0 {problem}")
+        return 0
     expected = [(b, c, s) for s in args.sets for b in args.boards for c in args.channels]
     expected += [tuple(int(x) for x in e.split(":")) for e in args.expect]
     for board, channel, set_no in expected:

@@ -8,6 +8,8 @@ and writes a manifest that ``process_packet.py`` reads like any other:
 
 * traces: every ``<PACKET_ID>_ref<set>_*.meta`` (reference, at the nominal configuration) and
   ``<PACKET_ID>_new<set>_*.meta`` (at the new settings); board from the .meta (ACMID), channel from the name;
+* level-1 strips (when the record has ``l1_prefix_ref`` / ``l1_prefix_new``): per board the latest ``<prefix>*`` level-1
+  file (FILTER 0x55) of each kind; they are never taken for the image;
 * images: per board, the first image (a .meta with an ``avg_<name>.fits*`` next to it) that started after
   the packet's last trace of that board, and before any trace of another packet;
 * theta: the parameters of the traces at the new settings, READ FROM THEIR .meta FILES (what the board
@@ -74,7 +76,9 @@ def read_metas(run_dir: Path) -> list[dict]:
         out.append({"meta": m, "stem": stem, "name": stem.name, "board": int(m.get("ACMID", -1)),
                     "start": datetime.fromisoformat(m["DATEini"]) if "DATEini" in m else None,
                     "end": datetime.fromisoformat(m["DATEend"]) if "DATEend" in m else None,
-                    "is_image": any(run_dir.glob(f"avg_{stem.name}.fits*"))})
+                    # a level-1 strip (acq_level 1 on every channel: FILTER 0x55) is never the packet's image
+                    "is_l1": m.get("FILTER") == 0x55 or "_L1_" in stem.name,
+                    "is_image": any(run_dir.glob(f"avg_{stem.name}.fits*")) and not (m.get("FILTER") == 0x55 or "_L1_" in stem.name)})
     return [e for e in out if e["start"] is not None]
 
 
@@ -127,10 +131,25 @@ def manifest_from_record(record: dict, run_dir: Path, metas: list[dict]) -> dict
                 "traces": [trace_entry(e, repeat_of(e, record["trace_prefix_new"])) for e in new],
                 "images": [], "theta": {}, "theta_ref": {}, "delta_theta": {}, "theta_id": {}, "reference_id": {},
                 "geometry": {}, "warnings": warnings}
-    # images: per board, the first image after this packet's last trace and before any other packet's trace
+    # level-1 strips (manual_packet.sh, 2026-11-03): per board and kind, the latest one (a retake replaces a bad one)
+    strips = []
+    for kind in ("ref", "new"):
+        prefix = record.get(f"l1_prefix_{kind}")
+        if not prefix:
+            continue
+        for b in boards:
+            found = sorted((e for e in metas if e["is_l1"] and e["board"] == b and e["name"].startswith(prefix)),
+                           key=lambda e: e["start"])
+            if found:
+                strips.append({"board": b, "kind": kind, "stem": str(found[-1]["stem"])})
+            else:
+                warnings.append(f"board {b}: no level-1 strip {prefix}*")
+    manifest["l1_strips"] = strips
+    # images: per board, the first image after this packet's last trace (or strip) and before any other packet's trace
     others = [e for e in metas if not e["is_image"] and TRACE_RE.search(e["name"]) and not e["name"].startswith(pid + "_")]
     for b in boards:
-        last = max(e["end"] or e["start"] for e in new if e["board"] == b)
+        last = max([e["end"] or e["start"] for e in new if e["board"] == b] +
+                   [e["end"] or e["start"] for e in metas if e["is_l1"] and e["board"] == b and e["name"].startswith(pid + "_l1")])
         next_other = min((e["start"] for e in others if e["board"] == b and e["start"] > last), default=None)
         cands = sorted((e for e in metas if e["is_image"] and e["board"] == b and e["start"] > last
                         and (next_other is None or e["start"] < next_other)), key=lambda e: e["start"])
