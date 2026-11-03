@@ -51,6 +51,11 @@
   ]
  },
  "seed": 0,
+ "run": {
+  "N_REF_SETS": 3,
+  "N_SETS": 5,
+  "IMAGE_TOML": "image_params/tc1/img32.toml"
+ },
  "packets": [
   {
    "session": "D",
