@@ -220,3 +220,30 @@ orders tiers cover random; n-boot 300; out processed_AB/lvl1_results/2026-11-03_
   time since the last flush), which the v2 procedure (flush right before the image, fixed timeline, more nominal
   packets, 32 rows) addresses. The parts' nominal repeatability (overscan 14-37 %, ratio 19-31 %) is worse than the
   total's (10-14 %).
+
+## 10. Feature ladder on the clean A+B labels (`processed_AB/lvl1_results/2026-11-03_ladder_raw`, figure feature_ladder.png)
+
+Orders tiers / cover / random (3), 13 models, same setting-grouped folds. Error % at each step (tiers order):
+
+| model | sigma_e best (set) | lambda best (set) | gain best (set) |
+|---|---|---|---|
+| physics_white | 12.3 (P+A); 13.9 with none | 30.7 (P); 27.7 (cover 25) | 1.1 (P) |
+| sets | 15.3 (P+A1), flat | = physics | = physics |
+| trees | 12.1 (P+A1) | 28.8 (all) | 0.8 (P+A..all) |
+| gp | 13.8 (P+A), else ~17 | 38.6 (P+A1) | 1.7 (P) |
+| **gp_dim** | **10.5 (P+A1)** | 34.1 (all) | **0.8 (P)** |
+| nn | 12.8 (all) | 28.9 (all) | 0.8 (P+A+B) |
+| cnn | 16.6 (P+A+B) | 29.4 (all) | 0.8 (P+A+B) |
+| **pretrained** | 11.7 (P+A+B) | **27.0 (all)** | 1.0 (P+A) |
+| deep_kernel | 12.4-13.5, flat | 38.1 (all) | 1.1 |
+| ridge | 22.0 (none), unstable with any trace features (33-103 %) | blows up | 1.3 (P+A1) |
+
+* With 32 packets the one-SE suggestions are mostly the smallest sets ("none"/"P"): the intervals are wide, so the
+  ladder cannot yet separate feature-set sizes; differences of 1-3 points are not significant.
+* Same pattern as on synthetic data: plain gp gains nothing beyond P-ish; gp_dim takes many features without
+  collapsing; nn/cnn/pretrained improve up to all features; ridge breaks with trace features (keep it at P or drop it);
+  cover order is not better than random.
+* physics (Allan term) stays at 30-35 % sigma_e for every set: the trace term, not the features, was its problem.
+* Candidate frozen choice (to agree with the user before session C is scored): sigma_e gp_dim [P+A1] (10.5) with
+  physics_white [P+A] (12.3) as the physics reference; lambda pretrained [all] (27.0) / trees [all] (28.8); gain
+  gp_dim [P] or trees [P+A] (0.8).
