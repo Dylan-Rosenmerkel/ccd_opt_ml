@@ -247,3 +247,27 @@ Orders tiers / cover / random (3), 13 models, same setting-grouped folds. Error 
 * Candidate frozen choice (to agree with the user before session C is scored): sigma_e gp_dim [P+A1] (10.5) with
   physics_white [P+A] (12.3) as the physics reference; lambda pretrained [all] (27.0) / trees [all] (28.8); gain
   gp_dim [P] or trees [P+A] (0.8).
+
+## 11. Do the traces predict anything beyond the amplifier? (labelled reference without traces)
+
+New extra models (labelled references, `USES_LABELS`): `settings_amp` (GP on settings + amplifier one-hot, no trace)
+and `settings_amp_trees` (the same with the trees learner). A+B CV: sigma_e 14.6 / 15.7, lambda 41.6 / 36.1, gain
+1.7 / **0.8** %. Paired (same folds, packet bootstrap 2000), best trace models vs these:
+* gain: trees [P+A] / gp_dim [P] 0.8 vs settings_amp_trees 0.8: +0.0 -> for the gain the traces act as an amplifier
+  fingerprint (label-free models identify the amplifier), nothing more;
+* sigma_e: gp_dim [P+A1] 10.5 vs 14.6 / 15.7: -4.1 [-6.7, -1.8] *, -5.2 [-9.4, -1.1] *; physics_white, trees,
+  pretrained, nn -2 to -4 points, intervals touching 0 -> a modest, real gain from the traces;
+* lambda: pretrained / trees / nn [all] 27-29 vs 41.6 / 36.1: -7 to -15 points, all * -> the traces clearly help.
+Caveat: the best feature set per model was chosen on this same CV (optimistic); session C is the honest test.
+
+## 12. FROZEN CHOICE (2026-11-03, before session C was looked at), user approved
+
+| target | main model | alternative |
+|---|---|---|
+| sigma_e | gp_dim [P+A1] | physics_white [P+A] (physics reference) |
+| lambda | pretrained [all] | trees [all] |
+| gain | gp_dim [P] | trees [P+A] |
+
+Tiers: `lvl1/feature_study/real_AB/evidence_tiers.json` (b7d25ca). Labels: drift subtraction off, run_WADERs --all-ext.
+Then session C is scored once (`--holdout-session C`), plus every model at each feature set (best set per model and
+target from the ladder, section 10) for reference.

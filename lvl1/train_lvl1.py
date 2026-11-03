@@ -101,14 +101,14 @@ TARGETS = ("sigma_e", "lambda", "gain")
 ALL_MODELS = ("mean", "settings", "trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
 #: GP-prior variants: run only when named in --models
 EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_gp_lambda", "physics_joint_weak", "physics_joint_select", "physics_saasmap_lambda", "physics_saasfull_lambda", "sets_gp_lambda",
-                "physics_white", "trace_physics_white")
+                "physics_white", "trace_physics_white", "settings_amp", "settings_amp_trees")
 #: models that use no trace features at all (they keep their plain names in every run)
-NO_FEATURES = ("mean", "trace_physics", "trace_physics_white")
+NO_FEATURES = ("mean", "trace_physics", "trace_physics_white", "settings_amp", "settings_amp_trees")
 #: baselines that see no trace: every report compares the models with them
 BASELINES = ("mean", "settings")
 #: models told which module and amplifier they see (references only; see the module docstring)
-USES_LABELS = ("physics_hier",)
-FAMILY = {"mean": "features", "settings": "features", "trace_physics": "physics", "trace_physics_white": "physics", "physics_white": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
+USES_LABELS = ("physics_hier", "settings_amp", "settings_amp_trees")
+FAMILY = {"mean": "features", "settings": "features", "settings_amp": "features", "settings_amp_trees": "features", "trace_physics": "physics", "trace_physics_white": "physics", "physics_white": "physics", "physics": "physics", "physics_joint": "physics", "physics_hier": "physics", "sets": "sets",
           "ridge": "features", "trees": "features", "gp": "features", "nn": "features",
           "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves",
           "gp_dim": "features", "gp_saas": "features", "physics_dim": "physics", "physics_saas": "physics", "physics_gp_lambda": "physics", "sets_gp_lambda": "sets",
@@ -572,6 +572,24 @@ class Runner:
         if not keep.any():                      # every training packet at the same settings: nothing to learn
             return self.mean(train, test)
         return models.GP(max_iter=60 if self.quick else 150).fit(xtr, self.Y[train]).predict(xte)
+
+    def _settings_amp(self, train, test):
+        """The settings and the amplifier's one-hot (no trace)."""
+        th = self.f("features")["theta"]
+        onehot = np.eye(self.amp_id.max() + 1)[self.amp_id]
+        xtr, xte, _ = prep_columns(np.hstack([th[train], onehot[train]]), np.hstack([th[test], onehot[test]]))
+        return xtr, xte
+
+    def settings_amp(self, train, test):
+        """Reference WITH labels, no trace: a GP on the settings and the amplifier's identity (one-hot).  A trace model
+        that does not beat it has learned nothing from the traces beyond which amplifier they come from (2026-11-03)."""
+        xtr, xte = self._settings_amp(train, test)
+        return models.GP(max_iter=60 if self.quick else 150).fit(xtr, self.Y[train]).predict(xte)
+
+    def settings_amp_trees(self, train, test):
+        """settings_amp with gradient-boosted trees (the same learner as ``trees``)."""
+        xtr, xte = self._settings_amp(train, test)
+        return models.GBT(max_iter=100 if self.quick else 300).fit(xtr, self.Y[train]).predict(xte)
 
     # -- the features family --------------------------------------------------------
     def _features(self, train, test):
