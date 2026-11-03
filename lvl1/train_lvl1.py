@@ -1154,6 +1154,8 @@ def main():
         rows &= base["label_ok"]
     if not args.allow_fake:
         rows &= ~base["fake"]
+    if "trace_ok" in base:                      # no usable trace at the packet's own settings: nothing to predict from
+        rows &= base["trace_ok"].astype(bool)
     rows = np.flatnonzero(rows)
     if len(rows) < 6:
         raise SystemExit(f"only {len(rows)} usable examples (boards {args.board}, labels ok, not fake): take more packets")

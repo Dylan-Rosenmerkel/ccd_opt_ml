@@ -28,6 +28,7 @@ Common part of every labeled file (row i = one amplifier in one packet; ONE TRAC
     Y, Y_err, targets                      log sigma_e, log lambda, log gain and their errors in the log (relative
                                            errors from WADERs); NaN where missing
     label_ok, fake                         WADERs fit without flags; packet made of copied files (rehearsal)
+    trace_ok                               at least one usable trace at the packet's own settings
     theta, theta_names                     the settings (as the boards report them)
 
 Nothing here is fitted to the data (no standardization, no imputation), so nothing leaks between training and test
@@ -80,9 +81,13 @@ def common(df: pd.DataFrame) -> dict[str, np.ndarray]:
             E[:, t] = np.where(val > 0, err / np.where(val > 0, val, 1.0), np.nan)
     theta_names = data.columns(df, "theta")
     ok = df["label.ok"].astype(str).str.lower().eq("true").to_numpy() if "label.ok" in df else np.zeros(len(df), bool)
+    # trace_ok: the amplifier has at least one usable trace at the packet's own settings (2026-11-03: in L1_37, L1_40 and
+    # L1_41 every trace at the new settings was damaged; a model then predicts from filled-in values, not from a trace)
+    n_usable = pd.to_numeric(df.get("trace.n_usable"), errors="coerce") if "trace.n_usable" in df else None
+    trace_ok = (n_usable.fillna(0).to_numpy() > 0) if n_usable is not None else np.ones(len(df), bool)
     return {"packet_id": df["packet_id"].astype(str).to_numpy(), "board": df["board"].to_numpy(int),
             "channel": df["channel"].to_numpy(int), "amplifier": df.get("amplifier", pd.Series([""] * len(df))).astype(str).to_numpy(),
-            "Y": Y, "Y_err": E, "targets": np.array(TARGETS), "label_ok": ok,
+            "Y": Y, "Y_err": E, "targets": np.array(TARGETS), "label_ok": ok, "trace_ok": trace_ok,
             "fake": df.get("fake", pd.Series([False] * len(df))).astype(str).str.lower().eq("true").to_numpy(),
             "theta": df[theta_names].apply(pd.to_numeric, errors="coerce").to_numpy(float), "theta_names": np.array(theta_names)}
 
