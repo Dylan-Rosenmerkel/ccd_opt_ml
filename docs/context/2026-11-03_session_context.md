@@ -139,3 +139,36 @@ orders tiers cover random; n-boot 300; out processed_AB/lvl1_results/2026-11-03_
   features.json and redoes only images + labels (~1 min per packet). Relabelling all 43 (scratchpad `relabel.sh`,
   6 workers, then processed/ and processed_AB/ rebuilt). The ladder run (section 4) was stopped: its labels were the
   corrupted ones. Everything is rerun after the relabel.
+
+## 7. Clean labels (drift correction off) and the rerun
+
+* Relabel of all 43 (traces reused): A+B labels 127 / 128 ok (ch3 in all 32). Nominal repeatability sigma_e 1.1-2.3 %,
+  gain 0.5-0.7 %, lambda 10-14 % (the drift is in the raw images too: ch0 0.307, 0.328, 0.309, 0.240). The 5 "exit 1"
+  of the relabel are the parallel dataset rebuild racing (labels written; the final rebuild ran after all workers).
+* Rerun (`processed_AB/lvl1_results/2026-11-03_auto_raw`, log `train_auto_raw.log`), error % (x mean):
+
+| model | sigma_e | lambda | gain |
+|---|---|---|---|
+| mean | 17.4 | 47.8 | 2.7 |
+| settings | 17.9 | 46.4 | 2.7 |
+| trace_physics / _white | 73.3 / 20.8 | = mean | = mean |
+| physics | 30.6 | 37.0 | 1.2 |
+| **physics_white** | 12.6 (0.73x) | 37.0 | 1.2 |
+| physics_joint / hier | 30.6 / 31.2 | 37.4 / 43.9 | 1.2 / 0.9 |
+| sets | 15.7 | 37.0 | 1.2 |
+| ridge [P+A] | 103 (unstable) | 213 | 3.6 |
+| trees [all] | 13.2 | **28.8 (0.60x)** | **0.8 (0.30x)** |
+| gp [P] | 17.0 | 40.2 | 1.7 |
+| nn [P+A] | 13.0 | 33.0 | 0.9 |
+| cnn | 16.9 | 32.4 | 0.9 |
+| **pretrained** | **11.8 (0.68x)** | 35.6 | 1.2 |
+| deep_kernel | 12.7 | 43.9 | 1.2 |
+
+  Paired vs physics, sigma_e (95 % CI excludes 0): physics_white -18.0, pretrained -18.8, deep_kernel -17.9, nn -17.6,
+  trees -17.4, sets -14.9, cnn -13.7, gp -13.6. lambda: no model's interval excludes 0 except ridge (worse) and the
+  baselines (worse); intervals are wide (physics 23.5-46.8 %): a few packets with high lambda (up to 1.2-2.6 e/pix)
+  dominate. gain: trees -0.4 *. Ladder rerun on these labels: `2026-11-03_ladder_raw`, log `train_ladder_raw.log`.
+* Pending user decisions: v2 packet plan (proposals in the chat of 2026-11-03: joint multi-level design, wider
+  ranges, fixed pre-image routine + state logging (temperature, time since clear), nominal every 6-8 packets, fewer
+  trace sets 3+5 to fit ~45 % more packets, automatic retake of damaged trace sets); drift correction only when it
+  improves the image's fit (run WADERs on both, keep the better chi2).
