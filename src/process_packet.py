@@ -653,13 +653,18 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
         entry["fits"] = str(fits)
         corrected = None
         if cfg.drift_enabled:
-            # the along-row baseline drift (image_drift.py): if one is found, a corrected copy is made (first
-            # ``drift_cut`` columns removed, the slow remainder subtracted) and labelled TOO; per channel the copy's
-            # labels are kept only if they fit better (fit_choice below)
+            # the along-row baseline drift (image_drift.py).  Every image is labelled on the SAME pixels: the first
+            # ``drift_cut`` columns are always cut (cut_columns); if a drift is found, a copy with the slow remainder
+            # also subtracted is labelled too, and per channel its labels are kept only if they measure less noise
+            # with a fit no worse (fit_choice below)
             try:
-                from image_drift import correct_image
+                from image_drift import correct_image, cut_columns
                 (out / "fits_drift").mkdir(parents=True, exist_ok=True)
-                drift = correct_image(fits, out / "fits_drift", cfg.drift_cut, cfg.drift_width_tol, 400, cfg.drift_channels)
+                if cfg.drift_cut != "auto":
+                    fits = cut_columns(fits, out / "fits_drift", int(cfg.drift_cut))
+                    entry["fits_cut"] = str(fits)
+                drift = correct_image(Path(entry["fits"]), out / "fits_drift", cfg.drift_cut, cfg.drift_width_tol, 400,
+                                      cfg.drift_channels)
                 entry["drift"] = {k: drift.get(k) for k in ("drift", "cut", "warning", "warning_channels", "output")}
                 entry["drift"]["channels"] = drift.get("channels")
                 if drift.get("drift"):
@@ -686,9 +691,10 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
         if entry.get("labels"):
             choice = (entry.get("drift") or {}).get("choice", {})
             d = entry.get("drift") or {}
+            cut = int(cfg.drift_cut) if cfg.drift_enabled and cfg.drift_cut != "auto" else 0
             for lab in entry["labels"]:
                 used = choice.get(lab["channel"]) == "corrected"
-                lab.update(drift_corrected=used, drift_cut=d.get("cut") if used else 0,
+                lab.update(drift_corrected=used, drift_cut=d.get("cut") if used else cut,
                            drift_warning=used and lab["channel"] in (d.get("warning_channels") or []))
         images.append(entry)
 

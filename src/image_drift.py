@@ -162,6 +162,25 @@ def fit_model(pr: dict, start: int) -> tuple[np.ndarray, dict]:
     return spl, info
 
 
+def cut_columns(path: Path, out: Path, cut: int) -> Path:
+    """A copy of the image with only the first ``cut`` columns removed (no drift subtracted; header NCOLPRE / NCOL
+    adjusted as in correct_image), written as ``<out>/<stem>_cut.fits``.  Every image gets it, so the labels of all
+    packets come from the same pixels whether or not their drift is subtracted (process_packet.py, 2026-11-03: lambda
+    over columns 200+ was ~7 % higher than over the whole row, so mixing cut and uncut images made lambda inconsistent)."""
+    h = open_any(path)
+    H = h[0].header
+    hdus = [x for x in h[1:] if getattr(x, "data", None) is not None and x.data.ndim == 2]
+    for x in hdus:
+        x.data = x.data[:, cut:].astype(np.float32)
+    H["NCOLPRE"] = H.get("NCOLPRE", 0) + cut * int(H.get("NSBIN", 1) or 1)
+    H["NCOL"] = H.get("NCOL", hdus[0].data.shape[1] + cut) - cut
+    H["DRIFTCOR"] = (False, "image_drift.py: columns cut only, no drift subtracted")
+    H["DRIFTCUT"] = (cut, "first columns removed (raised noise); NCOLPRE/NCOL adjusted")
+    dest = out / f"{path.name.split('.fits')[0]}_cut.fits"
+    h.writeto(dest, overwrite=True)
+    return dest
+
+
 def correct_image(path: Path, out: Path, cut_mode: str, width_tol: float, max_cut: int, channels: list[int]) -> dict:
     h = open_any(path)
     H = h[0].header

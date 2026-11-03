@@ -172,3 +172,33 @@ orders tiers cover random; n-boot 300; out processed_AB/lvl1_results/2026-11-03_
   ranges, fixed pre-image routine + state logging (temperature, time since clear), nominal every 6-8 packets, fewer
   trace sets 3+5 to fit ~45 % more packets, automatic retake of damaged trace sets); drift correction only when it
   improves the image's fit (run WADERs on both, keep the better chi2).
+
+## 8. Drift check, safeguards, v2 plan, CIC (2026-11-03, later)
+
+* **DAQ edits merged** into daq_scripts/manual_packet.sh (from the other agent's unpushed branch, by its diff): traces
+  per board, TRACE_CHANNELS override, no external-clock line. **User's flush scheme:** flush before / after the
+  reference traces, 2 settling traces after the change, flush before / after the image, 2 s pause after every trace
+  and the image.
+* **Safeguards** (manual_packet.sh, CHECK_TRACES=1): waits for each trace phase (each board writes a marker into
+  MARK_DIR when the queue reaches it), checks every board-101 trace (src/check_trace_files.py: missing, unfinished,
+  decoder quality check), retakes damaged traces under the next set number (2 rounds), restarts the packet from the
+  reset as <id>_r1 when more than 5 are damaged (record status "restarted", skipped by make_manual_manifest.py).
+  Tested with a stub cdaq (scratchpad data1103/stubtest): 2 damaged -> retaken, complete; 6 damaged -> restart, r1
+  complete. On the 2026-11-02 data ~1 packet in 10 would restart. Caveats: the clients must be on the DAQ machine;
+  the repeat queue may run between phases.
+* **32-row image** `configs/image_params_32rows.toml` (copy to cdaq image_params/tc1/img32.toml); IMAGE_TOML env.
+* **v2 plan** `lvl1/make_packet_plan_v2.py` -> `lvl1/packet_plan_v2/` (76 packets, ~21 h: session D 61 = 48 Sobol
+  joint points over 12 knob groups + 10 nominal + 3 replicates; session E 15 = 12 + 3 nominal, prospective test;
+  3 + 5 trace sets; all dry-run OK).
+* **Drift check: OFF for these data (final).** The per-channel rule (corrected only with less noise and a fit no
+  worse, `fit_choice`, test) chose the corrected copy for 60 / 128 labels, but the subtraction raises lambda by 7-10 %
+  on EVERY channel (L1_14 ch0 0.309 -> 0.331; the 200-column cut alone changes nothing), so mixing made lambda's
+  nominal repeatability worse (ch0 13.8 -> 18.1 %). Any mix of corrected and uncorrected images is inconsistent;
+  if used, apply to the whole dataset. `cut_columns` (image_drift.py) keeps both copies on the same pixels when on.
+  Relabelled once more with it off: identical to section 7 (127 / 128 ok).
+* **CIC as a target** (scratchpad-built `processed_AB/model_inputs_cic`: Y[:,1] = log lambda_cic;
+  `lvl1_results/2026-11-03_cic`): mean 41.9, settings 41.7, physics_white 28.1, sets 28.1, ridge 45.7, **trees 26.1
+  (0.62x)**, gp 35.7, nn 31.5, cnn 30.0, pretrained 32.3, deep_kernel 34.9 %. But the CIC LABEL repeats at nominal
+  only to 8-25 % (ch2 0.40-0.69; quoted 3 %), about its whole spread over the packets on ch2/ch3 (18-24 %): with 16
+  rows the dark-current / CIC split is unreliable (slope and intercept trade off; rows chi2/dof median 4.4). Total
+  lambda (2 % quoted, 10-14 % repeat) is the better target now; 32 rows should help the split.
