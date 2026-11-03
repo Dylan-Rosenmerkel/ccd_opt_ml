@@ -196,7 +196,41 @@ def packet_files(manifest: dict, cfg: ProcessingConfig) -> dict[str, list[dict]]
                    sorted(stem.parent.glob(f"cds_avg_{stem.name}*"))
         images.append({"board": int(im["board"]), "meta": stem.with_suffix(".meta"),
                        "fits": Path(fits[0]) if fits else None})
-    return {"traces": traces, "images": images}
+    strips = [{"board": int(s_["board"]), "kind": s_["kind"], "stem": localize(s_["stem"], cfg.path_map)}
+              for s_ in manifest.get("l1_strips", [])]
+    return {"traces": traces, "images": images, "strips": strips}
+
+
+def process_strip(entry: dict, out_dir: Path) -> list[dict]:
+    """
+    The level-1 strip of one board (src/decode_l1.py, src/l1_features.py): per channel its features and curves.
+    Returns one summary per channel ({kind, board, channel, usable, problems, scalars, npz}); a channel file that is
+    missing, incomplete or fails the layout checks is marked usable = False with no features.
+    """
+    from decode_l1 import read_l1
+    from l1_features import l1_features
+    stem = Path(entry["stem"])
+    meta = json.loads(stem.with_suffix(".meta").read_text()) if stem.with_suffix(".meta").exists() else {}
+    out = []
+    for ch in range(4):
+        summary = {"kind": entry["kind"], "board": entry["board"], "channel": ch, "file": str(stem)}
+        data = stem.parent / f"{stem.name}.RJ45ADCDATA{ch}"
+        try:
+            im = read_l1(data, int(meta.get("NCOL", 0)) or None, int(meta.get("NDCM", 0)) or None)
+            problems = list(im.problems)
+            if im.complete_rows < int(meta.get("NROW", im.complete_rows)):
+                problems.append(f"{im.complete_rows} of {meta.get('NROW')} rows complete")
+        except Exception as err:                         # noqa: BLE001 - a damaged or missing strip: unusable
+            summary.update(usable=False, problems=[f"{type(err).__name__}: {err}"])
+            out.append(summary)
+            continue
+        scalars, curves = l1_features(im.values, im.rows)
+        path = out_dir / "strips" / f"l1{entry['kind']}_acm{entry['board']}_ch{ch}.npz"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(path, **{"curve: " + k: v for k, v in curves.items()})
+        summary.update(usable=not problems, problems=problems, n_pixels=int(im.n_pixels), scalars=scalars, npz=str(path))
+        out.append(summary)
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -637,6 +671,8 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
         differences = trace_differences(combined)
         (out / "features.json").write_text(json.dumps(_json_safe(
             {"traces": traces, "combined": combined, "differences": differences}), indent=1))
+    # -- level-1 strips (when the packet has them) ---------------------------------------------------------------
+    strips = [c for entry in files.get("strips", []) for c in process_strip(entry, out)]
 
     # -- images and labels -------------------------------------------------------
     images = []
@@ -703,7 +739,7 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
               "images": [{k: v for k, v in im.items() if k in ("board", "labels", "error", "fake")} for im in images]}
     (out / "labels.json").write_text(json.dumps(_json_safe(labels), indent=1))
 
-    result.update(traces=traces, combined=combined, differences=differences, images=images,
+    result.update(traces=traces, combined=combined, differences=differences, images=images, strips=strips,
                   waders_version=labels["waders_version"],
                   fake=any(t.get("fake") for t in traces) or any(im.get("fake") for im in images))
     if result["fake"]:
@@ -791,7 +827,8 @@ def dataset_rows(result: dict, manifest: dict) -> list[dict[str, Any]]:
     Columns: ``theta.*`` and ``delta.*`` (this board's parameters and change from the
     reference), ``label.*`` (WADERs), ``trace.*`` / ``ref.*`` (tools averaged over the repeated
     trace sets at theta / at the reference), ``trace_sd.*`` / ``ref_sd.*`` (their scatter between
-    sets), ``diff.*`` (trace - ref).
+    sets), ``diff.*`` (trace - ref), and, for packets with level-1 strips, ``l1.*`` / ``l1ref.*`` (the strip features at
+    theta / at the reference, src/l1_features.py; ``l1.usable``).
     """
     def per_board(table, board):                    # manifest tables are keyed by board (as strings in JSON)
         return (table or {}).get(str(board), (table or {}).get(board, {})) or {}
@@ -833,6 +870,13 @@ def dataset_rows(result: dict, manifest: dict) -> list[dict[str, Any]]:
                     row[f"{prefix}_sd.{tool}"] = value
             for tool, value in diffs.get((board, ch), {}).items():
                 row[f"diff.{tool}"] = value
+            # level-1 strip features: l1.* at the packet's settings, l1ref.* at the reference (NaN if there is none)
+            for st in result.get("strips") or []:
+                if st["board"] == board and st["channel"] == ch:
+                    prefix = "l1" if st["kind"] == "new" else "l1ref"
+                    row[f"{prefix}.usable"] = bool(st.get("usable"))
+                    for name, value in (st.get("scalars") or {}).items() if st.get("usable") else []:
+                        row[f"{prefix}.{name}"] = value
             rows.append(row)
     return rows
 
