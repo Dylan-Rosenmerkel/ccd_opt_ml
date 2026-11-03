@@ -271,3 +271,30 @@ Caveat: the best feature set per model was chosen on this same CV (optimistic); 
 Tiers: `lvl1/feature_study/real_AB/evidence_tiers.json` (b7d25ca). Labels: drift subtraction off, run_WADERs --all-ext.
 Then session C is scored once (`--holdout-session C`), plus every model at each feature set (best set per model and
 target from the ladder, section 10) for reference.
+
+## 13. Next packet design: traces vs level-1 vs both (user, 2026-11-03)
+
+User: "first and foremost see if the trace can predict everything, then see if the lvl1 data can predict everything,
+then see what both of them can predict together; model the new packet designs after this."
+
+* **Level 1** (acmpy: filter level per channel, 0 raw / 1 per-skip CDS sums / 2 pixel averages / 3 off; FitsMaker
+  decodes all-L1 0x55 and all-L2 0xAA; `daq.take_image(level=1, ...)`): every skip's pedestal and signal sums of every
+  pixel, all 4 channels at once, ~8 kB per pixel per channel at 500 skips. Layout from
+  `comm_scripts/utils/skip_noise_L1.py` (read only): LINE per row, per pixel 4*NSKIP + 2 + 13 words (skip headers/sums,
+  one extra pedestal, 13-word trailer with the 62-bit sum of (signal - pedestal), EPIX). Checked on our 2026-10-06
+  partial 1x1 L1 row (100x1000x3000, file cut after 80 pixels): 80/80 pixels pass every layout check; per-skip sd
+  5.37 ADU (traces: 5.6), 2980-skip pixel means 0.102 ADU (white expectation 0.098). The 20x20-binned L1 images have
+  another layout (not decoded).
+* **Design rule:** every packet holds the same three kinds of input, so the three questions use the same packets,
+  labels and folds: (a) traces (raw, as now), (b) a level-1 STRIP read exactly like the image (image's prescan
+  NCOLPRE 5300, register clear BOOLCLR 1, NDCM 500, 1x1, EXPOSURE 0; NROW x NCOL small, e.g. 2 x 1000 = 16 MB per
+  channel, size to be confirmed on the DAQ), each at the reference and at the new settings, (c) the image.
+  Order: reference traces, reference strip, change, new traces, new strip, flush, image (traces before the strip, so
+  the trace inputs are not affected by it).
+* **Analysis:** three input sources per model (`trace`, `l1`, `both`), same folds; report all three; the prospective
+  block is scored for each.
+* Implementation steps: (1) src/decode_l1.py reader + tests; (2) strip features (image-style noise at the image's
+  skips, within-pixel Allan curve, their gap, transient, spectrum, direct sigma/gain/lambda from the pixel means);
+  (3) simulated L1 strips for tests; (4) manual_packet.sh strip steps + checks; (5) make_manual_manifest finds them;
+  (6) process_packet features -> dataset `l1.*`, `l1ref.*`; (7) real_inputs families per source; (8) train_lvl1
+  `--source trace|l1|both`; (9) v2 plan with strips, rehearsal end to end. DAQ test of strip sizes pending (user).
