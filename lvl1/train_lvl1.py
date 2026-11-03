@@ -299,14 +299,15 @@ def ladder_tables(results: dict, ladder: list[tuple[str, str, int]], plot_path: 
 
 def feature_mask(names, spec: str, tiers: dict[str, set[str]]) -> np.ndarray:
     """Columns of ``names`` selected by ``spec``: "all", "none", or tier labels joined by "+" (e.g. "A+B", "A1",
-    "impl0+impl1").  A feature without a tier label is kept only by "all"."""
+    "impl0+impl1").  A trace feature without a tier label is kept only by "all".  The level-1 strip features ("l1: ...",
+    inputs model_inputs_l1 / model_inputs_both) have no tiers: every spec but "none" keeps them."""
     names = [str(n) for n in names]
     if spec == "all":
         return np.ones(len(names), bool)
     if spec == "none":
         return np.zeros(len(names), bool)
     want = set(spec.split("+"))
-    return np.array([bool(tiers.get(n, set()) & want) for n in names])
+    return np.array([bool(tiers.get(n, set()) & want) or n.startswith("l1: ") for n in names])
 
 
 #: NUTS settings of the SAAS GP that fits lambda in ``physics`` (short chains: almost all of the full chains' gain)
@@ -422,8 +423,10 @@ class Runner:
         # curve it is the physics term, not an input, so it comes from the family file before any feature selection.
         full = self.files["physics"]
         names = list(full["feature_names"]) if "feature_names" in full else []
-        white = (np.asarray(full["X_trace"], float)[self.rows][:, names.index(st.WHITE_FEATURE)]
-                 if st.WHITE_FEATURE in names else np.full(len(a), np.nan))
+        # (the level-1 source has no trace feature: the strip's own white noise per skip takes its place)
+        wname = next((n for n in (st.WHITE_FEATURE, "l1: white noise per skip (ADU)") if n in names), None)
+        white = (np.asarray(full["X_trace"], float)[self.rows][:, names.index(wname)]
+                 if wname else np.full(len(a), np.nan))
         def part(idx, x):
             X = {"x": x, "a": a[idx], "b": b[idx], "white": white[idx], "n_skips": d["n_skips"][idx], "y_var": self.Y_err[idx] ** 2,
                  # module and amplifier ids: used ONLY by the labelled reference physics_hier (kind "hier")

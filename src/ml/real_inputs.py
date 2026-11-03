@@ -100,6 +100,36 @@ def _own_features(df: pd.DataFrame) -> dict[str, np.ndarray]:
             "feature_names": np.array(names)}
 
 
+def _l1_own_features(df: pd.DataFrame) -> dict[str, np.ndarray]:
+    """The level-1 strip features as the "own" inputs: X_trace = l1.* (at theta), X_ref = l1ref.* (at the reference)."""
+    new = [c for c in df.columns if c.startswith("l1.") and c != "l1.usable"]
+    ref = [c for c in df.columns if c.startswith("l1ref.") and c != "l1ref.usable"]
+    names = sorted(set(c.split(".", 1)[1] for c in new) & set(c.split(".", 1)[1] for c in ref))
+    num = lambda cols: df[cols].apply(pd.to_numeric, errors="coerce").to_numpy(float)
+    return {"X_trace": num([f"l1.{n}" for n in names]), "X_ref": num([f"l1ref.{n}" for n in names]),
+            "feature_names": np.array(names)}
+
+
+def _l1_allan(out_dir: Path, df: pd.DataFrame, ns: np.ndarray) -> np.ndarray:
+    """Per row, the strip's within-pixel Allan curve (at the packet's settings), interpolated (in log) onto ``ns``."""
+    curves = {}
+    for result_path in sorted(out_dir.glob("*/result.json")):
+        result = json.loads(result_path.read_text())
+        for st in result.get("strips") or []:
+            if st.get("kind") == "new" and st.get("usable") and st.get("npz") and Path(st["npz"]).exists():
+                with np.load(st["npz"]) as z:
+                    a, n = z["curve: l1: Allan deviation"], z["curve: l1: Allan n"]
+                ok = np.isfinite(a) & (a > 0)
+                if ok.sum() >= 2:
+                    curves[(result["packet_id"], st["board"], st["channel"])] = np.exp(
+                        np.interp(np.log(ns), np.log(n[ok]), np.log(a[ok]), left=np.nan, right=np.nan))
+    out = np.full((len(df), len(ns)), np.nan)
+    for i, (p, b, c) in enumerate(zip(df["packet_id"].astype(str), df["board"].astype(int), df["channel"].astype(int))):
+        if (p, b, c) in curves:
+            out[i] = curves[(p, b, c)]
+    return out
+
+
 def _traces(out_dir: Path) -> list[dict]:
     """Every trace of every processed packet: packet_id, kind, board, channel, repeat, usable, npz, theta."""
     rows = []
@@ -155,11 +185,16 @@ def build_all(out_dir: str | Path) -> list[Path]:
     dest = out_dir / "model_inputs"
     dest.mkdir(exist_ok=True)
     base = common(df)
+    has_l1 = "l1.usable" in df
+    if has_l1:
+        # level-1 strips present: the three sources (traces, strips, both) must be scored on the SAME rows, so a row needs
+        # a usable trace AND a usable strip in all three (docs/context/2026-11-03, section 13)
+        base["trace_ok"] = base["trace_ok"] & df["l1.usable"].astype(str).str.lower().eq("true").to_numpy()
     own = _own_features(df)
     traces = _traces(out_dir)
     written = []
 
-    def save(name, **arrays):
+    def save(name, dest=dest, **arrays):
         path = dest / f"{name}.npz"
         arrays = {k: (np.asarray(v).astype(str) if np.asarray(v).dtype == object else v) for k, v in arrays.items()}
         np.savez_compressed(path, family=np.array(name), description=np.array(FAMILIES[name]), **arrays)
@@ -207,6 +242,30 @@ def build_all(out_dir: str | Path) -> list[Path]:
              packet_id=np.array([t["packet_id"] for t in usable]), kind=np.array([t["kind"] for t in usable]),
              board=np.array([int(t["board"]) for t in usable]), channel=np.array([int(t["channel"]) for t in usable]),
              theta=np.array([[float(t["theta"].get(k, np.nan)) for k in tn] for t in usable]), theta_names=np.array(tn))
+    if has_l1:
+        # source "l1": the strip features instead of the trace features (features and physics families; the curve and
+        # set families are trace-only); source "both": trace + strip features (and the trace families as they are)
+        l1_own = _l1_own_features(df)
+        for name, d in (("l1", out_dir / "model_inputs_l1"), ("both", out_dir / "model_inputs_both")):
+            d.mkdir(exist_ok=True)
+            if name == "l1":
+                o = l1_own
+                phys = {**physics, **o, "allan": _l1_allan(out_dir, df, np.asarray(ALLAN_N, float)),
+                        "allan_curve_name": np.array("l1: Allan deviation")}
+            else:
+                o = {"X_trace": np.hstack([own["X_trace"], l1_own["X_trace"]]), "X_ref": np.hstack([own["X_ref"], l1_own["X_ref"]]),
+                     "feature_names": np.concatenate([own["feature_names"], l1_own["feature_names"]])}
+                phys = {**physics, **o}
+            save("features", dest=d, **base, **o)
+            save("physics", dest=d, **phys)
+            if name == "both":
+                for fam in ("curves", "sets", "pretrain"):
+                    if (dest / f"{fam}.npz").exists():
+                        z = dict(np.load(dest / f"{fam}.npz", allow_pickle=False))
+                        if "trace_ok" in z:
+                            z["trace_ok"] = base["trace_ok"]
+                        np.savez_compressed(d / f"{fam}.npz", **z)
+                        written.append(d / f"{fam}.npz")
     return written
 
 
