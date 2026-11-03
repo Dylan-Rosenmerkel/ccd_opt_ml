@@ -374,3 +374,18 @@ then see what both of them can predict together; model the new packet designs af
   deep_kernel 15.4 significant). sigma_e physics_white unaffected (7.3 -> 6.9 / 7.0). New amplifier: modest gains for
   the curve models (lambda cnn 64 -> 52, pretrained 61 -> 53; sigma_e pretrained 18.9 -> 14.4, deep_kernel 19.4 -> 15.9)
   but lambda and gain levels still no better than the mean.
+
+## 18. Without board 101 ch2 (EXT3) and the overview deck (2026-11-04)
+
+* ch2 (WADERs EXT3): per-row lambda fit chi2/ndf 22 (others 3-4), lambda 0.61 (others 0.27-0.48), sigma_e repeat 3.1 %.
+* `train_lvl1.py --exclude-amps 101:2`; predictions.csv now also holds the leave-one-amplifier-out predictions
+  (`loao <model>: log <t>`). Runs (each model at its CV-chosen set; CV, session C, LOAO): `processed/lvl1_results/
+  2026-11-04_all_amps`, `..._no_ch2`, `..._no_ch2_no_fingerprint` (run.sh in each). `lvl1/compare_runs.py` scores
+  them on the same rows (ch0/1/3) -> `2026-11-04_no_ch2/compare.json`.
+* Result (ch0/1/3): sigma_e and gain change within the noise (physics_white C 6.7 -> 6.2 -> 5.9 %). lambda on a new
+  amplifier improves: physics 70 -> 49 -> 46 %, nn 55 -> 47 -> 40 % (mean 52 %): first time below the average.
+  ch2's odd lambda level pulled every model (mean's C lambda 41.6 -> 34.8 %). Caveat: LOAO without ch2 trains on 2
+  amplifiers.
+* Overview deck (41 slides, pedagogical, with math, flow charts, results up to here):
+  https://claude.ai/artifact/KrzAfKm1qzchrDqXSdwCwG ; equations and new figures by `docs/slides/make_deck_2026_11_04.py`
+  into `docs/slides/deck_2026-11-04/`.

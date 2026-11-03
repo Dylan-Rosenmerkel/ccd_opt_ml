@@ -1149,6 +1149,8 @@ def main():
     parser.add_argument("--ladder-steps", type=int, nargs="+", default=list(LADDER_STEPS), help="feature counts of the cover and random ladders")
     parser.add_argument("--ladder-random", type=int, default=3, help="number of random orders (default 3)")
     parser.add_argument("--tier-file", default=str(TIER_FILE), help="evidence tiers (default lvl1/feature_study/evidence_tiers.json)")
+    parser.add_argument("--exclude-amps", nargs="*", default=[], metavar="BOARD:CHANNEL",
+                        help="amplifiers left out entirely (e.g. 101:2 = board 101 channel 2, WADERs EXT3)")
     parser.add_argument("--exclude-features", help="text file of trace features no model may see, one per line, as "
                                                    "'own: <name>' or 'ref: <name>' (e.g. lvl1/amp_fingerprint.py's lists)")
     parser.add_argument("--include-flagged", action="store_true", help="also use labels that WADERs flagged")
@@ -1169,6 +1171,9 @@ def main():
         rows &= ~base["fake"]
     if "trace_ok" in base:                      # no usable trace at the packet's own settings: nothing to predict from
         rows &= base["trace_ok"].astype(bool)
+    for bc in args.exclude_amps:
+        b, c = (int(x) for x in bc.split(":"))
+        rows &= ~((base["board"] == b) & (base["channel"] == c))
     rows = np.flatnonzero(rows)
     if len(rows) < 6:
         raise SystemExit(f"only {len(rows)} usable examples (boards {args.board}, labels ok, not fake): take more packets")
@@ -1249,7 +1254,7 @@ def main():
     info = {"date": datetime.now().isoformat(timespec="seconds"), "inputs": str(inputs), "boards": args.board,
             "n_rows": int(len(cv_idx)), "n_packets": int(len(np.unique(packets[cv_idx]))), "n_folds": n_folds, "quick": args.quick,
             "models": args.models, "feature_tiers": args.feature_tiers, "tier_ablation": args.tier_ablation,
-            "exclude_features": args.exclude_features,
+            "exclude_features": args.exclude_features, "exclude_amps": args.exclude_amps,
             "feature_ladder": [list(x) for x in ladder] if ladder else None, "group_by": args.group_by, "setting_tol": args.setting_tol, "n_groups": n_groups,
             "n_cv_packets": int(len(np.unique(packets[cv_idx]))), "merged_groups": merged, "n_boot": args.n_boot,
             "paired_ref": args.paired_ref, "holdout_packets": sorted(np.unique(packets[ho_idx]).tolist()),
@@ -1356,7 +1361,7 @@ def main():
         amps = np.unique(amp[cv_idx])
         splits = [(np.setdiff1d(cv_idx[amp[cv_idx] != a], test), test[amp[test] == a]) for a in amps for test in folds]
         splits = [(tr, te) for tr, te in splits if len(te) and len(tr)]
-        l_res = {}
+        l_res, l_preds = {}, {}
         print(f"\nleave one amplifier out ({len(amps)} amplifiers x {len(folds)} packet folds)")
         for name in preds:
             try:
@@ -1366,6 +1371,7 @@ def main():
                 print(f"{name:14s} failed: {l_res[name]['skipped']}")
                 continue
             l_res[name] = {"scores": scores(runner.Y[sl], runner.Y_err[sl], m[sl], s[sl], amp[sl], [np.searchsorted(cv_idx, t) for _, t in splits])}
+            l_preds[name] = m
             print(f"{name:14s} " + "  ".join(f"{t}: {100 * l_res[name]['scores'][t]['error']:5.1f} %" for t in TARGETS), flush=True)
         loao = {"n_folds": len(amps), "n_packet_folds": len(folds), "results": l_res}
 
@@ -1384,6 +1390,8 @@ def main():
         table[f"label error {tn}"] = runner.Y_err[:, t]
         for name, (m, s) in preds.items():
             table[f"{name}: log {tn}"], table[f"{name}: sd {tn}"] = m[:, t], s[:, t]
+        for name, m in (l_preds.items() if args.loao else []):       # leave one amplifier out (CV rows)
+            table[f"loao {name}: log {tn}"] = m[:, t]
     pd.DataFrame(table).to_csv(out / "predictions.csv", index=False)
     print(f"\nwrote {out / 'report.md'}, report.json, predictions.csv")
 
