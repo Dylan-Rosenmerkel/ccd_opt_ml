@@ -30,7 +30,7 @@ save_raw = true               # keep every decoded sample (values + flags) in a 
 #                          same rehearsal, so it is kept only as an alternative.
 runner = "run_WADERs"
 run_waders_command = ["/Users/dylanrosenmerkel/Documents/Software/comm_scripts/bin/run_WADERs"]
-run_waders_args = ["--no-clusters", "--autoconfig-args=--keep-dead"]
+run_waders_args = ["--no-clusters", "--all-ext", "--overwrite", "--autoconfig-args=--keep-dead"]   # --all-ext (2026-11-03): ch3 of board 101 has resolved peaks but run_WADERs skips it as an "outlier CCD"
 # How to start panaSKImg.  On this laptop it lives in the conda environment "damic" ("conda run"
 # sets up ROOT's environment; importing ROOT without it crashes); on the DAQ machine it may
 # simply be ["panaSKImg"].

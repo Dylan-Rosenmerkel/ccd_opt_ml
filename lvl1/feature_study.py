@@ -91,8 +91,75 @@ def study(df: pd.DataFrame) -> pd.DataFrame:
                      "repeat share": within / total if total > 0 else np.nan,
                      "NaN share": float(x.isna().mean()), "constant": bool(np.nanstd(x) == 0)})
     t = pd.DataFrame(rows).set_index("feature")
-    # redundancy clusters
-    X = df[feats].apply(pd.to_numeric, errors="coerce")
+    return _cluster_and_tier(t, df[feats].apply(pd.to_numeric, errors="coerce"), feats)
+
+
+def packet_traces(processed: Path, plan: Path, sessions: list[str], board: int = 101) -> pd.DataFrame:
+    """
+    One row per usable trace at the packet's own settings (kind "theta") of ``board``, from every
+    ``<processed>/<packet>/result.json`` of the planned packets in ``sessions``: packet, setting (the plan's changes;
+    packets with the same changes share it), channel, trace set, and the 141 scalar features.  No labels are read.
+    """
+    planned = {p["packet_id"]: p for p in json.loads(plan.read_text())["packets"] if p["session"] in sessions}
+    rows = []
+    for pid, p in sorted(planned.items()):
+        path = processed / pid / "result.json"
+        if not path.exists():
+            continue
+        for t in json.loads(path.read_text())["traces"]:
+            if t["board"] == board and t["kind"] == "theta" and t["usable"]:
+                rows.append({"packet": pid, "setting": json.dumps(p["changes"], sort_keys=True),
+                             "channel": t["channel"], "set": t["repeat"], **t["tools"]})
+    return pd.DataFrame(rows)
+
+
+def study_packets(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    The study of :func:`study` on real packets.  The unit of the settings comparison is the PACKET (mean over its
+    trace sets), because the trace sets of one packet are minutes apart and would hide the drift between packets:
+    * settings F   variance of the packet means over all packets / pooled variance of the packet means within the
+                   settings taken more than once (the replicate packets: nominal, the delayInt replicates), per
+                   amplifier; min and median over the amplifiers.  This asks whether the feature changes with the
+                   settings more than it wanders between two packets at the same settings.
+    * repeat share that within-setting variance / the total variance of the packet means (pooled over amplifiers);
+    * amplifier F  ANOVA F over the amplifiers within each packet (its trace sets as replicates), median over packets;
+    * clusters     |Spearman rho| > 0.95 over the packet means of every amplifier.
+    The tier rule is the one of :func:`study`.
+    """
+    feats = [n for n in tf.scalar_names() if n in df.columns]
+    means = df.groupby(["packet", "setting", "channel"])[feats].mean().reset_index()
+    replicated = means.groupby("setting")["packet"].nunique()
+    replicated = replicated[replicated > 1].index
+    rows = []
+    for f in feats:
+        Fset, within_ss, within_df, total = [], 0.0, 0, []
+        for ch, m in means.groupby("channel"):
+            x = m[f].astype(float)
+            ok = x.notna()
+            rep = m[ok & m.setting.isin(replicated)].groupby("setting")[f]
+            ss, dof = float((rep.var(ddof=1) * (rep.count() - 1)).sum()), int((rep.count() - 1).sum())
+            within_ss, within_df = within_ss + ss, within_df + dof
+            total.append(x[ok] - x[ok].mean())
+            msw = ss / dof if dof > 0 else np.nan
+            msb = float(np.var(x[ok], ddof=1)) if ok.sum() > 2 else np.nan
+            Fset.append(msb / msw if msw and msw > 0 else (np.inf if msb and msb > 0 else np.nan))
+        Famp = [anova_F([g[f] for _, g in d.groupby("channel")]) for _, d in df.groupby("packet")]
+        tot = np.concatenate(total) if total else np.array([])
+        total_var = float(np.var(tot, ddof=1)) if len(tot) > 2 else np.nan
+        x_all = pd.to_numeric(df[f], errors="coerce")
+        rows.append({"feature": f, "group": tf.FEATURES[f].group, "implementation tier": tf.FEATURES[f].tier,
+                     "settings F min": np.nanmin(Fset) if np.isfinite(Fset).any() else np.nan,
+                     "settings F median": np.nanmedian(Fset) if np.isfinite(Fset).any() else np.nan,
+                     "amplifier F median": np.nanmedian(Famp) if np.isfinite(Famp).any() else np.nan,
+                     "repeat share": (within_ss / within_df) / total_var if within_df and total_var > 0 else np.nan,
+                     "NaN share": float(x_all.isna().mean()), "constant": bool(np.nanstd(x_all) == 0)})
+    t = pd.DataFrame(rows).set_index("feature")
+    return _cluster_and_tier(t, means[feats].apply(pd.to_numeric, errors="coerce"), feats)
+
+
+def _cluster_and_tier(t: pd.DataFrame, X: pd.DataFrame, feats: list[str]) -> pd.DataFrame:
+    """Redundancy clusters on the rows of ``X``, informativeness, the evidence tiers A1/A2/B/C and the protected flag
+    (the second half of :func:`study`)."""
     usable = [f for f in feats if X[f].notna().mean() > 0.8 and np.nanstd(X[f]) > 0]
     rho = X[usable].rank().corr().abs().fillna(0).to_numpy()
     from scipy.cluster.hierarchy import fcluster, linkage
@@ -102,8 +169,8 @@ def study(df: pd.DataFrame) -> pd.DataFrame:
     labels = fcluster(linkage(squareform(dist, checks=False), "average"), t=0.05, criterion="distance")
     t["cluster"] = np.nan
     t.loc[usable, "cluster"] = labels
-    info = np.log1p(t[["settings F min", "amplifier F median"]].clip(lower=0).fillna(0)).sum(1)
-    t["informativeness"] = info
+    t["informativeness"] = np.log1p(t[["settings F min", "amplifier F median"]].clip(lower=0).fillna(0)
+                                    .replace(np.inf, 1e6)).sum(axis=1)
     t["cluster size"] = t.groupby("cluster")["cluster"].transform("count")
     rep = t.dropna(subset=["cluster"]).groupby("cluster")["informativeness"].idxmax()
     t["representative"] = t.index.isin(rep.values) | t["cluster"].isna()
@@ -117,8 +184,6 @@ def study(df: pd.DataFrame) -> pd.DataFrame:
             return "A"
         return "B"
     t["evidence tier"] = t.apply(tier, axis=1)
-    # tier A is about twice as large as B and C: split it by informativeness into two halves of similar size,
-    # A1 (the more informative) and A2, so that A1, A2, B and C each hold about a quarter of the features
     a = t[t["evidence tier"] == "A"].sort_values("informativeness", ascending=False)
     t["evidence subtier"] = t["evidence tier"]
     t.loc[a.index[: (len(a) + 1) // 2], "evidence subtier"] = "A1"
@@ -130,12 +195,20 @@ def study(df: pd.DataFrame) -> pd.DataFrame:
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--data", default=str(ROOT / "docs" / "slides" / "data" / "oct12_trace_features.csv"))
+    parser.add_argument("--packets", help="processed directory: study the real planned packets instead (label-free)")
+    parser.add_argument("--sessions", nargs="+", default=["A", "B"], help="plan sessions used with --packets")
+    parser.add_argument("--plan", default=str(ROOT / "lvl1" / "packet_plan" / "plan.json"))
     parser.add_argument("--out", default=str(ROOT / "lvl1" / "feature_study"))
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    df = pd.read_csv(args.data)
-    t = study(df)
+    if args.packets:
+        df = packet_traces(Path(args.packets), Path(args.plan), args.sessions)
+        print(f"{df.packet.nunique()} packets, {df.setting.nunique()} settings, {len(df)} traces (sessions "
+              f"{'+'.join(args.sessions)}, board 101, own settings only)")
+        t = study_packets(df)
+    else:
+        t = study(pd.read_csv(args.data))
     t.to_csv(out / "feature_table.csv")
     counts = pd.crosstab(t["implementation tier"], t["evidence subtier"])
     print(counts)

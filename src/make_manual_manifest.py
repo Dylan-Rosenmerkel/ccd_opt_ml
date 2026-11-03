@@ -38,8 +38,12 @@ THETA_PATTERNS = [r"^(V[123]|H[123]|TG|SW|OG|RG|DG)_[A-C12]_[HL]$", r"^(VSUB|VDD
                   r"^delay", r"^(NVWAIT|NPSD)$", r"^OFS_"]
 #: Image / trace geometry recorded with the manifest (not theta).
 GEOMETRY_KEYS = ("NROW", "NCOL", "NDCM", "NPBIN", "NSBIN", "EXPOSURE", "NCOLPRE", "NROWPRE", "PRESCAN", "PHYSROW", "PHYSCOl")
-#: Tolerance when comparing a requested change with the reported value (biases read back e.g. 45.095 for 45).
+#: Tolerance when comparing a requested change with the reported value: a clock rail reads back what was set; a
+#: bias reads back the nearest potentiometer step (45 -> 45.095, 40 -> 40.186, 50 -> 50.173 on 2026-11-02), so it
+#: gets the readback tolerance of daq_scripts/manual_packet.sh.
 VOLT_TOL = 0.15
+BIAS_TOL = 0.3
+BIAS_RE = re.compile(r"^(VSUB|VDD[12]|VDRAIN[12]|VR[12])$")
 TRACE_RE = re.compile(r"_ch(\d)_(\d+)_\d{8}_\d{6}_\d+$")
 
 
@@ -162,7 +166,7 @@ def manifest_from_record(record: dict, run_dir: Path, metas: list[dict]) -> dict
         for k, v in requested.get(b, {}).items():
             if k not in th:
                 warnings.append(f"board {b}: requested {k}={v:g} but {k} is not in the .meta files")
-            elif abs(th[k] - v) > (VOLT_TOL if not k.startswith("delay") else 0.5):
+            elif abs(th[k] - v) > (0.5 if k.startswith("delay") else BIAS_TOL if BIAS_RE.match(k) else VOLT_TOL):
                 warnings.append(f"board {b}: requested {k}={v:g} but the traces report {th[k]:g}")
                 manifest["status"] = "check"
         img = next((im for im in manifest["images"] if im["board"] == b), None)
