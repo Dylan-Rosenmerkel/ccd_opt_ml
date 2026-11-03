@@ -1242,6 +1242,9 @@ def main():
     W_cv = bootstrap_weights(packets[cv_idx], n_boot, seed=0) if n_boot else None
     sl = cv_idx
     results, preds, boots, cal_z = {}, {}, {}, {}
+    # every run's feature set, so the prospective test and LOAO refit each model with the set it was scored with (a run
+    # key without "[set]", e.g. under --feature-tiers P, does not carry it; before 2026-11-03 those refits used "all")
+    run_spec = {name: spec for name, _, spec in runs}
     for name, model, spec in runs:
         if FAMILY[model] not in files:
             results[name] = {"skipped": f"{FAMILY[model]}.npz not found"}
@@ -1304,7 +1307,7 @@ def main():
         for name in preds:
             t0 = time.time()
             try:
-                m, s = run_model(runner, name, [(cv_idx, ho_idx)])
+                m, s = run_model(runner, name, [(cv_idx, ho_idx)], run_spec.get(name))
             except SkipModel as exc:
                 h_res[name] = {"skipped": str(exc)}
                 continue
@@ -1337,7 +1340,7 @@ def main():
         print(f"\nleave one amplifier out ({len(amps)} amplifiers x {len(folds)} packet folds)")
         for name in preds:
             try:
-                m, s = run_model(runner, name, splits)
+                m, s = run_model(runner, name, splits, run_spec.get(name))
             except Exception as exc:                                 # e.g. a model that needs every amplifier in training
                 l_res[name] = {"skipped": f"{type(exc).__name__}: {exc}"}
                 print(f"{name:14s} failed: {l_res[name]['skipped']}")
