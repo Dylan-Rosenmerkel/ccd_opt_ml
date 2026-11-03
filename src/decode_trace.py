@@ -152,7 +152,8 @@ class DecodedTrace:
         """
         Largest |inline sum - sum of raw samples in the flagged window| over all skips.
 
-        0 means the raw samples, the window flags and the inline sums agree exactly.
+        0 means the raw samples, the window flags and the inline sums agree exactly; -1 means there is no complete
+        pedestal and signal window to compare (a trace cut short).
         """
         starts_rd, ends_rd = self.window_slices()
         starts_ru, ends_ru = self.signal_window_slices()
@@ -162,6 +163,8 @@ class DecodedTrace:
         inline_ped = self.l1_sum[~self.l1_is_signal]
         inline_sig = self.l1_sum[self.l1_is_signal]
         n = min(len(raw_ped), len(inline_ped), len(raw_sig), len(inline_sig))
+        if n == 0:
+            return -1
         return int(max(np.abs(raw_ped[:n] - inline_ped[:n]).max(),
                        np.abs(raw_sig[:n] - inline_sig[:n]).max()))
 
@@ -181,7 +184,9 @@ class DecodedTrace:
         if odd:
             problems.append(f"{odd} pedestal windows have an unusual length")
         mismatch = self.check_l1()
-        if mismatch:
+        if mismatch < 0:
+            problems.append("no complete pedestal and signal window")
+        elif mismatch:
             problems.append(f"inline sums differ from the raw samples by up to {mismatch}")
         counts = np.array([b - a for a, b in self.pixel_segments()])
         if len(counts) and counts.min() != counts.max():

@@ -237,7 +237,8 @@ def process_trace(entry: dict, out_dir: Path, cfg: ProcessingConfig) -> dict:
     ``compare_trace.py``, the advanced features and the 2026-10-21 additions: 141 numbers and 18 curves, each documented in
     ``trace_features.FEATURES`` and ``docs/overleaf_trace_features/trace_features.tex``.  They use the usable pixels (no
     row-start or charged pixels).  Returns a summary dict (also stored in features.json).  A trace
-    with quality problems is decoded and saved but marked ``usable = False``; no features.
+    with quality problems, or whose features cannot be computed, is decoded and saved but marked ``usable = False``;
+    no features.
     """
     name = f"{entry['kind']}{entry['repeat']}_acm{entry['board']}_ch{entry['channel']}"
     summary = {"name": name, "kind": entry["kind"], "board": entry["board"],
@@ -259,8 +260,13 @@ def process_trace(entry: dict, out_dir: Path, cfg: ProcessingConfig) -> dict:
                       l1_is_signal=trace.l1_is_signal, l1_n=trace.l1_n, l1_sum=trace.l1_sum)
 
     if not problems:
-        regions = split_regions(trace, meta)
-        features = trace_features(trace, meta=meta, regions=regions)
+        try:
+            regions = split_regions(trace, meta)
+            features = trace_features(trace, meta=meta, regions=regions)
+        except Exception as err:            # noqa: BLE001 - a damaged trace that passed the checks: unusable, not fatal
+            problems = [f"features failed: {type(err).__name__}: {err}"]
+            summary.update(problems=problems, usable=False)
+    if not problems:
         summary.update(pixels_used=features.info["pixels_used"],
                        row_start_pixels=features.info["row_start_pixels"],
                        charged_pixels=features.info["charged_pixels"],
