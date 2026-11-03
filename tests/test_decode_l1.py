@@ -63,9 +63,6 @@ class TestDecodeL1(unittest.TestCase):
         self.assertAlmostEqual(1.4826 * np.median(np.abs(v - np.median(v))), 0.102, places=2)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestL1Features(unittest.TestCase):
     """src/l1_features.py recovers a synthetic strip's noise, gain, lambda and transient."""
@@ -84,3 +81,7 @@ class TestL1Features(unittest.TestCase):
         self.assertAlmostEqual(S["l1: transient at skip 0 (ADU)"], 200, delta=2)
         self.assertAlmostEqual(S["l1: slow-noise excess"], 1.0, delta=0.1)
         self.assertEqual(len(C["l1: Allan deviation"]), len(C["l1: Allan n"]))
+
+
+if __name__ == "__main__":
+    unittest.main()
