@@ -103,3 +103,25 @@ class TestPacketReset(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDriftChoice(unittest.TestCase):
+    """process_packet.fit_choice: the drift-corrected labels are used only where they measure less noise with a fit no
+    worse than the raw one."""
+
+    def test_choice(self):
+        import process_packet as pp
+        raw = [{"channel": 0, "chi2ndf": 1.2, "sigma_e": 0.145}, {"channel": 1, "chi2ndf": 4.0, "sigma_e": 0.20},
+               {"channel": 2, "chi2ndf": 1.0, "sigma_e": 0.17}, {"channel": 3, "chi2ndf": 1.19, "sigma_e": 0.195}]
+        corr = [{"channel": 0, "chi2ndf": 4.8, "sigma_e": 0.348}, {"channel": 1, "chi2ndf": 1.3, "sigma_e": 0.16},
+                {"channel": 2, "chi2ndf": 1.5, "sigma_e": 0.165}, {"channel": 3, "chi2ndf": 0.95, "sigma_e": 0.258},
+                {"channel": 4, "chi2ndf": 1.1, "sigma_e": 0.18}]
+        labels, choice = pp.fit_choice(raw, corr, margin=0.1)
+        # 0: worse fit and more noise; 1: better on both; 2: less noise but a worse fit; 3: better chi2 but MORE
+        # noise (the L1_06 ch3 case); 4: no raw fit
+        self.assertEqual(choice, {0: "raw", 1: "corrected", 2: "raw", 3: "raw", 4: "corrected"})
+        by = {lab["channel"]: lab for lab in labels}
+        self.assertEqual(by[0]["sigma_e"], 0.145)
+        self.assertEqual(by[1]["sigma_e"], 0.16)
+        self.assertEqual((by[3]["sigma_e_raw"], by[3]["sigma_e_corrected"]), (0.195, 0.258))
+        self.assertEqual(pp.fit_choice(None, None)[0], [])

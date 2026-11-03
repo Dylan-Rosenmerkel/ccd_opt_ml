@@ -2,8 +2,9 @@
 # =============================================================================
 # manual_packet.sh -- one packet by hand, with the group's cdaq commands
 #
-#   standalone -> nominal (reset + readback) -> reference traces -> change parameters ->
-#   traces -> master/slave -> image (img.toml) -> standalone -> nominal (reset + readback)
+#   standalone -> nominal (reset + readback) -> flush -> reference traces -> flush -> change parameters ->
+#   settling traces -> traces -> flush -> master/slave -> image (img.toml) -> standalone -> flush ->
+#   nominal (reset + readback);  a PAUSE_S wait after every trace and after the image
 #
 # Every line below is a plain `cdaq qadd "..." <target>` (or take_image.py), the same
 # commands typed by hand.  The cdaq queue runs them ONE AFTER THE OTHER in the order
@@ -29,9 +30,11 @@
 # The manifest takes the settings of every trace and image from their .meta files (the values the boards
 # report), and the image is the first image of each board taken after the packet's last trace.
 #
-# Duration with the defaults: 18 flushes (~30 s each: 3 initial, one between trace sets, one after
-# the change, one at the end) = 9 min, 60 traces (~2 min), the img.toml image (16x1000x500,
-# 4.8 min readout + its EXPOSURE): about 16 min.
+# Flushes (2026-11-03, user): one before the reference traces, one after them, one after the new traces (= before
+# the image), one after the image; none between trace sets.  After the change, N_SETTLE_TRACES traces (named
+# <PACKET_ID>_settle<n>, not used for training) are taken before the new traces.
+# Duration with the defaults: 4 flushes (~30 s each) = 2 min, 15 sets x 4 channels x 2 boards traces + a 2 s pause
+# after every trace (~6 min), the img.toml image (16x1000x500, 4.8 min readout + its EXPOSURE): about 14 min.
 # Every packet starts AND ends by restoring the .bcf voltages and the sequencer's timing on the boards, then
 # reading them back (see nominal() below): a failed reset shows as "NOT NOMINAL" in cdaq print logs.
 # =============================================================================
@@ -47,13 +50,18 @@ PACKET_ID="${PACKET_ID:-m$(date +%Y%m%d_%H%M%S)}" # unique name of this packet: 
 RECORD_DIR="${RECORD_DIR:-$HOME/packet_records}" # where the packet record (JSON) is written
 SCAN_NAME="${SCAN_NAME:-manual}"                # free text: which scan / series this packet belongs to
 
-N_INITIAL_FLUSHES=3       # flushes before the first reference trace set
-N_REF_SETS=5              # reference trace sets (nominal parameters)
-N_SETS=10                 # trace sets at the new parameters
-FLUSH_BETWEEN="set"       # "set":   a flush between trace sets, none between the channels of a set
+N_REF_SETS="${N_REF_SETS:-5}"   # reference trace sets (nominal parameters)
+N_SETS="${N_SETS:-10}"          # trace sets at the new parameters
+N_SETTLE_TRACES="${N_SETTLE_TRACES:-2}"  # traces after the change, before the new sets (first channel; not used)
+FLUSH_BEFORE_REF=1        # flushes before the first reference trace set
+FLUSH_AFTER_REF=1         # flushes after the reference traces (before the change)
+FLUSH_BEFORE_IMAGE=1      # flushes after the new traces, before the image (in standalone)
+FLUSH_AFTER_IMAGE=1       # flushes after the image (back in standalone), before the final reset
+FLUSH_BETWEEN="none"      # "set":   a flush between trace sets, none between the channels of a set
                           # "trace": a flush before every trace;  "none": no flushes between traces
-FLUSH_AFTER_CHANGE=1      # flushes after changing the parameters
-TRACE_CHANNELS="0 1 2 3"  # one trace per channel (take_trace records one channel at a time)
+TRACE_CHANNELS="${TRACE_CHANNELS:-0 1 2 3}"  # one trace per channel; override e.g. TRACE_CHANNELS="1 0 2 3"
+TRACE_BOARDS="acm101 acm102"  # traces are sent to each board separately (not to the pool; DAQ edit of 2026-11-02)
+PAUSE_S="${PAUSE_S:-2.0}"       # seconds of waiting (both boards) after every trace and after the image
 
 # Trace that reads its pixels like the image (docs/packet_design.md, section 6): the same skips
 # (NDCM 500) and no binning (1x1), as img.toml; its own small size: 2 x 5 pixels after a
@@ -176,16 +184,18 @@ q() {   # queue one command:  q "<python text>" <target>
   if [[ ${DRY_RUN:-0} == 1 ]]; then echo "cdaq qadd \"$1\" $2"; else cdaq qadd "$1" "$2"; fi
 }
 flushes() { for ((i = 0; i < $1; i++)); do q "daq.flush_ccd()" "$POOL"; done; }
-traces() {   # traces <prefix> <number of sets>: one trace per channel per set, every board of the pool
-  local first=1 s ch
+pause() { q "time.sleep($PAUSE_S)" "$POOL"; }   # PAUSE_S seconds of waiting on both boards
+traces() {   # traces <prefix> <number of sets> [channels]: one trace per channel per board per set (each sent to
+             # its own board), then a PAUSE_S wait
+  local first=1 s ch board chans=${3:-$TRACE_CHANNELS}
   for ((s = 1; s <= $2; s++)); do
-    for ch in $TRACE_CHANNELS; do
-      if (( ! first )); then
-        if [[ $FLUSH_BETWEEN == trace ]] || [[ $FLUSH_BETWEEN == set && $ch == ${TRACE_CHANNELS%% *} ]]; then
-          flushes 1
-        fi
-      fi
-      q "daq.take_trace(fname='$1$s', ch=$ch, $TRACE_ARGS)" "$POOL"
+    if (( ! first )) && [[ $FLUSH_BETWEEN == set ]]; then flushes 1; fi
+    for ch in $chans; do
+      if (( ! first )) && [[ $FLUSH_BETWEEN == trace ]]; then flushes 1; fi
+      for board in $TRACE_BOARDS; do
+        q "daq.take_trace(fname='$1$s', ch=$ch, $TRACE_ARGS)" "$board"
+      done
+      pause
       first=0
     done
   done
@@ -227,7 +237,7 @@ write_record() {
   if [[ -e $file ]]; then echo "ERROR: $file exists: choose another PACKET_ID"; exit 1; fi
   {
     printf '{\n'
-    printf '  "record_version": 1,\n'
+    printf '  "record_version": 2,\n'
     printf '  "packet_id": "%s",\n' "$PACKET_ID"
     printf '  "scan_name": "%s",\n' "$SCAN_NAME"
     printf '  "queued_at": "%s",\n' "$(date +%Y-%m-%dT%H:%M:%S%z)"
@@ -243,6 +253,11 @@ write_record() {
     printf '  "trace_channels": %s,\n' "$(json_list $TRACE_CHANNELS)"
     printf '  "trace_args": "%s",\n' "${TRACE_ARGS//\'/}"
     printf '  "flush_between": "%s",\n' "$FLUSH_BETWEEN"
+    printf '  "flushes": {"before_ref": %d, "after_ref": %d, "before_image": %d, "after_image": %d},\n' \
+      "$FLUSH_BEFORE_REF" "$FLUSH_AFTER_REF" "$FLUSH_BEFORE_IMAGE" "$FLUSH_AFTER_IMAGE"
+    printf '  "n_settle_traces": %d,\n' "$N_SETTLE_TRACES"
+    printf '  "pause_s": %s,\n' "$PAUSE_S"
+    printf '  "trace_boards": %s,\n' "$(json_list $TRACE_BOARDS)"
     printf '  "image_toml": "%s",\n' "$IMAGE_TOML"
     printf '  "leader": %d\n' "$LEADER"
     printf '}\n'
@@ -254,7 +269,8 @@ write_record() {
 [[ $PACKET_ID =~ ^[A-Za-z0-9_-]+$ ]] || { echo "ERROR: PACKET_ID may only contain letters, digits, _ and -"; exit 1; }
 check_and_show || exit 1
 echo "Packet: $PACKET_ID   (traces ${PACKET_ID}_ref<set>, ${PACKET_ID}_new<set>; record in $RECORD_DIR)"
-echo "Traces: $N_REF_SETS reference + $N_SETS new sets x channels [$TRACE_CHANNELS], flush between: $FLUSH_BETWEEN"
+echo "Traces: $N_REF_SETS reference + $N_SETS new sets x channels [$TRACE_CHANNELS] x boards [$TRACE_BOARDS], $N_SETTLE_TRACES settling, flush between: $FLUSH_BETWEEN"
+echo "Flushes: before ref $FLUSH_BEFORE_REF, after ref $FLUSH_AFTER_REF, before image $FLUSH_BEFORE_IMAGE, after image $FLUSH_AFTER_IMAGE; pause ${PAUSE_S} s after every trace and the image"
 echo "Trace: $TRACE_ARGS"
 echo "Image: $IMAGE_TOML"
 case $FLUSH_BETWEEN in trace|set|none) ;; *) echo "ERROR: FLUSH_BETWEEN must be trace, set or none"; exit 1;; esac
@@ -265,14 +281,15 @@ fi
 
 write_record
 
-# 0. standalone mode, then the nominal configuration (the sequencer is uploaded in standalone), external clock
+# 0. standalone mode, then the nominal configuration (the sequencer is uploaded in standalone).  (The external
+#    clock is set once per session by hand; the daq.use_external_clock() line was removed on the DAQ, 2026-11-02.)
 q "daq.set_standalone()" "$POOL"
 nominal
-q "daq.use_external_clock()" "$POOL"          # set once per session; harmless if already set
 
-# 1. reference traces at nominal
-flushes "$N_INITIAL_FLUSHES"
+# 1. reference traces at nominal, between two flushes
+flushes "$FLUSH_BEFORE_REF"
 traces "${PACKET_ID}_ref" "$N_REF_SETS"
+flushes "$FLUSH_AFTER_REF"
 
 # 2. change the parameters
 for change in "${CHANGES[@]}"; do
@@ -280,10 +297,11 @@ for change in "${CHANGES[@]}"; do
   [[ $change == *:* ]] && { target=${change%%:*}; spec=${change#*:}; }
   q "daq['${spec%%=*}'] = ${spec#*=}" "$target"
 done
-flushes "$FLUSH_AFTER_CHANGE"
 
-# 3. traces at the new parameters
+# 3. settling traces (first channel; the first acquisition recompiles the sequencer), then the new traces, a flush
+(( N_SETTLE_TRACES > 0 )) && traces "${PACKET_ID}_settle" "$N_SETTLE_TRACES" "${TRACE_CHANNELS%% *}"
 traces "${PACKET_ID}_new" "$N_SETS"
+flushes "$FLUSH_BEFORE_IMAGE"
 
 # 4. master/slave mode and the image (take_image.py queues the take_image call itself)
 q "daq.master($LEADER)" "$POOL"
@@ -292,12 +310,13 @@ if [[ ${DRY_RUN:-0} == 1 ]]; then
 else
   (cd "$CDAQ_DIR" && $PYTHON scripts/take_image.py "$IMAGE_TOML")
 fi
+pause
 
 # 5. back to standalone FIRST (a flush -- e.g. the repeat queue's -- would hang in master mode),
-#    then the nominal configuration and a flush
+#    then a flush and the nominal configuration
 q "daq.set_standalone()" "$POOL"
+flushes "$FLUSH_AFTER_IMAGE"
 nominal
-flushes 1
 
 if [[ ${DRY_RUN:-0} == 1 ]]; then
   echo "(dry run: nothing was sent)"

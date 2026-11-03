@@ -98,6 +98,7 @@ class ProcessingConfig:
     drift_cut: str = "200"                 # columns cut where a drift is found ("auto": per image, diagnostic only)
     drift_channels: list[int] = field(default_factory=lambda: [0, 1, 3])   # channels that decide (the good ones of board 101)
     drift_width_tol: float = 0.05
+    drift_margin: float = 0.1              # a channel takes the corrected labels only if their chi2/ndf is lower by this fraction
     rows_enabled: bool = True              # per-row lambda and the dark-current / CIC split (image_rows.py)
     rows_reverse: bool = False             # True if FITS row 0 is the LAST row read out
     model_inputs: bool = True              # also write the per-model input files (ml/real_inputs.py)
@@ -131,6 +132,7 @@ class ProcessingConfig:
             drift_cut=str(data.get("drift", {}).get("cut", "200")),
             drift_channels=[int(c) for c in data.get("drift", {}).get("channels", [0, 1, 3])],
             drift_width_tol=float(data.get("drift", {}).get("width_tol", 0.05)),
+            drift_margin=float(data.get("drift", {}).get("margin", 0.1)),
             rows_enabled=bool(data.get("rows", {}).get("enabled", True)),
             rows_reverse=bool(data.get("rows", {}).get("reverse", False)),
             model_inputs=bool(data.get("model_inputs", {}).get("enabled", True)))
@@ -649,9 +651,11 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
             continue
         fits = decompress_fits(image["fits"], out / "fits")
         entry["fits"] = str(fits)
+        corrected = None
         if cfg.drift_enabled:
-            # the along-row baseline drift (image_drift.py): if present, WADERs and the per-row fit use the corrected copy
-            # (first ``drift_cut`` columns removed, the slow remainder subtracted); without a drift the copy is unchanged
+            # the along-row baseline drift (image_drift.py): if one is found, a corrected copy is made (first
+            # ``drift_cut`` columns removed, the slow remainder subtracted) and labelled TOO; per channel the copy's
+            # labels are kept only if they fit better (fit_choice below)
             try:
                 from image_drift import correct_image
                 (out / "fits_drift").mkdir(parents=True, exist_ok=True)
@@ -659,46 +663,33 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
                 entry["drift"] = {k: drift.get(k) for k in ("drift", "cut", "warning", "warning_channels", "output")}
                 entry["drift"]["channels"] = drift.get("channels")
                 if drift.get("drift"):
-                    entry["fits_original"] = str(fits)
-                    fits = Path(drift["output"])
-                    entry["fits"] = str(fits)
+                    corrected = Path(drift["output"])
                     if drift.get("warning"):
                         result["warnings"].append(f"drift on board {image['board']}: {drift['warning']}")
             except Exception as exc:                              # never lose the image over the drift step
                 result["warnings"].append(f"drift check failed on board {image['board']} (image used as is): {exc}")
         header = read_fits_primary(fits)
         entry["image_header"] = {k: header.get(k) for k in ("NROW", "NCOL", "NDCM", "NPBIN", "NSBIN", "EXPOSURE")}
-        if not skip_waders and cfg.waders_runner == "run_WADERs":
-            run = run_run_waders(fits, out / "waders" / f"acm{image['board']}", cfg)
-            entry["waders"] = run
-            if run["output"]:
-                entry["labels"] = labels_from_run_waders(Path(run["output"]), meta)
-                if run["returncode"] != 0:
-                    result["warnings"].append(f"run_WADERs returned {run['returncode']} on board {image['board']}; see {run['log']}")
-            else:
-                entry["error"] = f"run_WADERs wrote no fit_quality.csv (return code {run['returncode']}); see {run['log']}"
-        elif not skip_waders:
-            run = run_waders(fits, out / "waders" / f"acm{image['board']}", cfg)
-            entry["waders"] = run
-            if run["returncode"] == 0 and run["output"]:
-                entry["labels"] = extract_labels(read_fits_primary(Path(run["output"])), bounds, meta)
-            else:
-                entry["error"] = f"panaSKImg failed (return code {run['returncode']}); see {run['log']}"
-        if entry.get("labels") and cfg.rows_enabled:
-            try:
-                from image_rows import image_rows
-                # geometry for the active columns: the FITS header, overridden by the .meta where both have it
-                # geometry: the image's own header wins (a drift-corrected copy has NCOLPRE / NCOL adjusted for the cut)
-                rows = image_rows(fits, entry["labels"], {**meta, **header}, reverse=cfg.rows_reverse)
-                for lab in entry["labels"]:
-                    lab.update(rows.get(lab["channel"], {}))
-            except Exception as exc:                              # never lose the labels over the row fit
-                result["warnings"].append(f"per-row lambda failed on board {image['board']}: {exc}")
-        if entry.get("labels") and entry.get("drift"):
-            d = entry["drift"]
+        if not skip_waders:
+            raw = label_image(fits, out / "waders" / f"acm{image['board']}", meta, cfg, bounds, result, image["board"])
+            entry.update({k: v for k, v in raw.items() if k in ("waders", "error")})
+            labels = raw.get("labels")
+            if corrected is not None:
+                corr = label_image(corrected, out / "waders" / f"acm{image['board']}_drift", meta, cfg, bounds, result,
+                                   image["board"])
+                entry["waders_drift"] = corr.get("waders")
+                labels, entry["drift"]["choice"] = fit_choice(labels, corr.get("labels"), cfg.drift_margin)
+                if any(c == "corrected" for c in entry["drift"]["choice"].values()):
+                    entry["fits_drift"] = str(corrected)
+            if labels:
+                entry["labels"] = labels
+        if entry.get("labels"):
+            choice = (entry.get("drift") or {}).get("choice", {})
+            d = entry.get("drift") or {}
             for lab in entry["labels"]:
-                lab.update(drift_corrected=bool(d.get("drift")), drift_cut=d.get("cut") if d.get("drift") else 0,
-                           drift_warning=lab["channel"] in (d.get("warning_channels") or []))
+                used = choice.get(lab["channel"]) == "corrected"
+                lab.update(drift_corrected=used, drift_cut=d.get("cut") if used else 0,
+                           drift_warning=used and lab["channel"] in (d.get("warning_channels") or []))
         images.append(entry)
 
     labels = {"waders_version": waders_version(cfg) if not skip_waders else None,
@@ -713,6 +704,73 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
         result["warnings"].append("FAKE packet: files are copies of older data, not measurements at theta")
     (out / "result.json").write_text(json.dumps(_json_safe(result), indent=1))
     return result
+
+
+def label_image(fits: Path, waders_dir: Path, meta: dict, cfg: ProcessingConfig, bounds: dict, result: dict,
+                board: int) -> dict[str, Any]:
+    """WADERs labels of one image file (and the per-row lambda fit): ``{"waders": run info, "labels": [...]}`` or
+    ``{"error": ...}``; warnings go to ``result``."""
+    entry: dict[str, Any] = {}
+    if cfg.waders_runner == "run_WADERs":
+        run = run_run_waders(fits, waders_dir, cfg)
+        entry["waders"] = run
+        if run["output"]:
+            entry["labels"] = labels_from_run_waders(Path(run["output"]), meta)
+            if run["returncode"] != 0:
+                result["warnings"].append(f"run_WADERs returned {run['returncode']} on board {board}; see {run['log']}")
+        else:
+            entry["error"] = f"run_WADERs wrote no fit_quality.csv (return code {run['returncode']}); see {run['log']}"
+    else:
+        run = run_waders(fits, waders_dir, cfg)
+        entry["waders"] = run
+        if run["returncode"] == 0 and run["output"]:
+            entry["labels"] = extract_labels(read_fits_primary(Path(run["output"])), bounds, meta)
+        else:
+            entry["error"] = f"panaSKImg failed (return code {run['returncode']}); see {run['log']}"
+    if entry.get("labels") and cfg.rows_enabled:
+        try:
+            from image_rows import image_rows
+            # geometry: the image's own header wins (a drift-corrected copy has NCOLPRE / NCOL adjusted for the cut)
+            rows = image_rows(fits, entry["labels"], {**meta, **read_fits_primary(fits)}, reverse=cfg.rows_reverse)
+            for lab in entry["labels"]:
+                lab.update(rows.get(lab["channel"], {}))
+        except Exception as exc:                                  # never lose the labels over the row fit
+            result["warnings"].append(f"per-row lambda failed on board {board}: {exc}")
+    return entry
+
+
+def fit_choice(raw: list[dict] | None, corrected: list[dict] | None, margin: float = 0.1) -> tuple[list[dict], dict]:
+    """
+    Per channel, the labels of the raw image or of its drift-corrected copy.  The copy's are used only if
+    * its sigma_e is lower (subtracting a baseline drift can only remove noise: a copy that measures MORE noise has
+      noise added by the correction), and
+    * its fit is not worse: chi2/ndf at most (1 + ``margin``) x the raw fit's;
+    or if the raw fit is missing.  (2026-11-03: the correction, calibrated on the 2026-10-16 images where it brought
+    chi2/ndf 2.4-5.1 to 1.2-2.1 and removed a ~12 % sigma_e offset, made several 2026-11-02 images WORSE, e.g.
+    sigma_e 0.145 -> 0.348 e with chi2/ndf 1.2 -> 4.8; a lower chi2/ndf alone was not enough: L1_06 ch3 went
+    0.195 -> 0.258 e with chi2/ndf 1.19 -> 0.95.)  Returns the chosen labels (with both fits' chi2/ndf and sigma_e)
+    and ``{channel: "raw" | "corrected"}``.
+    """
+    by_raw = {lab["channel"]: lab for lab in raw or []}
+    by_corr = {lab["channel"]: lab for lab in corrected or []}
+    chosen, choice = [], {}
+    for ch in sorted(set(by_raw) | set(by_corr)):
+        r, c = by_raw.get(ch), by_corr.get(ch)
+        get = lambda lab, k: (lab or {}).get(k)
+        if c is None or get(c, "sigma_e") is None:
+            use_corr = False
+        elif r is None or get(r, "sigma_e") is None:
+            use_corr = True
+        else:
+            better_fit = get(c, "chi2ndf") is not None and get(r, "chi2ndf") is not None and \
+                get(c, "chi2ndf") <= (1 + margin) * get(r, "chi2ndf")
+            use_corr = get(c, "sigma_e") < get(r, "sigma_e") and better_fit
+        lab = dict(c if use_corr else r)
+        lab.update(chi2ndf_raw=get(r, "chi2ndf"), chi2ndf_corrected=get(c, "chi2ndf"),
+                   sigma_e_raw=get(r, "sigma_e"), sigma_e_corrected=get(c, "sigma_e"))
+        chosen.append(lab)
+        choice[ch] = "corrected" if use_corr else "raw"
+    return chosen, choice
 
 
 # --------------------------------------------------------------------------- #
