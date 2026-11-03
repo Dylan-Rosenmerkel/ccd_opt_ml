@@ -1,0 +1,21 @@
+# image_params_32rows.toml -- the v2 image (2026-11-03): image_params_recommended.toml with 32 rows instead of 16, so the
+# per-row lambda fit measures the dark-current part ~3x better (its slope error falls as rows^1.5; 16 rows gave it to ~11 %).
+# Copy it into the cdaq image_params folder (e.g. image_params/tc1/img32.toml) and set IMAGE_TOML in manual_packet.sh.
+# in the format of the group's image_params/*.toml, so it can be checked with
+#     python scripts/image_time.py <this file>
+# and taken with take_image.py.  Otherwise the same values as [image] in configs/packet_recommended.toml.
+# Expected (sequencer formulas of reference_v5_pumping.seq): 32 rows x 17.9 s = 573 s (9.5 min).
+subroutine = "AcquireImage"
+acq_level  = 2
+EXPOSURE = 0
+NDCM = 500
+NROW = 32
+NCOL = 1000
+NPBIN = 1
+NSBIN = 1
+NDCMPRE = 0
+NROWPRE = 0
+NROWPOST = 0
+NCOLPRE = 5300
+NCOLPOST = 0
+BOOLCLR = 1

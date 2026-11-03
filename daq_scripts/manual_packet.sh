@@ -43,7 +43,8 @@ set -euo pipefail
 # ------------------------------- SETTINGS ------------------------------------
 CDAQ_DIR="${CDAQ_DIR:-$HOME/Soft_JHU/cdaq}"     # where scripts/take_image.py lives
 PYTHON="${PYTHON:-python}"                      # or "pixi run python"
-IMAGE_TOML="image_params/tc1/img.toml"          # relative to CDAQ_DIR (16 x 1000 x 500, 1x1, prescan 5300)
+IMAGE_TOML="${IMAGE_TOML:-image_params/tc1/img.toml}"   # relative to CDAQ_DIR (16 x 1000 x 500, 1x1, prescan 5300;
+                                # v2 plan: a 32-row copy, configs/image_params_32rows.toml)
 LEADER=101                                      # master board for the image
 POOL=acmpool
 PACKET_ID="${PACKET_ID:-m$(date +%Y%m%d_%H%M%S)}" # unique name of this packet: the prefix of all its traces
@@ -62,6 +63,24 @@ FLUSH_BETWEEN="none"      # "set":   a flush between trace sets, none between th
 TRACE_CHANNELS="${TRACE_CHANNELS:-0 1 2 3}"  # one trace per channel; override e.g. TRACE_CHANNELS="1 0 2 3"
 TRACE_BOARDS="acm101 acm102"  # traces are sent to each board separately (not to the pool; DAQ edit of 2026-11-02)
 PAUSE_S="${PAUSE_S:-2.0}"       # seconds of waiting (both boards) after every trace and after the image
+
+# Safeguards (2026-11-03): after each trace phase (reference, new) the script WAITS until both boards have finished it,
+# checks every trace file (src/check_trace_files.py: missing, unfinished, or failing the decoder's quality check, as in
+# process_packet.py), and retakes each damaged trace under the next set number.  More than MAX_DAMAGED damaged traces
+# in one packet (retakes included): the packet is stopped, the boards reset, and the whole packet restarted as
+# <PACKET_ID>_r1 (then _r2 ...; its record is marked "restarted" and make_manual_manifest.py skips it).
+# The script therefore runs until the image is queued (~10 min): keep the terminal open (tmux).
+# Waiting needs the boards' cdaq clients on this machine (they write a small marker file into MARK_DIR).  While the
+# script waits the simple queue can be empty, so the cdaq REPEAT queue (e.g. an idle flush) may run then: suspend it
+# for the packets, or accept an extra flush between the phases.
+CHECK_TRACES="${CHECK_TRACES:-1}"   # 0: no waiting, no checks (queue everything at once, as before)
+CHECK_BOARDS="${CHECK_BOARDS:-101}" # boards whose traces are checked, retaken and counted (102 is not analysed)
+MAX_DAMAGED="${MAX_DAMAGED:-5}"     # more damaged traces than this in one packet: restart the packet from the reset
+MAX_RESTARTS="${MAX_RESTARTS:-2}"   # then give up (exit 1)
+RETAKE_ROUNDS="${RETAKE_ROUNDS:-2}" # retakes of retakes at most this often per phase; then go on with what there is
+PHASE_TIMEOUT_S="${PHASE_TIMEOUT_S:-900}"   # a phase not finished after this long: stop (a trace may hang, HDU END)
+MARK_DIR="${MARK_DIR:-$RECORD_DIR/markers}"
+SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../src" && pwd)"
 
 # Trace that reads its pixels like the image (docs/packet_design.md, section 6): the same skips
 # (NDCM 500) and no binning (1x1), as img.toml; its own small size: 2 x 5 pixels after a
@@ -238,6 +257,7 @@ write_record() {
   {
     printf '{\n'
     printf '  "record_version": 2,\n'
+    printf '  "status": "queued",\n'
     printf '  "packet_id": "%s",\n' "$PACKET_ID"
     printf '  "scan_name": "%s",\n' "$SCAN_NAME"
     printf '  "queued_at": "%s",\n' "$(date +%Y-%m-%dT%H:%M:%S%z)"
@@ -264,6 +284,62 @@ write_record() {
   } > "$file"
   echo "Packet record written: $file"
 }
+set_status() {   # set_status <text>: the record's "status" (queued -> complete / restarted: ... / failed: ...)
+  local file="$RECORD_DIR/$PACKET_ID.json"
+  [[ ${DRY_RUN:-0} == 1 || ! -e $file ]] && return 0
+  sed "s/\"status\": \"[^\"]*\"/\"status\": \"$1\"/" "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
+# ------------------------------ safeguards -----------------------------------
+marker() {   # marker <name>: each board writes MARK_DIR/<name>.<board id> (its run directory) when the queue gets there
+  q "import pathlib as _p; _p.Path('$MARK_DIR/$1.' + str(daq.id)).write_text(str(daq.acquire.directory))" "$POOL"
+}
+wait_marker() {   # wait_marker <name>: until every trace board has written its marker (PHASE_TIMEOUT_S at most)
+  local t0=$SECONDS b all
+  while :; do
+    all=1
+    for b in $TRACE_BOARDS; do [[ -e "$MARK_DIR/$1.${b#acm}" ]] || all=0; done
+    (( all )) && return 0
+    if (( SECONDS - t0 > PHASE_TIMEOUT_S )); then
+      echo "ERROR: the queue has not reached '$1' after $PHASE_TIMEOUT_S s.  A command may hang (e.g. a trace without"
+      echo "       HDU END): check 'cdaq print queues' and 'cdaq print logs' before doing anything else."
+      return 1
+    fi
+    sleep 3
+  done
+}
+check_phase() {   # check_phase <prefix> <number of sets>: wait for the phase, check its traces, retake damaged ones.
+                  # Returns 0 (go on), 2 (too many damaged traces: restart the packet) or 1 (error: stop).
+  local prefix=$1 n=$2 name dir lines count round=0 next=$(( $2 + 1 )) b ch s reason
+  local -a expect
+  if [[ ${DRY_RUN:-0} == 1 || $CHECK_TRACES != 1 ]]; then
+    if [[ $CHECK_TRACES == 1 ]]; then echo "(here the script waits for ${prefix}1..$n, checks them and retakes damaged traces)"; fi
+    return 0
+  fi
+  name="${PACKET_ID}_$(basename "$prefix")_check0"
+  marker "$name"; wait_marker "$name" || return 1
+  dir=$(cat "$MARK_DIR/$name.${CHECK_BOARDS%% *}")
+  lines=$($PYTHON "$SRC_DIR/check_trace_files.py" --dir "$dir" --prefix "$prefix" --sets $(seq 1 "$n") \
+          --channels $TRACE_CHANNELS --boards $CHECK_BOARDS) || return 1
+  while [[ -n $lines ]]; do
+    count=$(printf '%s\n' "$lines" | wc -l | tr -d ' ')
+    DAMAGED=$(( DAMAGED + count ))
+    printf '%s\n' "$lines" | sed "s/^/  damaged trace ($prefix, board channel set reason): /"
+    if (( DAMAGED > MAX_DAMAGED )); then return 2; fi
+    if (( round >= RETAKE_ROUNDS )); then echo "  $prefix: still damaged after $round retake rounds; going on"; return 0; fi
+    round=$(( round + 1 )); expect=()
+    while read -r b ch s reason; do
+      q "daq.take_trace(fname='$prefix$next', ch=$ch, $TRACE_ARGS)" "acm$b"
+      pause
+      expect+=("$b:$ch:$next"); next=$(( next + 1 ))
+    done <<< "$lines"
+    name="${PACKET_ID}_$(basename "$prefix")_check$round"
+    marker "$name"; wait_marker "$name" || return 1
+    lines=$($PYTHON "$SRC_DIR/check_trace_files.py" --dir "$dir" --prefix "$prefix" --expect "${expect[@]}") || return 1
+  done
+  echo "  $prefix: all traces checked ($DAMAGED damaged in this packet so far)"
+  return 0
+}
 
 # --------------------------------- the plan ----------------------------------
 [[ $PACKET_ID =~ ^[A-Za-z0-9_-]+$ ]] || { echo "ERROR: PACKET_ID may only contain letters, digits, _ and -"; exit 1; }
@@ -275,52 +351,83 @@ echo "Trace: $TRACE_ARGS"
 echo "Image: $IMAGE_TOML"
 case $FLUSH_BETWEEN in trace|set|none) ;; *) echo "ERROR: FLUSH_BETWEEN must be trace, set or none"; exit 1;; esac
 if [[ ${DRY_RUN:-0} != 1 ]]; then
-  read -r -p "Queue all commands now? [y/N] " answer
+  read -r -p "Start the packet now? (with CHECK_TRACES=1 the script runs until the image is queued) [y/N] " answer
   [[ $answer == [yY] ]] || { echo "nothing sent"; exit 0; }
 fi
 
-write_record
+run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart) / 1 (stop)
+  # 0. standalone mode, then the nominal configuration (the sequencer is uploaded in standalone).  (The external
+  #    clock is set once per session by hand; the daq.use_external_clock() line was removed on the DAQ, 2026-11-02.)
+  q "daq.set_standalone()" "$POOL"
+  nominal
 
-# 0. standalone mode, then the nominal configuration (the sequencer is uploaded in standalone).  (The external
-#    clock is set once per session by hand; the daq.use_external_clock() line was removed on the DAQ, 2026-11-02.)
-q "daq.set_standalone()" "$POOL"
-nominal
+  # 1. reference traces at nominal, between two flushes (the flush after them only once they are checked)
+  flushes "$FLUSH_BEFORE_REF"
+  traces "${PACKET_ID}_ref" "$N_REF_SETS"
+  check_phase "${PACKET_ID}_ref" "$N_REF_SETS" || return $?
+  flushes "$FLUSH_AFTER_REF"
 
-# 1. reference traces at nominal, between two flushes
-flushes "$FLUSH_BEFORE_REF"
-traces "${PACKET_ID}_ref" "$N_REF_SETS"
-flushes "$FLUSH_AFTER_REF"
+  # 2. change the parameters
+  local change target spec
+  for change in "${CHANGES[@]}"; do
+    target=$POOL; spec=$change
+    [[ $change == *:* ]] && { target=${change%%:*}; spec=${change#*:}; }
+    q "daq['${spec%%=*}'] = ${spec#*=}" "$target"
+  done
 
-# 2. change the parameters
-for change in "${CHANGES[@]}"; do
-  target=$POOL; spec=$change
-  [[ $change == *:* ]] && { target=${change%%:*}; spec=${change#*:}; }
-  q "daq['${spec%%=*}'] = ${spec#*=}" "$target"
+  # 3. settling traces (first channel; the first acquisition recompiles the sequencer), then the new traces, a flush
+  if (( N_SETTLE_TRACES > 0 )); then traces "${PACKET_ID}_settle" "$N_SETTLE_TRACES" "${TRACE_CHANNELS%% *}"; fi
+  traces "${PACKET_ID}_new" "$N_SETS"
+  check_phase "${PACKET_ID}_new" "$N_SETS" || return $?
+  flushes "$FLUSH_BEFORE_IMAGE"
+
+  # 4. master/slave mode and the image (take_image.py queues the take_image call itself)
+  q "daq.master($LEADER)" "$POOL"
+  if [[ ${DRY_RUN:-0} == 1 ]]; then
+    echo "(cd $CDAQ_DIR && $PYTHON scripts/take_image.py $IMAGE_TOML)"
+  else
+    (cd "$CDAQ_DIR" && $PYTHON scripts/take_image.py "$IMAGE_TOML")
+  fi
+  pause
+
+  # 5. back to standalone FIRST (a flush -- e.g. the repeat queue's -- would hang in master mode),
+  #    then a flush and the nominal configuration
+  q "daq.set_standalone()" "$POOL"
+  flushes "$FLUSH_AFTER_IMAGE"
+  nominal
+}
+
+[[ ${DRY_RUN:-0} == 1 ]] || mkdir -p "$MARK_DIR"
+BASE_ID=$PACKET_ID
+attempt=0
+while :; do
+  DAMAGED=0
+  write_record
+  status=0
+  run_packet || status=$?
+  if (( status == 2 )); then
+    echo "$PACKET_ID: $DAMAGED damaged traces (more than $MAX_DAMAGED): stopping it, resetting the boards, restarting the packet"
+    set_status "restarted: $DAMAGED damaged traces"
+    q "daq.set_standalone()" "$POOL"
+    nominal
+    attempt=$(( attempt + 1 ))
+    if (( attempt > MAX_RESTARTS )); then
+      echo "ERROR: $BASE_ID restarted $MAX_RESTARTS times and still too many damaged traces: giving up"
+      exit 1
+    fi
+    PACKET_ID="${BASE_ID}_r$attempt"
+    continue
+  elif (( status != 0 )); then
+    set_status "failed: stopped while waiting"
+    exit 1
+  fi
+  set_status "complete"
+  break
 done
-
-# 3. settling traces (first channel; the first acquisition recompiles the sequencer), then the new traces, a flush
-(( N_SETTLE_TRACES > 0 )) && traces "${PACKET_ID}_settle" "$N_SETTLE_TRACES" "${TRACE_CHANNELS%% *}"
-traces "${PACKET_ID}_new" "$N_SETS"
-flushes "$FLUSH_BEFORE_IMAGE"
-
-# 4. master/slave mode and the image (take_image.py queues the take_image call itself)
-q "daq.master($LEADER)" "$POOL"
-if [[ ${DRY_RUN:-0} == 1 ]]; then
-  echo "(cd $CDAQ_DIR && $PYTHON scripts/take_image.py $IMAGE_TOML)"
-else
-  (cd "$CDAQ_DIR" && $PYTHON scripts/take_image.py "$IMAGE_TOML")
-fi
-pause
-
-# 5. back to standalone FIRST (a flush -- e.g. the repeat queue's -- would hang in master mode),
-#    then a flush and the nominal configuration
-q "daq.set_standalone()" "$POOL"
-flushes "$FLUSH_AFTER_IMAGE"
-nominal
 
 if [[ ${DRY_RUN:-0} == 1 ]]; then
   echo "(dry run: nothing was sent)"
 else
-  echo "All commands queued.  Watch them with: cdaq print queues   (and cdaq print logs)"
+  echo "$PACKET_ID queued to the end ($DAMAGED damaged traces retaken).  Watch it with: cdaq print queues (and cdaq print logs)"
   echo "Afterwards: python src/make_manual_manifest.py $RECORD_DIR/$PACKET_ID.json --run-dir <raw-file directory>"
 fi

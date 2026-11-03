@@ -249,7 +249,14 @@ def main() -> None:
             parser.error("--run-dir is needed with records")
         run_dir = Path(args.run_dir).resolve()
         metas = read_metas(run_dir)
-        manifests = [manifest_from_record(json.loads(Path(r).read_text()), run_dir, metas) for r in args.records]
+        manifests = []
+        for r in args.records:
+            record = json.loads(Path(r).read_text())
+            # manual_packet.sh marks a packet it stopped ("restarted: ..." -- taken again as <id>_r1 -- or "failed: ...")
+            if str(record.get("status", "")).startswith(("restarted", "failed")):
+                print(f"{r}: skipped, the packet was {record['status']}")
+                continue
+            manifests.append(manifest_from_record(record, run_dir, metas))
     for m in manifests:
         path = out / f"{m['packet_id']}.json"
         path.write_text(json.dumps(m, indent=1, default=str))
