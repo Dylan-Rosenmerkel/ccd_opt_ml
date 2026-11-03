@@ -1,0 +1,253 @@
+column,block,feature,eta2,accuracy,tiers
+ref: edge: ringing rms (ADU),ref,edge: ringing rms (ADU),0.9998904267710945,1.0,A1
+ref: edge: cycle variation at dip (ADU),ref,edge: cycle variation at dip (ADU),0.9998710669045735,1.0,A1
+ref: edge: pre-pulse dip depth (ADU),ref,edge: pre-pulse dip depth (ADU),0.9997983169062418,1.0,A1
+ref: edge: recovery tau2 (us),ref,edge: recovery tau2 (us),0.9992209040526874,1.0,A1
+ref: noise: within-cycle power 0.3-1 MHz,ref,noise: within-cycle power 0.3-1 MHz,0.9992145917969905,1.0,A1
+ref: edge: dip per volt SW (ADU/V),ref,edge: dip per volt SW (ADU/V),0.9983855679641216,0.8976377952755905,B+P
+ref: skip: dip height,ref,skip: dip height,0.9983788716697686,0.8976377952755905,A1
+ref: noise: within-cycle power 3-7.5 MHz,ref,noise: within-cycle power 3-7.5 MHz,0.998367907375643,0.9921259842519685,A1
+ref: noise: within-cycle power 0.1-0.3 MHz,ref,noise: within-cycle power 0.1-0.3 MHz,0.9983373431170086,1.0,A1
+ref: edge: cycle variation in signal window (ADU),ref,edge: cycle variation in signal window (ADU),0.9982876199803685,0.984251968503937,A1
+ref: fit: dip recovery time (us),ref,fit: dip recovery time (us),0.998249962077666,1.0,A2
+ref: noise: within-cycle power 1-3 MHz,ref,noise: within-cycle power 1-3 MHz,0.9974442143613165,0.9133858267716536,A1
+ref: edge: recovery amplitude ratio,ref,edge: recovery amplitude ratio,0.9972768372192261,0.937007874015748,A1
+ref: edge: pre-pulse dip / pulse height,ref,edge: pre-pulse dip / pulse height,0.9970841918279666,1.0,A1
+ref: slow: PC1 variance fraction,ref,slow: PC1 variance fraction,0.9968704142664676,1.0,A1
+ref: edge: recovery tau1 (us),ref,edge: recovery tau1 (us),0.9961444370148533,0.9448818897637795,A1
+ref: slow: PC2 variance fraction,ref,slow: PC2 variance fraction,0.995952557429459,1.0,B
+own: edge: pre-pulse dip depth (ADU),own,edge: pre-pulse dip depth (ADU),0.9958734700782618,0.9921259842519685,A1
+ref: slow: PC3 variance fraction,ref,slow: PC3 variance fraction,0.9958158936309858,1.0,A1
+ref: edge: jitter (ns),ref,edge: jitter (ns),0.9950745666653988,0.937007874015748,A1
+ref: edge: cycle variation at reset (ADU),ref,edge: cycle variation at reset (ADU),0.9944958253001361,1.0,A1
+own: fit: dip recovery time (us),own,fit: dip recovery time (us),0.9933699531388299,0.984251968503937,A2
+ref: noise: waveform modes for 90 % of the CDS variance,ref,noise: waveform modes for 90 % of the CDS variance,0.9930880217369495,0.952755905511811,A1
+ref: fit: settling amplitude after pulse,ref,fit: settling amplitude after pulse,0.9929097982308158,0.905511811023622,A1
+own: edge: cycle variation at dip (ADU),own,edge: cycle variation at dip (ADU),0.9914439760157164,0.9763779527559056,A1
+ref: noise: null-CDS autocorrelation at lag 1,ref,noise: null-CDS autocorrelation at lag 1,0.9910751340976958,0.7952755905511811,A1
+ref: skip: noise power 3-7.5 MHz,ref,skip: noise power 3-7.5 MHz,0.990395965403595,0.984251968503937,A1
+ref: skip: noise power 1-3 MHz,ref,skip: noise power 1-3 MHz,0.987707268641178,0.9448818897637795,A1
+ref: edge: pulse/dip ratio,ref,edge: pulse/dip ratio,0.9858680434940624,0.8582677165354331,A1
+ref: fit: settling time after pulse (us),ref,fit: settling time after pulse (us),0.9855335635991068,1.0,A1
+own: noise: within-cycle power 0.3-1 MHz,own,noise: within-cycle power 0.3-1 MHz,0.9798418193395159,0.9291338582677166,A1
+ref: edge: rise time (ns),ref,edge: rise time (ns),0.9778275716827676,0.7952755905511811,A1
+ref: skip: end-of-cycle tail level,ref,skip: end-of-cycle tail level,0.9763743373151004,0.8818897637795275,A1
+ref: noise: window-length ratio 75/150,ref,noise: window-length ratio 75/150,0.9725233996692307,0.7086614173228346,A2
+ref: edge: pulse per volt RG (ADU/V),ref,edge: pulse per volt RG (ADU/V),0.9723311373116836,0.9448818897637795,A1+P
+ref: skip: pulse peak height,ref,skip: pulse peak height,0.9719596459048214,0.937007874015748,A1
+ref: noise: structure-function excess at 9 blocks (ADU),ref,noise: structure-function excess at 9 blocks (ADU),0.970500209713176,0.9291338582677166,A2
+ref: noise: null-CDS noise (ADU),ref,noise: null-CDS noise (ADU),0.9660321030807547,0.6377952755905512,A1+P
+ref: skip: skips 1-4 CDS ringing,ref,skip: skips 1-4 CDS ringing,0.9652965271639994,0.7480314960629921,A1
+ref: skip: noise power 0.1-1 MHz,ref,skip: noise power 0.1-1 MHz,0.965256066324859,0.968503937007874,B
+ref: fit: dip recovery amplitude,ref,fit: dip recovery amplitude,0.957415005501141,0.8267716535433071,A2
+ref: noise: signal-window settling (ADU),ref,noise: signal-window settling (ADU),0.9508551595926429,0.8661417322834646,A2
+ref: skip: CDS rms (detrended),ref,skip: CDS rms (detrended),0.9426054391832847,0.9291338582677166,A2+P
+ref: fit: white noise per skip (ADU),ref,fit: white noise per skip (ADU),0.9421893735724053,0.905511811023622,B+P
+ref: noise: jump-robust CDS sigma (ADU),ref,noise: jump-robust CDS sigma (ADU),0.9357651303082783,0.937007874015748,B+P
+ref: edge: ringing frequency (MHz),ref,edge: ringing frequency (MHz),0.9289227014045709,0.9763779527559056,A1
+ref: noise: pedestal-window settling (ADU),ref,noise: pedestal-window settling (ADU),0.9231389177013979,0.889763779527559,A1
+own: fit: dip recovery amplitude,own,fit: dip recovery amplitude,0.917619686364352,0.8582677165354331,A2
+ref: skip: baseline at skip 1,ref,skip: baseline at skip 1,0.9110631857013196,0.8976377952755905,A2
+ref: discrete: null-CDS kurtosis,ref,discrete: null-CDS kurtosis,0.9059669192386182,0.6377952755905512,A2
+ref: slow: row-start recovery time (skips),ref,slow: row-start recovery time (skips),0.9011706287114098,0.8031496062992126,A1
+own: noise: within-cycle power 3-7.5 MHz,own,noise: within-cycle power 3-7.5 MHz,0.9001608882387693,0.8503937007874016,A1
+"ref: clock: first H block of a row, excess (ADU)",ref,"clock: first H block of a row, excess (ADU)",0.8952738161093481,0.7795275590551181,A1
+ref: edge: cycle variation after reset (ADU),ref,edge: cycle variation after reset (ADU),0.891999223832456,0.6535433070866141,A2
+own: noise: structure-function excess at 9 blocks (ADU),own,noise: structure-function excess at 9 blocks (ADU),0.8798209375300392,0.9009009009009009,A2
+own: edge: dip per volt SW (ADU/V),own,edge: dip per volt SW (ADU/V),0.8693930251495083,0.8188976377952756,B+P
+own: skip: dip height,own,skip: dip height,0.8586897742294306,0.8110236220472441,A1
+own: noise: within-cycle power 1-3 MHz,own,noise: within-cycle power 1-3 MHz,0.8556260828731138,0.7637795275590551,A1
+ref: skip: noise of 10-skip average,ref,skip: noise of 10-skip average,0.8474452766340741,0.7244094488188977,A2
+ref: start: reset jump skip 0 to 1 (ADU),ref,start: reset jump skip 0 to 1 (ADU),0.8370102406879887,0.6456692913385826,A2
+ref: fit: first-skip ringing amplitude,ref,fit: first-skip ringing amplitude,0.8336039407116351,0.6456692913385826,A2
+own: fit: settling amplitude after pulse,own,fit: settling amplitude after pulse,0.8326880614107287,0.8267716535433071,A1
+own: edge: cycle variation at reset (ADU),own,edge: cycle variation at reset (ADU),0.8308668826122373,0.889763779527559,A1
+own: edge: pre-pulse dip / pulse height,own,edge: pre-pulse dip / pulse height,0.8295486593030048,0.889763779527559,A1
+own: edge: ringing rms (ADU),own,edge: ringing rms (ADU),0.8269807693782953,0.8976377952755905,A1
+ref: noise: reset-level scatter (ADU),ref,noise: reset-level scatter (ADU),0.8241793300634941,0.5905511811023622,B+P
+own: fit: settling time after pulse (us),own,fit: settling time after pulse (us),0.7617436535545186,0.8976377952755905,A1
+ref: skip: CDS autocorrelation at lag 2,ref,skip: CDS autocorrelation at lag 2,0.7553419785884807,0.6377952755905512,A2
+ref: start: transient time constant (us),ref,start: transient time constant (us),0.7500407242721097,0.6299212598425197,A2
+ref: edge: period offset (1e-3 samples),ref,edge: period offset (1e-3 samples),0.7256145067784591,0.5984251968503937,B
+own: noise: within-cycle power 0.1-0.3 MHz,own,noise: within-cycle power 0.1-0.3 MHz,0.721485030860681,0.905511811023622,A1
+own: edge: jitter (ns),own,edge: jitter (ns),0.7096553997075699,0.8503937007874016,A1
+ref: slow: row-start recovery amplitude (ADU),ref,slow: row-start recovery amplitude (ADU),0.7045809192026998,0.7795275590551181,A1
+ref: discrete: strongest line amplitude (ADU),ref,discrete: strongest line amplitude (ADU),0.7044744598790595,0.5275590551181102,B
+ref: noise: CDS autocorrelation at lag 1,ref,noise: CDS autocorrelation at lag 1,0.6954432081722522,0.5748031496062992,A2
+ref: start: CDS-slope lever arm (samples),ref,start: CDS-slope lever arm (samples),0.6926627769949526,0.5433070866141733,A2
+own: edge: recovery tau1 (us),own,edge: recovery tau1 (us),0.6697891049730287,0.7874015748031497,A1
+own: edge: recovery amplitude ratio,own,edge: recovery amplitude ratio,0.6681335470142309,0.8740157480314961,A1
+ref: discrete: in-window step amplitude (ADU),ref,discrete: in-window step amplitude (ADU),0.6612040522505367,0.8666666666666667,C
+own: noise: waveform modes for 90 % of the CDS variance,own,noise: waveform modes for 90 % of the CDS variance,0.6556841254073797,0.8188976377952756,A1
+own: edge: recovery tau2 (us),own,edge: recovery tau2 (us),0.6345874536747622,0.905511811023622,A1
+ref: start: first-skip excess per volt H (ADU/V),ref,start: first-skip excess per volt H (ADU/V),0.6325956203826958,0.4645669291338583,B
+ref: skip: first-skip CDS excess,ref,skip: first-skip CDS excess,0.6325956203826955,0.4645669291338583,A1
+"ref: start: transient amplitude, matched filter (ADU)",ref,"start: transient amplitude, matched filter (ADU)",0.6270400885840464,0.5354330708661418,B
+own: edge: cycle variation after reset (ADU),own,edge: cycle variation after reset (ADU),0.6124050517073115,0.5748031496062992,A2
+own: edge: ringing frequency (MHz),own,edge: ringing frequency (MHz),0.5698812882255153,0.7952755905511811,A1
+ref: noise: CDS spectral centroid,ref,noise: CDS spectral centroid,0.5688050087092005,0.5433070866141733,B
+ref: skip: noise of 50-skip average,ref,skip: noise of 50-skip average,0.5669259238437565,0.5275590551181102,C
+own: noise: reset-level scatter (ADU),own,noise: reset-level scatter (ADU),0.5593557354941894,0.6220472440944882,B+P
+ref: start: transient amplitude (ADU),ref,start: transient amplitude (ADU),0.5400734996264954,0.44881889763779526,A1
+ref: noise: permutation entropy (m=4),ref,noise: permutation entropy (m=4),0.5257939137222053,0.3464566929133858,A2
+ref: start: slope-explained fraction,ref,start: slope-explained fraction,0.5133620156254455,0.47244094488188976,A2
+ref: noise: DFA exponent,ref,noise: DFA exponent,0.5089432278473102,0.44881889763779526,A2
+ref: noise: Allan deviation n=50 (ADU),ref,noise: Allan deviation n=50 (ADU),0.48499426692475744,0.5196850393700787,C+P
+ref: discrete: in-window step rate (%),ref,discrete: in-window step rate (%),0.4821738042093894,0.4094488188976378,C
+ref: start: in-cycle slope at skip 0 (ADU/us),ref,start: in-cycle slope at skip 0 (ADU/us),0.4464912626720223,0.4566929133858268,B
+ref: noise: CDS power <1 kHz / >10 kHz,ref,noise: CDS power <1 kHz / >10 kHz,0.4343491229223351,0.5433070866141733,A2
+ref: fit: baseline droop time constant (skips),ref,fit: baseline droop time constant (skips),0.40649294202221076,0.36220472440944884,A2
+own: discrete: in-window step amplitude (ADU),own,discrete: in-window step amplitude (ADU),0.3900441228751018,0.6833333333333333,C
+ref: noise: Hadamard deviation n=50 (ADU),ref,noise: Hadamard deviation n=50 (ADU),0.37277208662241623,0.48031496062992124,A2
+own: skip: noise power 3-7.5 MHz,own,skip: noise power 3-7.5 MHz,0.3622002293404557,0.7874015748031497,A1
+own: edge: pulse per volt RG (ADU/V),own,edge: pulse per volt RG (ADU/V),0.3568688985849584,0.8503937007874016,A1+P
+own: edge: rise time (ns),own,edge: rise time (ns),0.3495018889597169,0.7244094488188977,A1
+own: discrete: null-CDS kurtosis,own,discrete: null-CDS kurtosis,0.3483019479694057,0.5984251968503937,A2
+ref: start: row-start/inner first-skip ratio,ref,start: row-start/inner first-skip ratio,0.34624227485323755,0.4251968503937008,A2
+ref: noise: CDS spectral slope,ref,noise: CDS spectral slope,0.34233478518251637,0.5196850393700787,A2
+own: edge: period offset (1e-3 samples),own,edge: period offset (1e-3 samples),0.34175539675239575,0.5039370078740157,B
+"own: discrete: line count (F-test, p<0.001)",own,"discrete: line count (F-test, p<0.001)",0.3416960558986296,0.3937007874015748,C
+own: skip: pulse peak height,own,skip: pulse peak height,0.3336983583721168,0.8503937007874016,A1
+own: slow: PC3 variance fraction,own,slow: PC3 variance fraction,0.3044771058602448,0.7559055118110236,A1
+"ref: discrete: line count (F-test, p<0.001)",ref,"discrete: line count (F-test, p<0.001)",0.29725975715340913,0.3858267716535433,C
+ref: noise: red-noise beta (50 skips),ref,noise: red-noise beta (50 skips),0.29216627300090947,0.1968503937007874,C
+ref: fit: baseline droop amplitude,ref,fit: baseline droop amplitude,0.2892934050548224,0.48031496062992124,A2
+own: edge: pulse/dip ratio,own,edge: pulse/dip ratio,0.2875721963508504,0.7165354330708661,A1
+own: discrete: strongest line amplitude (ADU),own,discrete: strongest line amplitude (ADU),0.2865739853920348,0.44881889763779526,B
+ref: noise: 1/f corner frequency (kHz),ref,noise: 1/f corner frequency (kHz),0.26673560551573594,0.44881889763779526,A2
+own: slow: PC1 variance fraction,own,slow: PC1 variance fraction,0.24868358661910495,0.6771653543307087,A1
+ref: skip: CDS mean (skips>=10),ref,skip: CDS mean (skips>=10),0.23489766761519804,0.8188976377952756,C
+ref: noise: CDS variance share of the 3 largest waveform modes,ref,noise: CDS variance share of the 3 largest waveform modes,0.2130678982253057,0.4409448818897638,A2
+"own: clock: first H block of a row, excess (ADU)",own,"clock: first H block of a row, excess (ADU)",0.21091053892120348,0.5984251968503937,A1
+ref: skip: signal-window level,ref,skip: signal-window level,0.204527447757212,0.8110236220472441,C
+ref: skip: droop total,ref,skip: droop total,0.18484930644744502,0.3700787401574803,A2
+ref: slow: drift (ADU/ms),ref,slow: drift (ADU/ms),0.17169122457907926,0.3228346456692913,A2
+own: level: common-pattern amplitude spread,own,level: common-pattern amplitude spread,0.16768824005237093,0.4330708661417323,C
+own: noise: window-length ratio 75/150,own,noise: window-length ratio 75/150,0.1579001833632503,0.5354330708661418,A2
+ref: skip: droop half-time (skips),ref,skip: droop half-time (skips),0.15239133541060768,0.36220472440944884,A2
+own: slow: PC2 variance fraction,own,slow: PC2 variance fraction,0.14595572650989785,0.7165354330708661,B
+ref: level: pixel level spread (ADU),ref,level: pixel level spread (ADU),0.1415260185400895,0.4409448818897638,C
+own: discrete: largest baseline step (t),own,discrete: largest baseline step (t),0.1324481322815052,0.3543307086614173,C
+own: noise: Allan slope n=10-100,own,noise: Allan slope n=10-100,0.13142375628845837,0.25984251968503935,C
+own: skip: noise power 1-3 MHz,own,skip: noise power 1-3 MHz,0.12867516608918794,0.7874015748031497,A1
+own: discrete: max within-window spectral kurtosis,own,discrete: max within-window spectral kurtosis,0.12445601861465494,0.41732283464566927,B
+ref: fit: first-skip ringing decay (skips),ref,fit: first-skip ringing decay (skips),0.11427426800806462,0.28346456692913385,C
+ref: start: mode damping (us),ref,start: mode damping (us),0.1063944477990113,0.31496062992125984,C
+ref: discrete: jump share of CDS variance,ref,discrete: jump share of CDS variance,0.10142026347505007,0.3464566929133858,C
+ref: discrete: max within-window spectral kurtosis,ref,discrete: max within-window spectral kurtosis,0.0975073464739954,0.33858267716535434,B
+own: fit: white noise per skip (ADU),own,fit: white noise per skip (ADU),0.0939336833894463,0.7165354330708661,B+P
+ref: noise: Allan slope n=10-100,ref,noise: Allan slope n=10-100,0.08940915374719072,0.2283464566929134,C
+own: skip: CDS rms (detrended),own,skip: CDS rms (detrended),0.08482251106648886,0.7086614173228346,A2+P
+own: noise: Hadamard deviation n=50 (ADU),own,noise: Hadamard deviation n=50 (ADU),0.08079905903543894,0.4330708661417323,A2
+ref: discrete: whitened CDS kurtosis,ref,discrete: whitened CDS kurtosis,0.07974159847548612,0.1889763779527559,C
+own: noise: jump-robust CDS sigma (ADU),own,noise: jump-robust CDS sigma (ADU),0.07880857869183389,0.7165354330708661,B+P
+own: discrete: in-window step rate (%),own,discrete: in-window step rate (%),0.07864297784734064,0.44881889763779526,C
+own: edge: cycle variation in signal window (ADU),own,edge: cycle variation in signal window (ADU),0.07771350449275649,0.9763779527559056,A1
+own: noise: red-noise beta (50 skips),own,noise: red-noise beta (50 skips),0.07546222072856856,0.3937007874015748,C
+ref: discrete: CDS excess kurtosis,ref,discrete: CDS excess kurtosis,0.07391269859640659,0.2755905511811024,C
+ref: discrete: CDS spectrum lines,ref,discrete: CDS spectrum lines,0.07134678961867558,0.25196850393700787,A2
+ref: fit: correlated noise floor (ADU),ref,fit: correlated noise floor (ADU),0.06978923512401591,0.25196850393700787,A1
+ref: discrete: largest baseline step (t),ref,discrete: largest baseline step (t),0.06923187326138569,0.23622047244094488,C
+own: noise: Allan deviation n=50 (ADU),own,noise: Allan deviation n=50 (ADU),0.06678899344693578,0.5118110236220472,C+P
+own: noise: null-CDS noise (ADU),own,noise: null-CDS noise (ADU),0.06629842453835177,0.6299212598425197,A1+P
+ref: noise: baseline coupling (1e-3),ref,noise: baseline coupling (1e-3),0.0647215211662805,0.2755905511811024,A2
+own: skip: noise of 50-skip average,own,skip: noise of 50-skip average,0.05553557175981805,0.5669291338582677,C
+"ref: noise: volatility clustering (Ljung-Box of e^2, 10 lags)",ref,"noise: volatility clustering (Ljung-Box of e^2, 10 lags)",0.055253519616751845,0.1889763779527559,B
+own: noise: null-CDS autocorrelation at lag 1,own,noise: null-CDS autocorrelation at lag 1,0.05459814023796805,0.5433070866141733,A1
+own: discrete: jump share of CDS variance,own,discrete: jump share of CDS variance,0.05294941536293529,0.3228346456692913,C
+own: skip: noise of 10-skip average,own,skip: noise of 10-skip average,0.05093776659989657,0.6535433070866141,A2
+ref: noise: 1/f exponent,ref,noise: 1/f exponent,0.05086061401212538,0.2204724409448819,C
+own: level: charge-loss slope (%),own,level: charge-loss slope (%),0.05019136932273294,0.40425531914893614,C
+own: noise: signal-window settling (ADU),own,noise: signal-window settling (ADU),0.047935583069244836,0.6850393700787402,A2
+"ref: discrete: jump count (Lee-Mykland, 1 %)",ref,"discrete: jump count (Lee-Mykland, 1 %)",0.04764813130338419,0.25196850393700787,C
+ref: level: pixel level max (ADU),ref,level: pixel level max (ADU),0.047116997066252275,0.4566929133858268,C
+own: discrete: largest CDS step (t),own,discrete: largest CDS step (t),0.04676766309200675,0.30708661417322836,B
+ref: start: fast decay (us),ref,start: fast decay (us),0.045336185993828604,0.2845528455284553,C
+own: level: charged-pixel skewness,own,level: charged-pixel skewness,0.04364329586934723,0.2127659574468085,C
+ref: discrete: STA/LTA maximum,ref,discrete: STA/LTA maximum,0.0417888136044382,0.2283464566929134,C
+own: discrete: ADC low-bit chi2/dof,own,discrete: ADC low-bit chi2/dof,0.04128014287859916,0.31496062992125984,C
+own: noise: CDS spectral slope,own,noise: CDS spectral slope,0.04011026890227942,0.25196850393700787,A2
+own: noise: DFA exponent,own,noise: DFA exponent,0.038785922540040874,0.3937007874015748,A2
+ref: noise: sample entropy,ref,noise: sample entropy,0.03819508930703441,0.31496062992125984,A2
+ref: discrete: largest CDS step (t),ref,discrete: largest CDS step (t),0.03638868105673476,0.2440944881889764,B
+ref: level: common-pattern amplitude spread,ref,level: common-pattern amplitude spread,0.0359389021295744,0.2755905511811024,C
+ref: noise: lag-1 autocorrelation of 10-skip means,ref,noise: lag-1 autocorrelation of 10-skip means,0.03324605831689276,0.18110236220472442,B
+ref: level: common CDS rise (ADU),ref,level: common CDS rise (ADU),0.032839754609779614,0.3464566929133858,C
+ref: start: ringing frequency (kHz),ref,start: ringing frequency (kHz),0.030568876722071314,0.2440944881889764,A2
+ref: fit: first-skip ringing frequency (cyc/skip),ref,fit: first-skip ringing frequency (cyc/skip),0.030568853368836302,0.2440944881889764,A2
+own: noise: CDS power <1 kHz / >10 kHz,own,noise: CDS power <1 kHz / >10 kHz,0.028227836804381123,0.3464566929133858,A2
+"ref: discrete: line frequency, whole trace (kHz)",ref,"discrete: line frequency, whole trace (kHz)",0.027638839791664704,0.25984251968503935,A2
+own: skip: skips 1-4 CDS ringing,own,skip: skips 1-4 CDS ringing,0.027258813337382115,0.5354330708661418,A1
+own: fit: correlated noise floor (ADU),own,fit: correlated noise floor (ADU),0.026407259262860028,0.25196850393700787,A1
+own: noise: noise trend along skips (ADU/100 skips),own,noise: noise trend along skips (ADU/100 skips),0.02586591135280214,0.36220472440944884,C
+own: noise: 1/f exponent,own,noise: 1/f exponent,0.02551316193391706,0.3937007874015748,C
+ref: discrete: ADC low-bit chi2/dof,ref,discrete: ADC low-bit chi2/dof,0.025371070932709627,0.28346456692913385,C
+ref: noise: late/early window ratio,ref,noise: late/early window ratio,0.024102559188922235,0.2204724409448819,C
+own: level: common CDS rise (ADU),own,level: common CDS rise (ADU),0.02375903357581577,0.14960629921259844,C
+own: level: slope-corrected CDS rise (ADU),own,level: slope-corrected CDS rise (ADU),0.0236546836209498,0.23622047244094488,B
+own: noise: baseline coupling (1e-3),own,noise: baseline coupling (1e-3),0.0236158319332328,0.25984251968503935,A2
+own: discrete: CDS outlier fraction,own,discrete: CDS outlier fraction,0.023561507936509463,0.25196850393700787,A2
+own: slow: row-start recovery amplitude (ADU),own,slow: row-start recovery amplitude (ADU),0.02345910357689418,0.3779527559055118,A1
+own: skip: CDS mean (skips>=10),own,skip: CDS mean (skips>=10),0.023037333181408992,0.6692913385826772,C
+own: skip: signal-window level,own,skip: signal-window level,0.02295900004467777,0.6771653543307087,C
+own: discrete: crest factor,own,discrete: crest factor,0.022620634534411987,0.3779527559055118,C
+own: noise: lag-1 autocorrelation of 10-skip means,own,noise: lag-1 autocorrelation of 10-skip means,0.02191142840533511,0.33858267716535434,B
+own: discrete: CDS excess kurtosis,own,discrete: CDS excess kurtosis,0.0215269655176068,0.25984251968503935,C
+own: noise: Lorentzian corner (kHz),own,noise: Lorentzian corner (kHz),0.020906370907749827,0.2677165354330709,C
+own: noise: late/early window ratio,own,noise: late/early window ratio,0.020822262765942456,0.2992125984251969,C
+own: skip: CDS autocorrelation at lag 2,own,skip: CDS autocorrelation at lag 2,0.020787318425457113,0.5826771653543307,A2
+own: noise: 1/f corner frequency (kHz),own,noise: 1/f corner frequency (kHz),0.020652982777042972,0.29133858267716534,A2
+own: discrete: whitened CDS kurtosis,own,discrete: whitened CDS kurtosis,0.02052931932943114,0.3858267716535433,C
+own: fit: first-skip ringing amplitude,own,fit: first-skip ringing amplitude,0.02003944955197401,0.4251968503937008,A2
+"ref: discrete: line phase coherence, pixel clock",ref,"discrete: line phase coherence, pixel clock",0.01746378951929861,0.30708661417322836,C
+own: level: pixel level spread (ADU),own,level: pixel level spread (ADU),0.016997994096655256,0.44881889763779526,C
+"own: noise: volatility clustering (Ljung-Box of e^2, 10 lags)",own,"noise: volatility clustering (Ljung-Box of e^2, 10 lags)",0.01693536890520808,0.14960629921259844,B
+own: start: first-skip excess per volt H (ADU/V),own,start: first-skip excess per volt H (ADU/V),0.01601653685635629,0.3858267716535433,B
+"own: start: transient amplitude, matched filter (ADU)",own,"start: transient amplitude, matched filter (ADU)",0.01598761706564933,0.3779527559055118,B
+own: skip: first-skip CDS excess,own,skip: first-skip CDS excess,0.0159592961909939,0.3858267716535433,A1
+own: start: transient amplitude (ADU),own,start: transient amplitude (ADU),0.015580407333583568,0.33858267716535434,A1
+"own: discrete: line phase coherence, pixel clock",own,"discrete: line phase coherence, pixel clock",0.015356815934427948,0.2992125984251969,C
+"own: discrete: line phase coherence, absolute time",own,"discrete: line phase coherence, absolute time",0.015005742217852669,0.23622047244094488,C
+own: noise: permutation entropy (m=4),own,noise: permutation entropy (m=4),0.014848186066501179,0.3464566929133858,A2
+own: noise: CDS variance share of the 3 largest waveform modes,own,noise: CDS variance share of the 3 largest waveform modes,0.014253143036989435,0.3937007874015748,A2
+ref: discrete: crest factor,ref,discrete: crest factor,0.013941090162780778,0.3464566929133858,C
+own: skip: baseline at skip 1,own,skip: baseline at skip 1,0.013717257699681795,0.5196850393700787,A2
+ref: level: slope-corrected CDS rise (ADU),ref,level: slope-corrected CDS rise (ADU),0.013251668229607105,0.2047244094488189,B
+ref: start: mode frequency (kHz),ref,start: mode frequency (kHz),0.012493736504961217,0.28346456692913385,A2
+ref: noise: noise trend along skips (ADU/100 skips),ref,noise: noise trend along skips (ADU/100 skips),0.012376930673727804,0.2047244094488189,C
+own: noise: sample entropy,own,noise: sample entropy,0.011753654336195463,0.2204724409448819,A2
+own: level: pixel level max (ADU),own,level: pixel level max (ADU),0.0115361037861339,0.4645669291338583,C
+own: start: in-cycle slope at skip 0 (ADU/us),own,start: in-cycle slope at skip 0 (ADU/us),0.010409608990718966,0.33070866141732286,B
+own: noise: baseline-CDS residual correlation,own,noise: baseline-CDS residual correlation,0.0103603016578665,0.33858267716535434,B
+"ref: discrete: line phase coherence, absolute time",ref,"discrete: line phase coherence, absolute time",0.010359722096770385,0.1968503937007874,C
+own: skip: noise power 0.1-1 MHz,own,skip: noise power 0.1-1 MHz,0.009988805324975703,0.7874015748031497,B
+own: start: fast decay (us),own,start: fast decay (us),0.009822477335170388,0.1889763779527559,C
+own: discrete: strongest line frequency (kHz),own,discrete: strongest line frequency (kHz),0.009189731808029178,0.2283464566929134,B
+own: start: reset jump skip 0 to 1 (ADU),own,start: reset jump skip 0 to 1 (ADU),0.00846142207707612,0.5590551181102362,A2
+own: discrete: CDS spectrum lines,own,discrete: CDS spectrum lines,0.008364298466985498,0.1968503937007874,A2
+own: discrete: STA/LTA maximum,own,discrete: STA/LTA maximum,0.006696952701708558,0.33858267716535434,C
+ref: noise: baseline-CDS residual correlation,ref,noise: baseline-CDS residual correlation,0.006424115695506383,0.2283464566929134,B
+own: skip: droop half-time (skips),own,skip: droop half-time (skips),0.005713017592385516,0.29133858267716534,A2
+own: skip: end-of-cycle tail level,own,skip: end-of-cycle tail level,0.005396769782388011,0.5669291338582677,A1
+ref: noise: Lorentzian corner (kHz),ref,noise: Lorentzian corner (kHz),0.004651461163166282,0.33858267716535434,C
+"own: discrete: jump count (Lee-Mykland, 1 %)",own,"discrete: jump count (Lee-Mykland, 1 %)",0.004603552876048078,0.2755905511811024,C
+own: noise: pedestal-window settling (ADU),own,noise: pedestal-window settling (ADU),0.004457494146699825,0.5984251968503937,A1
+own: start: slope-explained fraction,own,start: slope-explained fraction,0.004261620219475737,0.3700787401574803,A2
+own: start: mode damping (us),own,start: mode damping (us),0.003856050298602587,0.3543307086614173,C
+own: start: transient time constant (us),own,start: transient time constant (us),0.003103257078826527,0.4251968503937008,A2
+own: skip: droop total,own,skip: droop total,0.0029495215575899847,0.3464566929133858,A2
+own: fit: baseline droop time constant (skips),own,fit: baseline droop time constant (skips),0.0025180230396979475,0.5118110236220472,A2
+own: fit: first-skip ringing decay (skips),own,fit: first-skip ringing decay (skips),0.002493539030339109,0.3464566929133858,C
+ref: discrete: strongest line frequency (kHz),ref,discrete: strongest line frequency (kHz),0.00248407255692884,0.25196850393700787,B
+own: noise: CDS autocorrelation at lag 1,own,noise: CDS autocorrelation at lag 1,0.0022019884017060454,0.5275590551181102,A2
+own: noise: CDS spectral centroid,own,noise: CDS spectral centroid,0.0021881852896415976,0.49606299212598426,B
+own: slow: row-start recovery time (skips),own,slow: row-start recovery time (skips),0.001990357470569082,0.5669291338582677,A1
+own: start: row-start/inner first-skip ratio,own,start: row-start/inner first-skip ratio,0.0019032323275182117,0.3700787401574803,A2
+"own: discrete: line frequency, whole trace (kHz)",own,"discrete: line frequency, whole trace (kHz)",0.0009350006806323474,0.25196850393700787,A2
+own: slow: drift (ADU/ms),own,slow: drift (ADU/ms),0.0009106007295976992,0.33858267716535434,A2
+own: fit: baseline droop amplitude,own,fit: baseline droop amplitude,0.0006161151744425997,0.2992125984251969,A2
+own: start: CDS-slope lever arm (samples),own,start: CDS-slope lever arm (samples),0.0005225726307770406,0.4566929133858268,A2
+own: fit: first-skip ringing frequency (cyc/skip),own,fit: first-skip ringing frequency (cyc/skip),0.00032256219696247257,0.23622047244094488,A2
+own: start: mode frequency (kHz),own,start: mode frequency (kHz),0.00015685679356836069,0.2283464566929134,A2
+own: start: ringing frequency (kHz),own,start: ringing frequency (kHz),0.0001216590652695082,0.2204724409448819,A2
+own: discrete: within-cycle spectrum lines,own,discrete: within-cycle spectrum lines,1.8121965175255106e-05,0.25196850393700787,C

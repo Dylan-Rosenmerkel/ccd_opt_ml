@@ -385,6 +385,7 @@ class Runner:
         self.pretrainer = None
         self.tiers = tiers or {}
         self.feature_spec = "all"                            # which trace features the models see (--feature-tiers)
+        self.exclude: set[str] = set()                       # "own: <name>" / "ref: <name>" never seen (--exclude-features)
         d = files[next(iter(files))]
         self.Y, self.Y_err = d["Y"][rows], d["Y_err"][rows]
         # integer module / amplifier ids (for the labelled reference only)
@@ -405,6 +406,13 @@ class Runner:
             keep = feature_mask(out["feature_names"], self.feature_spec, self.tiers)
             out["X_trace"], out["X_ref"] = out["X_trace"][:, keep], out["X_ref"][:, keep]
             out["feature_names"] = np.asarray(out["feature_names"])[keep]
+        if self.exclude and "feature_names" in out and "X_trace" in out:
+            # an excluded column becomes all-NaN, so prep_columns drops it (own and reference blocks separately)
+            for key, prefix in (("X_trace", "own: "), ("X_ref", "ref: ")):
+                drop = np.array([prefix + str(n) in self.exclude for n in out["feature_names"]])
+                if drop.any():
+                    out[key] = np.array(out[key], float, copy=True)
+                    out[key][:, drop] = np.nan
         return out
 
     # -- the physics family -------------------------------------------------------
@@ -1141,6 +1149,8 @@ def main():
     parser.add_argument("--ladder-steps", type=int, nargs="+", default=list(LADDER_STEPS), help="feature counts of the cover and random ladders")
     parser.add_argument("--ladder-random", type=int, default=3, help="number of random orders (default 3)")
     parser.add_argument("--tier-file", default=str(TIER_FILE), help="evidence tiers (default lvl1/feature_study/evidence_tiers.json)")
+    parser.add_argument("--exclude-features", help="text file of trace features no model may see, one per line, as "
+                                                   "'own: <name>' or 'ref: <name>' (e.g. lvl1/amp_fingerprint.py's lists)")
     parser.add_argument("--include-flagged", action="store_true", help="also use labels that WADERs flagged")
     parser.add_argument("--allow-fake", action="store_true", help="also use FAKE (rehearsal) packets")
     parser.add_argument("--quick", action="store_true", help="short training (to test the pipeline)")
@@ -1203,6 +1213,10 @@ def main():
         args.ablation_ref = args.ablation_ref or "P"
     args.ablation_ref = args.ablation_ref or "all"
     runner = Runner(files, rows, args.quick, tiers)
+    if args.exclude_features:
+        runner.exclude = {ln.strip() for ln in Path(args.exclude_features).read_text().splitlines()
+                          if ln.strip() and not ln.startswith("#")}
+        print(f"excluded trace features: {len(runner.exclude)} ({args.exclude_features})")
     # the runs: one per model, or (ablation) one per model and feature set; key "model [set]" when a set is given
     if args.tier_ablation is not None:
         sets = args.tier_ablation or list(ABLATION_SETS)
@@ -1235,6 +1249,7 @@ def main():
     info = {"date": datetime.now().isoformat(timespec="seconds"), "inputs": str(inputs), "boards": args.board,
             "n_rows": int(len(cv_idx)), "n_packets": int(len(np.unique(packets[cv_idx]))), "n_folds": n_folds, "quick": args.quick,
             "models": args.models, "feature_tiers": args.feature_tiers, "tier_ablation": args.tier_ablation,
+            "exclude_features": args.exclude_features,
             "feature_ladder": [list(x) for x in ladder] if ladder else None, "group_by": args.group_by, "setting_tol": args.setting_tol, "n_groups": n_groups,
             "n_cv_packets": int(len(np.unique(packets[cv_idx]))), "merged_groups": merged, "n_boot": args.n_boot,
             "paired_ref": args.paired_ref, "holdout_packets": sorted(np.unique(packets[ho_idx]).tolist()),

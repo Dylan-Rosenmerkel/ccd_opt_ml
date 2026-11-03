@@ -357,3 +357,20 @@ then see what both of them can predict together; model the new packet designs af
   ratio 1.06 on 102 vs 0.82 on 101). lambda 1.11 vs 101's 0.27-0.61: most models ~-90 % (predict ~0.4); gp_dim 10.3 %,
   deep_kernel 13.6 %. gain: +2 to +8 % biased (settings_amp_trees 2.0, gp_dim 2.4). After one image (first nominal
   offset removed) every model is at the label scatter: sigma_e ~11 %, lambda ~8 %, gain 0.3 %.
+
+## 17. Amplifier fingerprints and leave-one-amplifier-out (2026-11-04)
+
+* LOAO (`processed_AB/lvl1_results/2026-11-04_loao/`, run.sh; each model at its CV-chosen set; 4 amps x 5 packet
+  folds). New-amplifier error (mean baseline: sigma_e 18.7, lambda 54.6, gain 3.5): sigma_e physics_white 14.0, sets
+  15.3, flexible models 17-23; lambda every model 52-80 (no better than the mean), after removing the amplifier's
+  offset (shape) physics 27.6, nn 28.9, pretrained 29.6 vs mean 37.2; gain 3.2-5.4, shape ~0.8-1.0 = mean 0.8.
+* `lvl1/amp_fingerprint.py` -> `lvl1/feature_study/real_AB/amp_fingerprint.csv` (eta2 = between-amplifier variance
+  share, single-feature amplifier accuracy) and exclusion lists eta90 (52 columns: 46 ref, 6 own) / eta50 (93).
+  Reference-trace features are almost all fingerprints (taken at nominal); own-trace noise features are not (white
+  noise eta2 0.09). `train_lvl1.py --exclude-features FILE` (excluded columns set to NaN -> dropped).
+* Without fingerprints (`processed/lvl1_results/2026-11-04_no_fingerprint_eta90|eta50/`; CV, session C, LOAO for
+  eta90): session C gets worse where the wins came from amplifier recognition: lambda physics 5.3 -> 15.2 / 17.6, gain
+  physics 0.9 -> 2.8 / 1.8, nn lambda 13.5 -> 17.3; still better than settings_amp_trees (23.2) for lambda (cnn 13.8 and
+  deep_kernel 15.4 significant). sigma_e physics_white unaffected (7.3 -> 6.9 / 7.0). New amplifier: modest gains for
+  the curve models (lambda cnn 64 -> 52, pretrained 61 -> 53; sigma_e pretrained 18.9 -> 14.4, deep_kernel 19.4 -> 15.9)
+  but lambda and gain levels still no better than the mean.

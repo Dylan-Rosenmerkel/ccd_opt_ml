@@ -1,0 +1,94 @@
+# trace features whose variance is > 50% between amplifiers (lvl1/amp_fingerprint.py; board 101, A+B)
+ref: edge: ringing rms (ADU)
+ref: edge: cycle variation at dip (ADU)
+ref: edge: pre-pulse dip depth (ADU)
+ref: edge: recovery tau2 (us)
+ref: noise: within-cycle power 0.3-1 MHz
+ref: edge: dip per volt SW (ADU/V)
+ref: skip: dip height
+ref: noise: within-cycle power 3-7.5 MHz
+ref: noise: within-cycle power 0.1-0.3 MHz
+ref: edge: cycle variation in signal window (ADU)
+ref: fit: dip recovery time (us)
+ref: noise: within-cycle power 1-3 MHz
+ref: edge: recovery amplitude ratio
+ref: edge: pre-pulse dip / pulse height
+ref: slow: PC1 variance fraction
+ref: edge: recovery tau1 (us)
+ref: slow: PC2 variance fraction
+own: edge: pre-pulse dip depth (ADU)
+ref: slow: PC3 variance fraction
+ref: edge: jitter (ns)
+ref: edge: cycle variation at reset (ADU)
+own: fit: dip recovery time (us)
+ref: noise: waveform modes for 90 % of the CDS variance
+ref: fit: settling amplitude after pulse
+own: edge: cycle variation at dip (ADU)
+ref: noise: null-CDS autocorrelation at lag 1
+ref: skip: noise power 3-7.5 MHz
+ref: skip: noise power 1-3 MHz
+ref: edge: pulse/dip ratio
+ref: fit: settling time after pulse (us)
+own: noise: within-cycle power 0.3-1 MHz
+ref: edge: rise time (ns)
+ref: skip: end-of-cycle tail level
+ref: noise: window-length ratio 75/150
+ref: edge: pulse per volt RG (ADU/V)
+ref: skip: pulse peak height
+ref: noise: structure-function excess at 9 blocks (ADU)
+ref: noise: null-CDS noise (ADU)
+ref: skip: skips 1-4 CDS ringing
+ref: skip: noise power 0.1-1 MHz
+ref: fit: dip recovery amplitude
+ref: noise: signal-window settling (ADU)
+ref: skip: CDS rms (detrended)
+ref: fit: white noise per skip (ADU)
+ref: noise: jump-robust CDS sigma (ADU)
+ref: edge: ringing frequency (MHz)
+ref: noise: pedestal-window settling (ADU)
+own: fit: dip recovery amplitude
+ref: skip: baseline at skip 1
+ref: discrete: null-CDS kurtosis
+ref: slow: row-start recovery time (skips)
+own: noise: within-cycle power 3-7.5 MHz
+ref: clock: first H block of a row, excess (ADU)
+ref: edge: cycle variation after reset (ADU)
+own: noise: structure-function excess at 9 blocks (ADU)
+own: edge: dip per volt SW (ADU/V)
+own: skip: dip height
+own: noise: within-cycle power 1-3 MHz
+ref: skip: noise of 10-skip average
+ref: start: reset jump skip 0 to 1 (ADU)
+ref: fit: first-skip ringing amplitude
+own: fit: settling amplitude after pulse
+own: edge: cycle variation at reset (ADU)
+own: edge: pre-pulse dip / pulse height
+own: edge: ringing rms (ADU)
+ref: noise: reset-level scatter (ADU)
+own: fit: settling time after pulse (us)
+ref: skip: CDS autocorrelation at lag 2
+ref: start: transient time constant (us)
+ref: edge: period offset (1e-3 samples)
+own: noise: within-cycle power 0.1-0.3 MHz
+own: edge: jitter (ns)
+ref: slow: row-start recovery amplitude (ADU)
+ref: discrete: strongest line amplitude (ADU)
+ref: noise: CDS autocorrelation at lag 1
+ref: start: CDS-slope lever arm (samples)
+own: edge: recovery tau1 (us)
+own: edge: recovery amplitude ratio
+ref: discrete: in-window step amplitude (ADU)
+own: noise: waveform modes for 90 % of the CDS variance
+own: edge: recovery tau2 (us)
+ref: start: first-skip excess per volt H (ADU/V)
+ref: skip: first-skip CDS excess
+ref: start: transient amplitude, matched filter (ADU)
+own: edge: cycle variation after reset (ADU)
+own: edge: ringing frequency (MHz)
+ref: noise: CDS spectral centroid
+ref: skip: noise of 50-skip average
+own: noise: reset-level scatter (ADU)
+ref: start: transient amplitude (ADU)
+ref: noise: permutation entropy (m=4)
+ref: start: slope-explained fraction
+ref: noise: DFA exponent
