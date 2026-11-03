@@ -65,4 +65,49 @@ settings, sessions A + B; the settings comparison uses PACKET means (trace sets 
 settings F = variance of the packet means / pooled variance within the replicated settings (nominal x4 in A+B,
 delayInt 300 x2, delayInt 3000 x2; 5 degrees of freedom), per amplifier, min and median; repeat share = that
 within-setting variance / total; amplifier F within each packet over its trace sets; clusters on packet means. Same
-tier rule as before. Results: (pending).
+tier rule as before. Results: 32 packets, 27 settings, 1223 traces: **A1 38 / A2 38 / B 19 / C 46 / P 8**
+(frozen in git, `lvl1/feature_study/real_AB/`, commit b7d25ca, before any training). Versus the 10-12 tiers only 64 of
+141 features keep their tier (the 10-12 settings did not change the noise; session A does). The protected estimators
+are given to every model (guard a) whatever their tier (white noise per skip B, CDS rms A2, Allan n=50 C, reset
+scatter B, dip per volt SW B, pulse per volt RG A1, null-CDS A1, jump-robust B). 17 of the 46 C are NaN in > 20 %.
+
+## 4. First training (A+B, setting-grouped CV, C sealed)
+
+Run 1: `train_lvl1.py --inputs processed_AB/model_inputs --board 101 --feature-tiers auto --tier-file
+lvl1/feature_study/real_AB/evidence_tiers.json --n-boot 1000 --out processed_AB/lvl1_results/2026-11-03_auto`
+(log: scratchpad `data1103/train_auto.log`). 119 examples, 32 packets, 27 setting groups (merged L1_01+07+14+32,
+L1_04+13, L1_06+23). Error % (x mean); label noise at nominal ~2 / ~10 / ~0.6 %:
+
+| model | sigma_e | lambda | gain |
+|---|---|---|---|
+| mean | 22.4 | 45.0 | 2.8 |
+| settings | 23.2 (1.04x) | 43.7 (0.97x) | 2.8 |
+| trace_physics | 68.7 (3.07x) | = mean | = mean |
+| physics [P+A+B] | 27.8 (1.24x) | 20.6 (0.46x) | 1.5 (0.53x) |
+| physics_joint | = physics | 33.8 | = physics |
+| physics_hier (labels) | 27.5 | 34.9 | 1.2 |
+| sets | 20.4 (0.91x) | 20.6 | 1.5 |
+| ridge [P+A] | 29.6 | 34.8 | 2.1 |
+| **trees [all]** | **16.2 (0.72x)** | 21.3 (0.47x) | **1.1 (0.40x)** |
+| gp [P] | 25.4 | 35.6 | 1.7 |
+| nn [P+A] | 18.0 (0.80x) | 24.0 | 1.1 |
+| cnn | 19.7 | 25.3 | 1.1 |
+| pretrained | 18.8 | 28.2 | 1.3 |
+| deep_kernel | 18.5 | 40.2 | 1.4 |
+
+Paired vs physics (95 % CI excludes 0): sigma_e better: trees -11.6, nn -9.8, pretrained -9.0, deep_kernel -9.3,
+sets -7.3; lambda worse: physics_joint, physics_hier, gp, pretrained, deep_kernel (trees +0.7 and sets "same" are
+level with physics); gain better: trees, nn, cnn.
+
+**Why the physics family fails sigma_e here (diagnosis):** log(estimate / image sigma_adu) over the 119 rows: white
+noise per skip / sqrt(NDCM): mean +0.136, sd 0.175 (per channel 0.12-0.22; within-channel corr with log sigma_e
+0.43-0.61); CDS rms the same; Allan n=50 x sqrt(50/N): -0.03, sd 0.18; trace_physics (Allan a^2/n + b^2 fit, x mean
+gain): +0.62, sd 0.30, within-channel corr -0.08..0.27. The Allan floor extrapolated to n = 500 is unstable on real
+traces (L1_04 vs L1_13, same setting: x1.45 vs x1.17). Physics findings: the trace is ~14 % noisier than the image at
+nominal; delay_Ha 3600 and delayRGH 400 raise the IMAGE sigma_e by ~45 % with no change in the trace's white noise;
+delayInt 500 raises the image sigma_e by 50 % but the trace's white noise by 9 %; delayInt 3000 raises the trace's
+white noise (5.6 -> 6.4 ADU) while the image sigma_e falls slightly (0.152 -> 0.142). Not yet understood (candidates:
+the image pixels see clocking the 2 x 5 trace pixels do not; WADERs' sigma_e affected by the 10x higher lambda).
+
+Run 2 (feature ladder; models settings physics physics_joint sets ridge trees gp gp_dim nn cnn pretrained deep_kernel;
+orders tiers cover random; n-boot 300; out processed_AB/lvl1_results/2026-11-03_ladder; log train_ladder.log): running.
