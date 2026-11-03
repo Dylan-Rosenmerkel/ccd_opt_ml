@@ -65,3 +65,22 @@ class TestDecodeL1(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestL1Features(unittest.TestCase):
+    """src/l1_features.py recovers a synthetic strip's noise, gain, lambda and transient."""
+
+    def test_synthetic_strip(self):
+        from l1_features import l1_features
+        rng = np.random.default_rng(1)
+        npx, nskip, g, lam = 2000, 500, 1.33, 0.35
+        v = rng.normal(0, 5.5, (npx, nskip)) + (rng.poisson(lam, npx) * g)[:, None]
+        v[:, :15] += 200 * np.exp(-np.arange(15) / 3)[None, :]
+        S, C = l1_features(v, np.repeat([0, 1], 1000))
+        self.assertAlmostEqual(S["l1: pixel noise (ADU)"], 5.5 / np.sqrt(500), delta=0.02)
+        self.assertAlmostEqual(S["l1: gain (ADU/e)"], g, delta=0.03)
+        self.assertAlmostEqual(S["l1: lambda (e/pixel)"], lam, delta=0.04)
+        self.assertAlmostEqual(S["l1: white noise per skip (ADU)"], 5.5, delta=0.1)
+        self.assertAlmostEqual(S["l1: transient at skip 0 (ADU)"], 200, delta=2)
+        self.assertAlmostEqual(S["l1: slow-noise excess"], 1.0, delta=0.1)
+        self.assertEqual(len(C["l1: Allan deviation"]), len(C["l1: Allan n"]))
