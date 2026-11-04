@@ -418,3 +418,13 @@ then see what both of them can predict together; model the new packet designs af
   gp / gp_dim on new amplifiers. Document corrected.
 * `docs/overleaf_overview_2026-11-04/level1_summary.tex` (11 pages) now has the CNN subsection and section 8, an
   assessment: what works, what does not, why (information, not models), prognosis, decisions for v2.
+
+## 22. Predicting the CHANGE between nominal and a new setting (2026-11-04)
+
+* User's reframing: from two traces (reference at nominal, own at the new setting) predict the change of sigma_e,
+  lambda, gain. `lvl1/change_test.py`: target log y(new) - log y(nominal), nominal interpolated in time between the
+  nominal packets of the same amplifier; inputs diff.* (own - reference, P+A tiers); board 101 without ch2; results in
+  `processed/lvl1_results/2026-11-04_change_test/results.json`.
+* New amplifier (true change RMS: sigma_e 18.5 %, lambda 36.8 %, gain 0.9 %): sigma_e change trees 12.6 % (direction of
+  clear changes right 94 %); lambda nn 30.9 % (direction 88 %); gain at the label noise (0.9 %; direction 64-82 %).
+  Settings-change GP about as good (sigma_e 13.5, lambda 33.6). Only 84 A+B rows.
