@@ -303,7 +303,7 @@ def main():
                                                        "N_POST_SETS": args.n_post, "SCREEN_REF_SETS": args.screen_ref,
                                                        "SCREEN_SETS": args.screen_new, "IMAGE_TOML": args.image_toml},
                                                "funnel": {"weights": args.funnel_weights, "rule": "weighted",
-                                                          "sort": "bradley-terry", "pairs": "random", "methods": ["without reference"],
+                                                          "sort": "bradley-terry", "pairs": "random", "target": "direction", "methods": ["without reference"],
                                                           "shortlist": SHORTLIST, "controls": CONTROLS, "screens": args.screens},
                                                "packets": planned}, indent=1, default=str))
     print("\n".join(doc[:28]))

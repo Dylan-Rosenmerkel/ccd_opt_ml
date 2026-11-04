@@ -591,3 +591,14 @@ then see what both of them can predict together; model the new packet designs af
 * Plan: 100 screens, SCREEN_REF_SETS 0, SHORTLIST 5 + CONTROLS 5; F 112 packets 6.9 h; total 188 packets 28.3 h;
   plan.json funnel {weights [0], sort bradley-terry, pairs random, methods [without reference]}. Plan document
   section 9 rewritten. The flow chart in the chat (48 screens, references) is now out of date.
+
+## 32. Direction classifier for the change model (2026-11-04)
+
+* User: the ranking only needs which trace is better, not the size. `rank_methods.py --target direction`: boosted-tree
+  CLASSIFIERS P(B worse than A) per target, sample weight 1 - exp(-d^2 / 2 s^2) (s = label noise of a change),
+  margins P - 0.5; `shortlist.sort_scores(soft=True)`: Bradley-Terry with fractional wins.
+* lambda ranking, Bradley-Terry Spearman (trained / new amp): size + random 0.79 / 0.83; size + neighbours 0.73 /
+  0.81; direction + random 0.84 / 0.85; direction + neighbours 0.77 / 0.76 (neighbours = i +- 1, i +- 2, both orders).
+  Top-5 regrets disagree in places (one trial each). Reports: docs/scorecard_2026-11-04/rank_{size,direction}_*.txt.
+* `funnel_shortlist.py --target direction` (default) | size; plan.json funnel target "direction". Plan document
+  section 9: "What the change model learns, and from which pairs" with the table.

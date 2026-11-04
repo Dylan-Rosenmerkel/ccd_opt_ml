@@ -66,6 +66,7 @@
   "rule": "weighted",
   "sort": "bradley-terry",
   "pairs": "random",
+  "target": "direction",
   "methods": [
    "without reference"
   ],

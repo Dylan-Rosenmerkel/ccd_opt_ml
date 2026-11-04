@@ -4,8 +4,10 @@ worth an image: can a shortlist of the best settings be predicted from ~100 trac
 
 1. Train on the labelled packets (a dataset.csv; board 101 without ch2 by default):
    * the change model, which RANKS: boosted trees on [features(A), features(B), features(B) - features(A)] of two
-     traces of one amplifier (log for positive features) -> the change of log sigma_e, log lambda, log gain from A to B
-     (one tree model per target), trained in both orders on the within-packet pairs (reference -> own trace) and on
+     traces of one amplifier (log for positive features), one per target (sigma_e, lambda, gain); by default
+     CLASSIFIERS of which trace is better (--target direction: P(B worse than A), changes of the size of the label
+     noise down-weighted; Bradley-Terry counts the probabilities as soft wins), or regressions of the size of the change
+     (--target size); trained in both orders on the within-packet pairs (reference -> own trace) and on
      every two packets of an amplifier with drift-corrected labels (--pairs random, the default: each packet's
      setting effect = log y - log y(nominal interpolated in time), the pair's target the difference), or on
      neighbouring packets (--pairs neighbours: n -> n+1, n+2, measured labels);
@@ -147,7 +149,23 @@ def gbt(X, Y):
     return lambda Z: np.column_stack([m.predict(tl.prep_columns(X, Z)[1]) for m in ms])
 
 
-def train(d: pd.DataFrame, names: list[str], pairs: str = "neighbours"):
+def direction_model(X, Y, noise=(0.019, 0.12, 0.008)):
+    """Boosted-tree CLASSIFIERS, one per target: is the change of the pair positive (B worse than A)?  A change of the
+    size of the label noise is down-weighted (w = 1 - exp(-d^2 / 2 s^2), s = the label noise of a change).  Returns
+    predict(Z) = P(B worse) - 0.5 per target (positive: B worse), the margins Bradley-Terry counts as soft wins."""
+    from sklearn.ensemble import HistGradientBoostingClassifier as C
+    xtr, _, _ = tl.prep_columns(X, X[:1])
+    ms = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for k in range(Y.shape[1]):
+            w = 1 - np.exp(-Y[:, k] ** 2 / (2 * noise[k] ** 2))
+            ms.append(C(max_iter=300, learning_rate=0.05, max_leaf_nodes=15, min_samples_leaf=10, random_state=0)
+                      .fit(xtr, (Y[:, k] > 0).astype(int), sample_weight=w))
+    return lambda Z: np.column_stack([m.predict_proba(tl.prep_columns(X, Z)[1])[:, 1] - 0.5 for m in ms])
+
+
+def train(d: pd.DataFrame, names: list[str], pairs: str = "random", target: str = "direction"):
     """The change model (A, B -> log y(B) - log y(A); ranks the screens) and the sigma_e model (one trace + which
     amplifier -> log sigma_e; only attaches a predicted noise to each screen, never ranks).  Returns also the sigma_e
     model's typical error (5-fold cross-validation by packet on the training rows, RMS of the log error)."""
@@ -172,7 +190,8 @@ def train(d: pd.DataFrame, names: list[str], pairs: str = "neighbours"):
         keep = np.isfinite(dy).all(1)
         XA.append(own[pr[keep, 0]]), XB.append(own[pr[keep, 1]]), D.append(dy[keep])
     XA, XB, D = np.vstack(XA), np.vstack(XB), np.vstack(D)
-    f_change = gbt(np.vstack([np.hstack([XA, XB, XB - XA]), np.hstack([XB, XA, XA - XB])]), np.vstack([D, -D]))
+    XX, YY = np.vstack([np.hstack([XA, XB, XB - XA]), np.hstack([XB, XA, XA - XB])]), np.vstack([D, -D])
+    f_change = direction_model(XX, YY) if target == "direction" else gbt(XX, YY)
     # the sigma_e predictor: trees on the trace features and the amplifier (the best sigma_e model on known amplifiers
     # in the scorecard, ~10 %); the funnel's amplifiers are the trained ones
     chans = sorted(d.channel.unique())
@@ -185,7 +204,7 @@ def train(d: pd.DataFrame, names: list[str], pairs: str = "neighbours"):
     for k in range(5):
         cv[folds == k] = gbt(Xs[folds != k], Y[folds != k, :1])(Xs[folds == k])[:, 0]
     err = float(np.sqrt(np.nanmean((cv - Y[:, 0]) ** 2)))
-    return pos, {"change": lambda A, B: f_change(np.hstack([A, B, B - A])),
+    return pos, {"change": lambda A, B: f_change(np.hstack([A, B, B - A])), "target": target,
                  "sigma_e": lambda B, ch: f_sig(np.hstack([B, onehot(ch)]))[:, 0], "sigma_e_error": err}, len(D)
 
 
@@ -206,7 +225,8 @@ def rank_screens(s: pd.DataFrame, names, pos, fitted, weights, sort: str) -> dic
     for w in weights:
         per_amp = []
         for ch, (ids, D) in pairwise.items():
-            per_amp.append(pd.Series(sl.sort_scores(sl.objective(D[:, :, 0], D[:, :, 1], w), sort), index=ids))
+            per_amp.append(pd.Series(sl.sort_scores(sl.objective(D[:, :, 0], D[:, :, 1], w), sort,
+                                                    soft=fitted["target"] == "direction"), index=ids))
         scores[("without reference", w)] = pd.DataFrame({k: v for k, v in enumerate(per_amp)}).mean(axis=1).reindex(screens)
         for m in METHODS:
             sc_ = scores[(m, w)].dropna()
@@ -249,6 +269,9 @@ def main():
                              "weights, else 0 = rank on lambda (dark charge) only, the first round)")
     parser.add_argument("--sort", choices=sl.SORTS, default=None,
                         help="sorting of the screen-vs-screen comparisons (default: the plan's, else bradley-terry: best on the first night, lvl1/rank_methods.py)")
+    parser.add_argument("--target", choices=("direction", "size"), default="direction",
+                        help="the change model: classify which trace is better (default; best lambda ranking on the first "
+                             "night, lvl1/rank_methods.py --target direction) or regress the size of the change")
     parser.add_argument("--pairs", choices=("neighbours", "random"), default="random",
                         help="the change model's training pairs besides the within-packet ones: every two packets with "
                              "drift-corrected labels (default: ranks the screens best on the first night, "
@@ -270,13 +293,14 @@ def main():
     names = features()
     d = load_labelled(Path(args.dataset), args.board, args.skip_channels, set(args.exclude_train) | set(screen_ids))
     names = [n for n in names if f"trace.{n}" in d and f"ref.{n}" in d]
-    pos, fitted, n_pairs = train(d, names, args.pairs)
+    pos, fitted, n_pairs = train(d, names, args.pairs, args.target)
     found = [Path(args.screens_dir) / p for p in screen_ids if (Path(args.screens_dir) / p / "features.json").exists()]
     missing = sorted(set(screen_ids) - {p.name for p in found})
     s = load_screens(found, args.board, args.skip_channels, names)
     order, scores, noise = rank_screens(s, names, pos, fitted, weights, sort)
     err = fitted["sigma_e_error"]
-    print(f"trained on {len(d)} rows ({d.packet_id.nunique()} packets; {n_pairs} change pairs, {args.pairs}); {s.packet_id.nunique()} screens"
+    print(f"trained on {len(d)} rows ({d.packet_id.nunique()} packets; {n_pairs} change pairs, {args.pairs}, "
+          f"{args.target} model); {s.packet_id.nunique()} screens"
           + (f" ({len(missing)} without features: {missing[:5]})" if missing else "")
           + f"; weights {', '.join(sl.weight_label(w) for w in weights)} (sigma_e:lambda); screen-vs-screen sort: {sort}")
     print(f"predicted noise attached to each screen: sigma_e (e-) from trees on the trace + amplifier, typical error "

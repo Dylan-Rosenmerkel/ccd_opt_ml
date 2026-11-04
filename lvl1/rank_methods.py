@@ -16,7 +16,8 @@ amplifier with drift-corrected labels ("random pairs"), both orders.  One-trace 
 setting effect.  Trained-amplifier and new-amplifier cells.  Score: regret of the best of the 5 shortlisted settings
 under J(w) (w = 1, 0.5, 0) and the Spearman correlation with the truth.
 
-    .venv/bin/python lvl1/rank_methods.py [--pairs neighbours]      (default: random drift-corrected pairs)
+    .venv/bin/python lvl1/rank_methods.py [--pairs neighbours] [--target direction]
+    (defaults: random drift-corrected pairs; a change model that regresses the size of the change)
 """
 
 from __future__ import annotations
@@ -53,10 +54,29 @@ def gbt(X, Y):
     return lambda Z: np.column_stack([m.predict(tl.prep_columns(X, Z)[1]) for m in ms])
 
 
+#: --target size (default): trees regress the change; --target direction: trees CLASSIFY which trace is better, with a
+#: change of the size of the label noise down-weighted (w = 1 - exp(-d^2 / 2 s^2)); they return P(B worse) - 0.5
+DIRECTION = "--target" in sys.argv and sys.argv[sys.argv.index("--target") + 1] == "direction"
+NOISE = np.array([0.019, 0.12])                          # label noise of a change (sigma_e, lambda), log units
+
+
 def change_model(FA, FB, Y):
     X, Xs = np.hstack([FA, FB, FB - FA]), np.hstack([FB, FA, FA - FB])
-    f = gbt(np.vstack([X, Xs]), np.vstack([Y, -Y]))
-    return lambda GA, GB: f(np.hstack([GA, GB, GB - GA]))
+    XX, YY = np.vstack([X, Xs]), np.vstack([Y, -Y])
+    if not DIRECTION:
+        f = gbt(XX, YY)
+        return lambda GA, GB: f(np.hstack([GA, GB, GB - GA]))
+    from sklearn.ensemble import HistGradientBoostingClassifier as C
+    xtr, _, _ = tl.prep_columns(XX, XX[:1])
+    ms = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for k in range(YY.shape[1]):
+            w = 1 - np.exp(-YY[:, k] ** 2 / (2 * NOISE[k] ** 2))
+            ms.append(C(max_iter=300, learning_rate=0.05, max_leaf_nodes=15, min_samples_leaf=10, random_state=0)
+                      .fit(xtr, (YY[:, k] > 0).astype(int), sample_weight=w))
+    return lambda GA, GB: np.column_stack([m.predict_proba(tl.prep_columns(XX, np.hstack([GA, GB, GB - GA]))[1])[:, 1] - 0.5
+                                           for m in ms])
 
 
 def main():
@@ -85,7 +105,8 @@ def main():
                     for i, j in zip(*(lambda r: (r[:-step], r[step:]))(np.flatnonzero(amp == ch)[np.argsort(d.hours.to_numpy()[amp == ch])]))])
     nbrY = Y[nbr[:, 1], :2] - Y[nbr[:, 0], :2]
     PAIRS, PY = (nbr, nbrY) if "--pairs" in sys.argv and sys.argv[sys.argv.index("--pairs") + 1] == "neighbours" else (allp, allY)
-    print(f"training pairs: {'neighbours' if PAIRS is nbr else 'random (drift-corrected)'}", flush=True)
+    print(f"training pairs: {'neighbours' if PAIRS is nbr else 'random (drift-corrected)'}; change model: "
+          f"{'direction classifier' if DIRECTION else 'size regression'}", flush=True)
 
     def training(excl_blocks, excl_amp):
         """Within-packet pairs and the other pairs (random or neighbours) with no packet in excl_blocks (and not excl_amp)."""
@@ -153,7 +174,7 @@ def main():
                 per_amp = []
                 for a, i in zip(amps, idx):
                     Dj = sl.objective(D[a][:, :, 0], D[a][:, :, 1], w)[np.ix_(i, i)]
-                    per_amp.append(sl.sort_scores(Dj, sort))
+                    per_amp.append(sl.sort_scores(Dj, sort, soft=DIRECTION))
                 return np.mean(per_amp, 0)
             line(f"without reference: screen vs screen, {sort}", board)
 

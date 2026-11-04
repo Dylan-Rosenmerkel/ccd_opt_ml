@@ -418,9 +418,9 @@ performing settings?}
   reset, a flush, the change, settling traces, two new trace sets, a reset; about 2 minutes). No reference trace, no
   strip, no image.
 \item \textbf{Shortlist step} (lvl1/funnel\_shortlist.py): run\_plan.sh stops at the first SHORTLIST packet. Process the
-  screens; the \emph{change model} trained on D+E (boosted trees on [features of A, features of B, their difference] for
-  two traces of one amplifier, trained in both orders on the within-packet pairs and on every two packets with
-  drift-corrected labels) compares every two screens of an amplifier ($\binom{100}{2}=4950$ comparisons per amplifier,
+  screens; the \emph{change model} trained on D+E (boosted-tree classifiers on [features of A, features of B, their
+  difference] for two traces of one amplifier, giving the probability that B is better than A; trained in both orders on
+  the within-packet pairs and on every two packets with drift-corrected labels) compares every two screens of an amplifier ($\binom{100}{2}=4950$ comparisons per amplifier,
   both orders averaged), and a \emph{sorting method} turns the comparisons into one order (below). The scores are
   averaged over the board's amplifiers, because a setting applies to all of them. The 5 best (skipping a screen that is
   already a random control) are written as the changes files of the SHORTLIST packets, with shortlist.json (the full
@@ -462,12 +462,27 @@ $\lambda$ counts: the direction-only sorts win, because the directions of the co
 predicted sizes of $\lambda$ changes are not. The reference traces are therefore dropped from the screens (they took
 about a third of each screen's time). Bradley--Terry is the default sort (plan.json, \texttt{--sort}).
 
-\paragraph{Training pairs.} Every two packets with drift-corrected labels (``random pairs'') against neighbouring packets
-only (lvl1/pairs\_extra.py, lvl1/rank\_methods.py): for the direction of single pairs, neighbours were slightly better for
-$\lambda$ (new amplifier 90 against 85\,\%) and random pairs for $\sigma_e$ (84 against 80\,\%); for the screen-vs-screen
-ranking on $\lambda$ that the funnel uses, random pairs were slightly better (Bradley--Terry rank agreement 0.83 against
-0.81, trained amplifiers 0.78 against 0.73), and they match the use (screens compared across hours). Default: random
-pairs (\texttt{--pairs}); v2, with a nominal packet every 7, will settle it.
+\paragraph{What the change model learns, and from which pairs.} The ranking only needs to know \emph{which} of two traces
+is better, so the change model can be trained for exactly that: a classifier giving $P(B\text{ better than }A)$, with
+changes smaller than the label noise down-weighted ($w=1-e^{-\Delta^2/2s^2}$), instead of a regression of the size of the
+change; Bradley--Terry then counts the probabilities as fractional wins. Training pairs: every two packets of an
+amplifier with drift-corrected labels (``random pairs''), or only neighbouring packets ($i\pm1$, $i\pm2$). Ranking on
+$\lambda$ on the first night (lvl1/rank\_methods.py; Bradley--Terry rank agreement with the truth, trained / new
+amplifier):
+\begin{center}\small
+\begin{tabular}{llcc}\toprule
+change model & training pairs & trained & new amplifier\\\midrule
+size (regression) & random & 0.79 & 0.83\\
+size (regression) & neighbours $i\pm1$, $i\pm2$ & 0.73 & 0.81\\
+\textbf{direction (classifier)} & \textbf{random} & \textbf{0.84} & \textbf{0.85}\\
+direction (classifier) & neighbours $i\pm1$, $i\pm2$ & 0.77 & 0.76\\\bottomrule
+\end{tabular}
+\end{center}
+The direction classifier on random pairs is the default (\texttt{--target direction --pairs random}); the others stay
+options, and v2's cross-validation on session D chooses again. (For single pairs, neighbours were slightly better for
+the direction of $\lambda$, 90 against 85\,\%, lvl1/pairs\_extra.py; for ranking many screens taken hours apart, random
+pairs match the use.) The top-5 regrets of these variants disagree with the rank agreement in places, but each is about
+one trial.
 
 \paragraph{Objective (for later rounds).} A knob can lower $\sigma_e$ and raise $\lambda$. The trade-off is one input, the
 $\sigma_e$ weight $w$ of the joint objective (lvl1/shortlist.py)

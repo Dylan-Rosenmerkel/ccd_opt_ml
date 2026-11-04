@@ -65,7 +65,7 @@ def antisymmetric(D: np.ndarray) -> np.ndarray:
     return M
 
 
-def sort_scores(D: np.ndarray, method: str = "mean change", n_iter: int = 200) -> np.ndarray:
+def sort_scores(D: np.ndarray, method: str = "mean change", n_iter: int = 200, soft: bool = False) -> np.ndarray:
     """One score per screen from the pairwise predicted changes D (n x n, see antisymmetric); lower = better.
     * "mean change": the mean predicted change from every other screen to this one (the least-squares ranking of the
       differences; uses their sizes);
@@ -73,7 +73,9 @@ def sort_scores(D: np.ndarray, method: str = "mean change", n_iter: int = 200) -
       round-robin tournament; direction only);
     * "bradley-terry": the strength p_i of P(i beats j) = p_i / (p_i + p_j) fitted to the predicted wins (Hunter's MM
       iteration, half a win against a virtual average opponent so a screen that wins or loses everything stays
-      finite); score = -log p."""
+      finite); score = -log p.
+    soft=True: D holds probability margins from a direction model, D[i, j] = P(j worse than i) - 0.5; Bradley-Terry then
+    counts fractional wins (0.5 + margin) instead of hard ones."""
     M = antisymmetric(D)
     if method == "mean change":
         return np.nanmean(M, 0)
@@ -81,7 +83,7 @@ def sort_scores(D: np.ndarray, method: str = "mean change", n_iter: int = 200) -
         return np.nanmean(np.sign(M), 0)
     if method == "bradley-terry":
         n = len(M)
-        beats = np.nan_to_num(M > 0)               # M[i, j] > 0: j is worse, i beats j
+        beats = np.nan_to_num(np.clip(0.5 + M, 0, 1) if soft else (M > 0).astype(float))   # M[i, j] > 0: i beats j
         played = np.isfinite(M).astype(float)
         W = beats.sum(1) + 0.5
         p = np.ones(n)
