@@ -385,6 +385,12 @@ def score_ranking(P, d, rel_preds, abs_preds):
         sources = {"random": None}
         sources.update({name: p[sel] for name, p in rel_preds[cell].items() if not name.startswith("absolute")})
         sources.update({f"absolute {name}": p[P["rb"][sel]] for name, p in abs_preds[cell].items() if name not in NOT_DIFFERENCED})
+        # hybrid: each target from the model that ranks it best on the first night -- sigma_e (and gain) from the
+        # absolute trace trees, lambda from the trace-change trees (the absolute level is a per-amplifier constant,
+        # which does not change a ranking within one amplifier)
+        hyb = sources["absolute trace: trees"].copy()
+        hyb[:, 1] = sources["trace change: trees"][:, 1]
+        sources["hybrid: sigma_e absolute trees, lambda change trees"] = hyb
         out[cell] = {}
         for name, p in sources.items():
             out[cell][name] = {}

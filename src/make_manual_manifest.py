@@ -6,7 +6,8 @@ leaves a small RECORD (``<PACKET_ID>.json``: the packet's name, the requested ch
 settings) plus the raw files that cdaq writes.  This script finds the packet's files in the run directory
 and writes a manifest that ``process_packet.py`` reads like any other:
 
-* traces: every ``<PACKET_ID>_ref<set>_*.meta`` (reference, at the nominal configuration) and
+* traces: every ``<PACKET_ID>_ref<set>_*.meta`` (reference: nominal, or the record's ``ref_changes``),
+  ``<PACKET_ID>_post<set>_*.meta`` (at theta, after the image: ``post_traces``) and
   ``<PACKET_ID>_new<set>_*.meta`` (at the new settings); board from the .meta (ACMID), channel from the name;
 * level-1 strips (when the record has ``l1_prefix_ref`` / ``l1_prefix_new``): per board the latest ``<prefix>*`` level-1
   file (FILTER 0x55) of each kind; they are never taken for the image;
@@ -117,6 +118,9 @@ def manifest_from_record(record: dict, run_dir: Path, metas: list[dict]) -> dict
     warnings: list[str] = []
     ref = [e for e in metas if e["name"].startswith(record["trace_prefix_ref"]) and TRACE_RE.search(e["name"])]
     new = [e for e in metas if e["name"].startswith(record["trace_prefix_new"]) and TRACE_RE.search(e["name"])]
+    # traces at the new settings taken AFTER the image (manual_packet.sh N_POST_SETS, 2026-11-04)
+    post = [e for e in metas if record.get("trace_prefix_post") and e["name"].startswith(record["trace_prefix_post"])
+            and TRACE_RE.search(e["name"])]
     if not new:
         raise SystemExit(f"{pid}: no traces named {record['trace_prefix_new']}* in {run_dir}")
     boards = sorted({e["board"] for e in ref + new})
@@ -129,6 +133,8 @@ def manifest_from_record(record: dict, run_dir: Path, metas: list[dict]) -> dict
                 "source": "manual_packet.sh", "record": record, "run_directories": {b: str(run_dir) for b in boards},
                 "reference_traces": [trace_entry(e, repeat_of(e, record["trace_prefix_ref"])) for e in ref],
                 "traces": [trace_entry(e, repeat_of(e, record["trace_prefix_new"])) for e in new],
+                "post_traces": [trace_entry(e, repeat_of(e, record["trace_prefix_post"])) for e in post],
+                "reference": "settings" if record.get("ref_changes") else "nominal",
                 "images": [], "theta": {}, "theta_ref": {}, "delta_theta": {}, "theta_id": {}, "reference_id": {},
                 "geometry": {}, "warnings": warnings}
     # level-1 strips (manual_packet.sh, 2026-11-03): per board and kind, the latest one (a retake replaces a bad one)
@@ -182,6 +188,13 @@ def manifest_from_record(record: dict, run_dir: Path, metas: list[dict]) -> dict
             manifest["delta_theta"][b] = {k: th[k] - tr_[k] for k in th if k in tr_}
         else:
             warnings.append(f"board {b}: no reference traces")
+        pb = [e for e in post if e["board"] == b]
+        if pb:                         # the post-image traces must still be at the new settings
+            tp = _consistent(pb, f"board {b} post-image traces", warnings)
+            diff = [k for k in th if k in tp and abs(th[k] - tp[k]) > 1e-6]
+            if diff:
+                warnings.append(f"board {b}: the post-image traces' settings differ from the new traces' in {diff[:5]}")
+                manifest["status"] = "check"
         for k, v in requested.get(b, {}).items():
             if k not in th:
                 warnings.append(f"board {b}: requested {k}={v:g} but {k} is not in the .meta files")
@@ -199,7 +212,10 @@ def manifest_from_record(record: dict, run_dir: Path, metas: list[dict]) -> dict
     manifest["date_start"] = min(starts).isoformat()
     manifest["date_end"] = max(e["end"] or e["start"] for e in new).isoformat()
     manifest["seconds_since_previous"] = None
-    if not manifest["images"]:
+    if record.get("screen"):           # a trace-only funnel screen: no image by design
+        manifest["status"] = "screen"
+        manifest["warnings"] = [w for w in warnings if "no image found" not in w]
+    elif not manifest["images"]:
         manifest["status"] = "no image"
     return manifest
 

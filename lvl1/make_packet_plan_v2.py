@@ -12,6 +12,18 @@ What the first data showed (docs/context/2026-11-03_session_context.md) and what
 * replicates away from nominal: REPLICATES earlier design points are taken again later in the session;
 * the prospective test is kept: a separate block of joint points (session E), never used to choose a model.
 
+Added 2026-11-04 (after the four-way scorecard, lvl1/scorecard.py):
+* the reference is not always nominal: in session D every other packet that follows a non-nominal packet takes its
+  reference traces and strip at the PREVIOUS packet's settings (``<id>_ref.txt``).  With a nominal reference 96 % of
+  the clear sigma_e changes go up (nominal is near the best setting), so a change model can score by saying "up";
+  incumbent -> candidate references make the changes go both ways, as in level 2;
+* the new trace sets are split: N_SETS before the strip and the image, N_POST_SETS after it (traces bracket the image);
+* session F (optional, --screens): the funnel test.  SCREENS trace-only packets at new Sobol points (no strip, no
+  image, ~2 min each), then SHORTLIST packets whose settings the model trained on D+E picks from the screens (their
+  changes files are written by the shortlist step: run_plan.sh stops at the first one until they exist) and as many
+  CONTROL packets at screen settings drawn at random now; the images of the shortlist against the controls test the
+  screening step of level 2.
+
 Rules (as v1): every configuration passes ccd_limits (windows, the ACM manual's hardware ranges, the group's voltage
 rules; points that fail are redrawn); every voltage within ONE max_step of nominal (manual_packet.sh applies a change
 in one command and resets at the end: no ramps); changes on board 101 only; both readout stages / bias sets together.
@@ -53,6 +65,8 @@ BOX = {
 LOG_SCALE = {"delayInt", "delay_H", "delayRGH"}
 NOMINAL_EVERY = 7          # a nominal packet at positions 1, 8, 15, ... of each session
 REPLICATES = 3             # earlier training points repeated later
+REF_PREVIOUS_EVERY = 2     # session D: every 2nd packet after a non-nominal one takes its reference at that one's settings
+SHORTLIST = 5              # session F: shortlisted and random-control image packets (each)
 
 
 def packet_minutes(timing: dict, n_ref: int, n_new: int, image_rows: int = 16) -> float:
@@ -67,13 +81,24 @@ def packet_minutes(timing: dict, n_ref: int, n_new: int, image_rows: int = 16) -
     return 2.0 + traces * scale + image * scale + 1.5       # flushes, traces, image, resets and queue overhead
 
 
+def screen_minutes(timing: dict, n_ref: int, n_new: int) -> float:
+    """A trace-only screen packet: reset, a flush, the traces (as in packet_minutes), the change, a reset."""
+    scale = seconds_per_skip(timing) / seconds_per_skip(TIMING)
+    sets = n_ref + n_new
+    return 1.0 + (sets / 15 * 3.0 + sets * 4 * 2.0 / 60) * scale + 0.5
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--out", default=str(ROOT / "lvl1" / "packet_plan_v2"))
     parser.add_argument("--train", type=int, default=48, help="joint design points for training (session D)")
     parser.add_argument("--test", type=int, default=12, help="joint design points of the prospective test (session E)")
     parser.add_argument("--n-ref", type=int, default=3, help="reference trace sets per packet (N_REF_SETS)")
-    parser.add_argument("--n-new", type=int, default=5, help="trace sets at the new settings (N_SETS)")
+    parser.add_argument("--n-new", type=int, default=3, help="trace sets at the new settings before the image (N_SETS)")
+    parser.add_argument("--n-post", type=int, default=2, help="trace sets at the new settings after the image (N_POST_SETS)")
+    parser.add_argument("--screens", type=int, default=48, help="trace-only funnel screens of session F (0: no session F)")
+    parser.add_argument("--screen-ref", type=int, default=1, help="reference trace sets of a screen packet")
+    parser.add_argument("--screen-new", type=int, default=2, help="new trace sets of a screen packet")
     parser.add_argument("--image-rows", type=int, default=32, help="rows of the image (32: configs/image_params_32rows.toml)")
     parser.add_argument("--image-toml", default="image_params/tc1/img32.toml",
                         help="the image TOML on the DAQ machine (relative to CDAQ_DIR)")
@@ -137,20 +162,54 @@ def main():
         return with_nominal
 
     planned = session(train, "D", REPLICATES) + session(test, "E", 0)
+    # session D: references at the previous packet's settings (a separate generator: D and E stay as before)
+    rng_ref = np.random.default_rng(args.seed + 7)
+    eligible = [i for i in range(1, len(planned)) if planned[i]["session"] == "D" and planned[i]["changes"]
+                and planned[i - 1]["changes"]]
+    for k, i in enumerate(eligible):
+        if k % REF_PREVIOUS_EVERY == REF_PREVIOUS_EVERY - 1:
+            planned[i]["reference_changes"] = planned[i - 1]["changes"]
+    # session F: the funnel test
+    if args.screens:
+        screens, rej_f = draw(args.screens, qmc.Sobol(len(names), scramble=True, seed=args.seed + 2000))
+        controls = sorted(rng_ref.choice(len(screens), SHORTLIST, replace=False).tolist())
+        f = [{"session": "F", "purpose": "nominal (start of the funnel session)", "changes": {}}]
+        f += [{"session": "F", "purpose": f"funnel screen {k + 1} (trace only)", "changes": c, "screen": True}
+              for k, c in enumerate(screens)]
+        tail = [{"session": "F", "purpose": f"funnel SHORTLIST {k + 1} (settings picked from the screens by the model)",
+                 "changes": {}, "shortlist": k + 1} for k in range(SHORTLIST)]
+        tail += [{"session": "F", "purpose": f"funnel CONTROL: screen {c + 1}, drawn at random", "changes": screens[c],
+                  "control_of_screen": c + 1} for c in controls]
+        order = rng_ref.permutation(len(tail))
+        f += [tail[i] for i in order]
+        f.append({"session": "F", "purpose": "nominal (end of the session)", "changes": {}})
+        planned += f
     for i, p in enumerate(planned, start=1):
         p["packet_id"] = f"{args.prefix}_{i:02d}"
+    for p in planned:
         timing = {k: p["changes"].get(k, v) for k, v in TIMING.items()}
-        p["minutes"] = round(packet_minutes(timing, args.n_ref, args.n_new, args.image_rows), 1)
+        p["minutes"] = round(screen_minutes(timing, args.screen_ref, args.screen_new) if p.get("screen")
+                             else packet_minutes(timing, args.n_ref, args.n_new + args.n_post, args.image_rows), 1)
+        if "shortlist" in p:           # written by the shortlist step after the screens are processed
+            (out / f"{p['packet_id']}.txt").unlink(missing_ok=True)
+            continue
         lines = [f"# {p['packet_id']} (session {p['session']}): {p['purpose']}",
                  f"# estimated {p['minutes']:.0f} min; generated by lvl1/make_packet_plan_v2.py (seed {args.seed})"]
         if not p["changes"]:
             lines.append("# no changes: the nominal configuration (manual_packet.sh needs one line; this re-sends a nominal value)")
             lines.append("acm101:delayInt=1000")
-        lines += [f"acm101:{k}={v}" if isinstance(v, int) else f"acm101:{k}={v:g}" for k, v in p["changes"].items()]
+        fmt = lambda ch: [f"acm101:{k}={v}" if isinstance(v, int) else f"acm101:{k}={v:g}" for k, v in ch.items()]
+        lines += fmt(p["changes"])
         (out / f"{p['packet_id']}.txt").write_text("\n".join(lines) + "\n")
+        ref_file = out / f"{p['packet_id']}_ref.txt"
+        if p.get("reference_changes"):
+            ref_file.write_text("\n".join([f"# {p['packet_id']}: the reference settings (those of the previous packet)"]
+                                          + fmt(p["reference_changes"])) + "\n")
+        else:
+            ref_file.unlink(missing_ok=True)
 
     # write the plan
-    sessions = {s: [p for p in planned if p["session"] == s] for s in "DE"}
+    sessions = {s: [p for p in planned if p["session"] == s] for s in "DEF" if any(p["session"] == s for p in planned)}
     levels = {g: len({round(c[GROUPS.get(g, [g])[0]], 3) for c in train}) for g in names}
     env = f"N_REF_SETS={args.n_ref} N_SETS={args.n_new} IMAGE_TOML={args.image_toml} "
     doc = ["# Level-1 packet plan, version 2", "",
@@ -162,9 +221,10 @@ def main():
            f"**Voltage windows:** configs/limits.toml has `reviewed = {str(limits.reviewed).lower()}`"
            + (": the voltage changes use its PLACEHOLDER windows and are provisional." if not limits.reviewed else "."), "",
            "| session | packets | of which nominal | estimated time | use |", "|---|---|---|---|---|"]
-    use = {"D": "training and model choice (setting-grouped CV)", "E": "prospective test: scored once, after the choice is frozen"}
+    use = {"D": "training and model choice (setting-grouped CV)", "E": "prospective test: scored once, after the choice is frozen",
+           "F": f"funnel test: {args.screens} trace-only screens, {SHORTLIST} shortlisted + {SHORTLIST} random-control images (optional)"}
     for s, ps in sessions.items():
-        doc.append(f"| {s} | {len(ps)} | {sum(not p['changes'] for p in ps)} | {sum(p['minutes'] for p in ps) / 60:.1f} h | {use[s]} |")
+        doc.append(f"| {s} | {len(ps)} | {sum(not p['changes'] and 'shortlist' not in p for p in ps)} | {sum(p['minutes'] for p in ps) / 60:.1f} h | {use[s]} |")
     doc += [f"| all | {len(planned)} | | {sum(p['minutes'] for p in planned) / 60:.1f} h | |", "",
             "## What changed from v1, and why", "",
             "* **Joint design.** Every training packet moves all 12 knob groups at once, to a point of a scrambled Sobol "
@@ -175,19 +235,29 @@ def main():
             "the 2026-11-02 night) and measure the label noise.",
             f"* **{REPLICATES} replicates** of design points from the first half of session D, in its second half.",
             "* **Session E** is a separate Sobol sequence: the prospective test, as v1's session C.",
+            f"* **Reference not always nominal** (2026-11-04): {sum(bool(p.get('reference_changes')) for p in planned)} "
+            "packets of session D take their reference at the previous packet's settings (`<id>_ref.txt`), so "
+            "within-packet changes go up and down (with a nominal reference 96 % of the clear sigma_e changes go up).",
+            f"* **Traces bracket the image**: {args.n_new} new sets before the strip and image, {args.n_post} after.",
+            "* **Session F, the funnel test** (optional): trace-only screens at new Sobol points; the model trained on "
+            "D+E shortlists the best from their traces; the shortlist is imaged next to random controls drawn now.",
             f"* Points that break a rule are redrawn (D: {rej_train} rejected, E: {rej_test}).", "",
             "## The box", "", "| knob | range | pins |", "|---|---|---|"]
     for g, (lo, hi) in BOX.items():
         rng_txt = f"{lo}-{hi} cycles (log)" if g in LOG_SCALE else f"{lo:+g} to {hi:+g} V"
         doc.append(f"| {g} | {rng_txt} | {', '.join(GROUPS.get(g, [g]))} |")
     doc += ["", "Why these parameters: " + "; ".join(f"**{k}** {v}" for k, v in WHY.items()) + ".", "",
-            "## Packet procedure (daq_scripts/manual_packet.sh, 2026-11-03)", "",
-            "1. reset to nominal and read back; flush;",
-            f"2. {args.n_ref} reference trace sets (4 channels, each board separately, 2 s pause after every trace); flush;",
-            "3. the changes; 2 settling traces (not used);",
-            f"4. {args.n_new} trace sets at the new settings; flush;",
-            f"5. the image ({args.image_rows} rows, `{args.image_toml}`), 2 s pause; standalone; flush; reset to nominal "
-            "and read back.", "",
+            "## Packet procedure (daq_scripts/manual_packet.sh, 2026-11-04)", "",
+            "1. reset to nominal and read back (packets with `<id>_ref.txt`: then the reference settings and 2 settling "
+            "traces); flush;",
+            f"2. the reference level-1 strip, then {args.n_ref} reference trace sets (4 channels, each board separately, "
+            "2 s pause after every trace); flush;",
+            "3. (from a non-nominal reference: a reset to nominal) the changes; 2 settling traces (not used);",
+            f"4. {args.n_new} trace sets at the new settings; the new level-1 strip; flush;",
+            f"5. the image ({args.image_rows} rows, `{args.image_toml}`), 2 s pause; standalone; {args.n_post} more trace "
+            "sets at the new settings; flush; reset to nominal and read back.", "",
+            f"Screen packets (session F, `SCREEN=1`): reset; flush; {args.screen_ref} reference trace set; flush; the "
+            f"changes; 2 settling traces; {args.screen_new} new trace sets; reset. No strips, no image.", "",
             "**Safeguards** (manual_packet.sh, CHECK_TRACES=1): after the reference and after the new traces the script "
             "waits for both boards, checks every board-101 trace (src/check_trace_files.py) and retakes damaged ones; "
             "more than 5 damaged traces in a packet restart it from the reset as `<id>_r1` (the stopped attempt's record "
@@ -201,7 +271,10 @@ def main():
             "## The packets", "", "| packet | session | purpose | changes (board 101) | min |", "|---|---|---|---|---|"]
     for p in planned:
         ch = ", ".join(f"{k}={v}" if isinstance(v, int) else f"{k}={v:g}" for k, v in p["changes"].items()) or "–"
-        doc.append(f"| {p['packet_id']} | {p['session']} | {p['purpose']} | {ch} | {p['minutes']:.0f} |")
+        if "shortlist" in p:
+            ch = "(picked by the shortlist step)"
+        purpose = p["purpose"] + ("; reference at the previous packet's settings" if p.get("reference_changes") else "")
+        doc.append(f"| {p['packet_id']} | {p['session']} | {purpose} | {ch} | {p['minutes']:.0f} |")
     doc += ["", "## After the packets", "", "```bash",
             "python src/make_manual_manifest.py ~/packet_records/L2_*.json --run-dir <raw-file directory> --out manifests",
             "cd src && python process_packet.py ../manifests/L2_*.json && cd ..",
@@ -209,7 +282,8 @@ def main():
     (out / "PLAN.md").write_text("\n".join(doc))
     (out / "plan.json").write_text(json.dumps({"reviewed_limits": limits.reviewed, "box": BOX, "seed": args.seed,
                                                "run": {"N_REF_SETS": args.n_ref, "N_SETS": args.n_new,
-                                                       "IMAGE_TOML": args.image_toml},
+                                                       "N_POST_SETS": args.n_post, "SCREEN_REF_SETS": args.screen_ref,
+                                                       "SCREEN_SETS": args.screen_new, "IMAGE_TOML": args.image_toml},
                                                "packets": planned}, indent=1, default=str))
     print("\n".join(doc[:28]))
     print(f"... {len(planned)} packets; wrote {out}")

@@ -178,10 +178,10 @@ def packet_files(manifest: dict, cfg: ProcessingConfig) -> dict[str, list[dict]]
     Images: ``{board, meta, fits}`` where ``fits`` is the image builder's ``avg_<name>.fits*``.
     """
     traces = []
-    for kind in ("reference_traces", "traces"):
+    for kind in ("reference_traces", "traces", "post_traces"):
         for t in manifest.get(kind, []):
             stem = localize(t["stem"], cfg.path_map)
-            traces.append({"kind": "ref" if kind == "reference_traces" else "theta",
+            traces.append({"kind": {"reference_traces": "ref", "traces": "theta", "post_traces": "post"}[kind],
                            "board": int(t["board"]), "channel": int(t["channel"]),
                            "repeat": int(t.get("repeat", 1)),
                            "data": stem.parent / f"{stem.name}.RJ45ADCDATA{t['channel']}",
@@ -859,7 +859,10 @@ def dataset_rows(result: dict, manifest: dict) -> list[dict[str, Any]]:
                 row[f"image.{key}"] = value
             row["label.flags"] = "; ".join(label.get("flags", []))
             row["label.ok"] = not label.get("flags")
-            for kind, prefix in (("theta", "trace"), ("ref", "ref")):
+            # post.*: the new settings' traces taken after the image (absent before 2026-11-04)
+            for kind, prefix in (("theta", "trace"), ("ref", "ref"), ("post", "post")):
+                if kind == "post" and (kind, board, ch) not in combined:
+                    continue
                 c = combined.get((kind, board, ch), {})
                 row[f"{prefix}.n_usable"] = c.get("n_usable", 0)
                 # repeat values left out as outliers (summed over the features; 0 = none)

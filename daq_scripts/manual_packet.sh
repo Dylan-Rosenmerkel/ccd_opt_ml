@@ -2,9 +2,17 @@
 # =============================================================================
 # manual_packet.sh -- one packet by hand, with the group's cdaq commands
 #
-#   standalone -> nominal (reset + readback) -> flush -> reference traces -> flush -> change parameters ->
-#   settling traces -> traces -> flush -> master/slave -> image (img.toml) -> standalone -> flush ->
-#   nominal (reset + readback);  a PAUSE_S wait after every trace and after the image
+#   standalone -> nominal (reset + readback) [-> the reference settings, REF_CHANGES] -> flush -> reference strip ->
+#   reference traces -> flush -> change parameters -> settling traces -> new traces -> new strip -> flush ->
+#   master/slave -> image (img.toml) -> standalone -> post-image traces -> flush -> nominal (reset + readback);
+#   a PAUSE_S wait after every trace and after the image.  SCREEN=1: a trace-only packet (no strips, no image).
+#
+# Order (2026-11-04): the reference traces come right before the change and the new traces right after it, so the two
+# sides of a within-packet comparison are minutes apart; the strips bracket that pair; the new traces bracket the
+# strip and the image (N_SETS before, N_POST_SETS after), so a drift of the trace across the image can be seen.
+# The reference is nominal unless REF_CHANGES / REF_CHANGES_FILE is given (the previous packet's settings, so that
+# within-packet changes go both up and down, as between a level-2 incumbent and a candidate): then the change goes
+# through a reset to nominal (seconds) before the new settings.
 #
 # Every line below is a plain `cdaq qadd "..." <target>` (or take_image.py), the same
 # commands typed by hand.  The cdaq queue runs them ONE AFTER THE OTHER in the order
@@ -18,10 +26,13 @@
 #   PACKET_ID=L1_07 CHANGES_FILE=lvl1/packet_plan/L1_07.txt bash manual_packet.sh
 #                                           # take the changes from a file (one NAME=VALUE or acm101:NAME=VALUE per
 #                                           # line, # comments allowed) instead of the CHANGES block below
+#   REF_CHANGES_FILE=lvl1/packet_plan_v2/L2_09_ref.txt ...   # the reference at these settings instead of nominal
+#   SCREEN=1 ...                                              # trace-only packet (the funnel screen of session F)
 #
 # Edit the SETTINGS block, nothing else.
 #
-# PROCESSING: every trace of the packet is named <PACKET_ID>_ref<set> / <PACKET_ID>_new<set> (cdaq appends
+# PROCESSING: every trace of the packet is named <PACKET_ID>_ref<set> / <PACKET_ID>_new<set> / <PACKET_ID>_post<set>
+# (after the image; cdaq appends
 # the geometry, channel, board and time), and a small RECORD of the packet (its name, the changes, the
 # trace and image settings) is written to $RECORD_DIR/<PACKET_ID>.json when the commands are queued.  After
 # the queue has run, on the analysis computer:
@@ -30,8 +41,8 @@
 # The manifest takes the settings of every trace and image from their .meta files (the values the boards
 # report), and the image is the first image of each board taken after the packet's last trace.
 #
-# Flushes (2026-11-03, user): one before the reference traces, one after them, one after the new traces (= before
-# the image), one after the image; none between trace sets.  After the change, N_SETTLE_TRACES traces (named
+# Flushes (2026-11-03, user): one before the reference strip and traces, one after them, one after the new traces and
+# strip (= before the image), one after the image and the post-image traces; none between trace sets.  After the change, N_SETTLE_TRACES traces (named
 # <PACKET_ID>_settle<n>, not used for training) are taken before the new traces.
 # Duration with the defaults: 4 flushes (~30 s each) = 2 min, 15 sets x 4 channels x 2 boards traces + a 2 s pause
 # after every trace (~6 min), the img.toml image (16x1000x500, 4.8 min readout + its EXPOSURE): about 14 min.
@@ -52,7 +63,9 @@ RECORD_DIR="${RECORD_DIR:-$HOME/packet_records}" # where the packet record (JSON
 SCAN_NAME="${SCAN_NAME:-manual}"                # free text: which scan / series this packet belongs to
 
 N_REF_SETS="${N_REF_SETS:-5}"   # reference trace sets (nominal parameters)
-N_SETS="${N_SETS:-10}"          # trace sets at the new parameters
+N_SETS="${N_SETS:-10}"          # trace sets at the new parameters, before the image
+N_POST_SETS="${N_POST_SETS:-0}" # trace sets at the new parameters AFTER the image (v2 plan: 2), named <PACKET_ID>_post<set>
+SCREEN="${SCREEN:-0}"           # 1: trace-only packet: reference and new traces, no strips, no image
 N_SETTLE_TRACES="${N_SETTLE_TRACES:-2}"  # traces after the change, before the new sets (first channel; not used)
 FLUSH_BEFORE_REF=1        # flushes before the first reference trace set
 FLUSH_AFTER_REF=1         # flushes after the reference traces (before the change)
@@ -109,15 +122,25 @@ CHANGES=(
   "H3_B_L=6.0"
 )
 
-# CHANGES_FILE (optional): read the changes from a file instead (the planned packets of lvl1/packet_plan/).
-if [[ -n ${CHANGES_FILE:-} ]]; then
-  [[ -r $CHANGES_FILE ]] || { echo "ERROR: CHANGES_FILE $CHANGES_FILE cannot be read"; exit 1; }
-  CHANGES=()
+# The reference settings (optional; empty = nominal), in the same format: the previous packet's changes, so the
+# within-packet change is "incumbent -> candidate" and goes up as often as down.
+REF_CHANGES=()
+
+read_changes() {   # read_changes <file>: its NAME=VALUE lines (comments and blank lines dropped) into LINES
+  [[ -r $1 ]] || { echo "ERROR: changes file $1 cannot be read"; exit 1; }
+  LINES=()
   while IFS= read -r line || [[ -n $line ]]; do
     line=${line%%#*}; line=$(echo $line)          # strip comments and spaces
-    [[ -n $line ]] && CHANGES+=("$line")
-  done < "$CHANGES_FILE"
+    [[ -n $line ]] && LINES+=("$line")
+  done < "$1"
+}
+# CHANGES_FILE (optional): read the changes from a file instead (the planned packets of lvl1/packet_plan/).
+if [[ -n ${CHANGES_FILE:-} ]]; then
+  read_changes "$CHANGES_FILE"; CHANGES=("${LINES[@]}")
   [[ ${#CHANGES[@]} -gt 0 ]] || { echo "ERROR: no changes in $CHANGES_FILE"; exit 1; }
+fi
+if [[ -n ${REF_CHANGES_FILE:-} ]]; then
+  read_changes "$REF_CHANGES_FILE"; REF_CHANGES=("${LINES[@]}")
 fi
 
 # Nominal configuration files, restored at the start and at the end:  board=file
@@ -155,8 +178,9 @@ delayRGL 27  delayRGH 800  delaySWH 30  delaySWL 350  delayOGL 48  delayOGH 3  d
 #    VSUB 6.7..88.3 V.
 # The allowed WINDOWS of configs/limits.toml are not checked here (scan_packets.py / take_packet.py do).
 # Prints the table of changes; exits non-zero on any problem.  (awk: works with any bash.)
-check_and_show() {
-  printf '%s\n' "${CHANGES[@]}" | awk -v nominal="$(echo $NOMINAL)" -v pool="$POOL" '
+check_and_show() {   # check_and_show <title> <NAME=VALUE> ...: the checks above on nominal + these changes
+  local title=$1; shift
+  printf '%s\n' "$@" | awk -v title="$title" -v nominal="$(echo $NOMINAL)" -v pool="$POOL" '
     function rule(a, op, b) {          # a op b on the complete configuration; prints and flags a violation
       if (!(a in new) || !(b in new)) return
       x = new[a] + 0; y = new[b] + 0
@@ -203,7 +227,7 @@ check_and_show() {
           }
           rule("H3_A_L", ">", "SW_1_H"); rule("H3_A_L", ">", "SW_2_H"); rule("H3_B_L", ">", "SW_1_H"); rule("H3_B_L", ">", "SW_2_H")
           if (bad) exit 1
-          print "Parameter changes (nominal -> new):"; for (i = 1; i <= m; i++) print line[i] }'
+          print title; for (i = 1; i <= m; i++) print line[i] }'
 }
 
 # --------------------------------- sending -----------------------------------
@@ -273,9 +297,14 @@ write_record() {
     printf '  "script": "manual_packet.sh",\n'
     printf '  "changes": %s,\n' "$(json_list "${CHANGES[@]}")"
     printf '  "changes_file": "%s",\n' "${CHANGES_FILE:-}"
+    printf '  "ref_changes": %s,\n' "$(json_list ${REF_CHANGES[@]+"${REF_CHANGES[@]}"})"
+    printf '  "ref_changes_file": "%s",\n' "${REF_CHANGES_FILE:-}"
+    printf '  "screen": %s,\n' "$( ((SCREEN)) && echo true || echo false)"
     printf '  "bcf": %s,\n' "$(json_list $BCF)"
     printf '  "trace_prefix_ref": "%s_ref",\n' "$PACKET_ID"
     printf '  "trace_prefix_new": "%s_new",\n' "$PACKET_ID"
+    printf '  "trace_prefix_post": "%s_post",\n' "$PACKET_ID"
+    printf '  "n_post_sets": %d,\n' "$N_POST_SETS"
     printf '  "n_ref_sets": %d,\n' "$N_REF_SETS"
     printf '  "n_sets": %d,\n' "$N_SETS"
     printf '  "trace_channels": %s,\n' "$(json_list $TRACE_CHANNELS)"
@@ -286,12 +315,12 @@ write_record() {
     printf '  "n_settle_traces": %d,\n' "$N_SETTLE_TRACES"
     printf '  "pause_s": %s,\n' "$PAUSE_S"
     printf '  "trace_boards": %s,\n' "$(json_list $TRACE_BOARDS)"
-    if [[ $L1_STRIP == 1 ]]; then
+    if [[ $L1_STRIP == 1 && $SCREEN != 1 ]]; then
       printf '  "l1_prefix_ref": "%s_l1ref",\n' "$PACKET_ID"
       printf '  "l1_prefix_new": "%s_l1new",\n' "$PACKET_ID"
       printf '  "l1_args": "%s",\n' "${L1_ARGS//\'/}"
     fi
-    printf '  "image_toml": "%s",\n' "$IMAGE_TOML"
+    printf '  "image_toml": "%s",\n' "$( ((SCREEN)) || echo "$IMAGE_TOML")"
     printf '  "leader": %d\n' "$LEADER"
     printf '}\n'
   } > "$file"
@@ -354,7 +383,7 @@ check_phase() {   # check_phase <prefix> <number of sets>: wait for the phase, c
   return 0
 }
 strip() {   # strip <name>: a level-1 strip on both boards (standalone), then a pause; waited for, checked, retaken once
-  [[ $L1_STRIP == 1 ]] || return 0
+  [[ $L1_STRIP == 1 && $SCREEN != 1 ]] || return 0
   local name=$1 lines dir attempt
   for attempt in 1 2; do
     q "daq.take_image(fname='$name', acq_level=1, $L1_ARGS)" "$POOL"
@@ -375,18 +404,33 @@ strip() {   # strip <name>: a level-1 strip on both boards (standalone), then a 
 
 # --------------------------------- the plan ----------------------------------
 [[ $PACKET_ID =~ ^[A-Za-z0-9_-]+$ ]] || { echo "ERROR: PACKET_ID may only contain letters, digits, _ and -"; exit 1; }
-check_and_show || exit 1
-echo "Packet: $PACKET_ID   (traces ${PACKET_ID}_ref<set>, ${PACKET_ID}_new<set>; record in $RECORD_DIR)"
-echo "Traces: $N_REF_SETS reference + $N_SETS new sets x channels [$TRACE_CHANNELS] x boards [$TRACE_BOARDS], $N_SETTLE_TRACES settling, flush between: $FLUSH_BETWEEN"
+check_and_show "Parameter changes (nominal -> new):" "${CHANGES[@]}" || exit 1
+if (( ${#REF_CHANGES[@]} )); then
+  check_and_show "Reference settings (nominal -> reference; the reference traces and strip are taken here):" "${REF_CHANGES[@]}" || exit 1
+else
+  echo "Reference: nominal"
+fi
+echo "Packet: $PACKET_ID   (traces ${PACKET_ID}_ref<set>, ${PACKET_ID}_new<set>, ${PACKET_ID}_post<set>; record in $RECORD_DIR)"
+(( SCREEN )) && echo "SCREEN packet: traces only (no strips, no image)"
+echo "Traces: $N_REF_SETS reference + $N_SETS new (before the image) + $N_POST_SETS new (after it) sets x channels [$TRACE_CHANNELS] x boards [$TRACE_BOARDS], $N_SETTLE_TRACES settling, flush between: $FLUSH_BETWEEN"
 echo "Flushes: before ref $FLUSH_BEFORE_REF, after ref $FLUSH_AFTER_REF, before image $FLUSH_BEFORE_IMAGE, after image $FLUSH_AFTER_IMAGE; pause ${PAUSE_S} s after every trace and the image"
 echo "Trace: $TRACE_ARGS"
 echo "Image: $IMAGE_TOML"
-[[ $L1_STRIP == 1 ]] && echo "Level-1 strips (reference and new): $L1_ARGS"
+[[ $L1_STRIP == 1 && $SCREEN != 1 ]] && echo "Level-1 strips (reference and new): $L1_ARGS"
 case $FLUSH_BETWEEN in trace|set|none) ;; *) echo "ERROR: FLUSH_BETWEEN must be trace, set or none"; exit 1;; esac
 if [[ ${DRY_RUN:-0} != 1 ]]; then
   read -r -p "Start the packet now? (with CHECK_TRACES=1 the script runs until the image is queued) [y/N] " answer
   [[ $answer == [yY] ]] || { echo "nothing sent"; exit 0; }
 fi
+
+apply() {   # apply <NAME=VALUE | acmNNN:NAME=VALUE> ...: queue the parameter changes
+  local change target spec
+  for change in "$@"; do
+    target=$POOL; spec=$change
+    [[ $change == *:* ]] && { target=${change%%:*}; spec=${change#*:}; }
+    q "daq['${spec%%=*}'] = ${spec#*=}" "$target"
+  done
+}
 
 run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart) / 1 (stop)
   # 0. standalone mode, then the nominal configuration (the sequencer is uploaded in standalone).  (The external
@@ -394,25 +438,32 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
   q "daq.set_standalone()" "$POOL"
   nominal
 
-  # 1. reference traces at nominal, between two flushes (the flush after them only once they are checked)
+  # 1. the reference: nominal, or (REF_CHANGES) the previous packet's settings with their own settling traces; a flush,
+  #    the reference strip, then the reference traces, so that they end right before the change
+  if (( ${#REF_CHANGES[@]} )); then
+    apply "${REF_CHANGES[@]}"
+    if (( N_SETTLE_TRACES > 0 )); then traces "${PACKET_ID}_settleref" "$N_SETTLE_TRACES" "${TRACE_CHANNELS%% *}"; fi
+  fi
   flushes "$FLUSH_BEFORE_REF"
+  strip "${PACKET_ID}_l1ref" || return $?
   traces "${PACKET_ID}_ref" "$N_REF_SETS"
   check_phase "${PACKET_ID}_ref" "$N_REF_SETS" || return $?
-  strip "${PACKET_ID}_l1ref" || return $?
   flushes "$FLUSH_AFTER_REF"
 
-  # 2. change the parameters
-  local change target spec
-  for change in "${CHANGES[@]}"; do
-    target=$POOL; spec=$change
-    [[ $change == *:* ]] && { target=${change%%:*}; spec=${change#*:}; }
-    q "daq['${spec%%=*}'] = ${spec#*=}" "$target"
-  done
+  # 2. change the parameters (from a non-nominal reference: through a reset to nominal first, so no reference knob
+  #    is left behind)
+  if (( ${#REF_CHANGES[@]} )); then nominal; fi
+  apply "${CHANGES[@]}"
 
-  # 3. settling traces (first channel; the first acquisition recompiles the sequencer), then the new traces, a flush
+  # 3. settling traces (first channel; the first acquisition recompiles the sequencer), then the new traces right
+  #    after the change, the new strip, a flush
   if (( N_SETTLE_TRACES > 0 )); then traces "${PACKET_ID}_settle" "$N_SETTLE_TRACES" "${TRACE_CHANNELS%% *}"; fi
   traces "${PACKET_ID}_new" "$N_SETS"
   check_phase "${PACKET_ID}_new" "$N_SETS" || return $?
+  if (( SCREEN )); then            # trace-only packet: back to nominal, done
+    nominal
+    return 0
+  fi
   strip "${PACKET_ID}_l1new" || return $?
   flushes "$FLUSH_BEFORE_IMAGE"
 
@@ -425,9 +476,17 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
   fi
   pause
 
-  # 5. back to standalone FIRST (a flush -- e.g. the repeat queue's -- would hang in master mode),
-  #    then a flush and the nominal configuration
+  # 5. back to standalone FIRST (a flush -- e.g. the repeat queue's -- would hang in master mode), the post-image
+  #    traces (still at the new settings; checked and retaken, but never a reason to restart the packet: its image
+  #    is taken), then a flush and the nominal configuration
   q "daq.set_standalone()" "$POOL"
+  if (( N_POST_SETS > 0 )); then
+    traces "${PACKET_ID}_post" "$N_POST_SETS"
+    local rc=0
+    check_phase "${PACKET_ID}_post" "$N_POST_SETS" || rc=$?
+    (( rc == 1 )) && return 1
+    (( rc == 2 )) && echo "  ${PACKET_ID}_post: many damaged post-image traces; the packet is kept"
+  fi
   flushes "$FLUSH_AFTER_IMAGE"
   nominal
 }

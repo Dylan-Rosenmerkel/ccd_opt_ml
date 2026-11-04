@@ -7,8 +7,10 @@
 #   * stop if it was started but did not finish (a record that is not "complete": queued, failed, or restarted until
 #     manual_packet.sh gave up): something went wrong there (a hang, an error, many damaged traces).  Look at it first;
 #     then rerun with RETRY=1 to take it again as <id>b (<id>c ...);
-#   * otherwise take it: manual_packet.sh with the plan's N_REF_SETS / N_SETS / IMAGE_TOML (plan.json "run"), the
-#     packet's changes file, and the answer "y" to its question.  manual_packet.sh waits for and checks the traces,
+#   * otherwise take it: manual_packet.sh with the plan's N_REF_SETS / N_SETS / N_POST_SETS / IMAGE_TOML (plan.json
+#     "run"), the packet's changes file, its reference file <id>_ref.txt when the plan has one (the reference at the
+#     previous packet's settings), SCREEN=1 with the plan's screen trace sets for a trace-only funnel screen
+#     (plan.json "screen": true), and the answer "y" to its question.  manual_packet.sh waits for and checks the traces,
 #     retakes damaged ones and restarts the packet itself when too many are damaged.
 # Stops on the first packet that fails (manual_packet.sh exit code != 0), or before the next packet when the file
 # $RECORD_DIR/STOP exists (touch it to end a night cleanly; the runner removes it when it stops), or after TO.
@@ -39,6 +41,10 @@ export RECORD_DIR PYTHON
 read -r -a IDS <<< "$($PYTHON -c "import json,sys; print(' '.join(p['packet_id'] for p in json.load(open(sys.argv[1]))['packets']))" "$PLAN_DIR/plan.json")"
 eval "$($PYTHON -c "import json,sys; r=json.load(open(sys.argv[1])).get('run', {}); print(' '.join(f'PLAN_{k}={v!r}' for k, v in r.items()))" "$PLAN_DIR/plan.json")"
 export N_REF_SETS="${N_REF_SETS:-${PLAN_N_REF_SETS:-5}}" N_SETS="${N_SETS:-${PLAN_N_SETS:-10}}"
+export N_POST_SETS="${N_POST_SETS:-${PLAN_N_POST_SETS:-0}}"
+SCREEN_REF_SETS="${PLAN_SCREEN_REF_SETS:-1}" SCREEN_SETS="${PLAN_SCREEN_SETS:-2}"
+# the plan's screen packets (trace-only, session F)
+SCREENS=" $($PYTHON -c "import json,sys; print(' '.join(p['packet_id'] for p in json.load(open(sys.argv[1]))['packets'] if p.get('screen')))" "$PLAN_DIR/plan.json") "
 export IMAGE_TOML="${IMAGE_TOML:-${PLAN_IMAGE_TOML:-image_params/tc1/img.toml}}"
 mkdir -p "$RECORD_DIR"
 LOG="$RECORD_DIR/run_plan.log"
@@ -74,7 +80,7 @@ next_name() {   # next_name <id>: <id>b, <id>c ... (the first without a record)
 started=0
 [[ -z $FROM ]] && started=1
 n_done=0; n_taken=0
-log "run_plan: $PLAN_DIR (${#IDS[@]} packets), N_REF_SETS=$N_REF_SETS N_SETS=$N_SETS IMAGE_TOML=$IMAGE_TOML DRY_RUN=${DRY_RUN:-0}"
+log "run_plan: $PLAN_DIR (${#IDS[@]} packets), N_REF_SETS=$N_REF_SETS N_SETS=$N_SETS N_POST_SETS=$N_POST_SETS IMAGE_TOML=$IMAGE_TOML DRY_RUN=${DRY_RUN:-0}"
 for id in "${IDS[@]}"; do
   [[ $id == "$FROM" ]] && started=1
   (( started )) || continue
@@ -97,8 +103,15 @@ for id in "${IDS[@]}"; do
       name=$(next_name "$id")
       log "retrying $id as $name (the earlier attempt $bad: $(status_of "$bad"))"
     fi
-    log "taking $name ($PLAN_DIR/$id.txt)"
-    if echo y | PACKET_ID="$name" CHANGES_FILE="$PLAN_DIR/$id.txt" bash "$HERE/manual_packet.sh" >> "$LOG" 2>&1; then
+    if [[ ! -s $PLAN_DIR/$id.txt ]]; then
+      log "STOP: $PLAN_DIR/$id.txt is missing or empty (a shortlist packet of session F is filled by the shortlist step)"
+      exit 1
+    fi
+    extra=()
+    [[ -e $PLAN_DIR/${id}_ref.txt ]] && extra+=("REF_CHANGES_FILE=$PLAN_DIR/${id}_ref.txt")
+    [[ $SCREENS == *" $id "* ]] && extra+=(SCREEN=1 "N_REF_SETS=$SCREEN_REF_SETS" "N_SETS=$SCREEN_SETS" N_POST_SETS=0)
+    log "taking $name ($PLAN_DIR/$id.txt${extra[*]+; ${extra[*]}})"
+    if echo y | env ${extra[@]+"${extra[@]}"} PACKET_ID="$name" CHANGES_FILE="$PLAN_DIR/$id.txt" bash "$HERE/manual_packet.sh" >> "$LOG" 2>&1; then
       n_taken=$(( n_taken + 1 ))
       if [[ ${DRY_RUN:-0} == 1 ]]; then
         log "$name: dry run OK"

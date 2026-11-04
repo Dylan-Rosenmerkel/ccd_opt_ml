@@ -495,3 +495,23 @@ then see what both of them can predict together; model the new packet designs af
   amplifiers (trained and new amp), top-5 regret 3 / 9 % vs 20 % random; settings-change GP also 3 / 3. Sigma_e: spreads
   among the good settings are small (random top-5 regret 4 %); best models ~2 %. Combined sigma_e + lambda, new amp:
   absolute trace trees regret 0.3 %, settings GP 0.0 %, random 12.5 %.
+
+## 27. v2 plan revised after the scorecard (2026-11-04)
+
+* `daq_scripts/manual_packet.sh`: new order: [reference settings] -> flush -> reference strip -> reference traces ->
+  flush -> change -> settling -> new traces (N_SETS) -> new strip -> flush -> image -> standalone -> post-image
+  traces (`<id>_post<set>`, N_POST_SETS) -> flush -> reset. `REF_CHANGES_FILE` = reference at those settings (own
+  settling traces `<id>_settleref`, then a reset to nominal before the new settings). `SCREEN=1` = trace-only packet.
+  Record v2 gains ref_changes, screen, trace_prefix_post, n_post_sets.
+* `src/make_manual_manifest.py`: `post_traces` (settings checked against the new traces), `reference`
+  (nominal / settings), status `screen` for screens. `src/process_packet.py`: kind "post", exported as `post.*`.
+* `daq_scripts/run_plan.sh`: passes `<id>_ref.txt`, SCREEN=1 with the plan's screen sets, N_POST_SETS; stops at a
+  shortlist packet whose changes file is missing.
+* `lvl1/make_packet_plan_v2.py` (D and E unchanged): N_SETS 3 + N_POST_SETS 2; 21 D packets with the reference at
+  the previous packet's settings; optional session F (L2_77..L2_136, 5.4 h): nominal, 48 screens, 5 SHORTLIST (filled
+  by lvl1/funnel_shortlist.py, not yet written) + 5 random CONTROL screen settings in random order, nominal.
+* `docs/overleaf_v2_training_plan_2026-11-04/` (14 pages): base-rate correction, new rows in the changes table, new
+  sequence, scorecard section (8) with the v1 results, session F section (9: objective = Pareto front then
+  dlog sigma_e + dlog lambda; gain enters via sigma_e in electrons), outcomes, risks, commands.
+* scorecard ranking: hybrid (sigma_e from absolute trace trees, lambda from change trees) did not beat absolute trace
+  trees on sigma_e + lambda; the 3 amplifiers share packets, so ranking results are ~1 trial.

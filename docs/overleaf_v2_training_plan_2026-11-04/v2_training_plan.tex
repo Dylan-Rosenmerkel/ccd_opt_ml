@@ -25,16 +25,18 @@
 
 \title{The v2 data set: what it is, what it will train, and what we expect to learn}
 \author{ccd\_opt\_ml, level 1}
-\date{Plan of 2026-11-04, for the first v2 night}
+\date{Plan of 2026-11-04 (revised the same day after the four-way scorecard), for the v2 nights}
 
 \begin{document}
 \maketitle
 
 \section*{Summary}
-The v2 night is 76 packets (about 21 hours) on board 101 of PA03, designed from what the first night (43 packets,
-2026-11-02/03) taught us. Every packet takes reference traces at nominal settings, a reference level-1 strip, a change of
-\emph{all} twelve knob groups at once, settling traces, new traces, a new level-1 strip, and a 32-row image, with
-flushes around every step and automatic retakes of damaged traces. The data will be used for four things:
+The v2 data are 76 packets (about 21 hours, sessions D and E) on board 101 of PA03, designed from what the first night
+(43 packets, 2026-11-02/03) taught us, plus an optional session F (60 packets, about 5.4 hours) that tests the screening
+step of level 2. Every packet takes a reference level-1 strip and reference traces (at nominal, or in a third of the
+session-D packets at the previous packet's settings), a change of \emph{all} twelve knob groups at once, settling traces,
+new traces, a new level-1 strip, a 32-row image and more new traces after the image, with flushes around every step and
+automatic retakes of damaged traces. The data will be used for five things:
 \begin{enumerate}
 \item \textbf{Absolute prediction} (task A): predict the image's $\sigma_e$, $\lambda$ and gain from the traces, from the
   level-1 strip, and from both, on the same packets; choose models on session D, test once on session E.
@@ -42,7 +44,10 @@ flushes around every step and automatic retakes of damaged traces. The data will
   the gain change between them, in size and direction.
 \item \textbf{Transfer} (task C): predictions for an amplifier, and if possible a CCD, the models never saw.
 \item \textbf{Diagnostics} (task D): label noise at every setting, learning curves, what each model relies on.
+\item \textbf{The funnel} (session F): can the traces of many settings be whittled down to a short list worth an image?
 \end{enumerate}
+Every model is rated on one four-way scorecard (section~\ref{sec:scorecard}): absolute values and changes, on trained
+amplifiers and on a new one, each against a settings-only model, plus a shortlist (ranking) test.
 The main expectations: $\sigma_e$ should be predicted from the traces to about the 5\,\% level and keep transferring;
 the strip should measure the gain and the clock-induced part of $\lambda$ directly; the size (not only the direction) of
 changes should become predictable once the drift is tracked and there are five times more examples.
@@ -55,8 +60,11 @@ changes should become predictable once the drift is tracked and there are five t
 The first night established a pipeline and three results (first-data report, level-1 summary): (i) the trace predicts
 $\sigma_e$ through its measured white noise, also on amplifiers it never saw; (ii) the gain and the \emph{level} of
 $\lambda$ were predicted mostly by recognising the amplifier, which cannot carry over to a new one, and the gain is not
-in a trace at all (no known charge); (iii) the \emph{direction} of a change of $\sigma_e$ and $\lambda$ between two traces
-taken minutes apart is right about 9 times in 10, but its size is not reliably predicted. v2 is built to answer:
+in a trace at all (no known charge); (iii) the \emph{direction} of a change of $\sigma_e$ and $\lambda$ between two
+neighbouring packets is right about 7--9 times in 10 from the traces (about as often as from the settings), but its size
+is not reliably predicted. The earlier ``94\,\% within a packet'' for $\sigma_e$ was mostly a base rate: with a nominal
+reference 96\,\% of the clear $\sigma_e$ changes go \emph{up}, because nominal is close to the best setting
+(section~\ref{sec:scorecard}). v2 is built to answer:
 
 \begin{description}
 \item[Q1. Which cheap measurement predicts the image?] Traces only, a level-1 strip only, or both, compared on the same
@@ -66,6 +74,8 @@ taken minutes apart is right about 9 times in 10, but its size is not reliably p
 \item[Q3. Does it carry over?] To an amplifier the model never saw, and to a second CCD if its settings are varied too.
 \item[Q4. Is more data still helping?] The learning curve was still falling at 32 packets.
 \item[Q5. How good are the labels?] Repeat scatter at every setting (replicates), not only at nominal.
+\item[Q6. Does the funnel work?] From trace-only screens of many settings, does the model's short list image better than
+  settings drawn at random (session F)?
 \end{description}
 
 % =====================================================================================================
@@ -93,7 +103,16 @@ safeguards & damaged traces retaken; more than 5 restarts the packet & three ses
 level-1 strips & a reference and a new strip in every packet & the trace has no known charge (no gain) and does not see
   what the image's pixels go through after the prescan and clear\\
 32-row image & instead of 16 & twice the pixels; the dark-current part of $\lambda$ about 3$\times$ better\\
-pauses & 2 s after every trace and image & to let the boards settle between acquisitions\\\bottomrule
+pauses & 2 s after every trace and image & to let the boards settle between acquisitions\\
+reference not always nominal & 21 packets of D take their reference at the previous packet's settings & with a nominal
+  reference 96\,\% of the clear $\sigma_e$ changes go up, so a change model can score by always saying ``up''; an
+  incumbent $\to$ candidate reference is also exactly the level-2 comparison\\
+order around the change & reference strip, \emph{then} reference traces; new traces, \emph{then} new strip & the two traces
+  of a within-packet change are minutes apart, right on either side of the change\\
+traces bracket the image & 3 new sets before the image, 2 after & drift of the trace across the image becomes visible;
+  same number of sets as before\\
+session F (optional) & 48 trace-only screens, then 5 shortlisted and 5 random-control images & the funnel (level-2
+  screening) has to be tested on settings the model has not seen\\\bottomrule
 \end{longtable}
 
 % =====================================================================================================
@@ -102,27 +121,38 @@ pauses & 2 s after every trace and image & to let the boards settle between acqu
 \subsection{Sequence}
 \begin{center}
 \resizebox{\textwidth}{!}{\begin{tikzpicture}[node distance=0.25cm]
-\node[box] (a) {reset + readback};
+\node[box] (a) {reset + readback\\\scriptsize [+ reference settings]};
 \node[box,right=of a,text width=1.2cm] (b) {flush};
-\node[box=trace,right=of b] (c) {3 reference sets\\\scriptsize checked};
-\node[box=trace,right=of c] (d) {reference strip\\\scriptsize $2\times1000$};
-\node[box,right=of d,text width=1.2cm] (e) {flush};
+\node[box=trace,right=of b] (d) {reference strip\\\scriptsize $2\times1000$};
+\node[box=trace,right=of d] (c) {3 reference sets\\\scriptsize checked};
+\node[box,right=of c,text width=1.2cm] (e) {flush};
 \node[box,right=of e,text width=1.6cm] (f) {change\\\scriptsize 12 knobs};
 \node[box,below=0.7cm of a] (g) {2 settling traces};
-\node[box=trace,right=of g] (h) {5 new sets\\\scriptsize checked};
+\node[box=trace,right=of g] (h) {3 new sets\\\scriptsize checked};
 \node[box=trace,right=of h] (i) {new strip\\\scriptsize $2\times1000$};
 \node[box,right=of i,text width=1.2cm] (j) {flush};
 \node[box=image,right=of j] (k) {image\\\scriptsize $32\times1000\times500$};
-\node[box,right=of k] (l) {flush + reset};
-\foreach \x/\y in {a/b,b/c,c/d,d/e,e/f,g/h,h/i,i/j,j/k,k/l} \draw[arr] (\x)--(\y);
+\node[box=trace,right=of k] (m) {2 new sets\\\scriptsize after the image};
+\node[box,right=of m] (l) {flush + reset};
+\foreach \x/\y in {a/b,b/d,d/c,c/e,e/f,g/h,h/i,i/j,j/k,k/m,m/l} \draw[arr] (\x)--(\y);
 \draw[arr] (f.south) -- ++(0,-0.35) -| (g.north);
 \end{tikzpicture}}
 \end{center}
+The reference traces now come \emph{after} the reference strip, so they end right before the change, and the new
+traces start right after it: the two sides of a within-packet change are minutes apart. The two strips bracket that
+pair; the new traces bracket the strip and the image. When a packet's reference is the previous packet's settings
+(\texttt{<id>\_ref.txt}), the packet first applies them (with their own settling traces) and goes from them to the new
+settings through a reset to nominal, so no reference knob is left behind. Going back to nominal \emph{after} the new
+traces for a second reference strip was considered and rejected: it adds a settings switch, its settling and its
+transients, and the next packet's reference already brackets each new setting from the other side.
+
 A packet takes 10--23 minutes depending on the timing settings (a longer integration window makes every skip slower);
 nominal packets about 16 minutes. The plan (lvl1/packet\_plan\_v2/, made by lvl1/make\_packet\_plan\_v2.py) has
-session D, 61 packets (10 nominal, 17.1 h) for training and model choice, and session E, 15 packets (3 nominal, 4.3 h)
-for the prospective test. daq\_scripts/run\_plan.sh takes them in order, skips finished packets, and stops on an error or
-a STOP file.
+session D, 61 packets (10 nominal, 17.1 h) for training and model choice, session E, 15 packets (3 nominal, 4.3 h)
+for the prospective test, and the optional session F, 60 packets (5.4 h; section~\ref{sec:funnel}).
+daq\_scripts/run\_plan.sh takes them in order (passing each packet's reference file and, for screens,
+\texttt{SCREEN=1}), skips finished packets, and stops on an error, a STOP file, or a shortlist packet whose settings are
+not yet written.
 
 \subsection{The knob box}
 \begin{center}\small
@@ -146,9 +176,10 @@ TG & $\pm$0.25 V & transfer gate\\\bottomrule
 \begin{center}\small
 \begin{tabular}{p{4.2cm}p{4.0cm}p{6.8cm}}\toprule
 product & per amplifier & used for\\\midrule
-3 reference trace sets & features + curves at nominal & the amplifier's state just before the change; the ``A'' side of a within-packet change\\
-5 new trace sets & features + curves at the new setting & task A inputs; the ``B'' side of a change\\
-reference strip & strip features at nominal & the strip's own $\sigma_e$, gain, CIC at nominal\\
+3 reference trace sets & features + curves at the reference (nominal or the previous packet's settings) & the amplifier's state just before the change; the ``A'' side of a within-packet change\\
+3 new trace sets & features + curves at the new setting & task A inputs; the ``B'' side of a change\\
+2 post-image trace sets & the same, after the image (\texttt{post.*}) & drift of the trace across the image; more examples at the image's setting\\
+reference strip & strip features at the reference & the strip's own $\sigma_e$, gain, CIC at the reference\\
 new strip & strip features at the new setting & task A strip inputs; with the reference strip, a \emph{measured} within-packet change of gain and CIC\\
 image & $\sigma_e$, $\lambda$, gain (WADERs); $\lambda$ per row & the labels\\
 record, readback & settings, times, status & bookkeeping, drift time axis, quality\\\bottomrule
@@ -168,6 +199,8 @@ record, readback & settings, times, status & bookkeeping, drift time axis, quali
 \item \textbf{Temperature}: log the CCD temperature per packet if a readout exists; it drives dark current and drift.
 \item \textbf{Bad channels}: decide on board 101 ch2 (EXT3) before training (its per-row fit $\chi^2$ is 22, others
   3--4); the current recommendation is to leave it out of training and report it separately.
+\item \textbf{Session F}: decide whether to take it (another 5.4 h, best on its own night after D and E are processed),
+  and write the shortlist step (lvl1/funnel\_shortlist.py) before it.
 \end{enumerate}
 
 % =====================================================================================================
@@ -178,6 +211,10 @@ skips restarted attempts), process\_packet.py (decodes and checks traces, featur
 the drift correction off, $\lambda$ per row), real\_inputs.py (one file per model family). It writes three input folders on
 exactly the same rows: \texttt{model\_inputs} (traces), \texttt{model\_inputs\_l1} (strip features in place of trace
 features) and \texttt{model\_inputs\_both}. A row needs a usable trace \emph{and} a usable strip at its own settings.
+New in the revised plan: the manifest lists the post-image traces (\texttt{post\_traces}, checked to be at the new
+settings) and process\_packet.py exports them as \texttt{post.*} columns; a packet's \texttt{reference} is
+\texttt{nominal} or \texttt{settings}; screen packets get the status \texttt{screen} and have no image, so they give
+trace features (features.json) but no labelled rows.
 
 \paragraph{Default training choices} (from the 2026-11-04 tests): traces only, never the settings as an input
 (\texttt{--no-settings}; neutral or better for the physics model and the networks); without the amplifier-fingerprint
@@ -254,7 +291,8 @@ amplifier cancels its fingerprint.
   label we will have.
 \item[Within a packet, from the images.] $\Delta$ between the packet's image and the same amplifier's nominal level
   interpolated in time between the neighbouring nominal packets (now every 7 packets, so the interpolation spans about
-  2 hours instead of 4--6).
+  2 hours instead of 4--6). For the 21 packets whose reference is the previous packet's settings, the reference label
+  is that packet's image, measured about 15 minutes earlier: no interpolation, and the change can go either way.
 \item[Between packets.] Any two packets of one amplifier, both with an image: $\Delta=\log y_j-\log y_i$ with both labels
   measured. Pairs are limited in time (within an hour, or neighbouring packets), because the drift over hours swamps the
   setting's effect (first-night test: direction right 88\,\% within a packet and within an hour for $\lambda$, 66--75\,\%
@@ -293,7 +331,10 @@ window length; $\Delta\lambda$ the within-cycle and CDS spectra.}
 \subsection{Scores}
 For every model and target: the RMS error of $\Delta$, its median absolute error (less sensitive to a few large
 changes), the fraction of \emph{clear} changes (larger than about twice the label noise of a change) whose direction is
-right, and the Spearman correlation between predicted and true changes. Always on amplifiers not in training (task C).
+right, and the Spearman correlation between predicted and true changes; on trained amplifiers and on a new one
+(section~\ref{sec:scorecard}). Every pair is used in both orders in training, so no model can learn a base rate, and the
+report gives the fraction of clear changes that go up (the score of always saying ``up'') next to every direction
+score.
 
 \subsection{What we expect}
 On the first night most changes were smaller than the label noise of a change (median true change $\sigma_e$ 3.9\,\%,
@@ -301,14 +342,98 @@ $\lambda$ 8.5\,\%, gain 0.4\,\%, against label noise 1.9, 11.9 and 0.8\,\%), and
 twelve knobs at once over a wider box, so changes are larger; the strips give drift-free change labels; and there are
 about five times more examples. We therefore expect:
 \begin{itemize}
-\item the \textbf{direction} of $\sigma_e$ and $\lambda$ changes to stay at 85--95\,\% and the gain's to become
-  measurable from the strips;
+\item the \textbf{direction} of $\sigma_e$ and $\lambda$ changes, measured fairly (balanced pairs), to rise from about
+  70--90\,\% to 85--95\,\%, now \emph{significantly} above the settings-only model, and the gain's to become measurable
+  from the strips;
 \item the \textbf{size} of $\sigma_e$ changes to be predicted clearly better than ``no change'', and the size of
   $\lambda$ changes to become predictable at least for the large ones;
 \item the shared-encoder models, which overfitted 84 examples, to become competitive.
 \end{itemize}
 
 \input{adjacent_check.tex}
+
+% =====================================================================================================
+\section{The four-way scorecard}\label{sec:scorecard}
+
+Every model, on v1 now and on v2 later, is rated in four cells, per target ($\sigma_e$, $\lambda$, gain), plus a
+ranking test (lvl1/scorecard.py; report and figures in docs/scorecard\_2026-11-04/):
+\begin{center}\small
+\begin{tabular}{p{3.2cm}p{5.4cm}p{5.4cm}}\toprule
+& \textbf{absolute} (one trace $\to$ value) & \textbf{relative} (two traces $\to$ change)\\\midrule
+\textbf{trained amplifiers} & (1) test packets of amplifiers in training & (3) pairs of test packets, amplifiers in training\\
+\textbf{new amplifier} & (2) one amplifier left out, crossed with the packet folds & (4) the same, for pairs\\\bottomrule
+\end{tabular}
+\end{center}
+\begin{itemize}
+\item \textbf{Splits}: the packets in time order cut into 5 contiguous blocks; a test block's packets are never in
+  training. A test pair has both packets in the test block; training pairs have neither, and are used in both orders.
+  Pair types are scored separately: within a packet, neighbours ($n\to n+1$), $n\to n+2$.
+\item \textbf{Competitors}: the average, the amplifier's average (trained cells), settings-only GP and trees (with the
+  amplifier's identity in the trained cells), and the trace models, which never see the settings and whose feature sets
+  are fixed in advance. Relative models: feature differences (trees, GP), the shared-encoder network, hand-picked
+  difference-curve bands, and every absolute model's two predictions differenced.
+\item \textbf{Scores}: absolute, the typical error; relative, the direction of clear changes, the size error and the
+  Spearman correlation; each against the cell's settings-only reference on the same rows, with a packet bootstrap:
+  \emph{better}, \emph{same} or \emph{worse} at 95\,\%.
+\item \textbf{Ranking (5)}: per amplifier, its settings ranked by the prediction; is the truly best setting on a 5- or
+  10-setting shortlist, and how much worse is the best shortlisted one (regret)? This is the funnel's screening step.
+\end{itemize}
+
+\paragraph{First night (board 101 ch0/1/3, 40 packets).}
+\begin{center}\small
+\begin{tabular}{p{3.6cm}p{3.7cm}p{3.1cm}p{3.6cm}}\toprule
+cell & trace models & settings only & trace better?\\\midrule
+(1) value, trained & $\sigma_e$ 10, $\lambda$ 28, gain 0.9\,\% & 11, 37, 1.4\,\% & yes for $\lambda$ and gain\\
+(2) value, new amp & 15, 41--55, 3.4\,\% & 16, 49, 3.5\,\% & no (cnn $\lambda$ the exception)\\
+(3) direction, trained ($n\to n+1$) & 78--92, 89, 86\,\% & 72, 79, 78\,\% & ahead, not significant\\
+(4) direction, new amp ($n\to n+1$) & 72--86, 82--90, 89\,\% & 72, 82, 69\,\% & ahead, not significant\\
+(5) shortlist of 10 of 35 & best-$\lambda$ setting caught on all 3 amplifiers & also & similar\\\bottomrule
+\end{tabular}
+\end{center}
+Within a packet the clear changes go up 96\,\% ($\sigma_e$) and 76\,\% ($\lambda$) of the time; trained on both orders,
+the trace models get the $\sigma_e$ direction 65--76\,\% right and the settings models 33--45\,\%. Sizes: $\sigma_e$
+10--13\,\% against 15\,\% for ``no change''; $\lambda$ no better than ``no change''. No purpose-built change model beat
+plain trees on feature differences or the differenced absolute models. The ranking test is weak evidence: the three
+amplifiers share their packets and settings, so it is closer to one trial than three. A hybrid ranking ($\sigma_e$ from
+the absolute trace trees, $\lambda$ from the change trees) did not beat the absolute trace trees alone on
+$\sigma_e+\lambda$.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/scorecard_absolute.png}
+\caption{Scorecard cells (1) and (2): typical error of every model on trained amplifiers (filled) and on a new
+amplifier (open); orange settings only, blue traces only, grey averages; dotted the label noise.}
+\end{figure}
+
+% =====================================================================================================
+\section{Session F: the funnel test}\label{sec:funnel}
+
+Level 2 is meant to work as a funnel: traces of hundreds of settings (about a minute each) whittled down to 5--10 worth
+an image (about 15 minutes each), finer steps around the survivors, and level 3 automating the loop. Session F tests
+the first step on settings no model has seen.
+\begin{enumerate}
+\item \textbf{Screens}: 48 trace-only packets at new Sobol points of the same box (\texttt{SCREEN=1}: a reset, a flush, one
+  reference set at nominal, the change, settling, two new sets, a reset; about 2--3 minutes). No strip, no image.
+\item \textbf{Shortlist step} (lvl1/funnel\_shortlist.py, to be written): process the screens; the models trained on D+E
+  predict, per amplifier, each screen's $\Delta\sigma_e$ and $\Delta\lambda$ against nominal (the same reference for
+  all, so the screens are comparable) and the absolute values; the 5 settings with the best predicted objective are
+  written as the changes files of the five SHORTLIST packets.
+\item \textbf{Images}: the 5 shortlisted settings and 5 CONTROL settings drawn at random from the screens now (fixed in
+  the plan), in random order, as full packets; nominal packets at the start and the end.
+\end{enumerate}
+\paragraph{Objective and trade-offs.} A knob can lower $\sigma_e$ and raise $\lambda$. The shortlist therefore keeps the
+two predictions apart: the settings on the predicted Pareto front (no other screen predicted lower in both) come first,
+filled up to five by the weighted score $\Delta\log\sigma_e+\Delta\log\lambda$ (equal weight in log units, i.e.\ the
+same relative change counts the same), with an optional hard limit (for example $\sigma_e$ below the single-electron
+resolution threshold). The images then decide the trade-off on measured values.
+\paragraph{Gain.} The gain is not an objective; it enters through $\sigma_e$ in electrons,
+$\Delta\log\sigma_e=\Delta\log\sigma_{\mathrm{ADU}}-\Delta\log g$. The trace measures $\Delta\log\sigma_{\mathrm{ADU}}$
+(its white noise) directly; the gain's change is predicted (it follows delayInt, VDD and VR) and is small (about 1\,\%
+against 15\,\% for $\sigma_e$), so it is a correction. The images and strips of the shortlist measure the gain directly.
+\paragraph{Scores.} The best and the mean measured objective of the shortlist against those of the controls (paired by
+amplifier), and the regret of the shortlist (how much worse its best is than the best of all ten imaged). The funnel
+passes if the shortlist's best beats the controls' best on the amplifiers not in training as well as on the trained
+ones.
 
 % =====================================================================================================
 \section{Task C: does it carry over?}
@@ -356,6 +481,9 @@ the change of $\sigma_e$ and $\lambda$ is predicted in size from two traces & le
 only the direction is predicted & level 2 uses ranking (preference) optimisation, not regression\\
 the learning curve is still falling at 61 packets & take a third night (or a longer one)\\
 $\sigma_e$ and changes carry over to a second CCD & build level 2 on the trace models\\
+the session-F shortlist images clearly better than the controls & level 2 screens with traces and images only the
+  short list\\
+it does not & level 2 uses images for every candidate; traces only for diagnosis\\
 they do not & per-CCD training, or a short calibration session per CCD\\\bottomrule
 \end{tabular}
 \end{center}
@@ -367,7 +495,10 @@ than the no-trace references, within about twice the label scatter, and the dire
 \begin{itemize}
 \item \textbf{Strips do not arrive complete} at $2\times1000$: fall back to $1\times1000$ (the DAQ test decides).
 \item \textbf{Damaged traces}: the retakes and restarts cost time; about 1 packet in 10 is expected to restart.
-\item \textbf{Night too short}: the plan is 21.4 h; run\_plan.sh can be stopped and resumed; session E must not be cut.
+\item \textbf{Night too short}: D and E are 21.4 h, F another 5.4 h; run\_plan.sh can be stopped and resumed; session E
+  must not be cut, and F is best taken on its own night after D and E are processed.
+\item \textbf{A non-nominal reference unsettled}: the reference settings get their own settling traces; the manifest
+  checks every trace's settings against the record.
 \item \textbf{Drift larger than expected}: the nominal packets every 7 still allow interpolation; flag packets taken after
   long stalls.
 \item \textbf{Voltage windows}: the box uses provisional windows; a reviewed limits file must exist before the night.
@@ -387,6 +518,10 @@ python lvl1/train_lvl1.py --inputs processed_v2/model_inputs[_l1|_both] --no-set
 python lvl1/change_models.py; python lvl1/change_handpicked.py; python lvl1/change_pairs.py --max-step 1
 # task D
 python lvl1/learning_curve.py ...; python lvl1/explain_models.py ...; python lvl1/amp_fingerprint.py
+# the four-way scorecard and the ranking test
+python lvl1/scorecard.py [--rescore]
+# session F: screens, then the shortlist step, then the rest (run_plan.sh stops at the first SHORTLIST packet)
+FROM=L2_77 bash daq_scripts/run_plan.sh; python lvl1/funnel_shortlist.py ...; FROM=L2_77 bash daq_scripts/run_plan.sh
 \end{Verbatim}
 (The scripts read the v1 paths today; pointing them at the v2 folders is part of the processing step.)
 

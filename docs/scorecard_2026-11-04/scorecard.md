@@ -196,6 +196,7 @@ Per amplifier, its non-nominal settings (one per packet) are ranked by the predi
 | absolute trace: cnn | 0.61 | 0.7 of 5 | 2.3 | 2.1 | 0.33 |
 | absolute trace: pretrained cnn | 0.65 | 1.3 of 5 | 2.1 | 1.7 | 0.67 |
 | absolute trace: deep kernel | 0.64 | 1.3 of 5 | 4.1 | 2.4 | 0.33 |
+| hybrid: sigma_e absolute trees, lambda change trees | 0.66 | 1.7 of 5 | 2.1 | 2.1 | 0.67 |
 
 ### trained amplifiers, best = lowest lambda (35 settings per amplifier)
 
@@ -222,6 +223,7 @@ Per amplifier, its non-nominal settings (one per packet) are ranked by the predi
 | absolute trace: cnn | 0.50 | 0.7 of 5 | 16.5 | 12.2 | 0.33 |
 | absolute trace: pretrained cnn | 0.49 | 0.0 of 5 | 23.7 | 18.0 | 0.00 |
 | absolute trace: deep kernel | 0.51 | 0.7 of 5 | 14.8 | 5.9 | 0.67 |
+| hybrid: sigma_e absolute trees, lambda change trees | 0.69 | 2.3 of 5 | 3.4 | 0.0 | 1.00 |
 
 ### trained amplifiers, best = lowest sigma_e + lambda (35 settings per amplifier)
 
@@ -248,13 +250,14 @@ Per amplifier, its non-nominal settings (one per packet) are ranked by the predi
 | absolute trace: cnn | 0.63 | 0.3 of 5 | 13.7 | 4.2 | 0.33 |
 | absolute trace: pretrained cnn | 0.63 | 1.7 of 5 | 10.9 | 10.6 | 0.00 |
 | absolute trace: deep kernel | 0.69 | 0.7 of 5 | 12.9 | 6.4 | 0.67 |
+| hybrid: sigma_e absolute trees, lambda change trees | 0.60 | 1.0 of 5 | 12.5 | 7.0 | 0.33 |
 
 ### new amplifier, best = lowest sigma_e (35 settings per amplifier)
 
 | model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
 |---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 4.0 | 2.8 | 0.28 |
-| no change | 0.00 | 0.7 of 5 | 4.1 | 3.1 | 0.23 |
+| random | 0.00 | 0.7 of 5 | 4.1 | 2.8 | 0.28 |
+| no change | 0.00 | 0.6 of 5 | 4.0 | 2.8 | 0.30 |
 | settings change: gp | 0.05 | 0.0 of 5 | 8.7 | 2.4 | 0.33 |
 | settings change: trees | -0.01 | 0.7 of 5 | 1.6 | 1.6 | 0.33 |
 | trace change: trees | 0.31 | 0.7 of 5 | 2.9 | 2.0 | 0.67 |
@@ -262,21 +265,22 @@ Per amplifier, its non-nominal settings (one per packet) are ranked by the predi
 | trace change: shared-encoder net | 0.03 | 0.0 of 5 | 5.3 | 2.4 | 0.33 |
 | trace change: hand-picked bands + gp | 0.32 | 0.7 of 5 | 2.7 | 0.5 | 0.67 |
 | absolute settings: gp | 0.35 | 1.0 of 5 | 2.0 | 2.0 | 0.67 |
-| absolute settings: trees | 0.26 | 0.4 of 5 | 4.3 | 3.6 | 0.33 |
+| absolute settings: trees | 0.26 | 0.5 of 5 | 4.1 | 3.6 | 0.33 |
 | absolute trace: physics | 0.10 | 0.0 of 5 | 5.9 | 3.9 | 0.00 |
-| absolute trace: gp | -0.57 | 0.6 of 5 | 5.6 | 2.5 | 0.33 |
+| absolute trace: gp | -0.57 | 0.6 of 5 | 4.9 | 2.5 | 0.33 |
 | absolute trace: trees | 0.57 | 0.3 of 5 | 4.1 | 3.8 | 0.33 |
 | absolute trace: nn | 0.46 | 0.3 of 5 | 2.5 | 1.7 | 0.33 |
 | absolute trace: cnn | 0.42 | 1.0 of 5 | 4.2 | 3.8 | 0.00 |
 | absolute trace: pretrained cnn | 0.43 | 1.0 of 5 | 3.3 | 2.8 | 0.33 |
 | absolute trace: deep kernel | 0.08 | 1.3 of 5 | 3.5 | 3.4 | 0.33 |
+| hybrid: sigma_e absolute trees, lambda change trees | 0.57 | 0.3 of 5 | 4.1 | 3.8 | 0.33 |
 
 ### new amplifier, best = lowest lambda (35 settings per amplifier)
 
 | model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
 |---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 19.9 | 13.1 | 0.29 |
-| no change | 0.00 | 0.7 of 5 | 20.0 | 13.4 | 0.33 |
+| random | 0.00 | 0.7 of 5 | 19.7 | 13.5 | 0.28 |
+| no change | 0.00 | 0.8 of 5 | 19.5 | 13.6 | 0.27 |
 | settings change: gp | 0.42 | 1.7 of 5 | 0.0 | 0.0 | 1.00 |
 | settings change: trees | 0.52 | 0.0 of 5 | 25.3 | 9.3 | 0.33 |
 | trace change: trees | 0.69 | 2.3 of 5 | 9.3 | 0.0 | 1.00 |
@@ -292,13 +296,14 @@ Per amplifier, its non-nominal settings (one per packet) are ranked by the predi
 | absolute trace: cnn | 0.34 | 0.3 of 5 | 22.7 | 12.3 | 0.33 |
 | absolute trace: pretrained cnn | 0.35 | 1.0 of 5 | 18.0 | 18.0 | 0.00 |
 | absolute trace: deep kernel | 0.03 | 1.0 of 5 | 16.0 | 12.1 | 0.33 |
+| hybrid: sigma_e absolute trees, lambda change trees | 0.69 | 2.3 of 5 | 9.3 | 0.0 | 1.00 |
 
 ### new amplifier, best = lowest sigma_e + lambda (35 settings per amplifier)
 
 | model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
 |---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 12.5 | 8.8 | 0.29 |
-| no change | 0.00 | 0.6 of 5 | 12.7 | 9.7 | 0.27 |
+| random | 0.00 | 0.7 of 5 | 12.5 | 8.9 | 0.28 |
+| no change | 0.00 | 0.7 of 5 | 12.8 | 8.0 | 0.38 |
 | settings change: gp | 0.20 | 0.7 of 5 | 13.9 | 13.1 | 0.33 |
 | settings change: trees | 0.15 | 0.0 of 5 | 14.7 | 13.9 | 0.00 |
 | trace change: trees | 0.55 | 1.3 of 5 | 10.6 | 6.7 | 0.33 |
@@ -306,7 +311,7 @@ Per amplifier, its non-nominal settings (one per packet) are ranked by the predi
 | trace change: shared-encoder net | -0.02 | 1.0 of 5 | 18.4 | 15.2 | 0.00 |
 | trace change: hand-picked bands + gp | 0.00 | 0.3 of 5 | 19.4 | 5.9 | 0.33 |
 | absolute settings: gp | 0.24 | 1.3 of 5 | 0.0 | 0.0 | 1.00 |
-| absolute settings: trees | 0.05 | 0.3 of 5 | 16.6 | 3.6 | 0.50 |
+| absolute settings: trees | 0.05 | 0.3 of 5 | 16.6 | 2.9 | 0.52 |
 | absolute trace: physics | 0.30 | 0.7 of 5 | 18.2 | 10.6 | 0.00 |
 | absolute trace: gp | -0.42 | 0.0 of 5 | 42.7 | 13.5 | 0.00 |
 | absolute trace: trees | 0.53 | 2.0 of 5 | 0.3 | 0.0 | 1.00 |
@@ -314,3 +319,4 @@ Per amplifier, its non-nominal settings (one per packet) are ranked by the predi
 | absolute trace: cnn | 0.47 | 1.7 of 5 | 5.2 | 4.2 | 0.33 |
 | absolute trace: pretrained cnn | 0.37 | 2.0 of 5 | 10.8 | 10.8 | 0.00 |
 | absolute trace: deep kernel | -0.12 | 1.3 of 5 | 8.0 | 0.4 | 0.67 |
+| hybrid: sigma_e absolute trees, lambda change trees | 0.50 | 1.3 of 5 | 6.7 | 6.7 | 0.33 |
