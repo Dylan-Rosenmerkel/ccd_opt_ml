@@ -454,3 +454,8 @@ then see what both of them can predict together; model the new packet designs af
   shape (|r| 0.74 at point 61), within-cycle structure function and spectrum, noise vs window length; d lambda tracks
   the within-cycle spectrum (0.60), CDS spectrum (log f), mean skip shape, CDS autocorrelation. Candidates for
   hand-made difference features.
+* `lvl1/change_handpicked.py`: 6 bands per target of the difference curves, chosen in each training fold, + the change of
+  the white noise. GP: new amplifier sigma_e 14.5 % (dir 94 %), lambda 35.3 % (dir 82 %); session C sigma_e 6.6 %
+  (best trace-based; settings GP 7.5, no change 11.9), lambda 24.1 %. Huber blows up on new amplifiers. Most often
+  picked: sigma_e noise-vs-window-length (short windows), within-cycle spectrum; lambda mean skip shape (point 111),
+  within-cycle spectrum, equivalent-time pulse; gain the variation along the cycle.
