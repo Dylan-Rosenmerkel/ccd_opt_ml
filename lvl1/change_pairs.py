@@ -9,7 +9,7 @@ the settings change theta_j - theta_i for the reference.  Board 101 without ch2,
 Testing on a new amplifier: the packets are split into 5 folds; a test pair has both packets in the test fold and
 belongs to the held-out amplifier; training pairs come from the other amplifiers with neither packet in the test fold.
 
-    .venv/bin/python lvl1/change_pairs.py
+    .venv/bin/python lvl1/change_pairs.py [--max-hours 1]
 """
 
 from __future__ import annotations
@@ -50,10 +50,13 @@ def load():
     return d, F, Th, Y
 
 
-def pairs(d):
+def pairs(d, max_hours=None):
+    """Every pair of packets of one amplifier; with max_hours, only pairs taken within that many hours."""
+    t = pd.to_datetime(d["date_start"]).astype("int64").to_numpy() / 3.6e12
     out = []
     for ch, g in d.groupby("channel"):
-        out += [(i, j) for i, j in combinations(g.index.to_numpy(), 2)]
+        out += [(i, j) for i, j in combinations(g.index.to_numpy(), 2)
+                if max_hours is None or abs(t[j] - t[i]) <= max_hours]
     return np.array(out)
 
 
@@ -70,8 +73,14 @@ def predict(kind, X, Y, tr, te):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--max-hours", type=float, help="only pairs of packets taken within this many hours")
+    parser.add_argument("--models", nargs="*", default=["no change", "settings change: trees", "settings change: gp",
+                                                        "trace change: trees", "trace change: gp"])
+    args = parser.parse_args()
     d, F, Th, Y = load()
-    P = pairs(d)
+    P = pairs(d, args.max_hours)
     i, j = P[:, 0], P[:, 1]
     Xf, Xs, Yp = F[j] - F[i], Th[j] - Th[i], Y[j] - Y[i]
     amp, pk = d.channel.to_numpy(), d.packet_id.to_numpy()
@@ -85,6 +94,8 @@ def main():
     for name, kind, X in (("no change", "no change", Xs), ("settings change: trees", "trees", Xs),
                           ("settings change: gp", "gp", Xs), ("trace change: trees", "trees", Xf),
                           ("trace change: gp", "gp", Xf)):
+        if name not in args.models:
+            continue
         pred = np.full(Yp.shape, np.nan)
         for a in np.unique(amp):
             for k in range(5):
