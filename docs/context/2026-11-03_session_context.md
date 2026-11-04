@@ -407,3 +407,14 @@ then see what both of them can predict together; model the new packet designs af
   the 2026-10 design. Proposed: make --no-settings the default for trace models (baselines keep theta).
 * Overview as a Beamer PDF (44 frames, real LaTeX math, TikZ flow charts): `docs/overleaf_overview_2026-11-04/`
   (overview.tex, no_settings.tex, figures/; zip `docs/overleaf_overview_2026-11-04.zip`).
+
+## 21. CNN encoder inside the physics model; assessment (2026-11-04)
+
+* `train_lvl1.py` models `physics_cnn` (physics_white + the pre-trained encoder's embedding of own and reference curves
+  and their difference as extra GP inputs) and `physics_cnn_only` (embedding only). Run
+  `processed/lvl1_results/2026-11-04_physics_cnn/` (no ch2, no fingerprints, no settings). No gain: sigma_e C 6.1 vs
+  6.3, lambda C 10.4 vs 13.7 (n.s.), gain 0.7 vs 1.3 (significantly worse); embedding alone worse for lambda (26.9).
+* Settings check (paired bootstrap): dropping theta is neutral or better for physics and the networks, worse for
+  gp / gp_dim on new amplifiers. Document corrected.
+* `docs/overleaf_overview_2026-11-04/level1_summary.tex` (11 pages) now has the CNN subsection and section 8, an
+  assessment: what works, what does not, why (information, not models), prognosis, decisions for v2.

@@ -101,7 +101,7 @@ TARGETS = ("sigma_e", "lambda", "gain")
 ALL_MODELS = ("mean", "settings", "trace_physics", "physics", "physics_joint", "physics_hier", "sets", "ridge", "trees", "gp", "nn", "cnn", "pretrained", "deep_kernel")
 #: GP-prior variants: run only when named in --models
 EXTRA_MODELS = ("gp_dim", "gp_saas", "physics_dim", "physics_saas", "physics_gp_lambda", "physics_joint_weak", "physics_joint_select", "physics_saasmap_lambda", "physics_saasfull_lambda", "sets_gp_lambda",
-                "physics_white", "trace_physics_white", "settings_amp", "settings_amp_trees")
+                "physics_white", "trace_physics_white", "settings_amp", "settings_amp_trees", "physics_cnn", "physics_cnn_only")
 #: models that use no trace features at all (they keep their plain names in every run)
 NO_FEATURES = ("mean", "trace_physics", "trace_physics_white", "settings_amp", "settings_amp_trees")
 #: baselines that see no trace: every report compares the models with them
@@ -113,7 +113,8 @@ FAMILY = {"mean": "features", "settings": "features", "settings_amp": "features"
           "cnn": "curves", "pretrained": "curves", "deep_kernel": "curves",
           "gp_dim": "features", "gp_saas": "features", "physics_dim": "physics", "physics_saas": "physics", "physics_gp_lambda": "physics", "sets_gp_lambda": "sets",
           "physics_joint_weak": "physics", "physics_joint_select": "physics",
-          "physics_saasmap_lambda": "physics", "physics_saasfull_lambda": "physics"}
+          "physics_saasmap_lambda": "physics", "physics_saasfull_lambda": "physics",
+          "physics_cnn": "physics", "physics_cnn_only": "physics"}
 MAX_NAN_FRACTION = 0.2
 #: the evidence tiers of every trace feature (lvl1/feature_study.py); see docs/trace_features_and_tiers.md
 TIER_FILE = ROOT / "lvl1" / "feature_study" / "evidence_tiers.json"
@@ -496,6 +497,33 @@ class Runner:
         Xtr, Xte = self._physics_X(d, train, test)
         model = st.PhysicsStructured(lambda_kind="saas", lambda_kw=SAAS_LAMBDA_KW, noise_source="white")
         return model.fit(Xtr, self.Y[train]).predict(Xte)
+
+    def _embedding(self) -> np.ndarray:
+        """Per row: the pre-trained CNN encoder's 16 numbers for the own curves, for the reference curves, and their
+        difference (48 columns; the encoder never saw a label)."""
+        pre = self._pretrained()
+        d = self.f("curves")
+        own = pre.encode(np.nan_to_num(d["curves_theta"]))
+        ref = pre.encode(np.nan_to_num(d["curves_ref"]))
+        return np.hstack([own, ref, own - ref])
+
+    def physics_cnn(self, train, test, only: bool = False):
+        """physics_white with the pre-trained CNN encoder inside: its embedding of the own and reference curves is added
+        to the inputs of the gain, correction and lambda GPs (only=True: the embedding replaces every other input).
+        Added 2026-11-04."""
+        d = self.f("physics")
+        Xtr, Xte = self._physics_X(d, train, test)
+        E = self._embedding()
+        if only:
+            Xtr["x"], Xte["x"] = E[train], E[test]
+        else:
+            Xtr["x"], Xte["x"] = np.hstack([Xtr["x"], E[train]]), np.hstack([Xte["x"], E[test]])
+        model = st.PhysicsStructured(lambda_kind="saas", lambda_kw=SAAS_LAMBDA_KW, noise_source="white")
+        return model.fit(Xtr, self.Y[train]).predict(Xte)
+
+    def physics_cnn_only(self, train, test):
+        """physics_cnn with only the CNN embedding as the GPs' inputs (no hand-made features, no packet state)."""
+        return self.physics_cnn(train, test, only=True)
 
     def physics_saasmap_lambda(self, train, test):
         """physics with lambda by our GP with the SAAS prior fitted by MAP (no sampling: as fast as physics_gp_lambda)."""

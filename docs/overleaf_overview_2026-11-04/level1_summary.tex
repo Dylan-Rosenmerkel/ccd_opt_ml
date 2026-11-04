@@ -37,9 +37,10 @@
   because the reference trace identifies the amplifier. On a new amplifier no model beats the average until its level is
   measured once (one image or one level-1 strip); after that the gain is at about 1\,\% and the $\lambda$ models still
   beat the average.
-\item \textbf{Inputs.} Leaving out the noisy channel (101 ch2 = EXT3), the amplifier-fingerprint features and the
-  settings makes nothing worse and lets $\lambda$ beat the average on a new amplifier for the first time
-  (39.7\,\% against 51.5\,\%). The learning curve is still falling at 32 packets: more packets help.
+\item \textbf{Inputs.} Leaving out the noisy channel (101 ch2 = EXT3) and the amplifier-fingerprint features lets
+  $\lambda$ beat the average on a new amplifier for the first time (39.7\,\% against 51.5\,\%). Leaving out the settings
+  as well is neutral or better for the physics model and the networks (worse only for the GPs on features). The
+  learning curve is still falling at 32 packets: more packets help.
 \item \textbf{Next.} The v2 night (76 packets, joint design, level-1 strips in every packet, settings changed on every
   working board), then a test on a second CCD.
 \end{itemize}
@@ -101,13 +102,13 @@ board-101 traces were usable.
 
 \subsection{Processing}
 \begin{center}
-\resizebox{0.92\textwidth}{!}{\begin{tikzpicture}[node distance=0.3cm and 0.3cm]
+\resizebox{0.85\textwidth}{!}{\begin{tikzpicture}[node distance=0.3cm and 0.3cm]
 \node[box] (m) {manifest\\\scriptsize files + settings};
 \node[box=trace,right=0.5cm of m,yshift=0.75cm] (t1) {decode + check};
 \node[box=trace,right=of t1] (t2) {features\\\scriptsize 141 + 16 curves};
 \node[box=trace,right=of t2] (t3) {combine sets\\\scriptsize robust mean};
 \node[box=image,right=0.5cm of m,yshift=-0.75cm] (i1) {image FITS};
-\node[box=image,right=of i1] (i2) {run\_WADERs\\\scriptsize $\sigma_e,\lambda,g$};
+\node[box=image,right=of i1,text width=2.2cm] (i2) {run\_WADERs\\\scriptsize $\sigma_e,\lambda,g$};
 \node[box=image,right=of i2] (i3) {$\lambda$ per row\\\scriptsize dark + CIC};
 \node[box=model,right=0.5cm of t3,yshift=-0.75cm] (ds) {dataset.csv\\\scriptsize packet $\times$ amp};
 \draw[arr] (m.east)--(t1.west); \draw[arr] (m.east)--(i1.west);
@@ -307,8 +308,40 @@ gain & physics & 2.9 & 3.6 & 3.6 & 3.7\\\bottomrule
 \end{table}
 
 Leaving out ch2 lets the $\lambda$ models beat the average on a new amplifier; removing the fingerprints costs
-$\lambda$ on known amplifiers but not on new ones; removing the settings costs nothing. The models therefore learn from
-the trace, not from a map of this CCD's knobs.
+$\lambda$ on known amplifiers but not on new ones. Removing the settings (paired packet bootstrap, 95\,\%): for the
+physics model $\sigma_e$ and $\lambda$ are unchanged and the gain improves (2.0 $\to$ 0.7\,\%); the networks are
+unchanged or better (pretrained $\sigma_e$ 15.7 $\to$ 5.2\,\%, deep\_kernel $\lambda$ on a new amplifier 53.2 $\to$
+42.0\,\%), with small gain losses of 0.3--0.6 points; only the GPs on features get worse on new amplifiers (gp, gp\_dim
+$\sigma_e$ +5 to +6 points, gp $\lambda$ +8). The recommended models therefore learn from the trace, not from a map of
+this CCD's knobs.
+
+\subsection{A CNN encoder inside the physics model}
+The pre-trained CNN encoder's 16-number summaries of the own and reference curves (and their difference) were added to
+the inputs of the physics model's gain, correction and $\lambda$ GPs (physics\_cnn), or replaced every other input
+(physics\_cnn\_only); same setup as above (no ch2, no fingerprints, no settings).
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{llcccc}\toprule
+target & model & A+B CV & session C & new amplifier & after one image\\\midrule
+$\sigma_e$ & physics\_white & 12.1 & 6.1 & 14.9 & 13.3\\
+ & physics\_cnn & 12.4 & 6.3 & 15.1 & 13.6\\
+ & physics\_cnn\_only & 13.3 & 6.9 & 15.1 & 13.8\\
+$\lambda$ & physics\_white & 28.1 & 10.4 & 46.0 & 32.5\\
+ & physics\_cnn & 28.5 & 13.7 & 47.1 & 30.2\\
+ & physics\_cnn\_only & 37.5 & 26.9 & 48.0 & 39.7\\
+gain & physics\_white & 0.8 & 0.7 & 3.7 & 1.2\\
+ & physics\_cnn & 1.0 & 1.3 & 3.7 & 1.0\\
+ & physics\_cnn\_only & 1.1 & 1.5 & 3.7 & 1.1\\\bottomrule
+\end{tabular}
+\caption{Errors (\%) on ch0, ch1, ch3. Session C, physics\_cnn minus physics\_white (95\,\%): $\sigma_e$
+[$-0.1$, $+0.6$], $\lambda$ [$-2.1$, $+8.4$], gain [$+0.4$, $+0.7$].}
+\end{table}
+
+The encoder adds nothing: $\sigma_e$ is unchanged, $\lambda$ and the gain are slightly worse (the gain significantly),
+and the encoder alone is clearly worse for $\lambda$. With about 2400 unlabelled traces from one night the encoder learns
+little that the hand-made features (white noise, edge and start features) do not already carry. It may help with more
+and more varied unlabelled traces (v2, a second CCD).
 
 \subsection{Learning curve}
 Trained on random subsets of A+B (without ch2 and the fingerprints) and scored on session C, $\sigma_e$ (physics)
@@ -352,6 +385,73 @@ joint Sobol design over 12 knob groups, nominal every 7, 3 replicates; 15 held o
   score session E once.
 \item Later: train on one CCD and test on another; a $\lambda$ formula (dark current $\times$ wait time + CIC); level 2,
   safe Bayesian optimisation of the settings.
+\end{enumerate}
+
+% ======================================================================================================
+\section{Assessment of the first results}
+
+\subsection{What works}
+\begin{itemize}
+\item \textbf{The pipeline.} Packets are taken from a verified nominal state, damaged traces are caught, every packet
+  becomes four labelled rows with one command, and models are chosen and tested on whole held-out packets with a frozen
+  choice and a prospective test. Two real errors were found this way (the drift correction, a feature set picked after
+  looking at the test) and corrected.
+\item \textbf{$\sigma_e$ from the trace.} The physics-structured model reads $\sigma_e$ off the trace's white noise
+  ($\sigma_1/\sqrt N$) with a learned gain and a small correction: 6--7\,\% on session C, about 14\,\% on an amplifier it
+  never saw, unchanged without the settings, the fingerprints or ch2. This is the result that carries over.
+\item \textbf{Changes in $\lambda$.} The trace predicts how $\lambda$ moves with the settings and the CCD's state:
+  better than the no-trace references on session C even without the fingerprints, and better than the average on a new
+  amplifier once its level is anchored.
+\end{itemize}
+
+\subsection{What does not work yet}
+\begin{itemize}
+\item \textbf{Gain and $\lambda$ levels on a new amplifier.} No model predicts them better than the average. On board
+  101 their excellent numbers came mostly from recognising the amplifier through the reference trace.
+\item \textbf{$\sigma_e$ under timing changes.} Session A (timing) carries 76\,\% of the $\sigma_e$ error: the trace
+  (10 pixels after a short burst) does not see what the image's pixels go through after a long prescan and a clear.
+\item \textbf{Model choice on one-knob data.} Cross-validation on packets that change one knob at a time picked flexible
+  models that failed on joint changes (gp\_dim for $\sigma_e$).
+\item \textbf{Data quality limits.} 101 ch2 (EXT3) and board 102 have unreliable labels; $\lambda$ drifts about 20\,\%
+  over a night; three session-C packets lost all their traces.
+\end{itemize}
+
+\subsection{Why: information, not models}
+All 17 models, from linear to networks and a CNN inside the physics model, fail on new amplifiers in the same way, so
+the limit is the information in the inputs, not the choice of model:
+\begin{itemize}
+\item \textbf{The gain is not in the trace.} The trace is in ADU and holds no known charge; $\sigma_1^{\rm ADU}=\sigma_e
+  g$ cannot be split into noise and gain without whole electrons (an image's or a strip's peak spacing).
+\item \textbf{Levels need many amplifiers.} With four amplifiers (three in training) no rule from trace features to
+  an amplifier's $\lambda$ or gain level can be learned; it would need dozens, and only if such a rule exists.
+\item \textbf{The reference trace is a fingerprint}, taken at nominal settings; it identifies the amplifier rather than
+  measuring its state.
+\item \textbf{The data are small and from one CCD.} 32 training packets (the learning curve still falls), one night,
+  one module with three good amplifiers.
+\end{itemize}
+
+\subsection{Prognosis}
+\begin{center}\small
+\begin{tabular}{p{2cm}p{6.2cm}p{6.6cm}}\toprule
+target & now & outlook\\\midrule
+$\sigma_e$ & predicted from the trace; transfers to new amplifiers (14\,\%) & good: more joint-design packets and level-1 strips for the timing gap\\
+gain & needs one measurement per amplifier; then $\sim$1\,\% & good with a strip per amplifier (stable to 0.6\,\% over a night); not from traces alone\\
+$\lambda$ & changes predicted; level needs anchoring; drifts & fair: strips measure the CIC part directly; the dark-current part and the drift need periodic anchoring\\
+other CCDs & untested (board 102 too weak) & unknown until a second working CCD with varied settings is measured\\\bottomrule
+\end{tabular}
+\end{center}
+The original aim, scanning settings with traces instead of images, survives in a modified form: a trace at every setting,
+plus a one-time (occasionally repeated) calibration per amplifier from one image or level-1 strip.
+
+\subsection{Decisions for v2}
+\begin{enumerate}
+\item Train traces-only (no settings as input) and without the amplifier-fingerprint features; leave out 101 ch2.
+\item Make the physics-structured model the default for $\sigma_e$ and $\lambda$; score every model on ``new amplifier
+  after one calibration'' as well as on held-out packets.
+\item Take level-1 strips in every packet and compare traces, strips and both on the same rows.
+\item Use the joint design for training and testing; change settings on every working board; get a second working CCD.
+\item Level 1 passes if, on the held-out v2 session, the trace (with a per-amplifier calibration) predicts $\sigma_e$
+  and $\lambda$ significantly better than the no-trace references, within about twice the label scatter.
 \end{enumerate}
 
 \end{document}
