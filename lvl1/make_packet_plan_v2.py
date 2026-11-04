@@ -18,11 +18,12 @@ Added 2026-11-04 (after the four-way scorecard, lvl1/scorecard.py):
   the clear sigma_e changes go up (nominal is near the best setting), so a change model can score by saying "up";
   incumbent -> candidate references make the changes go both ways, as in level 2;
 * the new trace sets are split: N_SETS before the strip and the image, N_POST_SETS after it (traces bracket the image);
-* session F (optional, --screens): the funnel test.  SCREENS trace-only packets at new Sobol points (no strip, no
-  image, ~2 min each), then SHORTLIST packets whose settings the model trained on D+E picks from the screens (their
-  changes files are written by the shortlist step: run_plan.sh stops at the first one until they exist) and as many
-  CONTROL packets at screen settings drawn at random now; the images of the shortlist against the controls test the
-  screening step of level 2.
+* session F (part of the plan, --screens): the funnel test.  SCREENS trace-only packets at new Sobol points (no strip,
+  no image, ~2-3 min each), then SHORTLIST packets whose settings lvl1/funnel_shortlist.py picks from the screens with
+  the models trained on D+E (run_plan.sh stops at the first one until their changes files exist), and as many CONTROL
+  packets at screen settings drawn at random now; the images of the shortlist against the controls test the screening
+  step of level 2.  The shortlist slots are shared in turn by the funnel weights (--funnel-weights, the sigma_e weight
+  w of J = w dlog sigma_e + (1-w) dlog lambda; default 1, 0.5, 0), so the images also test the weighting.
 
 Rules (as v1): every configuration passes ccd_limits (windows, the ACM manual's hardware ranges, the group's voltage
 rules; points that fail are redrawn); every voltage within ONE max_step of nominal (manual_packet.sh applies a change
@@ -97,6 +98,8 @@ def main():
     parser.add_argument("--n-new", type=int, default=3, help="trace sets at the new settings before the image (N_SETS)")
     parser.add_argument("--n-post", type=int, default=2, help="trace sets at the new settings after the image (N_POST_SETS)")
     parser.add_argument("--screens", type=int, default=48, help="trace-only funnel screens of session F (0: no session F)")
+    parser.add_argument("--funnel-weights", type=float, nargs="+", default=[1.0, 0.5, 0.0],
+                        help="sigma_e weights of the funnel objective, sharing the shortlist slots in turn")
     parser.add_argument("--screen-ref", type=int, default=1, help="reference trace sets of a screen packet")
     parser.add_argument("--screen-new", type=int, default=2, help="new trace sets of a screen packet")
     parser.add_argument("--image-rows", type=int, default=32, help="rows of the image (32: configs/image_params_32rows.toml)")
@@ -222,7 +225,7 @@ def main():
            + (": the voltage changes use its PLACEHOLDER windows and are provisional." if not limits.reviewed else "."), "",
            "| session | packets | of which nominal | estimated time | use |", "|---|---|---|---|---|"]
     use = {"D": "training and model choice (setting-grouped CV)", "E": "prospective test: scored once, after the choice is frozen",
-           "F": f"funnel test: {args.screens} trace-only screens, {SHORTLIST} shortlisted + {SHORTLIST} random-control images (optional)"}
+           "F": f"funnel test: {args.screens} trace-only screens, {SHORTLIST} shortlisted + {SHORTLIST} random-control images"}
     for s, ps in sessions.items():
         doc.append(f"| {s} | {len(ps)} | {sum(not p['changes'] and 'shortlist' not in p for p in ps)} | {sum(p['minutes'] for p in ps) / 60:.1f} h | {use[s]} |")
     doc += [f"| all | {len(planned)} | | {sum(p['minutes'] for p in planned) / 60:.1f} h | |", "",
@@ -239,8 +242,10 @@ def main():
             "packets of session D take their reference at the previous packet's settings (`<id>_ref.txt`), so "
             "within-packet changes go up and down (with a nominal reference 96 % of the clear sigma_e changes go up).",
             f"* **Traces bracket the image**: {args.n_new} new sets before the strip and image, {args.n_post} after.",
-            "* **Session F, the funnel test** (optional): trace-only screens at new Sobol points; the model trained on "
-            "D+E shortlists the best from their traces; the shortlist is imaged next to random controls drawn now.",
+            "* **Session F, the funnel test**: trace-only screens at new Sobol points; the models trained on D+E "
+            "shortlist the best from their traces (`lvl1/funnel_shortlist.py`, weights "
+            + ", ".join(f"{w:g}:{1 - w:g}" for w in args.funnel_weights) + " of sigma_e:lambda taking the slots in turn); "
+            "the shortlist is imaged next to random controls drawn now.",
             f"* Points that break a rule are redrawn (D: {rej_train} rejected, E: {rej_test}).", "",
             "## The box", "", "| knob | range | pins |", "|---|---|---|"]
     for g, (lo, hi) in BOX.items():
@@ -275,6 +280,14 @@ def main():
             ch = "(picked by the shortlist step)"
         purpose = p["purpose"] + ("; reference at the previous packet's settings" if p.get("reference_changes") else "")
         doc.append(f"| {p['packet_id']} | {p['session']} | {purpose} | {ch} | {p['minutes']:.0f} |")
+    if args.screens:
+        first_f = next(p["packet_id"] for p in planned if p["session"] == "F")
+        doc += ["", "## Session F: the shortlist step", "",
+                f"run_plan.sh stops at the first SHORTLIST packet (no changes file yet). Process the screens and D+E, then",
+                "", "```bash",
+                "python lvl1/funnel_shortlist.py --dataset <processed_v2>/dataset.csv --screens-dir <processed_v2> "
+                "--plan lvl1/packet_plan_v2/plan.json   # weights from plan.json; --weight w ... to override",
+                f"FROM={first_f} bash daq_scripts/run_plan.sh                           # finished packets are skipped", "```"]
     doc += ["", "## After the packets", "", "```bash",
             "python src/make_manual_manifest.py ~/packet_records/L2_*.json --run-dir <raw-file directory> --out manifests",
             "cd src && python process_packet.py ../manifests/L2_*.json && cd ..",
@@ -284,6 +297,8 @@ def main():
                                                "run": {"N_REF_SETS": args.n_ref, "N_SETS": args.n_new,
                                                        "N_POST_SETS": args.n_post, "SCREEN_REF_SETS": args.screen_ref,
                                                        "SCREEN_SETS": args.screen_new, "IMAGE_TOML": args.image_toml},
+                                               "funnel": {"weights": args.funnel_weights, "rule": "weighted",
+                                                          "shortlist": SHORTLIST, "screens": args.screens},
                                                "packets": planned}, indent=1, default=str))
     print("\n".join(doc[:28]))
     print(f"... {len(planned)} packets; wrote {out}")

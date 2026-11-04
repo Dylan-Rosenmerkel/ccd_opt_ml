@@ -20,8 +20,9 @@ Models: no change; settings change (GP, trees; + the amplifier's identity in the
 differences: trees, GP; the shared-encoder network of change_models.py; hand-picked difference-curve bands + GP,
 change_handpicked.py); and every absolute model's two predictions differenced (packet pairs only).
 
-Ranking (5): per amplifier, its settings ranked from the traces (score_ranking): is the truly best setting on a
-5- or 10-setting shortlist, and how much worse is the best shortlisted one (regret)?  The screening step of level 2.
+Ranking (5): the settings ranked from the traces under the joint objective w dlog sigma_e + (1-w) dlog lambda for
+every --weights w, with two shortlist rules (lvl1/shortlist.py): is the truly best setting on a 5- or 10-setting
+shortlist, and how much worse is the best shortlisted one (regret)?  The screening step of level 2 (session F).
 
 Training pairs are used in both orders, so no model can learn "a change away from nominal goes up" (96 % of the clear
 within-packet sigma_e changes do: nominal is near the best setting); the report gives that base rate per pair type.
@@ -56,6 +57,7 @@ sys.path.insert(0, str(ROOT / "lvl1"))
 import change_handpicked as hp  # noqa: E402
 import change_models as cm  # noqa: E402
 import change_test as ct  # noqa: E402
+import shortlist as sl  # noqa: E402
 import train_lvl1 as tl  # noqa: E402
 from ml import models, real_inputs  # noqa: E402
 
@@ -351,20 +353,20 @@ def score_relative(P, d, preds, n_boot):
 
 
 # --------------------------------------------------------------------------- ranking
-#: what "best" means: lowest sigma_e, lowest lambda, or the lowest sum of the two (log units, equal weight)
-OBJECTIVES = {"sigma_e": np.array([1.0, 0, 0]), "lambda": np.array([0, 1.0, 0]), "sigma_e + lambda": np.array([1.0, 1, 0])}
 RANK_K = (5, 10)
 
 
-def rank_metrics(true, pred, rng, n_draws=1):
-    """Shortlist the k settings predicted best (lowest); ties are broken at random (averaged over n_draws).  hits: how
-    many of the k truly best are on the shortlist; regret: how much worse (%) the best shortlisted setting truly is than
-    the best of all; caught: the single best setting is on the shortlist."""
+def rank_metrics(true, pred_s, pred_l, w, rule, rng, n_draws=1):
+    """Shortlist the k settings predicted best under J(w) with a shortlist rule (lvl1/shortlist.py); ties broken at
+    random (averaged over n_draws).  The truth is J(w) of the measured changes.  hits: how many of the k truly best are
+    on the shortlist; regret: how much worse (%, J in log units x 100) the best shortlisted setting truly is than the
+    best of all; caught: the single best setting is on the shortlist."""
+    pred = sl.objective(pred_s, pred_l, w)
     out = {"spearman": float(spearmanr(true, pred)[0]) if np.std(pred) > 0 else 0.0}
     for k in RANK_K:
         h, r, c = [], [], []
         for _ in range(n_draws):
-            top = np.lexsort((rng.random(len(pred)), pred))[:k]
+            top = sl.order(pred_s, pred_l, w, rule, rng)[:k]
             h.append(len(np.intersect1d(top, np.argsort(true)[:k])))
             r.append(100 * (true[top].min() - true.min()))
             c.append(float(np.argmin(true) in top))
@@ -372,60 +374,83 @@ def rank_metrics(true, pred, rng, n_draws=1):
     return out
 
 
-def score_ranking(P, d, rel_preds, abs_preds):
-    """Rank each amplifier's settings (the non-nominal packets) from the traces and check the shortlist.  The truth is
-    the setting's effect: log y(packet) - log y(nominal, interpolated in time), i.e. the within-packet change, so the
-    night's drift does not decide the ranking.  Relative models rank by their predicted within-packet change; absolute
-    models by their predicted value; "random" is the average of 2000 random orders."""
+def score_ranking(P, d, rel_preds, abs_preds, weights):
+    """Rank the settings (the non-nominal packets) from the traces and check the shortlist, for every sigma_e weight w
+    and both shortlist rules.  The truth is each setting's effect: log y(packet) - log y(nominal, interpolated in
+    time), i.e. the within-packet change, so the night's drift does not decide the ranking.  Relative models rank by
+    their predicted within-packet change, absolute models by their predicted value; "random" averages 2000 random
+    orders.  Two levels: "board" -- a setting applies to every amplifier of the board, so its objective is the mean
+    over the amplifiers (predicted and true; the funnel's choice); "amplifier" -- each amplifier ranked on its own,
+    then averaged."""
     sel = np.flatnonzero(P["type"] == 0)
     amp = d.channel.to_numpy()[P["ra"][sel]]
+    pk = d.packet_id.to_numpy()[P["ra"][sel]]
+    amps = np.unique(amp)
+    common = sorted(set.intersection(*[set(pk[amp == a]) for a in amps]))
     rng = np.random.default_rng(0)
+    Ytrue = P["Y"][sel]
     out = {}
     for cell in CELLS:
         sources = {"random": None}
         sources.update({name: p[sel] for name, p in rel_preds[cell].items() if not name.startswith("absolute")})
         sources.update({f"absolute {name}": p[P["rb"][sel]] for name, p in abs_preds[cell].items() if name not in NOT_DIFFERENCED})
-        # hybrid: each target from the model that ranks it best on the first night -- sigma_e (and gain) from the
-        # absolute trace trees, lambda from the trace-change trees (the absolute level is a per-amplifier constant,
-        # which does not change a ranking within one amplifier)
+        # hybrid: sigma_e from the absolute trace trees, lambda from the trace-change trees (the absolute level is a
+        # per-amplifier constant, which does not change a ranking within one amplifier)
         hyb = sources["absolute trace: trees"].copy()
         hyb[:, 1] = sources["trace change: trees"][:, 1]
         sources["hybrid: sigma_e absolute trees, lambda change trees"] = hyb
         out[cell] = {}
         for name, p in sources.items():
             out[cell][name] = {}
-            for obj, w in OBJECTIVES.items():
-                per_amp = {}
-                for a in np.unique(amp):
-                    m = amp == a
-                    true = P["Y"][sel][m] @ w
+            for w in weights:
+                for rule in sl.RULES:
+                    key = f"{sl.weight_label(w)} {rule}"
+                    groups = {"board": [np.array([np.flatnonzero((pk == q) & (amp == a))[0] for q in common]) for a in amps]}
+                    res = {}
+                    # board: mean over the amplifiers of each setting's changes
+                    idx = groups["board"]
+                    true = np.mean([sl.objective(Ytrue[i, 0], Ytrue[i, 1], w) for i in idx], 0)
                     if p is None:
-                        per_amp[str(a)] = rank_metrics(true, np.zeros(m.sum()), rng, n_draws=2000)
+                        z = np.zeros(len(common))
+                        res["board"] = rank_metrics(true, z, z, w, rule, rng, n_draws=2000)
                     else:
-                        per_amp[str(a)] = rank_metrics(true, p[m] @ w, rng, n_draws=50)
-                mean = {k: float(np.mean([v[k] for v in per_amp.values()])) for k in next(iter(per_amp.values()))}
-                out[cell][name][obj] = {"mean over amplifiers": mean, "per amplifier": per_amp,
-                                        "n_settings": int(np.sum(amp == amp[0]))}
+                        ps, pl = np.mean([p[i, 0] for i in idx], 0), np.mean([p[i, 1] for i in idx], 0)
+                        res["board"] = rank_metrics(true, ps, pl, w, rule, rng, n_draws=50)
+                    per_amp = {}
+                    for a in amps:
+                        m = np.flatnonzero(amp == a)
+                        t = sl.objective(Ytrue[m, 0], Ytrue[m, 1], w)
+                        if p is None:
+                            z = np.zeros(len(m))
+                            per_amp[str(a)] = rank_metrics(t, z, z, w, rule, rng, n_draws=2000)
+                        else:
+                            per_amp[str(a)] = rank_metrics(t, p[m, 0], p[m, 1], w, rule, rng, n_draws=50)
+                    res["amplifier"] = {k: float(np.mean([v[k] for v in per_amp.values()])) for k in next(iter(per_amp.values()))}
+                    res["per amplifier"] = per_amp
+                    res["n_settings"] = len(common)
+                    out[cell][name][key] = res
     return out
 
 
-def ranking_report(rank_sc) -> list[str]:
-    L = ["## (5) Ranking: shortlist each amplifier's settings from the traces", "",
-         "Per amplifier, its non-nominal settings (one per packet) are ranked by the prediction; the truth is the setting's "
-         "effect relative to nominal (drift removed). Mean over the 3 amplifiers. Spearman: rank agreement. Top 5: how many "
-         "of the 5 truly best are on the 5-setting shortlist, and how much worse (%) the best shortlisted setting is than "
-         "the true best (regret). Top 10: is the single best on the 10-setting shortlist (fraction of amplifiers).", ""]
+def ranking_report(rank_sc, weights) -> list[str]:
+    L = ["## (5) Ranking: shortlist the settings from the traces, joint objective J(w) = w dlog sigma_e + (1-w) dlog lambda",
+         "",
+         "Each setting (non-nominal packet) applies to the whole board, so its objective is the mean over the 3 amplifiers "
+         "(predicted and true; truth = the setting's effect relative to nominal, drift removed). Weight w:(1-w) of "
+         "sigma_e:lambda. Shortlist rules (lvl1/shortlist.py): weighted = by J(w); pareto = the predicted Pareto front "
+         "first. Cells: top-5 regret (%) = how much worse the best of the 5 shortlisted settings truly is than the truly "
+         "best setting / whether the truly best is on the 10-setting shortlist (1 = yes). The 3 amplifiers share their "
+         "settings, so each column is ONE trial: read the pattern, not single numbers.", ""]
+    keys = [f"{sl.weight_label(w)} {rule}" for rule in sl.RULES for w in weights]
     for cell in CELLS:
-        for obj in OBJECTIVES:
-            n = next(iter(rank_sc[cell].values()))[obj]["n_settings"]
-            L += [f"### {CELL_NAME[cell]}, best = lowest {obj} ({n} settings per amplifier)", "",
-                  "| model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |",
-                  "|---|---|---|---|---|---|"]
-            for name, r in rank_sc[cell].items():
-                m = r[obj]["mean over amplifiers"]
-                L.append(f"| {name} | {m['spearman']:.2f} | {m['hits@5']:.1f} of 5 | {m['regret@5']:.1f} | "
-                         f"{m['regret@10']:.1f} | {m['caught@10']:.2f} |")
-            L.append("")
+        n = next(iter(rank_sc[cell].values()))[keys[0]]["n_settings"]
+        L += [f"### {CELL_NAME[cell]} ({n} settings)", "",
+              "| model | " + " | ".join(f"{k}" for k in keys) + " |", "|---|" + "---|" * len(keys)]
+        for name, r in rank_sc[cell].items():
+            L.append(f"| {name} | " + " | ".join(f"{r[k]['board']['regret@5']:.1f} / {r[k]['board']['caught@10']:.0f}"
+                                                 if name != "random" else
+                                                 f"{r[k]['board']['regret@5']:.1f} / {r[k]['board']['caught@10']:.2f}" for k in keys) + " |")
+        L.append("")
     return L
 
 
@@ -532,6 +557,8 @@ def main():
     parser.add_argument("--n-boot", type=int, default=1000)
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--rescore", action="store_true", help="score the predictions saved in --out (no training)")
+    parser.add_argument("--weights", type=float, nargs="+", default=list(sl.DEFAULT_WEIGHTS),
+                        help="sigma_e weights w of the ranking objective w dlog sigma_e + (1-w) dlog lambda (default 1 .75 .5 .25 0)")
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -547,14 +574,14 @@ def main():
         cache.write_bytes(pickle.dumps((Y, Y_err, abs_preds, P, rel_preds)))
     abs_sc = score_absolute(Y, abs_preds, d.packet_id.to_numpy(), args.n_boot)
     rel_sc = score_relative(P, d, rel_preds, args.n_boot)
-    rank_sc = score_ranking(P, d, rel_preds, abs_preds)
+    rank_sc = score_ranking(P, d, rel_preds, abs_preds, args.weights)
     info = {"n_rows": len(d), "n_packets": int(d.packet_id.nunique()),
             "blocks": d.groupby("block").packet_id.unique().apply(lambda v: [str(v.min()), str(v.max())]).to_dict(),
             "label_noise_abs": {t: float(100 * np.sqrt(np.mean(Y_err[:, i] ** 2))) for i, t in enumerate(T)},
             "n_pairs": {t: int((P["type"] == k).sum()) for k, t in enumerate(PAIR_TYPES)}, "ref": REF}
     (out / "scorecard.json").write_text(json.dumps({"info": info, "absolute": abs_sc, "relative": rel_sc, "ranking": rank_sc},
                                                        indent=1, default=float))
-    (out / "scorecard.md").write_text(report(abs_sc, rel_sc, info) + "\n" + "\n".join(ranking_report(rank_sc)))
+    (out / "scorecard.md").write_text(report(abs_sc, rel_sc, info) + "\n" + "\n".join(ranking_report(rank_sc, args.weights)))
     plot(abs_sc, rel_sc, info, out)
     cols = {"packet_id": d.packet_id, "channel": d.channel, "block": d.block}
     for cell in CELLS:

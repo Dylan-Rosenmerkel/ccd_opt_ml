@@ -515,3 +515,21 @@ then see what both of them can predict together; model the new packet designs af
   dlog sigma_e + dlog lambda; gain enters via sigma_e in electrons), outcomes, risks, commands.
 * scorecard ranking: hybrid (sigma_e from absolute trace trees, lambda from change trees) did not beat absolute trace
   trees on sigma_e + lambda; the 3 amplifiers share packets, so ranking results are ~1 trial.
+
+## 28. Weighted joint objective; session F part of the plan (2026-11-04)
+
+* `lvl1/shortlist.py`: J(w) = w dlog sigma_e + (1-w) dlog lambda (w = sigma_e weight, 0..1); rules "weighted" and
+  "pareto" (predicted Pareto front first). `lvl1/scorecard.py --weights ...` (default 1 .75 .5 .25 0): ranking now per
+  weight and rule, settings scored as the mean over the 3 amplifiers (a setting applies to the board).
+  First night (regret of the best of 5 shortlisted, %): random 2.9 / 3.1 / 6.3 / 8.0 / 21 for w = 1 .. 0; trace change
+  trees (new amp) 2.8 / 3.2 / 6.1 / 6.5 / 0.0; absolute trace trees 2.9 / 0 / 0 / 1.2 / 16. sigma_e-only shortlisting
+  gains little (good settings within ~3 %); lambda-heavy gains most. Pareto-first loses at the extremes -> default
+  weighted. Each column ~ one trial.
+* `lvl1/funnel_shortlist.py`: trains change trees (within-packet + n+1/n+2 pairs, both orders; reference label =
+  interpolated nominal or the packet at the reference settings) and absolute trees (f(new) - f(ref)); reads screens'
+  features.json; board mean over amplifiers; `--weight w ...` share the shortlist slots in turn; skips screens that are
+  random controls; writes SHORTLIST changes files + shortlist.json; `--evaluate` on labelled screens (first-night last
+  block: best caught for w = 1, .5, 0, but 5 of 7 shortlisted: a code check only).
+* Session F is now part of the plan (plan.json "funnel": weights [1, 0.5, 0], rule weighted); PLAN.md has the shortlist
+  step; run_plan.sh's stop message names it. Plan document (15 pages): section 9 objective J(w), weight table, scores
+  per weight.

@@ -167,156 +167,56 @@ clear changes: sigma_e 51 of 90, lambda 53 of 90, gain 28 of 90; true change RMS
 | absolute trace: pretrained cnn, differenced | 86 % (same) | 12.5 (same) | 75 % (same) | 36.9 (same) | 75 % (same) | 1.4 (same) |
 | absolute trace: deep kernel, differenced | 69 % (same) | 17.2 (same) | 74 % (same) | 43.6 (same) | 70 % (same) | 1.2 (same) |
 
-## (5) Ranking: shortlist each amplifier's settings from the traces
+## (5) Ranking: shortlist the settings from the traces, joint objective J(w) = w dlog sigma_e + (1-w) dlog lambda
 
-Per amplifier, its non-nominal settings (one per packet) are ranked by the prediction; the truth is the setting's effect relative to nominal (drift removed). Mean over the 3 amplifiers. Spearman: rank agreement. Top 5: how many of the 5 truly best are on the 5-setting shortlist, and how much worse (%) the best shortlisted setting is than the true best (regret). Top 10: is the single best on the 10-setting shortlist (fraction of amplifiers).
+Each setting (non-nominal packet) applies to the whole board, so its objective is the mean over the 3 amplifiers (predicted and true; truth = the setting's effect relative to nominal, drift removed). Weight w:(1-w) of sigma_e:lambda. Shortlist rules (lvl1/shortlist.py): weighted = by J(w); pareto = the predicted Pareto front first. Cells: top-5 regret (%) = how much worse the best of the 5 shortlisted settings truly is than the truly best setting / whether the truly best is on the 10-setting shortlist (1 = yes). The 3 amplifiers share their settings, so each column is ONE trial: read the pattern, not single numbers.
 
-### trained amplifiers, best = lowest sigma_e (35 settings per amplifier)
+### trained amplifiers (35 settings)
 
-| model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
-|---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 4.0 | 2.8 | 0.29 |
-| no change | 0.00 | 0.6 of 5 | 4.1 | 2.8 | 0.31 |
-| settings change: gp | 0.06 | 0.0 of 5 | 14.5 | 2.4 | 0.33 |
-| settings change: trees | 0.04 | 0.7 of 5 | 1.6 | 1.6 | 0.33 |
-| settings + amplifier: gp | 0.07 | 0.0 of 5 | 14.5 | 2.4 | 0.33 |
-| settings + amplifier: trees | 0.04 | 0.7 of 5 | 1.6 | 1.6 | 0.33 |
-| trace change: trees | 0.36 | 1.0 of 5 | 2.7 | 2.0 | 0.67 |
-| trace change: gp | 0.16 | 0.0 of 5 | 6.7 | 2.8 | 0.33 |
-| trace change: shared-encoder net | 0.22 | 0.3 of 5 | 4.8 | 3.8 | 0.00 |
-| trace change: hand-picked bands + gp | 0.25 | 1.0 of 5 | 2.6 | 0.0 | 0.67 |
-| absolute settings: gp | 0.47 | 1.0 of 5 | 2.3 | 1.7 | 0.67 |
-| absolute settings: trees | 0.24 | 0.0 of 5 | 5.1 | 3.6 | 0.33 |
-| absolute settings + amplifier: gp | 0.37 | 1.0 of 5 | 3.4 | 2.5 | 0.33 |
-| absolute settings + amplifier: trees | 0.22 | 0.2 of 5 | 4.7 | 1.7 | 0.67 |
-| absolute trace: physics | 0.45 | 0.7 of 5 | 2.8 | 0.0 | 1.00 |
-| absolute trace: gp | 0.31 | 1.3 of 5 | 3.8 | 3.4 | 0.00 |
-| absolute trace: trees | 0.66 | 1.7 of 5 | 2.1 | 2.1 | 0.67 |
-| absolute trace: nn | 0.66 | 1.0 of 5 | 4.2 | 3.7 | 0.33 |
-| absolute trace: cnn | 0.61 | 0.7 of 5 | 2.3 | 2.1 | 0.33 |
-| absolute trace: pretrained cnn | 0.65 | 1.3 of 5 | 2.1 | 1.7 | 0.67 |
-| absolute trace: deep kernel | 0.64 | 1.3 of 5 | 4.1 | 2.4 | 0.33 |
-| hybrid: sigma_e absolute trees, lambda change trees | 0.66 | 1.7 of 5 | 2.1 | 2.1 | 0.67 |
+| model | 1:0 weighted | 0.75:0.25 weighted | 0.5:0.5 weighted | 0.25:0.75 weighted | 0:1 weighted | 1:0 pareto | 0.75:0.25 pareto | 0.5:0.5 pareto | 0.25:0.75 pareto | 0:1 pareto |
+|---|---|---|---|---|---|---|---|---|---|---|
+| random | 2.9 / 0.29 | 3.1 / 0.29 | 6.3 / 0.28 | 8.0 / 0.28 | 21.2 / 0.26 | 2.9 / 0.27 | 3.1 / 0.28 | 6.4 / 0.29 | 7.8 / 0.27 | 20.5 / 0.31 |
+| no change | 3.3 / 0 | 3.5 / 0 | 6.6 / 0 | 8.0 / 0 | 18.5 / 0 | 3.5 / 0 | 2.6 / 0 | 6.4 / 0 | 7.8 / 0 | 20.3 / 0 |
+| settings change: gp | 14.5 / 0 | 2.7 / 0 | 7.1 / 0 | 6.5 / 1 | 0.0 / 1 | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 6.5 / 1 | 18.2 / 1 |
+| settings change: trees | 0.0 / 1 | 2.7 / 0 | 7.1 / 1 | 6.5 / 0 | 18.2 / 1 | 9.7 / 1 | 2.7 / 0 | 7.1 / 0 | 6.5 / 0 | 18.2 / 0 |
+| settings + amplifier: gp | 14.5 / 0 | 2.7 / 0 | 7.1 / 0 | 6.5 / 1 | 0.0 / 1 | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 12.7 / 1 | 32.1 / 1 |
+| settings + amplifier: trees | 0.0 / 1 | 2.7 / 0 | 7.1 / 1 | 6.5 / 0 | 18.2 / 1 | 9.7 / 1 | 2.7 / 0 | 7.1 / 1 | 6.5 / 0 | 18.2 / 0 |
+| trace change: trees | 2.8 / 0 | 2.7 / 0 | 7.1 / 0 | 6.5 / 1 | 0.0 / 1 | 2.8 / 0 | 2.7 / 0 | 7.1 / 0 | 6.5 / 0 | 18.0 / 1 |
+| trace change: gp | 6.7 / 0 | 2.7 / 0 | 7.1 / 0 | 11.2 / 0 | 18.0 / 0 | 3.6 / 0 | 2.7 / 0 | 7.1 / 0 | 10.7 / 0 | 28.7 / 0 |
+| trace change: shared-encoder net | 3.5 / 0 | 2.7 / 0 | 7.1 / 0 | 6.5 / 0 | 18.2 / 0 | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 6.5 / 0 | 18.2 / 0 |
+| trace change: hand-picked bands + gp | 0.0 / 1 | 11.7 / 0 | 21.4 / 0 | 32.3 / 0 | 28.3 / 1 | 2.7 / 1 | 2.3 / 0 | 6.5 / 0 | 12.0 / 0 | 28.3 / 1 |
+| absolute settings: gp | 2.8 / 0 | 0.0 / 1 | 0.0 / 1 | 1.2 / 0 | 18.0 / 0 | 2.8 / 0 | 3.2 / 1 | 7.1 / 1 | 11.2 / 0 | 18.0 / 0 |
+| absolute settings: trees | 3.5 / 0 | 3.2 / 1 | 2.8 / 1 | 11.2 / 0 | 18.0 / 0 | 3.5 / 0 | 3.5 / 0 | 18.2 / 0 | 11.2 / 0 | 18.0 / 0 |
+| absolute settings + amplifier: gp | 2.8 / 0 | 2.3 / 1 | 6.5 / 1 | 6.5 / 0 | 18.0 / 0 | 2.8 / 0 | 2.3 / 1 | 6.5 / 1 | 6.5 / 0 | 18.0 / 0 |
+| absolute settings + amplifier: trees | 3.5 / 0 | 3.3 / 0 | 4.8 / 1 | 11.2 / 0 | 18.0 / 0 | 3.5 / 0 | 3.5 / 0 | 18.2 / 1 | 11.2 / 0 | 18.0 / 0 |
+| absolute trace: physics | 2.8 / 0 | 3.5 / 1 | 6.1 / 0 | 10.3 / 0 | 0.0 / 1 | 3.5 / 0 | 3.5 / 0 | 8.1 / 0 | 11.2 / 0 | 18.0 / 1 |
+| absolute trace: gp | 2.7 / 0 | 2.7 / 0 | 6.5 / 0 | 6.5 / 0 | 18.0 / 0 | 3.6 / 0 | 3.3 / 0 | 6.5 / 0 | 6.5 / 0 | 18.2 / 0 |
+| absolute trace: trees | 2.4 / 0 | 2.6 / 1 | 7.1 / 1 | 12.7 / 0 | 18.0 / 0 | 2.4 / 0 | 2.6 / 1 | 6.5 / 1 | 10.7 / 0 | 18.0 / 0 |
+| absolute trace: nn | 2.9 / 0 | 2.7 / 0 | 6.1 / 0 | 10.3 / 0 | 18.0 / 0 | 2.9 / 0 | 2.7 / 0 | 6.1 / 0 | 11.2 / 0 | 25.3 / 0 |
+| absolute trace: cnn | 2.9 / 0 | 2.7 / 0 | 6.1 / 0 | 10.3 / 0 | 25.3 / 1 | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 12.7 / 0 | 25.3 / 1 |
+| absolute trace: pretrained cnn | 0.0 / 1 | 2.7 / 0 | 6.1 / 0 | 10.3 / 0 | 25.3 / 0 | 2.9 / 1 | 2.7 / 0 | 6.1 / 0 | 10.3 / 0 | 25.3 / 0 |
+| absolute trace: deep kernel | 2.8 / 1 | 2.7 / 0 | 7.1 / 0 | 12.7 / 0 | 30.8 / 1 | 2.8 / 1 | 2.7 / 0 | 7.1 / 0 | 12.7 / 0 | 30.8 / 1 |
+| hybrid: sigma_e absolute trees, lambda change trees | 2.4 / 0 | 2.6 / 0 | 6.5 / 1 | 6.5 / 1 | 0.0 / 1 | 3.5 / 0 | 3.5 / 0 | 6.5 / 0 | 6.5 / 1 | 18.2 / 1 |
 
-### trained amplifiers, best = lowest lambda (35 settings per amplifier)
+### new amplifier (35 settings)
 
-| model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
-|---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 19.7 | 13.1 | 0.29 |
-| no change | 0.00 | 0.7 of 5 | 19.0 | 13.6 | 0.24 |
-| settings change: gp | 0.48 | 2.0 of 5 | 0.0 | 0.0 | 1.00 |
-| settings change: trees | 0.58 | 1.0 of 5 | 18.2 | 0.0 | 1.00 |
-| settings + amplifier: gp | 0.36 | 1.3 of 5 | 0.0 | 0.0 | 1.00 |
-| settings + amplifier: trees | 0.58 | 0.7 of 5 | 19.5 | 0.0 | 1.00 |
-| trace change: trees | 0.69 | 2.3 of 5 | 3.4 | 0.0 | 1.00 |
-| trace change: gp | 0.55 | 2.0 of 5 | 14.9 | 14.9 | 0.00 |
-| trace change: shared-encoder net | 0.50 | 1.0 of 5 | 21.6 | 14.9 | 0.00 |
-| trace change: hand-picked bands + gp | 0.23 | 1.3 of 5 | 7.3 | 0.0 | 1.00 |
-| absolute settings: gp | 0.31 | 2.0 of 5 | 14.9 | 12.4 | 0.00 |
-| absolute settings: trees | 0.37 | 1.0 of 5 | 18.0 | 16.5 | 0.00 |
-| absolute settings + amplifier: gp | 0.31 | 1.3 of 5 | 17.6 | 14.9 | 0.00 |
-| absolute settings + amplifier: trees | 0.43 | 1.3 of 5 | 15.7 | 12.1 | 0.33 |
-| absolute trace: physics | 0.53 | 1.7 of 5 | 8.7 | 0.0 | 1.00 |
-| absolute trace: gp | 0.53 | 2.3 of 5 | 14.9 | 9.0 | 0.33 |
-| absolute trace: trees | 0.54 | 1.0 of 5 | 15.8 | 13.2 | 0.33 |
-| absolute trace: nn | 0.54 | 1.0 of 5 | 12.3 | 9.0 | 0.33 |
-| absolute trace: cnn | 0.50 | 0.7 of 5 | 16.5 | 12.2 | 0.33 |
-| absolute trace: pretrained cnn | 0.49 | 0.0 of 5 | 23.7 | 18.0 | 0.00 |
-| absolute trace: deep kernel | 0.51 | 0.7 of 5 | 14.8 | 5.9 | 0.67 |
-| hybrid: sigma_e absolute trees, lambda change trees | 0.69 | 2.3 of 5 | 3.4 | 0.0 | 1.00 |
-
-### trained amplifiers, best = lowest sigma_e + lambda (35 settings per amplifier)
-
-| model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
-|---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 12.5 | 8.8 | 0.29 |
-| no change | 0.00 | 0.7 of 5 | 13.3 | 8.7 | 0.29 |
-| settings change: gp | 0.32 | 0.7 of 5 | 13.9 | 13.1 | 0.33 |
-| settings change: trees | 0.13 | 0.3 of 5 | 14.3 | 0.3 | 0.67 |
-| settings + amplifier: gp | 0.11 | 0.0 of 5 | 14.5 | 13.1 | 0.00 |
-| settings + amplifier: trees | 0.13 | 0.3 of 5 | 14.3 | 0.7 | 0.67 |
-| trace change: trees | 0.56 | 0.7 of 5 | 13.9 | 7.7 | 0.33 |
-| trace change: gp | 0.40 | 0.0 of 5 | 14.6 | 13.2 | 0.00 |
-| trace change: shared-encoder net | 0.23 | 0.7 of 5 | 12.0 | 12.0 | 0.00 |
-| trace change: hand-picked bands + gp | -0.30 | 0.0 of 5 | 41.1 | 10.3 | 0.33 |
-| absolute settings: gp | 0.30 | 1.3 of 5 | 0.5 | 0.0 | 1.00 |
-| absolute settings: trees | 0.17 | 0.8 of 5 | 9.5 | 0.4 | 0.67 |
-| absolute settings + amplifier: gp | 0.27 | 0.7 of 5 | 13.9 | 7.4 | 0.67 |
-| absolute settings + amplifier: trees | 0.18 | 0.6 of 5 | 10.6 | 0.5 | 0.67 |
-| absolute trace: physics | 0.48 | 0.7 of 5 | 15.0 | 4.2 | 0.33 |
-| absolute trace: gp | 0.47 | 1.3 of 5 | 11.6 | 11.6 | 0.00 |
-| absolute trace: trees | 0.63 | 1.3 of 5 | 4.9 | 0.0 | 1.00 |
-| absolute trace: nn | 0.58 | 0.3 of 5 | 13.8 | 10.3 | 0.33 |
-| absolute trace: cnn | 0.63 | 0.3 of 5 | 13.7 | 4.2 | 0.33 |
-| absolute trace: pretrained cnn | 0.63 | 1.7 of 5 | 10.9 | 10.6 | 0.00 |
-| absolute trace: deep kernel | 0.69 | 0.7 of 5 | 12.9 | 6.4 | 0.67 |
-| hybrid: sigma_e absolute trees, lambda change trees | 0.60 | 1.0 of 5 | 12.5 | 7.0 | 0.33 |
-
-### new amplifier, best = lowest sigma_e (35 settings per amplifier)
-
-| model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
-|---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 4.1 | 2.8 | 0.28 |
-| no change | 0.00 | 0.6 of 5 | 4.0 | 2.8 | 0.30 |
-| settings change: gp | 0.05 | 0.0 of 5 | 8.7 | 2.4 | 0.33 |
-| settings change: trees | -0.01 | 0.7 of 5 | 1.6 | 1.6 | 0.33 |
-| trace change: trees | 0.31 | 0.7 of 5 | 2.9 | 2.0 | 0.67 |
-| trace change: gp | 0.20 | 0.0 of 5 | 5.4 | 2.5 | 0.33 |
-| trace change: shared-encoder net | 0.03 | 0.0 of 5 | 5.3 | 2.4 | 0.33 |
-| trace change: hand-picked bands + gp | 0.32 | 0.7 of 5 | 2.7 | 0.5 | 0.67 |
-| absolute settings: gp | 0.35 | 1.0 of 5 | 2.0 | 2.0 | 0.67 |
-| absolute settings: trees | 0.26 | 0.5 of 5 | 4.1 | 3.6 | 0.33 |
-| absolute trace: physics | 0.10 | 0.0 of 5 | 5.9 | 3.9 | 0.00 |
-| absolute trace: gp | -0.57 | 0.6 of 5 | 4.9 | 2.5 | 0.33 |
-| absolute trace: trees | 0.57 | 0.3 of 5 | 4.1 | 3.8 | 0.33 |
-| absolute trace: nn | 0.46 | 0.3 of 5 | 2.5 | 1.7 | 0.33 |
-| absolute trace: cnn | 0.42 | 1.0 of 5 | 4.2 | 3.8 | 0.00 |
-| absolute trace: pretrained cnn | 0.43 | 1.0 of 5 | 3.3 | 2.8 | 0.33 |
-| absolute trace: deep kernel | 0.08 | 1.3 of 5 | 3.5 | 3.4 | 0.33 |
-| hybrid: sigma_e absolute trees, lambda change trees | 0.57 | 0.3 of 5 | 4.1 | 3.8 | 0.33 |
-
-### new amplifier, best = lowest lambda (35 settings per amplifier)
-
-| model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
-|---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 19.7 | 13.5 | 0.28 |
-| no change | 0.00 | 0.8 of 5 | 19.5 | 13.6 | 0.27 |
-| settings change: gp | 0.42 | 1.7 of 5 | 0.0 | 0.0 | 1.00 |
-| settings change: trees | 0.52 | 0.0 of 5 | 25.3 | 9.3 | 0.33 |
-| trace change: trees | 0.69 | 2.3 of 5 | 9.3 | 0.0 | 1.00 |
-| trace change: gp | 0.30 | 1.7 of 5 | 14.9 | 11.5 | 0.33 |
-| trace change: shared-encoder net | 0.32 | 1.3 of 5 | 11.8 | 9.3 | 0.33 |
-| trace change: hand-picked bands + gp | 0.37 | 0.7 of 5 | 17.8 | 16.3 | 0.33 |
-| absolute settings: gp | 0.24 | 2.0 of 5 | 9.3 | 3.4 | 0.67 |
-| absolute settings: trees | 0.33 | 2.0 of 5 | 7.4 | 4.1 | 0.67 |
-| absolute trace: physics | 0.28 | 1.3 of 5 | 9.3 | 9.3 | 0.33 |
-| absolute trace: gp | -0.08 | 1.0 of 5 | 18.0 | 14.6 | 0.33 |
-| absolute trace: trees | 0.48 | 1.3 of 5 | 15.5 | 6.8 | 0.33 |
-| absolute trace: nn | 0.55 | 1.0 of 5 | 18.0 | 5.9 | 0.67 |
-| absolute trace: cnn | 0.34 | 0.3 of 5 | 22.7 | 12.3 | 0.33 |
-| absolute trace: pretrained cnn | 0.35 | 1.0 of 5 | 18.0 | 18.0 | 0.00 |
-| absolute trace: deep kernel | 0.03 | 1.0 of 5 | 16.0 | 12.1 | 0.33 |
-| hybrid: sigma_e absolute trees, lambda change trees | 0.69 | 2.3 of 5 | 9.3 | 0.0 | 1.00 |
-
-### new amplifier, best = lowest sigma_e + lambda (35 settings per amplifier)
-
-| model | Spearman | top 5: truly best found | top 5: regret (%) | top 10: regret (%) | top 10: best caught |
-|---|---|---|---|---|---|
-| random | 0.00 | 0.7 of 5 | 12.5 | 8.9 | 0.28 |
-| no change | 0.00 | 0.7 of 5 | 12.8 | 8.0 | 0.38 |
-| settings change: gp | 0.20 | 0.7 of 5 | 13.9 | 13.1 | 0.33 |
-| settings change: trees | 0.15 | 0.0 of 5 | 14.7 | 13.9 | 0.00 |
-| trace change: trees | 0.55 | 1.3 of 5 | 10.6 | 6.7 | 0.33 |
-| trace change: gp | 0.28 | 0.3 of 5 | 15.0 | 11.6 | 0.00 |
-| trace change: shared-encoder net | -0.02 | 1.0 of 5 | 18.4 | 15.2 | 0.00 |
-| trace change: hand-picked bands + gp | 0.00 | 0.3 of 5 | 19.4 | 5.9 | 0.33 |
-| absolute settings: gp | 0.24 | 1.3 of 5 | 0.0 | 0.0 | 1.00 |
-| absolute settings: trees | 0.05 | 0.3 of 5 | 16.6 | 2.9 | 0.52 |
-| absolute trace: physics | 0.30 | 0.7 of 5 | 18.2 | 10.6 | 0.00 |
-| absolute trace: gp | -0.42 | 0.0 of 5 | 42.7 | 13.5 | 0.00 |
-| absolute trace: trees | 0.53 | 2.0 of 5 | 0.3 | 0.0 | 1.00 |
-| absolute trace: nn | 0.44 | 0.3 of 5 | 16.0 | 11.6 | 0.00 |
-| absolute trace: cnn | 0.47 | 1.7 of 5 | 5.2 | 4.2 | 0.33 |
-| absolute trace: pretrained cnn | 0.37 | 2.0 of 5 | 10.8 | 10.8 | 0.00 |
-| absolute trace: deep kernel | -0.12 | 1.3 of 5 | 8.0 | 0.4 | 0.67 |
-| hybrid: sigma_e absolute trees, lambda change trees | 0.50 | 1.3 of 5 | 6.7 | 6.7 | 0.33 |
+| model | 1:0 weighted | 0.75:0.25 weighted | 0.5:0.5 weighted | 0.25:0.75 weighted | 0:1 weighted | 1:0 pareto | 0.75:0.25 pareto | 0.5:0.5 pareto | 0.25:0.75 pareto | 0:1 pareto |
+|---|---|---|---|---|---|---|---|---|---|---|
+| random | 3.0 / 0.27 | 3.1 / 0.27 | 6.3 / 0.27 | 7.8 / 0.28 | 20.5 / 0.27 | 2.9 / 0.28 | 3.1 / 0.28 | 6.4 / 0.29 | 7.8 / 0.29 | 20.2 / 0.28 |
+| no change | 2.7 / 0 | 3.6 / 0 | 6.3 / 0 | 7.7 / 0 | 19.4 / 0 | 2.9 / 0 | 3.2 / 0 | 6.1 / 0 | 8.7 / 0 | 18.9 / 0 |
+| settings change: gp | 14.5 / 0 | 2.7 / 0 | 7.1 / 0 | 6.5 / 1 | 0.0 / 1 | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 12.7 / 1 | 32.1 / 1 |
+| settings change: trees | 0.0 / 1 | 2.7 / 0 | 7.1 / 0 | 12.7 / 0 | 25.3 / 0 | 6.7 / 1 | 2.7 / 0 | 7.1 / 0 | 12.7 / 0 | 30.8 / 0 |
+| trace change: trees | 2.8 / 0 | 3.2 / 0 | 6.1 / 0 | 6.5 / 1 | 0.0 / 1 | 2.8 / 0 | 3.2 / 0 | 6.1 / 0 | 6.5 / 1 | 18.0 / 1 |
+| trace change: gp | 3.6 / 0 | 3.3 / 0 | 7.6 / 0 | 6.5 / 0 | 18.4 / 0 | 3.6 / 0 | 3.3 / 0 | 7.6 / 0 | 6.5 / 0 | 18.2 / 0 |
+| trace change: shared-encoder net | 2.8 / 0 | 11.7 / 0 | 13.6 / 0 | 11.2 / 0 | 18.0 / 1 | 9.7 / 0 | 13.1 / 0 | 13.6 / 0 | 11.2 / 0 | 18.0 / 1 |
+| trace change: hand-picked bands + gp | 2.8 / 1 | 3.2 / 1 | 6.5 / 0 | 10.7 / 0 | 18.0 / 1 | 4.0 / 0 | 0.0 / 1 | 6.5 / 1 | 10.7 / 0 | 18.0 / 0 |
+| absolute settings: gp | 2.4 / 1 | 0.0 / 1 | 0.0 / 1 | 11.2 / 0 | 18.0 / 0 | 2.8 / 0 | 3.2 / 1 | 7.1 / 1 | 11.2 / 0 | 18.0 / 0 |
+| absolute settings: trees | 3.0 / 0 | 2.9 / 1 | 8.1 / 1 | 11.2 / 0 | 10.1 / 1 | 3.5 / 0 | 3.5 / 1 | 8.1 / 1 | 11.2 / 0 | 18.0 / 1 |
+| absolute trace: physics | 8.9 / 0 | 0.0 / 1 | 6.1 / 1 | 10.3 / 0 | 18.0 / 0 | 3.5 / 0 | 0.0 / 1 | 0.0 / 1 | 1.2 / 0 | 16.2 / 0 |
+| absolute trace: gp | 2.8 / 0 | 18.8 / 0 | 18.2 / 1 | 11.2 / 0 | 18.0 / 0 | 2.8 / 0 | 18.8 / 0 | 18.2 / 1 | 11.2 / 0 | 18.0 / 0 |
+| absolute trace: trees | 2.9 / 0 | 0.0 / 1 | 0.0 / 1 | 1.2 / 0 | 16.2 / 0 | 4.0 / 0 | 0.0 / 1 | 0.0 / 1 | 1.2 / 0 | 16.2 / 0 |
+| absolute trace: nn | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 11.2 / 0 | 18.0 / 1 | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 12.7 / 0 | 30.8 / 1 |
+| absolute trace: cnn | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 12.7 / 0 | 25.3 / 0 | 2.9 / 0 | 2.7 / 0 | 7.1 / 0 | 12.7 / 0 | 25.3 / 0 |
+| absolute trace: pretrained cnn | 0.0 / 1 | 2.7 / 0 | 6.1 / 0 | 10.3 / 0 | 18.0 / 0 | 0.0 / 1 | 3.2 / 0 | 6.1 / 0 | 10.3 / 0 | 25.3 / 0 |
+| absolute trace: deep kernel | 2.4 / 0 | 2.3 / 0 | 0.0 / 1 | 1.2 / 0 | 16.2 / 0 | 0.0 / 1 | 2.6 / 1 | 0.0 / 1 | 1.2 / 0 | 16.2 / 0 |
+| hybrid: sigma_e absolute trees, lambda change trees | 2.9 / 0 | 2.7 / 1 | 6.1 / 1 | 0.0 / 1 | 0.0 / 1 | 3.5 / 0 | 3.2 / 0 | 6.1 / 0 | 6.5 / 1 | 18.2 / 1 |

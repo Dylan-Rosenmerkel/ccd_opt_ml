@@ -14,7 +14,7 @@ N_REF_SETS=3 N_SETS=3 IMAGE_TOML=image_params/tc1/img32.toml PACKET_ID=L2_NN CHA
 |---|---|---|---|---|
 | D | 61 | 10 | 17.1 h | training and model choice (setting-grouped CV) |
 | E | 15 | 3 | 4.3 h | prospective test: scored once, after the choice is frozen |
-| F | 60 | 2 | 5.4 h | funnel test: 48 trace-only screens, 5 shortlisted + 5 random-control images (optional) |
+| F | 60 | 2 | 5.4 h | funnel test: 48 trace-only screens, 5 shortlisted + 5 random-control images |
 | all | 136 | | 26.8 h | |
 
 ## What changed from v1, and why
@@ -25,7 +25,7 @@ N_REF_SETS=3 N_SETS=3 IMAGE_TOML=image_params/tc1/img32.toml PACKET_ID=L2_NN CHA
 * **Session E** is a separate Sobol sequence: the prospective test, as v1's session C.
 * **Reference not always nominal** (2026-11-04): 21 packets of session D take their reference at the previous packet's settings (`<id>_ref.txt`), so within-packet changes go up and down (with a nominal reference 96 % of the clear sigma_e changes go up).
 * **Traces bracket the image**: 3 new sets before the strip and image, 2 after.
-* **Session F, the funnel test** (optional): trace-only screens at new Sobol points; the model trained on D+E shortlists the best from their traces; the shortlist is imaged next to random controls drawn now.
+* **Session F, the funnel test**: trace-only screens at new Sobol points; the models trained on D+E shortlist the best from their traces (`lvl1/funnel_shortlist.py`, weights 1:0, 0.5:0.5, 0:1 of sigma_e:lambda taking the slots in turn); the shortlist is imaged next to random controls drawn now.
 * Points that break a rule are redrawn (D: 0 rejected, E: 0).
 
 ## The box
@@ -205,6 +205,15 @@ Screen packets (session F, `SCREEN=1`): reset; flush; 1 reference trace set; flu
 | L2_134 | F | funnel SHORTLIST 5 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
 | L2_135 | F | funnel CONTROL: screen 43, drawn at random | delayInt=1240, delay_Ha=2720, delay_Hb=2720, delay_Hc=2720, delayRGH=1250, VDD1=-18.04, VDD2=-18.04, VR1=-2.55, VR2=-2.55, VSUB=48.7, RG_1_H=8.82, RG_2_H=8.82, RG_1_L=3.15, RG_2_L=3.15, SW_1_L=-6.08, SW_2_L=-6.08, H1_A_L=6.73, H1_B_L=6.53, H2_C_L=6.73, H3_A_L=6.73, H3_B_L=6.53, V1_A_L=8.09, V1_B_L=7.89, V2_C_L=8.09, V3_A_L=8.09, V3_B_L=7.89, TG_A_H=7.63, TG_A_L=7.63, TG_B_H=7.63, TG_B_L=7.63 | 19 |
 | L2_136 | F | nominal (end of the session) | – | 16 |
+
+## Session F: the shortlist step
+
+run_plan.sh stops at the first SHORTLIST packet (no changes file yet). Process the screens and D+E, then
+
+```bash
+python lvl1/funnel_shortlist.py --dataset <processed_v2>/dataset.csv --screens-dir <processed_v2> --plan lvl1/packet_plan_v2/plan.json   # weights from plan.json; --weight w ... to override
+FROM=L2_77 bash daq_scripts/run_plan.sh                           # finished packets are skipped
+```
 
 ## After the packets
 

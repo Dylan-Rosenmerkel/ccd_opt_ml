@@ -104,7 +104,8 @@ for id in "${IDS[@]}"; do
       log "retrying $id as $name (the earlier attempt $bad: $(status_of "$bad"))"
     fi
     if [[ ! -s $PLAN_DIR/$id.txt ]]; then
-      log "STOP: $PLAN_DIR/$id.txt is missing or empty (a shortlist packet of session F is filled by the shortlist step)"
+      log "STOP: $PLAN_DIR/$id.txt is missing or empty.  If $id is a session-F SHORTLIST packet: process the screens"
+      log "      and sessions D+E, run lvl1/funnel_shortlist.py --plan $PLAN_DIR/plan.json (see PLAN.md), then rerun."
       exit 1
     fi
     extra=()

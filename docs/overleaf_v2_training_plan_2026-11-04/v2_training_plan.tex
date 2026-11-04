@@ -31,9 +31,9 @@
 \maketitle
 
 \section*{Summary}
-The v2 data are 76 packets (about 21 hours, sessions D and E) on board 101 of PA03, designed from what the first night
-(43 packets, 2026-11-02/03) taught us, plus an optional session F (60 packets, about 5.4 hours) that tests the screening
-step of level 2. Every packet takes a reference level-1 strip and reference traces (at nominal, or in a third of the
+The v2 data are 136 packets on board 101 of PA03 in three sessions, designed from what the first night (43 packets,
+2026-11-02/03) taught us: D (61 packets, 17.1 h) for training, E (15 packets, 4.3 h) for the prospective test, and F
+(60 packets, 5.4 h) for the funnel test, the screening step of level 2. Every packet takes a reference level-1 strip and reference traces (at nominal, or in a third of the
 session-D packets at the previous packet's settings), a change of \emph{all} twelve knob groups at once, settling traces,
 new traces, a new level-1 strip, a 32-row image and more new traces after the image, with flushes around every step and
 automatic retakes of damaged traces. The data will be used for five things:
@@ -111,7 +111,7 @@ order around the change & reference strip, \emph{then} reference traces; new tra
   of a within-packet change are minutes apart, right on either side of the change\\
 traces bracket the image & 3 new sets before the image, 2 after & drift of the trace across the image becomes visible;
   same number of sets as before\\
-session F (optional) & 48 trace-only screens, then 5 shortlisted and 5 random-control images & the funnel (level-2
+session F & 48 trace-only screens, then 5 shortlisted and 5 random-control images & the funnel (level-2
   screening) has to be tested on settings the model has not seen\\\bottomrule
 \end{longtable}
 
@@ -149,7 +149,7 @@ transients, and the next packet's reference already brackets each new setting fr
 A packet takes 10--23 minutes depending on the timing settings (a longer integration window makes every skip slower);
 nominal packets about 16 minutes. The plan (lvl1/packet\_plan\_v2/, made by lvl1/make\_packet\_plan\_v2.py) has
 session D, 61 packets (10 nominal, 17.1 h) for training and model choice, session E, 15 packets (3 nominal, 4.3 h)
-for the prospective test, and the optional session F, 60 packets (5.4 h; section~\ref{sec:funnel}).
+for the prospective test, and session F, 60 packets (5.4 h; section~\ref{sec:funnel}) for the funnel test.
 daq\_scripts/run\_plan.sh takes them in order (passing each packet's reference file and, for screens,
 \texttt{SCREEN=1}), skips finished packets, and stops on an error, a STOP file, or a shortlist packet whose settings are
 not yet written.
@@ -199,8 +199,9 @@ record, readback & settings, times, status & bookkeeping, drift time axis, quali
 \item \textbf{Temperature}: log the CCD temperature per packet if a readout exists; it drives dark current and drift.
 \item \textbf{Bad channels}: decide on board 101 ch2 (EXT3) before training (its per-row fit $\chi^2$ is 22, others
   3--4); the current recommendation is to leave it out of training and report it separately.
-\item \textbf{Session F}: decide whether to take it (another 5.4 h, best on its own night after D and E are processed),
-  and write the shortlist step (lvl1/funnel\_shortlist.py) before it.
+\item \textbf{Session F}: schedule it after D and E are processed (its shortlist step trains on them): on its own
+  night, or at the end of the second night with a pause for the shortlist step. Choose the funnel weights
+  (section~\ref{sec:funnel}; default $w=1,\,0.5,\,0$).
 \end{enumerate}
 
 % =====================================================================================================
@@ -414,26 +415,55 @@ the first step on settings no model has seen.
 \begin{enumerate}
 \item \textbf{Screens}: 48 trace-only packets at new Sobol points of the same box (\texttt{SCREEN=1}: a reset, a flush, one
   reference set at nominal, the change, settling, two new sets, a reset; about 2--3 minutes). No strip, no image.
-\item \textbf{Shortlist step} (lvl1/funnel\_shortlist.py, to be written): process the screens; the models trained on D+E
-  predict, per amplifier, each screen's $\Delta\sigma_e$ and $\Delta\lambda$ against nominal (the same reference for
-  all, so the screens are comparable) and the absolute values; the 5 settings with the best predicted objective are
-  written as the changes files of the five SHORTLIST packets.
+\item \textbf{Shortlist step} (lvl1/funnel\_shortlist.py): run\_plan.sh stops at the first SHORTLIST packet. Process
+  the screens; boosted trees trained on D+E (a change model on trace-feature differences, and an absolute model applied
+  to the new and the reference trace) predict each screen's $\Delta\log\sigma_e$ and $\Delta\log\lambda$ against
+  nominal for every amplifier (the same reference for all screens, so they are comparable), averaged over the board's
+  amplifiers because a setting applies to all of them. The picks are written as the changes files of the five SHORTLIST
+  packets (a screen that is already a random control is skipped) with shortlist.json; run\_plan.sh then continues.
 \item \textbf{Images}: the 5 shortlisted settings and 5 CONTROL settings drawn at random from the screens now (fixed in
   the plan), in random order, as full packets; nominal packets at the start and the end.
 \end{enumerate}
-\paragraph{Objective and trade-offs.} A knob can lower $\sigma_e$ and raise $\lambda$. The shortlist therefore keeps the
-two predictions apart: the settings on the predicted Pareto front (no other screen predicted lower in both) come first,
-filled up to five by the weighted score $\Delta\log\sigma_e+\Delta\log\lambda$ (equal weight in log units, i.e.\ the
-same relative change counts the same), with an optional hard limit (for example $\sigma_e$ below the single-electron
-resolution threshold). The images then decide the trade-off on measured values.
+\paragraph{Objective and trade-offs.} A knob can lower $\sigma_e$ and raise $\lambda$. The model predicts the two
+separately; the trade-off is set by one input, the $\sigma_e$ weight $w$ of the joint objective (lvl1/shortlist.py)
+\begin{equation}
+J(w)=w\,\Delta\log\sigma_e+(1-w)\,\Delta\log\lambda,\qquad 0\le w\le1,
+\end{equation}
+lower is better: $w=1$ is $\sigma_e$ only, $w=0$ is $\lambda$ only, $w=0.5$ counts the same relative change of either the
+same, and any value in between can be given (\texttt{--weight}). Two ordering rules: \emph{weighted} (by $J$) and
+\emph{pareto} (the predicted Pareto front first, i.e.\ the screens no other screen is predicted to beat in both, each part
+by $J$). In session F the five shortlist slots are shared in turn by the funnel weights (plan.json; default
+$w=1,\,0.5,\,0$): slot 1 is the best screen for $\sigma_e$, slot 2 the best balanced one, slot 3 the best for $\lambda$,
+then the second best of each, never the same screen twice. The images therefore also measure which weighting the
+traces serve best. A hard limit (for example $\sigma_e$ below the single-electron threshold) can be added later.
+
+\paragraph{The weighting on the first night} (lvl1/scorecard.py, ranking; 35 settings, each scored as the mean over the 3
+amplifiers; ``regret'' = how much worse the best of the 5 shortlisted settings truly is than the truly best one):
+\begin{center}\small
+\begin{tabular}{lccccc}\toprule
+weight $w$ ($\sigma_e{:}\lambda$) & 1:0 & 0.75:0.25 & 0.5:0.5 & 0.25:0.75 & 0:1\\\midrule
+random shortlist & 2.9 & 3.1 & 6.3 & 8.0 & 21\\
+trace change, trees (new amp) & 2.8 & 3.2 & 6.1 & 6.5 & 0.0\\
+absolute trace trees (new amp) & 2.9 & 0.0 & 0.0 & 1.2 & 16\\
+settings change, GP (new amp) & 15 & 2.7 & 7.1 & 6.5 & 0.0\\\bottomrule
+\end{tabular}
+\end{center}
+For $\sigma_e$ alone the good settings lie within about 3\,\% of each other, so a shortlist gains little; the more weight
+on $\lambda$, the more a shortlist matters (a random one misses the best $\lambda$ by about 20\,\%). The Pareto-first
+rule lost at the extreme weights (for example 18 against 0\,\% at 0:1), so \emph{weighted} is the default. Each column
+is about one trial (the three amplifiers share their settings): session F is the real test. On the first night's last
+block treated as screens (7 settings), funnel\_shortlist.py's shortlist contained the truly best setting for all three
+weights; with 5 of 7 shortlisted that only checks the code.
 \paragraph{Gain.} The gain is not an objective; it enters through $\sigma_e$ in electrons,
 $\Delta\log\sigma_e=\Delta\log\sigma_{\mathrm{ADU}}-\Delta\log g$. The trace measures $\Delta\log\sigma_{\mathrm{ADU}}$
 (its white noise) directly; the gain's change is predicted (it follows delayInt, VDD and VR) and is small (about 1\,\%
 against 15\,\% for $\sigma_e$), so it is a correction. The images and strips of the shortlist measure the gain directly.
-\paragraph{Scores.} The best and the mean measured objective of the shortlist against those of the controls (paired by
-amplifier), and the regret of the shortlist (how much worse its best is than the best of all ten imaged). The funnel
-passes if the shortlist's best beats the controls' best on the amplifiers not in training as well as on the trained
-ones.
+\paragraph{Scores.} For every weight $w$ (any $w$ can be evaluated afterwards, since all ten images measure both
+$\sigma_e$ and $\lambda$): the best and the mean measured $J(w)$ of the shortlist against those of the controls (paired
+by amplifier), and the regret of the shortlist (how much worse its best is than the best of all ten imaged), for the
+slots picked with that weight and for the whole shortlist. The funnel passes if the shortlist's best beats the
+controls' best, also on an amplifier left out of the shortlist step's training (the step is rerun leaving each
+amplifier out, offline, on the same screens).
 
 % =====================================================================================================
 \section{Task C: does it carry over?}
@@ -482,7 +512,7 @@ only the direction is predicted & level 2 uses ranking (preference) optimisation
 the learning curve is still falling at 61 packets & take a third night (or a longer one)\\
 $\sigma_e$ and changes carry over to a second CCD & build level 2 on the trace models\\
 the session-F shortlist images clearly better than the controls & level 2 screens with traces and images only the
-  short list\\
+  short list; the weight whose picks did best becomes level 2's default\\
 it does not & level 2 uses images for every candidate; traces only for diagnosis\\
 they do not & per-CCD training, or a short calibration session per CCD\\\bottomrule
 \end{tabular}
@@ -496,7 +526,7 @@ than the no-trace references, within about twice the label scatter, and the dire
 \item \textbf{Strips do not arrive complete} at $2\times1000$: fall back to $1\times1000$ (the DAQ test decides).
 \item \textbf{Damaged traces}: the retakes and restarts cost time; about 1 packet in 10 is expected to restart.
 \item \textbf{Night too short}: D and E are 21.4 h, F another 5.4 h; run\_plan.sh can be stopped and resumed; session E
-  must not be cut, and F is best taken on its own night after D and E are processed.
+  must not be cut. F needs D and E processed before its shortlist step.
 \item \textbf{A non-nominal reference unsettled}: the reference settings get their own settling traces; the manifest
   checks every trace's settings against the record.
 \item \textbf{Drift larger than expected}: the nominal packets every 7 still allow interpolation; flag packets taken after
@@ -521,7 +551,11 @@ python lvl1/learning_curve.py ...; python lvl1/explain_models.py ...; python lvl
 # the four-way scorecard and the ranking test
 python lvl1/scorecard.py [--rescore]
 # session F: screens, then the shortlist step, then the rest (run_plan.sh stops at the first SHORTLIST packet)
-FROM=L2_77 bash daq_scripts/run_plan.sh; python lvl1/funnel_shortlist.py ...; FROM=L2_77 bash daq_scripts/run_plan.sh
+FROM=L2_77 bash daq_scripts/run_plan.sh             # stops at the first SHORTLIST packet
+python lvl1/funnel_shortlist.py --dataset <processed_v2>/dataset.csv --screens-dir <processed_v2> \
+    --plan lvl1/packet_plan_v2/plan.json [--weight 1 0.5 0]   # writes the SHORTLIST changes files
+FROM=L2_77 bash daq_scripts/run_plan.sh             # the rest of session F
+python lvl1/scorecard.py --weights 1 0.75 0.5 0.25 0  # the weighting on the labelled packets
 \end{Verbatim}
 (The scripts read the v1 paths today; pointing them at the v2 folders is part of the processing step.)
 

@@ -59,6 +59,16 @@
   "SCREEN_SETS": 2,
   "IMAGE_TOML": "image_params/tc1/img32.toml"
  },
+ "funnel": {
+  "weights": [
+   1.0,
+   0.5,
+   0.0
+  ],
+  "rule": "weighted",
+  "shortlist": 5,
+  "screens": 48
+ },
  "packets": [
   {
    "session": "D",
