@@ -428,3 +428,12 @@ then see what both of them can predict together; model the new packet designs af
 * New amplifier (true change RMS: sigma_e 18.5 %, lambda 36.8 %, gain 0.9 %): sigma_e change trees 12.6 % (direction of
   clear changes right 94 %); lambda nn 30.9 % (direction 88 %); gain at the label noise (0.9 %; direction 64-82 %).
   Settings-change GP about as good (sigma_e 13.5, lambda 33.6). Only 84 A+B rows.
+
+## 23. Change prediction follow-ups (2026-11-04)
+
+* `lvl1/change_test2.py`: label noise of a change (nominal to nominal): sigma_e 1.9 %, lambda 11.9 %, gain 0.8 %;
+  median true change sigma_e 3.9 %, lambda 8.5 %, gain 0.4 % -> lambda and gain changes mostly within label noise.
+  VDD / VR packets: the same knob change gave opposite gain changes (L1_15 +1.2 %, L1_31 -2 %), common to the 4
+  amplifiers of a packet (60 % of the variance): a shared per-packet effect, not VDD / VR; gain follows delayInt in C.
+  Lasso / PLS blow up on outliers; trees, GP, SAAS best; physics difference model best median sigma_e error (3.8 %).
+* `lvl1/change_pairs.py`: all pairs of packets of one amplifier (both labels measured), new-amplifier test.
