@@ -441,3 +441,16 @@ then see what both of them can predict together; model the new packet designs af
   80 %, trace trees 50 / 75 / 82 % (trace GP blew up); pairs within 1 h (405 pairs, 54 test) -- trace trees lambda 88 %
   (25 cases), sigma_e 59 %; settings lambda 76 %. Within a packet (change_test) sigma_e 94 %, lambda 88 %. Fixed: the
   time conversion assumed nanoseconds (pandas gives microseconds); change_test's interpolation is unaffected (scale-free).
+
+## 24. Change models (2026-11-04): Siamese, direction losses, difference curves
+
+* `lvl1/change_models.py` (results `processed/lvl1_results/2026-11-04_change_models/`). New amplifier, within-packet
+  changes (+ cross-packet pairs within 1 h for training). Best size is still "feature difference: trees" (sigma_e
+  12.6 %, dir 94 %) and settings GP (lambda 33.6 %). Siamese (shared encoder) on features or pre-trained curve
+  embedding: no better; direction-only loss gets lambda direction 94 % (features) but meaningless sizes. Difference
+  curves (PCA 10): trees sigma_e 14.5 % dir 94 %, lambda 36.2 % dir 76 %; intercept-free ridge unstable on new amps but
+  best on C (sigma_e 6.9 %). 84 rows: the fancier models overfit; v2 data needed.
+* Difference-curve correlation map (difference_curve_correlation.png): d sigma_e tracks the change of the mean skip
+  shape (|r| 0.74 at point 61), within-cycle structure function and spectrum, noise vs window length; d lambda tracks
+  the within-cycle spectrum (0.60), CDS spectrum (log f), mean skip shape, CDS autocorrelation. Candidates for
+  hand-made difference features.
