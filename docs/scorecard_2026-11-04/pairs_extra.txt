@@ -1,0 +1,21 @@
+336 current pairs; 2340 drift-corrected pairs of any two packets
+
+=== trained amplifiers ===
+B - A        | current (within + neighbours, raw)     | n->n+1 (raw): sigma_e  78 % /  11.1   lambda  89 % /  44.6   gain  86 % /   1.2
+             |                                        | any test pair (corrected, 420): sigma_e  72 % /  13.1   lambda  85 % /  43.0   gain  84 % /   1.2
+B - A        | within + ALL pairs, drift-corrected    | n->n+1 (raw): sigma_e  82 % /  10.9   lambda  89 % /  39.1   gain  81 % /   1.3
+             |                                        | any test pair (corrected, 420): sigma_e  79 % /  12.5   lambda  81 % /  39.7   gain  85 % /   1.1
+A, B, B - A  | current (within + neighbours, raw)     | n->n+1 (raw): sigma_e  80 % /  11.3   lambda  90 % /  39.6   gain  86 % /   1.3
+             |                                        | any test pair (corrected, 420): sigma_e  81 % /  13.5   lambda  86 % /  37.4   gain  81 % /   1.2
+A, B, B - A  | within + ALL pairs, drift-corrected    | n->n+1 (raw): sigma_e  86 % /  11.4   lambda  80 % /  40.2   gain  83 % /   1.4
+             |                                        | any test pair (corrected, 420): sigma_e  88 % /  13.3   lambda  79 % /  38.5   gain  80 % /   1.3
+
+=== new amplifier ===
+B - A        | current (within + neighbours, raw)     | n->n+1 (raw): sigma_e  72 % /  12.9   lambda  82 % /  42.9   gain  89 % /   1.2
+             |                                        | any test pair (corrected, 420): sigma_e  68 % /  13.7   lambda  84 % /  39.8   gain  83 % /   1.2
+B - A        | within + ALL pairs, drift-corrected    | n->n+1 (raw): sigma_e  72 % /  12.0   lambda  87 % /  40.9   gain  92 % /   1.4
+             |                                        | any test pair (corrected, 420): sigma_e  71 % /  13.1   lambda  82 % /  39.5   gain  84 % /   1.2
+A, B, B - A  | current (within + neighbours, raw)     | n->n+1 (raw): sigma_e  80 % /  12.4   lambda  90 % /  42.6   gain  89 % /   1.3
+             |                                        | any test pair (corrected, 420): sigma_e  79 % /  13.2   lambda  84 % /  40.3   gain  83 % /   1.2
+A, B, B - A  | within + ALL pairs, drift-corrected    | n->n+1 (raw): sigma_e  84 % /  12.2   lambda  85 % /  45.5   gain  72 % /   1.5
+             |                                        | any test pair (corrected, 420): sigma_e  82 % /  13.2   lambda  82 % /  46.7   gain  70 % /   1.4

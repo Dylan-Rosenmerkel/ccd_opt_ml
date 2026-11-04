@@ -16,7 +16,7 @@ amplifier with drift-corrected labels ("random pairs"), both orders.  One-trace 
 setting effect.  Trained-amplifier and new-amplifier cells.  Score: regret of the best of the 5 shortlisted settings
 under J(w) (w = 1, 0.5, 0) and the Spearman correlation with the truth.
 
-    .venv/bin/python lvl1/rank_methods.py
+    .venv/bin/python lvl1/rank_methods.py [--pairs neighbours]      (default: random drift-corrected pairs)
 """
 
 from __future__ import annotations
@@ -81,15 +81,21 @@ def main():
     idx = [np.array([key[(q, a)] for q in common]) for a in amps]
     truth = np.mean([eff[i] for i in idx], 0)
 
+    nbr = np.array([(i, j) for ch in amps for step in (1, 2)
+                    for i, j in zip(*(lambda r: (r[:-step], r[step:]))(np.flatnonzero(amp == ch)[np.argsort(d.hours.to_numpy()[amp == ch])]))])
+    nbrY = Y[nbr[:, 1], :2] - Y[nbr[:, 0], :2]
+    PAIRS, PY = (nbr, nbrY) if "--pairs" in sys.argv and sys.argv[sys.argv.index("--pairs") + 1] == "neighbours" else (allp, allY)
+    print(f"training pairs: {'neighbours' if PAIRS is nbr else 'random (drift-corrected)'}", flush=True)
+
     def training(excl_blocks, excl_amp):
-        """Within-packet pairs and random drift-corrected pairs with no packet in excl_blocks (and not excl_amp)."""
+        """Within-packet pairs and the other pairs (random or neighbours) with no packet in excl_blocks (and not excl_amp)."""
         keep_w = ~np.isin(blk[wr], excl_blocks) & ((amp[wr] != excl_amp) if excl_amp is not None else True)
-        keep_a = (~np.isin(blk[allp[:, 0]], excl_blocks) & ~np.isin(blk[allp[:, 1]], excl_blocks)
-                  & ((amp[allp[:, 0]] != excl_amp) if excl_amp is not None else True))
+        keep_a = (~np.isin(blk[PAIRS[:, 0]], excl_blocks) & ~np.isin(blk[PAIRS[:, 1]], excl_blocks)
+                  & ((amp[PAIRS[:, 0]] != excl_amp) if excl_amp is not None else True))
         w = within[keep_w]
-        FA = np.vstack([F[P["A"][w]], F[allp[keep_a, 0]]])
-        FB = np.vstack([F[P["B"][w]], F[allp[keep_a, 1]]])
-        return FA, FB, np.vstack([P["Y"][w, :2], allY[keep_a]])
+        FA = np.vstack([F[P["A"][w]], F[PAIRS[keep_a, 0]]])
+        FB = np.vstack([F[P["B"][w]], F[PAIRS[keep_a, 1]]])
+        return FA, FB, np.vstack([P["Y"][w, :2], PY[keep_a]])
 
     for cell in sc.CELLS:
         groups = [None] if cell == "trained" else list(amps)

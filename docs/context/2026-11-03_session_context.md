@@ -575,3 +575,19 @@ then see what both of them can predict together; model the new packet designs af
   plan.json funnel {weights [1, .5, 0], sort bradley-terry, methods}. manual_packet.sh accepts N_REF_SETS=0 (screens
   without references possible; not the default). Plan document section 9 updated.
 * Running: lvl1/pairs_extra.py (random drift-corrected pairs vs neighbours for training; shared references).
+
+## 31. Funnel simplified: no references, lambda first, noise attached (2026-11-04)
+
+* User decisions: (1) no one-trace ("Way 1") model in the ranking; (2) first round ranks on lambda (DC) only, the
+  predicted noise is only attached to each pick afterwards; (3) screens WITHOUT reference traces: the question is
+  "from ~100 traces, can a shortlist of the best settings be predicted?".
+* `lvl1/funnel_shortlist.py`: METHODS = without reference only (screen vs screen, Bradley-Terry default); weight
+  default 0 (lambda); noise model = trees on own features + amplifier one-hot -> log sigma_e (CV ~11 %, 14 % on the
+  mock screens), attached per amplifier in the output, the changes-file comments and shortlist.json; --pairs random
+  (default) | neighbours.
+* `lvl1/pairs_extra.py` (fast trees now): direction of single pairs, new amp, [A, B, B-A]: neighbours sigma_e 80 /
+  lambda 90 / gain 89 %, random drift-corrected pairs 84 / 85 / 72 %. `rank_methods.py --pairs neighbours`: Bradley-Terry
+  lambda ranking 0.81 (new) / 0.73 (trained) vs random 0.83 / 0.78 -> random pairs the default for the funnel.
+* Plan: 100 screens, SCREEN_REF_SETS 0, SHORTLIST 5 + CONTROLS 5; F 112 packets 6.9 h; total 188 packets 28.3 h;
+  plan.json funnel {weights [0], sort bradley-terry, pairs random, methods [without reference]}. Plan document
+  section 9 rewritten. The flow chart in the chat (48 screens, references) is now out of date.

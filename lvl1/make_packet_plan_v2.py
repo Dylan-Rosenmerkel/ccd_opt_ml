@@ -22,10 +22,10 @@ Added 2026-11-04 (after the four-way scorecard, lvl1/scorecard.py):
   no image, ~2-3 min each), then SHORTLIST packets whose settings lvl1/funnel_shortlist.py picks from the screens with
   the models trained on D+E (run_plan.sh stops at the first one until their changes files exist), and as many CONTROL
   packets at screen settings drawn at random now; the images of the shortlist against the controls test the screening
-  step of level 2.  Two rankings run side by side on the same screens: WITH the screen's own reference trace, and
-  WITHOUT it (the screens compared two at a time and sorted).  The shortlist slots go round the funnel weights
-  (--funnel-weights, the sigma_e weight w of J = w dlog sigma_e + (1-w) dlog lambda; default 1, 0.5, 0) and the two
-  rankings, so the images test both rankings and the weighting.
+  step of level 2: from ~100 traces alone, can a shortlist of the best settings be predicted?  The screens take new
+  traces only (no reference); the change model compares them two at a time and Bradley-Terry sorts the comparisons.
+  The funnel weight (--funnel-weights, the sigma_e weight w of J = w dlog sigma_e + (1-w) dlog lambda) is 0 for the
+  first round: lambda, the dark charge, alone, with the predicted noise attached to each pick.
 
 Rules (as v1): every configuration passes ccd_limits (windows, the ACM manual's hardware ranges, the group's voltage
 rules; points that fail are redrawn); every voltage within ONE max_step of nominal (manual_packet.sh applies a change
@@ -69,7 +69,7 @@ LOG_SCALE = {"delayInt", "delay_H", "delayRGH"}
 NOMINAL_EVERY = 7          # a nominal packet at positions 1, 8, 15, ... of each session
 REPLICATES = 3             # earlier training points repeated later
 REF_PREVIOUS_EVERY = 2     # session D: every 2nd packet after a non-nominal one takes its reference at that one's settings
-SHORTLIST = 6              # session F: shortlisted image packets (2 rankings, with / without reference, x 3 weights)
+SHORTLIST = 5              # session F: shortlisted image packets (the screens' best, ranked without any reference)
 CONTROLS = 5               # session F: random-control image packets (screen settings drawn when the plan is made)
 
 
@@ -100,10 +100,11 @@ def main():
     parser.add_argument("--n-ref", type=int, default=3, help="reference trace sets per packet (N_REF_SETS)")
     parser.add_argument("--n-new", type=int, default=3, help="trace sets at the new settings before the image (N_SETS)")
     parser.add_argument("--n-post", type=int, default=2, help="trace sets at the new settings after the image (N_POST_SETS)")
-    parser.add_argument("--screens", type=int, default=48, help="trace-only funnel screens of session F (0: no session F)")
-    parser.add_argument("--funnel-weights", type=float, nargs="+", default=[1.0, 0.5, 0.0],
-                        help="sigma_e weights of the funnel objective, sharing the shortlist slots in turn")
-    parser.add_argument("--screen-ref", type=int, default=1, help="reference trace sets of a screen packet")
+    parser.add_argument("--screens", type=int, default=100, help="trace-only funnel screens of session F (0: no session F)")
+    parser.add_argument("--funnel-weights", type=float, nargs="+", default=[0.0],
+                        help="sigma_e weights of the funnel objective, sharing the shortlist slots in turn (default 0: rank on lambda, the dark charge, alone; the first round)")
+    parser.add_argument("--screen-ref", type=int, default=0, help="reference trace sets of a screen packet (0: none; the "
+                                                                   "screens are compared with each other)")
     parser.add_argument("--screen-new", type=int, default=2, help="new trace sets of a screen packet")
     parser.add_argument("--image-rows", type=int, default=32, help="rows of the image (32: configs/image_params_32rows.toml)")
     parser.add_argument("--image-toml", default="image_params/tc1/img32.toml",
@@ -228,7 +229,7 @@ def main():
            + (": the voltage changes use its PLACEHOLDER windows and are provisional." if not limits.reviewed else "."), "",
            "| session | packets | of which nominal | estimated time | use |", "|---|---|---|---|---|"]
     use = {"D": "training and model choice (setting-grouped CV)", "E": "prospective test: scored once, after the choice is frozen",
-           "F": f"funnel test: {args.screens} trace-only screens, {SHORTLIST} shortlisted (two rankings) + {CONTROLS} random-control images"}
+           "F": f"funnel test: {args.screens} trace-only screens (no reference), {SHORTLIST} shortlisted + {CONTROLS} random-control images"}
     for s, ps in sessions.items():
         doc.append(f"| {s} | {len(ps)} | {sum(not p['changes'] and 'shortlist' not in p for p in ps)} | {sum(p['minutes'] for p in ps) / 60:.1f} h | {use[s]} |")
     doc += [f"| all | {len(planned)} | | {sum(p['minutes'] for p in planned) / 60:.1f} h | |", "",
@@ -245,11 +246,11 @@ def main():
             "packets of session D take their reference at the previous packet's settings (`<id>_ref.txt`), so "
             "within-packet changes go up and down (with a nominal reference 96 % of the clear sigma_e changes go up).",
             f"* **Traces bracket the image**: {args.n_new} new sets before the strip and image, {args.n_post} after.",
-            "* **Session F, the funnel test**: trace-only screens at new Sobol points; the models trained on D+E "
-            "shortlist the best from their traces with two rankings side by side, with the screen's reference trace and "
-            "without it (screens compared two at a time, then sorted) (`lvl1/funnel_shortlist.py`, weights "
-            + ", ".join(f"{w:g}:{1 - w:g}" for w in args.funnel_weights) + " of sigma_e:lambda); "
-            f"{SHORTLIST} shortlisted settings are imaged next to {CONTROLS} random controls drawn now.",
+            f"* **Session F, the funnel test**: {args.screens} trace-only screens at new Sobol points, new traces only (no "
+            "reference); the models trained on D+E compare them two at a time and sort them (Bradley-Terry), on "
+            "lambda for the first round (weight " + ", ".join(f"{w:g}:{1 - w:g}" for w in args.funnel_weights)
+            + " of sigma_e:lambda), with the predicted noise attached (`lvl1/funnel_shortlist.py`); "
+            f"the {SHORTLIST} best are imaged next to {CONTROLS} random controls drawn now.",
             f"* Points that break a rule are redrawn (D: {rej_train} rejected, E: {rej_test}).", "",
             "## The box", "", "| knob | range | pins |", "|---|---|---|"]
     for g, (lo, hi) in BOX.items():
@@ -265,8 +266,8 @@ def main():
             f"4. {args.n_new} trace sets at the new settings; the new level-1 strip; flush;",
             f"5. the image ({args.image_rows} rows, `{args.image_toml}`), 2 s pause; standalone; {args.n_post} more trace "
             "sets at the new settings; flush; reset to nominal and read back.", "",
-            f"Screen packets (session F, `SCREEN=1`): reset; flush; {args.screen_ref} reference trace set; flush; the "
-            f"changes; 2 settling traces; {args.screen_new} new trace sets; reset. No strips, no image.", "",
+            f"Screen packets (session F, `SCREEN=1 N_REF_SETS={args.screen_ref}`): reset; flush; the changes; 2 settling "
+            f"traces; {args.screen_new} new trace sets; reset. No reference, no strips, no image.", "",
             "**Safeguards** (manual_packet.sh, CHECK_TRACES=1): after the reference and after the new traces the script "
             "waits for both boards, checks every board-101 trace (src/check_trace_files.py) and retakes damaged ones; "
             "more than 5 damaged traces in a packet restart it from the reset as `<id>_r1` (the stopped attempt's record "
@@ -302,7 +303,7 @@ def main():
                                                        "N_POST_SETS": args.n_post, "SCREEN_REF_SETS": args.screen_ref,
                                                        "SCREEN_SETS": args.screen_new, "IMAGE_TOML": args.image_toml},
                                                "funnel": {"weights": args.funnel_weights, "rule": "weighted",
-                                                          "sort": "bradley-terry", "methods": ["with reference", "without reference"],
+                                                          "sort": "bradley-terry", "pairs": "random", "methods": ["without reference"],
                                                           "shortlist": SHORTLIST, "controls": CONTROLS, "screens": args.screens},
                                                "packets": planned}, indent=1, default=str))
     print("\n".join(doc[:28]))

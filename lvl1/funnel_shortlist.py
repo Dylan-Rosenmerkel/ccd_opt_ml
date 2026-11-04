@@ -1,34 +1,32 @@
 """
-funnel_shortlist.py -- session F: pick the settings worth an image from the trace-only screens, with TWO rankings side
-by side on the same screens.
+funnel_shortlist.py -- session F: from the trace-only screens (new traces only, no reference), pick the settings
+worth an image: can a shortlist of the best settings be predicted from ~100 traces?
 
 1. Train on the labelled packets (a dataset.csv; board 101 without ch2 by default):
-   * the change model: boosted trees on [features(A), features(B), features(B) - features(A)] of two traces of one
-     amplifier (log for positive features), trained on the within-packet pairs (reference -> own trace; the reference's
-     label is the nominal label interpolated in time, or, for a reference at another packet's settings, that packet's
-     label) and on every pair of packets of an amplifier with drift-corrected labels ("random pairs": each packet's
-     setting effect = log y - log y(nominal interpolated in time), the pair's target the difference), in both orders;
-   * the one-trace model: boosted trees, one trace's features (never the settings) -> setting effect.
-2. Read the screens (processed packet folders: features.json; new traces, and the reference trace if there is one).
-3. Rank them twice, per amplifier, then average each screen's score over the board's amplifiers (a setting is for all):
-   * WITH REFERENCE: each screen's change against its own nominal reference trace = the mean of the change model
-     (reference -> new) and the one-trace model (f(new) - f(reference));
-   * WITHOUT REFERENCE: the references are ignored.  The change model compares every two screens (both orders,
-     averaged), and a sorting method (--sort, lvl1/shortlist.py: mean change, wins, Bradley-Terry) turns the
-     comparisons into one order.
-   The joint objective J(w) = w dlog sigma_e + (1-w) dlog lambda (lvl1/shortlist.py) is applied to every prediction
-   (for screen vs screen: to every comparison, before sorting).
-4. The shortlist slots go round: for each weight (--weight, default the plan's funnel weights), the best screen of the
-   with-reference ranking, then the best of the without-reference ranking, then the next weight; then the second best
-   of each, never the same screen twice, skipping screens already imaged as random CONTROLs.  So session F's images
-   test both rankings and the weighting.  With --plan the picks are written into the plan's SHORTLIST changes files
-   (in slot order) with shortlist.json (both full rankings); run_plan.sh then continues with session F.
+   * the change model, which RANKS: boosted trees on [features(A), features(B), features(B) - features(A)] of two
+     traces of one amplifier (log for positive features) -> the change of log sigma_e, log lambda, log gain from A to B
+     (one tree model per target), trained in both orders on the within-packet pairs (reference -> own trace) and on
+     every two packets of an amplifier with drift-corrected labels (--pairs random, the default: each packet's
+     setting effect = log y - log y(nominal interpolated in time), the pair's target the difference), or on
+     neighbouring packets (--pairs neighbours: n -> n+1, n+2, measured labels);
+   * the noise model, which only ATTACHES a predicted sigma_e (electrons) to each screen after the ranking: boosted
+     trees on one trace's features and its amplifier -> log sigma_e (the best sigma_e model on known amplifiers in the
+     scorecard, ~10 %); its typical error is estimated by 5-fold cross-validation on the training packets.
+2. Read the screens (processed packet folders: features.json, the new traces).
+3. Rank: per amplifier, the change model compares every two screens (both orders, averaged); a sorting method (--sort,
+   lvl1/shortlist.py: mean change, wins, Bradley-Terry; default Bradley-Terry, best on the first night,
+   lvl1/rank_methods.py) turns the comparisons of J(w) = w dlog sigma_e + (1-w) dlog lambda into one order; the
+   scores are averaged over the board's amplifiers (a setting is for all of them).  First round: w = 0, the screens
+   are ranked on lambda (dark charge) alone, and the predicted noise is attached to the picks.
+4. The shortlist = the best screens in order (with several weights, they take turns), skipping screens already imaged
+   as random CONTROLs.  With --plan the picks are written into the plan's SHORTLIST changes files with shortlist.json
+   (the full ranking, scores and predicted noise); run_plan.sh then continues with session F.
 
---evaluate: the screens are labelled packets (a test on old data): each ranking's top k against the truth and random.
+--evaluate: the screens are labelled packets (a test on old data): the shortlist against the truth and random picks.
 
     python lvl1/funnel_shortlist.py --dataset processed_v2/dataset.csv --screens-dir processed_v2 \
-        --plan lvl1/packet_plan_v2/plan.json [--weight 1 0.5 0] [--sort bradley-terry]
-    python lvl1/funnel_shortlist.py --screens L1_33 ... L1_42 --evaluate        # first night (the screens are held out)
+        --plan lvl1/packet_plan_v2/plan.json [--weight 0] [--sort bradley-terry] [--pairs random]
+    python lvl1/funnel_shortlist.py --screens L1_26 ... L1_42 --evaluate        # first night (the screens are held out)
 """
 
 from __future__ import annotations
@@ -52,7 +50,7 @@ import shortlist as sl  # noqa: E402
 import train_lvl1 as tl  # noqa: E402
 
 T = list(ct.LABELS)                 # sigma_e, lambda, gain
-METHODS = ("with reference", "without reference")
+METHODS = ("without reference",)    # the screens are compared with each other; no nominal reference (user, 2026-11-04)
 
 
 # --------------------------------------------------------------------------- data
@@ -149,8 +147,10 @@ def gbt(X, Y):
     return lambda Z: np.column_stack([m.predict(tl.prep_columns(X, Z)[1]) for m in ms])
 
 
-def train(d: pd.DataFrame, names: list[str]):
-    """The change model (A, B -> log y(B) - log y(A)) and the one-trace model (trace -> setting effect)."""
+def train(d: pd.DataFrame, names: list[str], pairs: str = "neighbours"):
+    """The change model (A, B -> log y(B) - log y(A); ranks the screens) and the sigma_e model (one trace + which
+    amplifier -> log sigma_e; only attaches a predicted noise to each screen, never ranks).  Returns also the sigma_e
+    model's typical error (5-fold cross-validation by packet on the training rows, RMS of the log error)."""
     own, ref = d[[f"trace.{n}" for n in names]].to_numpy(float), d[[f"ref.{n}" for n in names]].to_numpy(float)
     pos = (np.nanmin(own, 0) > 0) & (np.nanmin(ref, 0) > 0)
     own, ref = logf(own, pos), logf(ref, pos)
@@ -160,30 +160,39 @@ def train(d: pd.DataFrame, names: list[str]):
     XA, XB, D = [], [], []
     ok = np.isfinite(Yref).all(1)                                     # within-packet pairs
     XA.append(ref[ok]), XB.append(own[ok]), D.append(Y[ok] - Yref[ok])
-    for ch in d.channel.unique():                                     # random pairs, drift-corrected
+    for ch in d.channel.unique():
         r = np.flatnonzero(d.channel.to_numpy() == ch)
-        pr = np.array([(i, j) for i, j in combinations(r, 2)])
-        dy = eff[pr[:, 1]] - eff[pr[:, 0]]
+        if pairs == "random":                                         # every two packets, drift-corrected labels
+            pr = np.array([(i, j) for i, j in combinations(r, 2)])
+            dy = eff[pr[:, 1]] - eff[pr[:, 0]]
+        else:                                                         # neighbours n -> n+1, n+2, measured labels
+            r = r[np.argsort(d.hours.to_numpy()[r])]
+            pr = np.array([(i, j) for step in (1, 2) for i, j in zip(r[:-step], r[step:])])
+            dy = Y[pr[:, 1]] - Y[pr[:, 0]]
         keep = np.isfinite(dy).all(1)
         XA.append(own[pr[keep, 0]]), XB.append(own[pr[keep, 1]]), D.append(dy[keep])
     XA, XB, D = np.vstack(XA), np.vstack(XB), np.vstack(D)
     f_change = gbt(np.vstack([np.hstack([XA, XB, XB - XA]), np.hstack([XB, XA, XA - XB])]), np.vstack([D, -D]))
-    ok1 = np.isfinite(eff).all(1)
-    f_one = gbt(own[ok1], eff[ok1])
-    return pos, {"change": lambda A, B: f_change(np.hstack([A, B, B - A])), "one trace": f_one}, len(D)
+    # the sigma_e predictor: trees on the trace features and the amplifier (the best sigma_e model on known amplifiers
+    # in the scorecard, ~10 %); the funnel's amplifiers are the trained ones
+    chans = sorted(d.channel.unique())
+    onehot = lambda ch: np.eye(len(chans))[[chans.index(c) for c in ch]]
+    Xs = np.hstack([own, onehot(d.channel)])
+    f_sig = gbt(Xs, Y[:, :1])
+    pk = d.packet_id.to_numpy()
+    folds = np.searchsorted(np.unique(pk), pk) % 5                    # packets dealt into 5 folds
+    cv = np.full(len(d), np.nan)
+    for k in range(5):
+        cv[folds == k] = gbt(Xs[folds != k], Y[folds != k, :1])(Xs[folds == k])[:, 0]
+    err = float(np.sqrt(np.nanmean((cv - Y[:, 0]) ** 2)))
+    return pos, {"change": lambda A, B: f_change(np.hstack([A, B, B - A])),
+                 "sigma_e": lambda B, ch: f_sig(np.hstack([B, onehot(ch)]))[:, 0], "sigma_e_error": err}, len(D)
 
 
 def rank_screens(s: pd.DataFrame, names, pos, fitted, weights, sort: str) -> dict:
     """{(method, w): screen ids in order (best first)} and the per-screen board scores."""
-    A = logf(s[[f"ref.{n}" for n in names]].to_numpy(float), pos)
     B = logf(s[[f"trace.{n}" for n in names]].to_numpy(float), pos)
-    has_ref = np.isfinite(A).any(1)
-    # with reference: per (screen, amplifier), the mean of the change model and the one-trace difference
-    wr = np.full((len(s), 3), np.nan)
-    if has_ref.any():
-        wr[has_ref] = (fitted["change"](A[has_ref], B[has_ref])
-                       + fitted["one trace"](B[has_ref]) - fitted["one trace"](A[has_ref])) / 2
-    # without reference: every two screens of an amplifier compared with the change model
+    # every two screens of an amplifier compared with the change model (both orders)
     pairwise = {}
     for ch in s.channel.unique():
         r = np.flatnonzero(s.channel.to_numpy() == ch)
@@ -195,16 +204,21 @@ def rank_screens(s: pd.DataFrame, names, pos, fitted, weights, sort: str) -> dic
     screens = sorted(set(s.packet_id))
     out, scores = {}, {}
     for w in weights:
-        j = pd.Series(sl.objective(wr[:, 0], wr[:, 1], w), index=s.index).groupby(s.packet_id).mean()
-        scores[("with reference", w)] = j.reindex(screens)
         per_amp = []
         for ch, (ids, D) in pairwise.items():
             per_amp.append(pd.Series(sl.sort_scores(sl.objective(D[:, :, 0], D[:, :, 1], w), sort), index=ids))
-        scores[("without reference", w)] = pd.DataFrame({k: v for k, v in enumerate(per_amp)}).mean(1).reindex(screens)
+        scores[("without reference", w)] = pd.DataFrame({k: v for k, v in enumerate(per_amp)}).mean(axis=1).reindex(screens)
         for m in METHODS:
             sc_ = scores[(m, w)].dropna()
             out[(m, w)] = list(sc_.sort_values(kind="stable").index)
-    return out, scores
+    # the predicted noise attached to every screen (never used to rank): sigma_e in electrons per amplifier, and the
+    # mean over the amplifiers
+    sig = pd.DataFrame({"packet_id": s.packet_id, "channel": s.channel,
+                        "sigma_e": np.exp(fitted["sigma_e"](B, s.channel.to_numpy()))})
+    noise = sig.pivot_table(index="packet_id", columns="channel", values="sigma_e")
+    noise.columns = [f"sigma_e ch{c}" for c in noise.columns]
+    noise["sigma_e mean"] = noise.mean(axis=1)
+    return out, scores, noise.reindex(screens)
 
 
 def pick_slots(order: dict, weights, n: int, skip=()) -> list[tuple[str, float, str]]:
@@ -232,9 +246,13 @@ def main():
     parser.add_argument("--plan", help="plan.json: its screens, controls and SHORTLIST packets (changes files written)")
     parser.add_argument("--weight", type=float, nargs="+", default=None,
                         help="sigma_e weight(s) w of J = w dlog sigma_e + (1-w) dlog lambda (default: the plan's funnel "
-                             "weights, else 1 0.5 0)")
+                             "weights, else 0 = rank on lambda (dark charge) only, the first round)")
     parser.add_argument("--sort", choices=sl.SORTS, default=None,
                         help="sorting of the screen-vs-screen comparisons (default: the plan's, else bradley-terry: best on the first night, lvl1/rank_methods.py)")
+    parser.add_argument("--pairs", choices=("neighbours", "random"), default="random",
+                        help="the change model's training pairs besides the within-packet ones: every two packets with "
+                             "drift-corrected labels (default: ranks the screens best on the first night, "
+                             "lvl1/rank_methods.py) or neighbouring packets (n -> n+1, n+2, measured labels)")
     parser.add_argument("--k", type=int, default=5, help="top k per ranking for --evaluate")
     parser.add_argument("--board", type=int, default=101)
     parser.add_argument("--skip-channels", type=int, nargs="*", default=[2])
@@ -244,7 +262,7 @@ def main():
 
     plan = json.loads(Path(args.plan).read_text()) if args.plan else None
     funnel = (plan or {}).get("funnel", {})
-    weights = args.weight or funnel.get("weights") or [1.0, 0.5, 0.0]
+    weights = args.weight or funnel.get("weights") or [0.0]
     sort = args.sort or funnel.get("sort") or "bradley-terry"
     screen_ids = args.screens or [p["packet_id"] for p in (plan or {}).get("packets", []) if p.get("screen")]
     if not screen_ids:
@@ -252,17 +270,23 @@ def main():
     names = features()
     d = load_labelled(Path(args.dataset), args.board, args.skip_channels, set(args.exclude_train) | set(screen_ids))
     names = [n for n in names if f"trace.{n}" in d and f"ref.{n}" in d]
-    pos, fitted, n_pairs = train(d, names)
+    pos, fitted, n_pairs = train(d, names, args.pairs)
     found = [Path(args.screens_dir) / p for p in screen_ids if (Path(args.screens_dir) / p / "features.json").exists()]
     missing = sorted(set(screen_ids) - {p.name for p in found})
     s = load_screens(found, args.board, args.skip_channels, names)
-    order, scores = rank_screens(s, names, pos, fitted, weights, sort)
-    print(f"trained on {len(d)} rows ({d.packet_id.nunique()} packets; {n_pairs} change pairs); {s.packet_id.nunique()} screens"
+    order, scores, noise = rank_screens(s, names, pos, fitted, weights, sort)
+    err = fitted["sigma_e_error"]
+    print(f"trained on {len(d)} rows ({d.packet_id.nunique()} packets; {n_pairs} change pairs, {args.pairs}); {s.packet_id.nunique()} screens"
           + (f" ({len(missing)} without features: {missing[:5]})" if missing else "")
           + f"; weights {', '.join(sl.weight_label(w) for w in weights)} (sigma_e:lambda); screen-vs-screen sort: {sort}")
+    print(f"predicted noise attached to each screen: sigma_e (e-) from trees on the trace + amplifier, typical error "
+          f"{100 * err:.0f} % (cross-validated)")
     for w in weights:
-        print(f"  {sl.weight_label(w)}: with reference {order[('with reference', w)][:5]}   "
-              f"without reference {order[('without reference', w)][:5]}")
+        for m in METHODS:
+            top = order[(m, w)][:8]
+            print(f"\n  {m}, weight {sl.weight_label(w)}" + (f" (sort {sort})" if m == "without reference" else "")
+                  + ": best first")
+            print(noise.loc[top].round(3).assign(score=scores[(m, w)].loc[top].round(3)).to_string())
 
     if args.evaluate:
         lab = load_labelled(Path(args.dataset), args.board, args.skip_channels, set())
@@ -281,6 +305,10 @@ def main():
                 line.append(f"{m}: best of top {k} {100 * tj.loc[top].min():.1f} (regret {100 * (tj.loc[top].min() - tj.min()):.1f})")
             line.append(f"random {k}: best {100 * rand:.1f} on average")
             print("\n  ".join(line))
+        tsig = lab[lab.packet_id.isin(screen_ids)].groupby("packet_id")[ct.LABELS["sigma_e"]].mean()
+        both = noise["sigma_e mean"].dropna().index.intersection(tsig.index)
+        print(f"attached sigma_e vs the image (board mean, {len(both)} screens): typical error "
+              f"{100 * np.sqrt(np.mean(np.log(noise.loc[both, 'sigma_e mean'] / tsig.loc[both]) ** 2)):.1f} %")
 
     if plan:
         controls = {json.dumps(p["changes"], sort_keys=True) for p in plan["packets"] if "control_of_screen" in p}
@@ -292,12 +320,17 @@ def main():
         for slot, (pick, w, m) in zip(slots, chosen):
             lines = [f"# {slot['packet_id']} (session F): funnel SHORTLIST {slot['shortlist']} = screen {pick}",
                      f"# picked by lvl1/funnel_shortlist.py: ranking {m}, weight {sl.weight_label(w)} (sigma_e:lambda)"
-                     + (f", sort {sort}" if m == "without reference" else "")]
+                     + (f", sort {sort}" if m == "without reference" else ""),
+                     "# predicted noise (not used to pick): " + ", ".join(
+                         f"{c} {v:.3f}" for c, v in noise.loc[pick].items() if np.isfinite(v)) + f" e- (+-{100 * err:.0f} %)"]
             lines += [f"acm101:{k}={v}" if isinstance(v, int) else f"acm101:{k}={v:g}" for k, v in changes[pick].items()]
             (out_dir / f"{slot['packet_id']}.txt").write_text("\n".join(lines) + "\n")
         (out_dir / "shortlist.json").write_text(json.dumps(
-            {"weights": weights, "sort": sort, "methods": list(METHODS),
-             "picks": {s_["packet_id"]: {"screen": p, "weight": w, "ranking": m} for s_, (p, w, m) in zip(slots, chosen)},
+            {"weights": weights, "sort": sort, "methods": list(METHODS), "sigma_e_typical_error": err,
+             "picks": {s_["packet_id"]: {"screen": p, "weight": w, "ranking": m,
+                                         "predicted_noise_e": noise.loc[p].dropna().to_dict()}
+                       for s_, (p, w, m) in zip(slots, chosen)},
+             "predicted_noise_e": noise.dropna(how="all").to_dict(orient="index"),
              "skipped_as_controls": sorted(skip),
              "rankings": {f"{m} | {sl.weight_label(w)}": order[(m, w)] for m in METHODS for w in weights},
              "scores": {f"{m} | {sl.weight_label(w)}": scores[(m, w)].dropna().to_dict() for m in METHODS for w in weights},

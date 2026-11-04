@@ -11,7 +11,7 @@ pairs_extra.py -- two questions for the v2 plan, on the first night (board 101 c
    minutes before; d = 3 / 6 ~ 45 / 90 minutes earlier), as if one nominal trace set were shared by several screens.
    Scored by direction, size and the ranking regret of the setting effect (board mean, w = 0.5).
 
-    .venv/bin/python lvl1/pairs_extra.py
+    .venv/bin/python lvl1/pairs_extra.py [--shared-refs]
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ import scorecard as sc  # noqa: E402
 import shortlist as sl  # noqa: E402
 
 T = sc.T
+SHARED_REFS = "--shared-refs" in sys.argv     # part 2 (off by default: the funnel now ranks with and without references)
 
 
 def setting_effect(d, Y):
@@ -53,13 +54,9 @@ def fit(kind, FA, FB, Y):
         X, Xs = FB - FA, FA - FB
     else:
         X, Xs = np.hstack([FA, FB, FB - FA]), np.hstack([FB, FA, FA - FB])
-    Xtr, Ytr = np.vstack([X, Xs]), np.vstack([Y, -Y])
-    def predict(GA, GB):
-        Z = GB - GA if kind == "B - A" else np.hstack([GA, GB, GB - GA])
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            return sc.fit_predict("trees", Xtr, Ytr, Z)
-    return predict
+    import funnel_shortlist as fs
+    f = fs.gbt(np.vstack([X, Xs]), np.vstack([Y, -Y]))         # one tree model per target (fast)
+    return lambda GA, GB: f(GB - GA if kind == "B - A" else np.hstack([GA, GB, GB - GA]))
 
 
 def score(y, p):
@@ -122,16 +119,19 @@ def main():
                         ta = np.flatnonzero((blk[allp[:, 0]] == k) & (blk[allp[:, 1]] == k) & sel_a(allp[:, 0]))
                         if len(ta):
                             pa[ta] = pred(F[allp[ta, 0]], F[allp[ta, 1]])
-                        tw = np.flatnonzero((blk[P["rb"][within]] == k) & sel_a(P["rb"][within]))
-                        for dist in pw:
-                            refs = np.array([n + shifted_ref(P["rb"][within[i]], dist) for i in tw], int)
-                            if len(tw):
-                                pw[dist][tw] = pred(F[refs], F[P["B"][within[tw]]])
+                        if SHARED_REFS:
+                            tw = np.flatnonzero((blk[P["rb"][within]] == k) & sel_a(P["rb"][within]))
+                            for dist in pw:
+                                refs = np.array([n + shifted_ref(P["rb"][within[i]], dist) for i in tw], int)
+                                if len(tw):
+                                    pw[dist][tw] = pred(F[refs], F[P["B"][within[tw]]])
                 nb = P["type"] == 1
                 okn, oka = np.isfinite(pn[nb, 0]), np.isfinite(pa[:, 0])
                 print(f"{kind:12s} | {tset:38s} | n->n+1 (raw): {score(P['Y'][nb][okn], pn[nb][okn])}")
                 print(f"{'':12s} | {'':38s} | any test pair (corrected, {oka.sum()}): {score(allY[oka], pa[oka])}")
                 res[(kind, tset)] = pw
+        if not SHARED_REFS:
+            continue
         # 2. shared references (the combined model trained on everything)
         print(f"\n  within-packet changes with the reference of the packet d earlier ({sc.CELL_NAME[cell]}):")
         yw = P["Y"][within]
