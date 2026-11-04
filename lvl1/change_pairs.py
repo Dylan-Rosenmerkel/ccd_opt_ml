@@ -52,7 +52,8 @@ def load():
 
 def pairs(d, max_hours=None):
     """Every pair of packets of one amplifier; with max_hours, only pairs taken within that many hours."""
-    t = pd.to_datetime(d["date_start"]).astype("int64").to_numpy() / 3.6e12
+    ts = pd.to_datetime(d["date_start"])
+    t = ((ts - ts.min()).dt.total_seconds() / 3600).to_numpy()          # hours (independent of the time unit)
     out = []
     for ch, g in d.groupby("channel"):
         out += [(i, j) for i, j in combinations(g.index.to_numpy(), 2)

@@ -437,3 +437,7 @@ then see what both of them can predict together; model the new packet designs af
   amplifiers of a packet (60 % of the variance): a shared per-packet effect, not VDD / VR; gain follows delayInt in C.
   Lasso / PLS blow up on outliers; trees, GP, SAAS best; physics difference model best median sigma_e error (3.8 %).
 * `lvl1/change_pairs.py`: all pairs of packets of one amplifier (both labels measured), new-amplifier test.
+* change_pairs (new amplifier, direction of clear changes): all pairs -- settings GP sigma_e 68 % / lambda 66 % / gain
+  80 %, trace trees 50 / 75 / 82 % (trace GP blew up); pairs within 1 h (405 pairs, 54 test) -- trace trees lambda 88 %
+  (25 cases), sigma_e 59 %; settings lambda 76 %. Within a packet (change_test) sigma_e 94 %, lambda 88 %. Fixed: the
+  time conversion assumed nanoseconds (pandas gives microseconds); change_test's interpolation is unaffected (scale-free).
