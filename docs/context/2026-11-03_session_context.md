@@ -470,3 +470,28 @@ then see what both of them can predict together; model the new packet designs af
 * `change_pairs.py --max-step K --block-folds` (contiguous time folds keep neighbours together). Neighbours (n+-1, 81
   test pairs): trace trees lambda direction 91 % (44 clear), trace GP sigma_e 75 %, gain 81 %; settings GP lambda
   82 %, sigma_e 53 %; sizes ~ no change (lambda RMS dominated by L1_18). n+-2: lambda 86 %, sigma_e 71 %.
+
+## 26. Four-way scorecard and ranking test (2026-11-04)
+
+* `lvl1/scorecard.py` (results `processed/lvl1_results/2026-11-04_scorecard/`, copy of the report and figures in
+  `docs/scorecard_2026-11-04/`; `--rescore` re-scores the saved predictions). Board 101 ch0/1/3, 40 packets with traces,
+  5 contiguous time blocks; trained amplifiers vs new amplifier (LOAO x blocks); absolute vs relative (pairs within a
+  packet, n -> n+1, n -> n+2; training pairs pooled, both orders); trace models never see settings; each model vs its
+  cell's settings-only reference (settings + amplifier GP when amplifiers are trained, settings GP for a new one),
+  packet bootstrap 95 %. Ranking (5): per amplifier, shortlist 5 / 10 of its ~35 settings, regret vs the true best.
+* CORRECTION: 96 % of the clear within-packet sigma_e changes go UP (nominal is near the best setting; lambda 76 %),
+  so "always up" scores 96 %: the earlier "sigma_e direction 94 % within a packet" (change_test.py, trained in one
+  order) was mostly this base rate. With both orders in training: trace trees 76 % (trained) / 65 % (new amp) vs
+  settings 33-45 %. Neighbouring-packet pairs are balanced (~50 % up) and are the fair direction test.
+* (1) absolute, trained amps: trace models beat settings + amplifier for lambda (28-29 vs 37 %) and gain (0.9-1.0 vs
+  1.4 %, but the amplifier mean is 1.0); sigma_e same (10-11 vs 10.7 %).
+* (2) absolute, new amp: nothing reliably beats settings GP (15.7 / 49 / 3.5 %); physics sigma_e 14.7 (n.s.), cnn
+  lambda 41 % (better), deep kernel lambda 90 % (worse).
+* (3)/(4) relative, n -> n+1 (balanced): trained amps trace trees 78 / 89 / 86 % (sigma_e / lambda / gain) vs settings
+  + amp GP 72 / 79 / 78; new amp trace trees 72 / 82 / 89 vs settings GP 72 / 82 / 69; absolute pretrained cnn
+  differenced 92 / 89 / 83 (trained), 86 / 80 / 72 (new). None significant at 95 % (about 50 clear changes each).
+  Sizes: sigma_e 10-13 % vs 15 % for "no change"; lambda ~ no change.
+* (5) ranking: noisy (3 amps x 35 settings). Lambda: trace-change trees put the true best in the top 10 for all 3
+  amplifiers (trained and new amp), top-5 regret 3 / 9 % vs 20 % random; settings-change GP also 3 / 3. Sigma_e: spreads
+  among the good settings are small (random top-5 regret 4 %); best models ~2 %. Combined sigma_e + lambda, new amp:
+  absolute trace trees regret 0.3 %, settings GP 0.0 %, random 12.5 %.
