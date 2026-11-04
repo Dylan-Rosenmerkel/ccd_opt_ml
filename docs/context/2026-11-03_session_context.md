@@ -459,3 +459,14 @@ then see what both of them can predict together; model the new packet designs af
   (best trace-based; settings GP 7.5, no change 11.9), lambda 24.1 %. Huber blows up on new amplifiers. Most often
   picked: sigma_e noise-vs-window-length (short windows), within-cycle spectrum; lambda mean skip shape (point 111),
   within-cycle spectrum, equivalent-time pulse; gain the variation along the cycle.
+
+## 25. v2 training plan document; neighbouring-packet check (2026-11-04)
+
+* `docs/overleaf_v2_training_plan_2026-11-04/v2_training_plan.tex` (10 pages; zip next to it): questions Q1-Q5, what
+  changes from v1 and why, the v2 packet and its data products, pre-night checklist (strip test, pull main, settings on
+  every working board, voltage windows, temperature, ch2), processing, tasks A (absolute, three sources), B (change
+  between two traces: within-packet strip labels, image labels, neighbouring pairs; models and losses), C (transfer),
+  D (diagnostics), expected outcomes and decisions, risks, commands.
+* `change_pairs.py --max-step K --block-folds` (contiguous time folds keep neighbours together). Neighbours (n+-1, 81
+  test pairs): trace trees lambda direction 91 % (44 clear), trace GP sigma_e 75 %, gain 81 %; settings GP lambda
+  82 %, sigma_e 53 %; sizes ~ no change (lambda RMS dominated by L1_18). n+-2: lambda 86 %, sigma_e 71 %.

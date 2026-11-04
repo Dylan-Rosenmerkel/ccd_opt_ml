@@ -50,14 +50,18 @@ def load():
     return d, F, Th, Y
 
 
-def pairs(d, max_hours=None):
-    """Every pair of packets of one amplifier; with max_hours, only pairs taken within that many hours."""
+def pairs(d, max_hours=None, max_step=None):
+    """Every pair of packets of one amplifier; with max_hours, only pairs taken within that many hours; with
+    max_step, only packets at most that many places apart in time order (1 = neighbours)."""
     ts = pd.to_datetime(d["date_start"])
     t = ((ts - ts.min()).dt.total_seconds() / 3600).to_numpy()          # hours (independent of the time unit)
     out = []
     for ch, g in d.groupby("channel"):
-        out += [(i, j) for i, j in combinations(g.index.to_numpy(), 2)
-                if max_hours is None or abs(t[j] - t[i]) <= max_hours]
+        idx = g.index.to_numpy()[np.argsort(t[g.index.to_numpy()])]
+        rank = {i: r for r, i in enumerate(idx)}
+        out += [(i, j) for i, j in combinations(idx, 2)
+                if (max_hours is None or abs(t[j] - t[i]) <= max_hours)
+                and (max_step is None or abs(rank[j] - rank[i]) <= max_step)]
     return np.array(out)
 
 
@@ -77,16 +81,22 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--max-hours", type=float, help="only pairs of packets taken within this many hours")
+    parser.add_argument("--max-step", type=int, help="only packets at most this many places apart in time (1 = neighbours)")
+    parser.add_argument("--block-folds", action="store_true", help="folds = 5 contiguous blocks of packets in time")
     parser.add_argument("--models", nargs="*", default=["no change", "settings change: trees", "settings change: gp",
                                                         "trace change: trees", "trace change: gp"])
     args = parser.parse_args()
     d, F, Th, Y = load()
-    P = pairs(d, args.max_hours)
+    P = pairs(d, args.max_hours, args.max_step)
     i, j = P[:, 0], P[:, 1]
     Xf, Xs, Yp = F[j] - F[i], Th[j] - Th[i], Y[j] - Y[i]
     amp, pk = d.channel.to_numpy(), d.packet_id.to_numpy()
     upk = np.unique(pk)
-    fold_of = {p: k for k, f in enumerate(grouped_folds(upk, 5, seed=0)) for p in upk[f]}
+    if args.block_folds:                              # 5 contiguous blocks in time: neighbouring packets share a fold
+        first = d.groupby("packet_id").date_start.min().sort_values()
+        fold_of = {p: min(4, r * 5 // len(first)) for r, p in enumerate(first.index)}
+    else:
+        fold_of = {p: k for k, f in enumerate(grouped_folds(upk, 5, seed=0)) for p in upk[f]}
     fi, fj = np.array([fold_of[p] for p in pk[i]]), np.array([fold_of[p] for p in pk[j]])
     pa = amp[i]
     print(f"{len(d)} rows, {len(P)} pairs ({len(P)//len(np.unique(amp))} per amplifier); "
