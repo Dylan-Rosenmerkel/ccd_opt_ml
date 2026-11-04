@@ -473,7 +473,7 @@ then see what both of them can predict together; model the new packet designs af
 
 ## 26. Four-way scorecard and ranking test (2026-11-04)
 
-* `lvl1/scorecard.py` (results `processed/lvl1_results/2026-11-04_scorecard/`, copy of the report and figures in
+* `lvl1/scorecard.py` (results `processed/lvl1_results/2026-11-04_scorecard/`, copy of the report in
   `docs/scorecard_2026-11-04/`; `--rescore` re-scores the saved predictions). Board 101 ch0/1/3, 40 packets with traces,
   5 contiguous time blocks; trained amplifiers vs new amplifier (LOAO x blocks); absolute vs relative (pairs within a
   packet, n -> n+1, n -> n+2; training pairs pooled, both orders); trace models never see settings; each model vs its
@@ -550,6 +550,8 @@ then see what both of them can predict together; model the new packet designs af
   timing sigma_e 80-88 %, lambda 88-90 %); output stage: gain 100 % (9-19 clear), sigma_e/lambda changes too small;
   clock rails, VSUB: almost no clear changes in v1 (within one max_step); two different kinds (e.g. delayInt vs VR,
   48 pairs): lambda 90 %, gain 100 % (5 clear), sigma_e only 44 % (17 clear, small changes ~5-10 %).
-* `docs/scorecard_2026-11-04/subtracted_traces_example.png`: raw B - A (clock pulses out of phase, noise invisible) vs the
+* `docs/context/figures/subtracted_traces_example.png`: raw B - A (clock pulses out of phase, noise invisible) vs the
   difference curves the models use (L1_04 delayInt, L1_16 VR). `process_packet.py --packets-dir` now also processes
   status "screen".
+
+* Figures: docs/context/figures/scorecard_absolute.png, scorecard_relative.png, subtracted_traces_example.png.
