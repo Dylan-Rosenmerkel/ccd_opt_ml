@@ -42,7 +42,7 @@ Packets taken by hand (daq_scripts/manual_packet.sh) get their manifest from mak
 Usage
 -----
     python process_packet.py <manifest.json> [<manifest.json> ...] [--config ../configs/processing.toml]
-    python process_packet.py --packets-dir <work_dir>/packets          # every packet with status ok
+    python process_packet.py --packets-dir <work_dir>/packets          # every packet with status ok (or screen)
     options: --skip-waders (traces only), --out DIR, --path-map OLD=NEW
 """
 
@@ -941,7 +941,7 @@ def main() -> None:
     if args.packets_dir:
         for path in sorted(Path(args.packets_dir).glob("*.json")):
             status = json.loads(path.read_text()).get("status")
-            if status == "ok":
+            if status in ("ok", "screen"):          # screen: a session-F trace-only packet (features, no labels)
                 manifests.append(path)
             else:
                 print(f"skipped {path.name}: status {status!r} (check its warnings; give it explicitly to process it)")

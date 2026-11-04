@@ -108,10 +108,10 @@ class Runner(tl.Runner):
 
 
 # --------------------------------------------------------------------------- data
-def load():
+def load(channels=(0, 1, 3)):
     files = {p.stem: real_inputs.load(p) for p in sorted((ROOT / "processed" / "model_inputs").glob("*.npz"))}
     b = files["physics"]
-    ok = ((b["board"] == 101) & (b["channel"] != 2) & b["label_ok"] & ~b["fake"] & b["trace_ok"].astype(bool)
+    ok = ((b["board"] == 101) & np.isin(b["channel"], channels) & b["label_ok"] & ~b["fake"] & b["trace_ok"].astype(bool)
           & np.isfinite(b["Y"]).all(1))
     rows = np.flatnonzero(ok)
     d = pd.read_csv(ROOT / "processed" / "dataset.csv", low_memory=False).iloc[rows].reset_index(drop=True).copy()
@@ -167,7 +167,7 @@ def make_pairs(d, Y):
 
 
 # --------------------------------------------------------------------------- absolute
-def run_absolute(files, rows, d, quick):
+def run_absolute(files, rows, d, quick, only=None):
     runner = Runner(files, rows, quick, tl.load_tiers(ct.TIERS))
     amp, blk = d.channel.to_numpy(), d.block.to_numpy()
     splits = {"trained": [(np.flatnonzero(blk != k), np.flatnonzero(blk == k)) for k in range(N_BLOCKS)],
@@ -176,6 +176,8 @@ def run_absolute(files, rows, d, quick):
     preds = {cell: {} for cell in CELLS}
     # settings models first: the pre-trained encoder is built on the first trace model's call, which must not see theta
     for name, (method, spec, sees_settings, cells) in sorted(ABS_MODELS.items(), key=lambda kv: not kv[1][2]):
+        if only and name not in only:
+            continue
         runner.no_settings = not sees_settings
         for cell in cells:
             t0 = time.time()
@@ -226,10 +228,10 @@ def rel_predict(name, TR, P, tr, te, onehot):
     raise ValueError(name)
 
 
-def run_relative(TR, P, d, abs_preds):
+def run_relative(TR, P, d, abs_preds, only=None):
     amp, blk = d.channel.to_numpy(), d.block.to_numpy()
     ba, bb, pamp = blk[P["ra"]], blk[P["rb"]], amp[P["ra"]]
-    onehot = np.eye(3)[np.unique(amp, return_inverse=True)[1][P["ra"]]]
+    onehot = np.eye(len(np.unique(amp)))[np.unique(amp, return_inverse=True)[1][P["ra"]]]
     preds = {cell: {} for cell in CELLS}
     for cell in CELLS:
         splits = []
@@ -240,6 +242,8 @@ def run_relative(TR, P, d, abs_preds):
                 if len(te) and len(tr):
                     splits.append((tr, te))
         for name in REL_MODELS:
+            if only and name not in only:
+                continue
             if "amplifier" in name and cell == "new":
                 continue
             t0 = time.time()
@@ -396,9 +400,10 @@ def score_ranking(P, d, rel_preds, abs_preds, weights):
         sources.update({f"absolute {name}": p[P["rb"][sel]] for name, p in abs_preds[cell].items() if name not in NOT_DIFFERENCED})
         # hybrid: sigma_e from the absolute trace trees, lambda from the trace-change trees (the absolute level is a
         # per-amplifier constant, which does not change a ranking within one amplifier)
-        hyb = sources["absolute trace: trees"].copy()
-        hyb[:, 1] = sources["trace change: trees"][:, 1]
-        sources["hybrid: sigma_e absolute trees, lambda change trees"] = hyb
+        if "absolute trace: trees" in sources and "trace change: trees" in sources:
+            hyb = sources["absolute trace: trees"].copy()
+            hyb[:, 1] = sources["trace change: trees"][:, 1]
+            sources["hybrid: sigma_e absolute trees, lambda change trees"] = hyb
         out[cell] = {}
         for name, p in sources.items():
             out[cell][name] = {}
@@ -457,7 +462,7 @@ def ranking_report(rank_sc, weights) -> list[str]:
 # --------------------------------------------------------------------------- report
 def report(abs_sc, rel_sc, info) -> str:
     L = ["# Level-1 scorecard", "",
-         f"Board 101 ch0/1/3, {info['n_rows']} rows from {info['n_packets']} packets, {N_BLOCKS} contiguous time blocks. "
+         f"Board 101 ch{'/'.join(str(c) for c in info.get('channels', [0, 1, 3]))}, {info['n_rows']} rows from {info['n_packets']} packets, {N_BLOCKS} contiguous time blocks. "
          "Trace models never see the settings. vs settings: the cell's settings-only reference "
          f"(absolute: `{REF['trained']}` / `{REF['new']}`; relative: `{REL_REF['trained']}` / `{REL_REF['new']}`), packet bootstrap 95 %: better / same / worse.", "",
          f"Label noise (floor): absolute {', '.join(f'{t} {v:.1f} %' for t, v in info['label_noise_abs'].items())}; "
@@ -556,26 +561,29 @@ def main():
     parser.add_argument("--out", default=str(ROOT / "processed/lvl1_results/2026-11-04_scorecard"))
     parser.add_argument("--n-boot", type=int, default=1000)
     parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--channels", type=int, nargs="+", default=[0, 1, 3], help="board-101 amplifiers (default 0 1 3: no ch2)")
+    parser.add_argument("--abs-models", nargs="+", help="only these absolute models (names as in ABS_MODELS; keep the references)")
+    parser.add_argument("--rel-models", nargs="+", help="only these relative models (names as in REL_MODELS; keep the references)")
     parser.add_argument("--rescore", action="store_true", help="score the predictions saved in --out (no training)")
     parser.add_argument("--weights", type=float, nargs="+", default=list(sl.DEFAULT_WEIGHTS),
                         help="sigma_e weights w of the ranking objective w dlog sigma_e + (1-w) dlog lambda (default 1 .75 .5 .25 0)")
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    files, rows, d = load()
+    files, rows, d = load(tuple(args.channels))
     cache = out / "predictions.pkl"
     if args.rescore:
         Y, Y_err, abs_preds, P, rel_preds = pickle.loads(cache.read_bytes())
     else:
-        Y, Y_err, abs_preds = run_absolute(files, rows, d, args.quick)
+        Y, Y_err, abs_preds = run_absolute(files, rows, d, args.quick, args.abs_models)
         TR = trace_table(files, rows, d)
         P = make_pairs(d, Y)
-        rel_preds = run_relative(TR, P, d, abs_preds)
+        rel_preds = run_relative(TR, P, d, abs_preds, args.rel_models)
         cache.write_bytes(pickle.dumps((Y, Y_err, abs_preds, P, rel_preds)))
     abs_sc = score_absolute(Y, abs_preds, d.packet_id.to_numpy(), args.n_boot)
     rel_sc = score_relative(P, d, rel_preds, args.n_boot)
     rank_sc = score_ranking(P, d, rel_preds, abs_preds, args.weights)
-    info = {"n_rows": len(d), "n_packets": int(d.packet_id.nunique()),
+    info = {"n_rows": len(d), "n_packets": int(d.packet_id.nunique()), "channels": args.channels,
             "blocks": d.groupby("block").packet_id.unique().apply(lambda v: [str(v.min()), str(v.max())]).to_dict(),
             "label_noise_abs": {t: float(100 * np.sqrt(np.mean(Y_err[:, i] ** 2))) for i, t in enumerate(T)},
             "n_pairs": {t: int((P["type"] == k).sum()) for k, t in enumerate(PAIR_TYPES)}, "ref": REF}

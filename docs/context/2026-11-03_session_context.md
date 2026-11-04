@@ -533,3 +533,23 @@ then see what both of them can predict together; model the new packet designs af
 * Session F is now part of the plan (plan.json "funnel": weights [1, 0.5, 0], rule weighted); PLAN.md has the shortlist
   step; run_plan.sh's stop message names it. Plan document (15 pages): section 9 objective J(w), weight table, scores
   per weight.
+
+## 29. ch2 in the relative models; combined change models; every kind of change (2026-11-04)
+
+* `scorecard.py --channels --abs-models --rel-models`; run with ch0-3 in `processed/lvl1_results/2026-11-04_scorecard_with_ch2/`;
+  `lvl1/compare_amp_sets.py` -> `docs/scorecard_2026-11-04/ch2_comparison.md`. ch2 as a new amplifier: absolute
+  models are off by -54..-100 % in lambda (its offset), change models by -7..0 %; change trees n->n+1 direction ch2
+  76 / 90 / 82 % (sigma_e / lambda / gain) vs others 68 / 89 / 92. ch2 in training: change models unchanged within
+  the intervals (shared-encoder net worse in lambda size, +22..29 %); absolute models' new-amp lambda worse (physics
+  +24, trees +11, pretrained +5 %, significant). -> ch2 usable for change models, not for absolute ones.
+* `lvl1/relative_extra.py` -> `docs/scorecard_2026-11-04/relative_extra.md`: combined trees on [A, B, B-A] (both
+  orders) best change model on a new amplifier, between packets 75 / 89 / 88 % vs change trees 70 / 88 / 86 (n.s.);
+  hand-picked bands add nothing; [A, B-A] without B worse on new amps (lambda size 53 %). Within a packet [A, B, B-A]
+  gets sigma_e 90 % (it can recognise the nominal trace: partly the base rate).
+* By kind of change (new amp): timing changes work (nominal vs timing lambda 96-100 %, sigma_e 64-88 %; timing vs
+  timing sigma_e 80-88 %, lambda 88-90 %); output stage: gain 100 % (9-19 clear), sigma_e/lambda changes too small;
+  clock rails, VSUB: almost no clear changes in v1 (within one max_step); two different kinds (e.g. delayInt vs VR,
+  48 pairs): lambda 90 %, gain 100 % (5 clear), sigma_e only 44 % (17 clear, small changes ~5-10 %).
+* `docs/scorecard_2026-11-04/subtracted_traces_example.png`: raw B - A (clock pulses out of phase, noise invisible) vs the
+  difference curves the models use (L1_04 delayInt, L1_16 VR). `process_packet.py --packets-dir` now also processes
+  status "screen".
