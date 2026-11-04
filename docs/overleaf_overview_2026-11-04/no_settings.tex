@@ -1,0 +1,16 @@
+\begin{frame}{Without the settings as input, nothing gets worse}
+\eyebrow[model]{Traces only}
+\small Every model trained without 101 ch2, without the fingerprints, and \textbf{with} vs \textbf{without} the 67 settings $\theta$ as input. Errors in \%, scored on ch0, ch1, ch3.\par\medskip
+\begin{tabular}{lcccc}\toprule
+ & \multicolumn{2}{c}{session C} & \multicolumn{2}{c}{new amplifier}\\
+model, target & with $\theta$ & without $\theta$ & with $\theta$ & without $\theta$\\\midrule
+physics, $\sigma_e$ & 5.9 & 6.1 & 14.4 & 14.9\\
+cnn, $\sigma_e$ & 10.0 & 7.0 & 23.4 & 22.5\\
+pretrained, $\sigma_e$ & 15.7 & \textbf{5.2} & 17.8 & 19.0\\
+physics, $\lambda$ & 10.4 & 10.4 & 46.3 & 46.0\\
+cnn, $\lambda$ & 13.2 & 11.8 & 44.4 & \textbf{39.7}\\
+deep\_kernel, $\lambda$ & 20.3 & 17.5 & 53.2 & \textbf{42.0}\\
+physics, gain & 2.0 & \textbf{0.7} & 3.6 & 3.7\\\bottomrule
+\end{tabular}\par\medskip
+The trace already carries what the models used the settings for. Traces-only models are simpler and do not learn a map of this CCD's knobs that would not carry to another CCD.
+\end{frame}

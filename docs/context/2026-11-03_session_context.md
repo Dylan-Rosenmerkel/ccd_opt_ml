@@ -396,3 +396,14 @@ then see what both of them can predict together; model the new packet designs af
   without the eta90 fingerprints, scored on session C (`processed/lvl1_results/2026-11-04_learning_curve/`).
 * physics_white: sigma_e 9.7 / 7.9 / 7.5 / 5.9 %, lambda 19.0 / 12.8 / 12.1 / 10.4 %; cnn lambda 22.6 -> 12.7 %;
   gain flattens near 1.0-1.2 % (cnn, nn). sigma_e and lambda still improving at 32 packets: more packets help.
+
+## 20. Traces only (no settings) and the overview PDF (2026-11-04)
+
+* `train_lvl1.py --no-settings`: theta never enters any model (also not the pre-training). Run
+  `processed/lvl1_results/2026-11-04_no_ch2_no_fingerprint_no_settings/` (without ch2, fingerprints and settings).
+  vs the same with settings (ch0/1/3): nothing gets worse; C: cnn sigma_e 10.0 -> 7.0, pretrained sigma_e 15.7 -> 5.2,
+  physics gain 2.0 -> 0.7, cnn lambda 13.2 -> 11.8; new amplifier: cnn lambda 44.4 -> 39.7, deep_kernel 53.2 -> 42.0.
+  The user wants traces-only models (they learn from the trace, not the parameters); settings were an input only by
+  the 2026-10 design. Proposed: make --no-settings the default for trace models (baselines keep theta).
+* Overview as a Beamer PDF (44 frames, real LaTeX math, TikZ flow charts): `docs/overleaf_overview_2026-11-04/`
+  (overview.tex, no_settings.tex, figures/; zip `docs/overleaf_overview_2026-11-04.zip`).

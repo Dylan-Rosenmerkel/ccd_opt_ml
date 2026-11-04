@@ -207,6 +207,35 @@ def fig_no_ch2():
     plt.close(fig)
 
 
+def fig_learning_curve():
+    import collections
+    agg = collections.defaultdict(list)
+    for f in sorted((ROOT / "processed/lvl1_results/2026-11-04_learning_curve").glob("n*.json")):
+        for k, v in json.loads(f.read_text()).items():
+            if not k.startswith("_"):
+                for t, e in v["errors"].items():
+                    agg[(v["model"], t, v["n_packets"])].append(e)
+    if not agg:
+        return
+    sizes = [8, 16, 24, 32]
+    lines = [("mean", GREY, "average (no trace)"), ("settings_amp_trees", "#86b6ef", "settings + amplifier"),
+             ("nn", ORANGE, "nn"), ("cnn", GREEN, "cnn"), ("physics_white", BLUE, "physics")]
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5.2))
+    for ax, t in zip(axes, ("sigma_e", "lambda", "gain")):
+        for m, c, lab in lines:
+            mu = [np.mean(agg[(m, t, n)]) for n in sizes]
+            sd = [np.std(agg[(m, t, n)]) for n in sizes]
+            ax.errorbar(sizes, mu, yerr=sd, color=c, marker="o", linewidth=2, capsize=3, label=lab if t == "sigma_e" else None)
+        ax.set_xticks(sizes)
+        ax.set_xlabel("training packets (A+B)", color=INK2, fontsize=12)
+        ax.set_title(TITLES[t] + ", session C", color=INK, fontsize=14, fontweight="bold")
+        style(ax, "typical error (%)" if t == "sigma_e" else None)
+    fig.legend(loc="lower center", ncol=5, frameon=False, fontsize=12, bbox_to_anchor=(0.5, -0.01))
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    fig.savefig(OUT / "fig_learning_curve.png", dpi=150, facecolor=SURFACE)
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--only", choices=("eq", "fig"))
@@ -221,6 +250,7 @@ def main():
         fig_no_fingerprint()
         fig_board102()
         fig_no_ch2()
+        fig_learning_curve()
     print("wrote", OUT)
 
 

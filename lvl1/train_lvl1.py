@@ -386,6 +386,7 @@ class Runner:
         self.tiers = tiers or {}
         self.feature_spec = "all"                            # which trace features the models see (--feature-tiers)
         self.exclude: set[str] = set()                       # "own: <name>" / "ref: <name>" never seen (--exclude-features)
+        self.no_settings = False                             # --no-settings: the models see the traces only, never theta
         d = files[next(iter(files))]
         self.Y, self.Y_err = d["Y"][rows], d["Y_err"][rows]
         # integer module / amplifier ids (for the labelled reference only)
@@ -406,6 +407,8 @@ class Runner:
             keep = feature_mask(out["feature_names"], self.feature_spec, self.tiers)
             out["X_trace"], out["X_ref"] = out["X_trace"][:, keep], out["X_ref"][:, keep]
             out["feature_names"] = np.asarray(out["feature_names"])[keep]
+        if self.no_settings and "theta" in out and np.asarray(out["theta"]).size:
+            out["theta"] = np.full(np.shape(out["theta"]), np.nan)      # all-NaN: prep_columns drops every setting
         if self.exclude and "feature_names" in out and "X_trace" in out:
             # an excluded column becomes all-NaN, so prep_columns drops it (own and reference blocks separately)
             for key, prefix in (("X_trace", "own: "), ("X_ref", "ref: ")):
@@ -667,7 +670,7 @@ class Runner:
             p = self.files["pretrain"]
             keep = np.isin(p["board"], np.unique(self.files["curves"]["board"][self.rows]))
             c = np.nan_to_num(p["curves"][keep])
-            th = np.nan_to_num(p["theta"][keep]) if p["theta"].size else None
+            th = np.nan_to_num(p["theta"][keep]) if p["theta"].size and not self.no_settings else None
             # unlabeled traces only: no label of any packet is used here
             self.pretrainer = deep.Pretrainer(epochs=10 if self.quick else 40).fit(c, th)
         return self.pretrainer
@@ -1149,6 +1152,8 @@ def main():
     parser.add_argument("--ladder-steps", type=int, nargs="+", default=list(LADDER_STEPS), help="feature counts of the cover and random ladders")
     parser.add_argument("--ladder-random", type=int, default=3, help="number of random orders (default 3)")
     parser.add_argument("--tier-file", default=str(TIER_FILE), help="evidence tiers (default lvl1/feature_study/evidence_tiers.json)")
+    parser.add_argument("--no-settings", action="store_true",
+                        help="the models never see the settings (theta), not even in pre-training: traces only")
     parser.add_argument("--exclude-amps", nargs="*", default=[], metavar="BOARD:CHANNEL",
                         help="amplifiers left out entirely (e.g. 101:2 = board 101 channel 2, WADERs EXT3)")
     parser.add_argument("--exclude-features", help="text file of trace features no model may see, one per line, as "
@@ -1218,6 +1223,7 @@ def main():
         args.ablation_ref = args.ablation_ref or "P"
     args.ablation_ref = args.ablation_ref or "all"
     runner = Runner(files, rows, args.quick, tiers)
+    runner.no_settings = args.no_settings
     if args.exclude_features:
         runner.exclude = {ln.strip() for ln in Path(args.exclude_features).read_text().splitlines()
                           if ln.strip() and not ln.startswith("#")}
@@ -1254,7 +1260,7 @@ def main():
     info = {"date": datetime.now().isoformat(timespec="seconds"), "inputs": str(inputs), "boards": args.board,
             "n_rows": int(len(cv_idx)), "n_packets": int(len(np.unique(packets[cv_idx]))), "n_folds": n_folds, "quick": args.quick,
             "models": args.models, "feature_tiers": args.feature_tiers, "tier_ablation": args.tier_ablation,
-            "exclude_features": args.exclude_features, "exclude_amps": args.exclude_amps,
+            "exclude_features": args.exclude_features, "exclude_amps": args.exclude_amps, "no_settings": args.no_settings,
             "feature_ladder": [list(x) for x in ladder] if ladder else None, "group_by": args.group_by, "setting_tol": args.setting_tol, "n_groups": n_groups,
             "n_cv_packets": int(len(np.unique(packets[cv_idx]))), "merged_groups": merged, "n_boot": args.n_boot,
             "paired_ref": args.paired_ref, "holdout_packets": sorted(np.unique(packets[ho_idx]).tolist()),
