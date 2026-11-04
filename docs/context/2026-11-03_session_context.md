@@ -555,3 +555,23 @@ then see what both of them can predict together; model the new packet designs af
   status "screen".
 
 * Figures: docs/context/figures/scorecard_absolute.png, scorecard_relative.png, subtracted_traces_example.png.
+
+## 30. Funnel: two rankings side by side, sorting pairwise comparisons (2026-11-04)
+
+* User: the funnel must sort ~100 traces by comparing two at a time (an ML comparator + a sorting algorithm); run
+  WITH-reference and WITHOUT-reference rankings side by side on the same screens (screens keep 1 reference set).
+* `lvl1/shortlist.py`: SORTS mean change (least squares of the differences), wins (round robin), Bradley-Terry (MM fit
+  of P(i beats j) = p_i / (p_i + p_j)); applied to the comparisons of J(w).
+* `lvl1/rank_methods.py` (first night, 35 settings as screens, pairs compared by models trained without both blocks;
+  change model = trees on [A, B, B-A] trained on within-packet + all drift-corrected pairs): Spearman with the true
+  setting effect, new amplifier, w = 1 / 0.5 / 0: with reference change model 0.77 / 0.51 / 0.53; one-trace difference
+  0.74 / 0.56 / 0.72; without reference one trace 0.73 / 0.56 / 0.69; screen vs screen mean change 0.69 / 0.66 / 0.74,
+  wins 0.75 / 0.77 / 0.83, Bradley-Terry 0.76 / 0.76 / 0.83 (trained amps similar). -> without reference >= with;
+  direction-only sorts best where lambda counts. Default sort: bradley-terry.
+* `lvl1/funnel_shortlist.py` rewritten: change model [A, B, B-A] on within + random drift-corrected pairs; one-trace
+  model -> setting effect; rankings "with reference" and "without reference" (+ --sort); slots go round weights x
+  rankings; shortlist.json has both full rankings and scores.
+* Plan: SHORTLIST 6 (2 rankings x 3 weights) + CONTROLS 5 (controls unchanged); F 61 packets 5.7 h, total 137 / 27.1 h;
+  plan.json funnel {weights [1, .5, 0], sort bradley-terry, methods}. manual_packet.sh accepts N_REF_SETS=0 (screens
+  without references possible; not the default). Plan document section 9 updated.
+* Running: lvl1/pairs_extra.py (random drift-corrected pairs vs neighbours for training; shared references).

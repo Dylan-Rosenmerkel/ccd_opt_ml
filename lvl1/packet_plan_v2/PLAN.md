@@ -14,8 +14,8 @@ N_REF_SETS=3 N_SETS=3 IMAGE_TOML=image_params/tc1/img32.toml PACKET_ID=L2_NN CHA
 |---|---|---|---|---|
 | D | 61 | 10 | 17.1 h | training and model choice (setting-grouped CV) |
 | E | 15 | 3 | 4.3 h | prospective test: scored once, after the choice is frozen |
-| F | 60 | 2 | 5.4 h | funnel test: 48 trace-only screens, 5 shortlisted + 5 random-control images |
-| all | 136 | | 26.8 h | |
+| F | 61 | 2 | 5.7 h | funnel test: 48 trace-only screens, 6 shortlisted (two rankings) + 5 random-control images |
+| all | 137 | | 27.1 h | |
 
 ## What changed from v1, and why
 
@@ -25,7 +25,7 @@ N_REF_SETS=3 N_SETS=3 IMAGE_TOML=image_params/tc1/img32.toml PACKET_ID=L2_NN CHA
 * **Session E** is a separate Sobol sequence: the prospective test, as v1's session C.
 * **Reference not always nominal** (2026-11-04): 21 packets of session D take their reference at the previous packet's settings (`<id>_ref.txt`), so within-packet changes go up and down (with a nominal reference 96 % of the clear sigma_e changes go up).
 * **Traces bracket the image**: 3 new sets before the strip and image, 2 after.
-* **Session F, the funnel test**: trace-only screens at new Sobol points; the models trained on D+E shortlist the best from their traces (`lvl1/funnel_shortlist.py`, weights 1:0, 0.5:0.5, 0:1 of sigma_e:lambda taking the slots in turn); the shortlist is imaged next to random controls drawn now.
+* **Session F, the funnel test**: trace-only screens at new Sobol points; the models trained on D+E shortlist the best from their traces with two rankings side by side, with the screen's reference trace and without it (screens compared two at a time, then sorted) (`lvl1/funnel_shortlist.py`, weights 1:0, 0.5:0.5, 0:1 of sigma_e:lambda); 6 shortlisted settings are imaged next to 5 random controls drawn now.
 * Points that break a rule are redrawn (D: 0 rejected, E: 0).
 
 ## The box
@@ -196,15 +196,16 @@ Screen packets (session F, `SCREEN=1`): reset; flush; 1 reference trace set; flu
 | L2_125 | F | funnel screen 48 (trace only) | delayInt=460, delay_Ha=1420, delay_Hb=1420, delay_Hc=1420, delayRGH=1370, VDD1=-18.87, VDD2=-18.87, VR1=-3.42, VR2=-3.42, VSUB=43.06, RG_1_H=9.07, RG_2_H=9.07, RG_1_L=3.38, RG_2_L=3.38, SW_1_L=-6.24, SW_2_L=-6.24, H1_A_L=6.89, H1_B_L=6.69, H2_C_L=6.89, H3_A_L=6.89, H3_B_L=6.69, V1_A_L=7.99, V1_B_L=7.79, V2_C_L=7.99, V3_A_L=7.99, V3_B_L=7.79, TG_A_H=7.23, TG_A_L=7.23, TG_B_H=7.23, TG_B_L=7.23 | 2 |
 | L2_126 | F | funnel SHORTLIST 4 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
 | L2_127 | F | funnel SHORTLIST 3 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
-| L2_128 | F | funnel CONTROL: screen 29, drawn at random | delayInt=920, delay_Ha=2880, delay_Hb=2880, delay_Hc=2880, delayRGH=1420, VDD1=-19.49, VDD2=-19.49, VR1=-3.25, VR2=-3.25, VSUB=41.56, RG_1_H=8.57, RG_2_H=8.57, RG_1_L=3.28, RG_2_L=3.28, SW_1_L=-6.33, SW_2_L=-6.33, H1_A_L=7.07, H1_B_L=6.87, H2_C_L=7.07, H3_A_L=7.07, H3_B_L=6.87, V1_A_L=7.92, V1_B_L=7.72, V2_C_L=7.92, V3_A_L=7.92, V3_B_L=7.72, TG_A_H=7.56, TG_A_L=7.56, TG_B_H=7.56, TG_B_L=7.56 | 18 |
-| L2_129 | F | funnel CONTROL: screen 42, drawn at random | delayInt=2240, delay_Ha=1530, delay_Hb=1530, delay_Hc=1530, delayRGH=570, VDD1=-19.92, VDD2=-19.92, VR1=-2.99, VR2=-2.99, VSUB=46.84, RG_1_H=9.15, RG_2_H=9.15, RG_1_L=3.35, RG_2_L=3.35, SW_1_L=-6.19, SW_2_L=-6.19, H1_A_L=7.05, H1_B_L=6.85, H2_C_L=7.05, H3_A_L=7.05, H3_B_L=6.85, V1_A_L=7.94, V1_B_L=7.74, V2_C_L=7.94, V3_A_L=7.94, V3_B_L=7.74, TG_A_H=7.47, TG_A_L=7.47, TG_B_H=7.47, TG_B_L=7.47 | 24 |
+| L2_128 | F | funnel CONTROL: screen 32, drawn at random | delayInt=530, delay_Ha=1730, delay_Hb=1730, delay_Hc=1730, delayRGH=780, VDD1=-18.61, VDD2=-18.61, VR1=-3.19, VR2=-3.19, VSUB=43.5, RG_1_H=9.4, RG_2_H=9.4, RG_1_L=3.21, RG_2_L=3.21, SW_1_L=-6.41, SW_2_L=-6.41, H1_A_L=6.7, H1_B_L=6.5, H2_C_L=6.7, H3_A_L=6.7, H3_B_L=6.5, V1_A_L=8.15, V1_B_L=7.95, V2_C_L=8.15, V3_A_L=8.15, V3_B_L=7.95, TG_A_H=7.41, TG_A_L=7.41, TG_B_H=7.41, TG_B_L=7.41 | 12 |
+| L2_129 | F | funnel CONTROL: screen 43, drawn at random | delayInt=1240, delay_Ha=2720, delay_Hb=2720, delay_Hc=2720, delayRGH=1250, VDD1=-18.04, VDD2=-18.04, VR1=-2.55, VR2=-2.55, VSUB=48.7, RG_1_H=8.82, RG_2_H=8.82, RG_1_L=3.15, RG_2_L=3.15, SW_1_L=-6.08, SW_2_L=-6.08, H1_A_L=6.73, H1_B_L=6.53, H2_C_L=6.73, H3_A_L=6.73, H3_B_L=6.53, V1_A_L=8.09, V1_B_L=7.89, V2_C_L=8.09, V3_A_L=8.09, V3_B_L=7.89, TG_A_H=7.63, TG_A_L=7.63, TG_B_H=7.63, TG_B_L=7.63 | 19 |
 | L2_130 | F | funnel SHORTLIST 2 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
-| L2_131 | F | funnel CONTROL: screen 28, drawn at random | delayInt=670, delay_Ha=1010, delay_Hb=1010, delay_Hc=1010, delayRGH=950, VDD1=-19.21, VDD2=-19.21, VR1=-3.39, VR2=-3.39, VSUB=44.1, RG_1_H=9.13, RG_2_H=9.13, RG_1_L=2.7, RG_2_L=2.7, SW_1_L=-6.09, SW_2_L=-6.09, H1_A_L=6.36, H1_B_L=6.16, H2_C_L=6.36, H3_A_L=6.36, H3_B_L=6.16, V1_A_L=8.23, V1_B_L=8.03, V2_C_L=8.23, V3_A_L=8.23, V3_B_L=8.03, TG_A_H=7.6, TG_A_L=7.6, TG_B_H=7.6, TG_B_L=7.6 | 14 |
-| L2_132 | F | funnel SHORTLIST 1 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
-| L2_133 | F | funnel CONTROL: screen 32, drawn at random | delayInt=530, delay_Ha=1730, delay_Hb=1730, delay_Hc=1730, delayRGH=780, VDD1=-18.61, VDD2=-18.61, VR1=-3.19, VR2=-3.19, VSUB=43.5, RG_1_H=9.4, RG_2_H=9.4, RG_1_L=3.21, RG_2_L=3.21, SW_1_L=-6.41, SW_2_L=-6.41, H1_A_L=6.7, H1_B_L=6.5, H2_C_L=6.7, H3_A_L=6.7, H3_B_L=6.5, V1_A_L=8.15, V1_B_L=7.95, V2_C_L=8.15, V3_A_L=8.15, V3_B_L=7.95, TG_A_H=7.41, TG_A_L=7.41, TG_B_H=7.41, TG_B_L=7.41 | 12 |
-| L2_134 | F | funnel SHORTLIST 5 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
-| L2_135 | F | funnel CONTROL: screen 43, drawn at random | delayInt=1240, delay_Ha=2720, delay_Hb=2720, delay_Hc=2720, delayRGH=1250, VDD1=-18.04, VDD2=-18.04, VR1=-2.55, VR2=-2.55, VSUB=48.7, RG_1_H=8.82, RG_2_H=8.82, RG_1_L=3.15, RG_2_L=3.15, SW_1_L=-6.08, SW_2_L=-6.08, H1_A_L=6.73, H1_B_L=6.53, H2_C_L=6.73, H3_A_L=6.73, H3_B_L=6.53, V1_A_L=8.09, V1_B_L=7.89, V2_C_L=8.09, V3_A_L=8.09, V3_B_L=7.89, TG_A_H=7.63, TG_A_L=7.63, TG_B_H=7.63, TG_B_L=7.63 | 19 |
-| L2_136 | F | nominal (end of the session) | – | 16 |
+| L2_131 | F | funnel SHORTLIST 6 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
+| L2_132 | F | funnel CONTROL: screen 28, drawn at random | delayInt=670, delay_Ha=1010, delay_Hb=1010, delay_Hc=1010, delayRGH=950, VDD1=-19.21, VDD2=-19.21, VR1=-3.39, VR2=-3.39, VSUB=44.1, RG_1_H=9.13, RG_2_H=9.13, RG_1_L=2.7, RG_2_L=2.7, SW_1_L=-6.09, SW_2_L=-6.09, H1_A_L=6.36, H1_B_L=6.16, H2_C_L=6.36, H3_A_L=6.36, H3_B_L=6.16, V1_A_L=8.23, V1_B_L=8.03, V2_C_L=8.23, V3_A_L=8.23, V3_B_L=8.03, TG_A_H=7.6, TG_A_L=7.6, TG_B_H=7.6, TG_B_L=7.6 | 14 |
+| L2_133 | F | funnel SHORTLIST 1 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
+| L2_134 | F | funnel CONTROL: screen 29, drawn at random | delayInt=920, delay_Ha=2880, delay_Hb=2880, delay_Hc=2880, delayRGH=1420, VDD1=-19.49, VDD2=-19.49, VR1=-3.25, VR2=-3.25, VSUB=41.56, RG_1_H=8.57, RG_2_H=8.57, RG_1_L=3.28, RG_2_L=3.28, SW_1_L=-6.33, SW_2_L=-6.33, H1_A_L=7.07, H1_B_L=6.87, H2_C_L=7.07, H3_A_L=7.07, H3_B_L=6.87, V1_A_L=7.92, V1_B_L=7.72, V2_C_L=7.92, V3_A_L=7.92, V3_B_L=7.72, TG_A_H=7.56, TG_A_L=7.56, TG_B_H=7.56, TG_B_L=7.56 | 18 |
+| L2_135 | F | funnel SHORTLIST 5 (settings picked from the screens by the model) | (picked by the shortlist step) | 16 |
+| L2_136 | F | funnel CONTROL: screen 42, drawn at random | delayInt=2240, delay_Ha=1530, delay_Hb=1530, delay_Hc=1530, delayRGH=570, VDD1=-19.92, VDD2=-19.92, VR1=-2.99, VR2=-2.99, VSUB=46.84, RG_1_H=9.15, RG_2_H=9.15, RG_1_L=3.35, RG_2_L=3.35, SW_1_L=-6.19, SW_2_L=-6.19, H1_A_L=7.05, H1_B_L=6.85, H2_C_L=7.05, H3_A_L=7.05, H3_B_L=6.85, V1_A_L=7.94, V1_B_L=7.74, V2_C_L=7.94, V3_A_L=7.94, V3_B_L=7.74, TG_A_H=7.47, TG_A_L=7.47, TG_B_H=7.47, TG_B_L=7.47 | 24 |
+| L2_137 | F | nominal (end of the session) | – | 16 |
 
 ## Session F: the shortlist step
 

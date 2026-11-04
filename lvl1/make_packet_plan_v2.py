@@ -22,8 +22,10 @@ Added 2026-11-04 (after the four-way scorecard, lvl1/scorecard.py):
   no image, ~2-3 min each), then SHORTLIST packets whose settings lvl1/funnel_shortlist.py picks from the screens with
   the models trained on D+E (run_plan.sh stops at the first one until their changes files exist), and as many CONTROL
   packets at screen settings drawn at random now; the images of the shortlist against the controls test the screening
-  step of level 2.  The shortlist slots are shared in turn by the funnel weights (--funnel-weights, the sigma_e weight
-  w of J = w dlog sigma_e + (1-w) dlog lambda; default 1, 0.5, 0), so the images also test the weighting.
+  step of level 2.  Two rankings run side by side on the same screens: WITH the screen's own reference trace, and
+  WITHOUT it (the screens compared two at a time and sorted).  The shortlist slots go round the funnel weights
+  (--funnel-weights, the sigma_e weight w of J = w dlog sigma_e + (1-w) dlog lambda; default 1, 0.5, 0) and the two
+  rankings, so the images test both rankings and the weighting.
 
 Rules (as v1): every configuration passes ccd_limits (windows, the ACM manual's hardware ranges, the group's voltage
 rules; points that fail are redrawn); every voltage within ONE max_step of nominal (manual_packet.sh applies a change
@@ -67,7 +69,8 @@ LOG_SCALE = {"delayInt", "delay_H", "delayRGH"}
 NOMINAL_EVERY = 7          # a nominal packet at positions 1, 8, 15, ... of each session
 REPLICATES = 3             # earlier training points repeated later
 REF_PREVIOUS_EVERY = 2     # session D: every 2nd packet after a non-nominal one takes its reference at that one's settings
-SHORTLIST = 5              # session F: shortlisted and random-control image packets (each)
+SHORTLIST = 6              # session F: shortlisted image packets (2 rankings, with / without reference, x 3 weights)
+CONTROLS = 5               # session F: random-control image packets (screen settings drawn when the plan is made)
 
 
 def packet_minutes(timing: dict, n_ref: int, n_new: int, image_rows: int = 16) -> float:
@@ -175,7 +178,7 @@ def main():
     # session F: the funnel test
     if args.screens:
         screens, rej_f = draw(args.screens, qmc.Sobol(len(names), scramble=True, seed=args.seed + 2000))
-        controls = sorted(rng_ref.choice(len(screens), SHORTLIST, replace=False).tolist())
+        controls = sorted(rng_ref.choice(len(screens), CONTROLS, replace=False).tolist())
         f = [{"session": "F", "purpose": "nominal (start of the funnel session)", "changes": {}}]
         f += [{"session": "F", "purpose": f"funnel screen {k + 1} (trace only)", "changes": c, "screen": True}
               for k, c in enumerate(screens)]
@@ -225,7 +228,7 @@ def main():
            + (": the voltage changes use its PLACEHOLDER windows and are provisional." if not limits.reviewed else "."), "",
            "| session | packets | of which nominal | estimated time | use |", "|---|---|---|---|---|"]
     use = {"D": "training and model choice (setting-grouped CV)", "E": "prospective test: scored once, after the choice is frozen",
-           "F": f"funnel test: {args.screens} trace-only screens, {SHORTLIST} shortlisted + {SHORTLIST} random-control images"}
+           "F": f"funnel test: {args.screens} trace-only screens, {SHORTLIST} shortlisted (two rankings) + {CONTROLS} random-control images"}
     for s, ps in sessions.items():
         doc.append(f"| {s} | {len(ps)} | {sum(not p['changes'] and 'shortlist' not in p for p in ps)} | {sum(p['minutes'] for p in ps) / 60:.1f} h | {use[s]} |")
     doc += [f"| all | {len(planned)} | | {sum(p['minutes'] for p in planned) / 60:.1f} h | |", "",
@@ -243,9 +246,10 @@ def main():
             "within-packet changes go up and down (with a nominal reference 96 % of the clear sigma_e changes go up).",
             f"* **Traces bracket the image**: {args.n_new} new sets before the strip and image, {args.n_post} after.",
             "* **Session F, the funnel test**: trace-only screens at new Sobol points; the models trained on D+E "
-            "shortlist the best from their traces (`lvl1/funnel_shortlist.py`, weights "
-            + ", ".join(f"{w:g}:{1 - w:g}" for w in args.funnel_weights) + " of sigma_e:lambda taking the slots in turn); "
-            "the shortlist is imaged next to random controls drawn now.",
+            "shortlist the best from their traces with two rankings side by side, with the screen's reference trace and "
+            "without it (screens compared two at a time, then sorted) (`lvl1/funnel_shortlist.py`, weights "
+            + ", ".join(f"{w:g}:{1 - w:g}" for w in args.funnel_weights) + " of sigma_e:lambda); "
+            f"{SHORTLIST} shortlisted settings are imaged next to {CONTROLS} random controls drawn now.",
             f"* Points that break a rule are redrawn (D: {rej_train} rejected, E: {rej_test}).", "",
             "## The box", "", "| knob | range | pins |", "|---|---|---|"]
     for g, (lo, hi) in BOX.items():
@@ -298,7 +302,8 @@ def main():
                                                        "N_POST_SETS": args.n_post, "SCREEN_REF_SETS": args.screen_ref,
                                                        "SCREEN_SETS": args.screen_new, "IMAGE_TOML": args.image_toml},
                                                "funnel": {"weights": args.funnel_weights, "rule": "weighted",
-                                                          "shortlist": SHORTLIST, "screens": args.screens},
+                                                          "sort": "bradley-terry", "methods": ["with reference", "without reference"],
+                                                          "shortlist": SHORTLIST, "controls": CONTROLS, "screens": args.screens},
                                                "packets": planned}, indent=1, default=str))
     print("\n".join(doc[:28]))
     print(f"... {len(planned)} packets; wrote {out}")

@@ -50,3 +50,44 @@ def order(d_sigma, d_lambda, w: float, rule: str = "weighted", rng=None) -> np.n
 
 def weight_label(w: float) -> str:
     return f"{w:g}:{1 - w:g}"
+
+
+# --------------------------------------------------------------------------- sorting pairwise comparisons
+#: ways of turning the pairwise predictions of many screens into one order (lvl1/rank_methods.py compares them)
+SORTS = ("mean change", "wins", "bradley-terry")
+
+
+def antisymmetric(D: np.ndarray) -> np.ndarray:
+    """D[i, j] = predicted change i -> j (log y_j - log y_i; NaN = not compared).  Averages the two directions where
+    both were predicted: M = (D - D^T) / 2."""
+    M = np.where(np.isfinite(D) & np.isfinite(D.T), (D - D.T) / 2, np.where(np.isfinite(D), D, -D.T))
+    np.fill_diagonal(M, np.nan)
+    return M
+
+
+def sort_scores(D: np.ndarray, method: str = "mean change", n_iter: int = 200) -> np.ndarray:
+    """One score per screen from the pairwise predicted changes D (n x n, see antisymmetric); lower = better.
+    * "mean change": the mean predicted change from every other screen to this one (the least-squares ranking of the
+      differences; uses their sizes);
+    * "wins": the fraction of the other screens predicted better than this one minus those predicted worse (a
+      round-robin tournament; direction only);
+    * "bradley-terry": the strength p_i of P(i beats j) = p_i / (p_i + p_j) fitted to the predicted wins (Hunter's MM
+      iteration, half a win against a virtual average opponent so a screen that wins or loses everything stays
+      finite); score = -log p."""
+    M = antisymmetric(D)
+    if method == "mean change":
+        return np.nanmean(M, 0)
+    if method == "wins":
+        return np.nanmean(np.sign(M), 0)
+    if method == "bradley-terry":
+        n = len(M)
+        beats = np.nan_to_num(M > 0)               # M[i, j] > 0: j is worse, i beats j
+        played = np.isfinite(M).astype(float)
+        W = beats.sum(1) + 0.5
+        p = np.ones(n)
+        for _ in range(n_iter):
+            denom = (played / (p[:, None] + p[None, :])).sum(1) + 1.0 / (p + 1.0)
+            p = W / denom
+            p /= np.exp(np.mean(np.log(p)))
+        return -np.log(p)
+    raise ValueError(f"sort must be one of {SORTS}")

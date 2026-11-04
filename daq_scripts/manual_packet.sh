@@ -27,7 +27,7 @@
 #                                           # take the changes from a file (one NAME=VALUE or acm101:NAME=VALUE per
 #                                           # line, # comments allowed) instead of the CHANGES block below
 #   REF_CHANGES_FILE=lvl1/packet_plan_v2/L2_09_ref.txt ...   # the reference at these settings instead of nominal
-#   SCREEN=1 ...                                              # trace-only packet (the funnel screen of session F)
+#   SCREEN=1 N_REF_SETS=0 ...                                 # trace-only packet (a funnel screen of session F)
 #
 # Edit the SETTINGS block, nothing else.
 #
@@ -65,7 +65,7 @@ SCAN_NAME="${SCAN_NAME:-manual}"                # free text: which scan / series
 N_REF_SETS="${N_REF_SETS:-5}"   # reference trace sets (nominal parameters)
 N_SETS="${N_SETS:-10}"          # trace sets at the new parameters, before the image
 N_POST_SETS="${N_POST_SETS:-0}" # trace sets at the new parameters AFTER the image (v2 plan: 2), named <PACKET_ID>_post<set>
-SCREEN="${SCREEN:-0}"           # 1: trace-only packet: reference and new traces, no strips, no image
+SCREEN="${SCREEN:-0}"           # 1: trace-only packet (session F screens): new traces only (with N_REF_SETS=0), no strips, no image
 N_SETTLE_TRACES="${N_SETTLE_TRACES:-2}"  # traces after the change, before the new sets (first channel; not used)
 FLUSH_BEFORE_REF=1        # flushes before the first reference trace set
 FLUSH_AFTER_REF=1         # flushes after the reference traces (before the change)
@@ -446,9 +446,11 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
   fi
   flushes "$FLUSH_BEFORE_REF"
   strip "${PACKET_ID}_l1ref" || return $?
-  traces "${PACKET_ID}_ref" "$N_REF_SETS"
-  check_phase "${PACKET_ID}_ref" "$N_REF_SETS" || return $?
-  flushes "$FLUSH_AFTER_REF"
+  if (( N_REF_SETS > 0 )); then     # N_REF_SETS=0 (the funnel screens): no reference traces, one flush only
+    traces "${PACKET_ID}_ref" "$N_REF_SETS"
+    check_phase "${PACKET_ID}_ref" "$N_REF_SETS" || return $?
+    flushes "$FLUSH_AFTER_REF"
+  fi
 
   # 2. change the parameters (from a non-nominal reference: through a reset to nominal first, so no reference knob
   #    is left behind)
