@@ -621,3 +621,15 @@ then see what both of them can predict together; model the new packet designs af
   sigma_e predictor's CV predictions (10 %). lambda, new amplifier: 3 of the 5 picks are among the true best 5
   (L1_08, L1_11, L1_12, -16 %), the single best (L1_13, -34 %) is ranked 7th: top-5 regret 18 % vs 21 % random, top-7
   regret 0 vs 18 %; first pick 32 vs 46 %. One trial: session F is the test; 7-10 picks would be safer than 5.
+
+## 34. Plain-language rewrite of the walkthrough (2026-11-05)
+
+* User: the deck of section 33 was unclear (plots hard to read, explanations not helpful); asked for a new document,
+  keeping the old one.
+* `docs/overleaf_walkthrough_explained_2026-11-05/explained.tex` (20 pages, article, zip next to it): one-page story,
+  glossary, then one message per subsection: the title states the conclusion, one simple figure, "How to read it" /
+  "What it shows", a takeaway box. Worked examples: two real pairs through the change model (L1_04 -> L1_05 right,
+  L1_02 -> L1_03 missed), six settings sorted by pairwise wins (L1_18's stall explains the one miss), the funnel replay
+  as bars in the model's order. Figures by `docs/slides/make_explained_2026_11_05.py` (e_*.png, all redrawn).
+* "After one calibration image" (board 102) now explained: correct every later prediction by the model's miss on the
+  first image; caveat: 102 stayed at nominal, so it shows the level is fixed by one image, not that settings are tracked.
