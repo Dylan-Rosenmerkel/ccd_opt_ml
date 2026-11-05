@@ -602,3 +602,22 @@ then see what both of them can predict together; model the new packet designs af
   Top-5 regrets disagree in places (one trial each). Reports: docs/scorecard_2026-11-04/rank_{size,direction}_*.txt.
 * `funnel_shortlist.py --target direction` (default) | size; plan.json funnel target "direction". Plan document
   section 9: "What the change model learns, and from which pairs" with the table.
+
+## 33. Walkthrough deck of everything so far (2026-11-05)
+
+* User request: a very visual, step-by-step document of all analyses (absolute and relative models, new amplifiers,
+  fingerprints, the funnel and sorting ideas, strips and amplifier bias, v2), with captions on every figure.
+* `docs/overleaf_walkthrough_2026-11-05/`: Beamer deck `walkthrough.tex` (74 frames, 7 steps; every figure has
+  "what you see" / "what it means"; TikZ flow charts and the funnel build up with overlays = the animations; the
+  Bradley-Terry sort steps through MM iterations) and `walkthrough_handout.tex` (same, one page per frame, readable as a
+  document). Zip `docs/overleaf_walkthrough_2026-11-05.zip`. Builds with 0 overfull boxes.
+* New figures: `docs/slides/make_walkthrough_2026_11_05.py` -> `figures/w_*.png` (night timeline, label noise, drift
+  bug, CV models, scorecard grid, base rate, ch2 offset, combined models, kind-of-change heatmap, direction weights,
+  pairs x target, sorting methods, design coverage v1 vs v2, v2 budget, funnel replay); the other figures are copies
+  from the first-data / overview / v2-plan docs.
+* `lvl1/funnel_replay.py` -> `processed/lvl1_results/2026-11-05_funnel_replay/replay.npz`: the funnel on the first
+  night (35 settings as screens, direction classifier, random pairs; same set-up as rank_methods --target direction,
+  reproduces its Spearman 0.84 / 0.85), keeps the comparison matrices, Bradley-Terry scores and MM history, and the
+  sigma_e predictor's CV predictions (10 %). lambda, new amplifier: 3 of the 5 picks are among the true best 5
+  (L1_08, L1_11, L1_12, -16 %), the single best (L1_13, -34 %) is ranked 7th: top-5 regret 18 % vs 21 % random, top-7
+  regret 0 vs 18 %; first pick 32 vs 46 %. One trial: session F is the test; 7-10 picks would be safer than 5.
