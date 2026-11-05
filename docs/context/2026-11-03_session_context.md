@@ -633,3 +633,25 @@ then see what both of them can predict together; model the new packet designs af
   as bars in the model's order. Figures by `docs/slides/make_explained_2026_11_05.py` (e_*.png, all redrawn).
 * "After one calibration image" (board 102) now explained: correct every later prediction by the model's miss on the
   first image; caveat: 102 stayed at nominal, so it shows the level is fixed by one image, not that settings are tracked.
+
+## 35. Models deck: how every model works (2026-11-05)
+
+* User: a slide show with full pedagogical explanations (flowcharts, figures, animations, math) of what every model
+  does, absolute and relative; later: "not concerned with the performance", only a thorough explanation. So the deck has
+  no scores or results charts.
+* `docs/overleaf_models_2026-11-05/models.tex` (Beamer, 63 frames / 127 slides with overlay builds) and
+  `models_handout.tex` (one page per frame, the last step of every animation). Zip `docs/overleaf_models_2026-11-05.zip`.
+  Parts: 0 common ground (inputs, labels, logs, absolute vs relative and the c_a cancellation, folds, model map);
+  1 learners (baselines, Bayesian ridge, a tree, boosting step by step, quantile error bars, GP prior -> posterior,
+  Matern-5/2 ARD + marginal likelihood, gp_dim / SAAS priors, network ensemble, CNN + a sliding filter, self-supervised
+  pre-training, pretrained CNN, deep-kernel GP); 2 physics model (skipper averaging, Allan vs white term, the assembly,
+  the three pieces on real data, packet state vector, label-error weighting and outliers, hierarchical kernel term by
+  term, physics_joint DC + CIC, sets network, variant table, calibration correction); 3 absolute model table and
+  pipeline; 4 relative (clear changes and label noise, pair types, drift-corrected setting effect, both orders,
+  feature differences, combined [A, B, B-A], shared encoder losses, DiffPCA, hand-picked bands, differenced absolute
+  models, direction classifier, how the funnel's change model is trained); 5 ranking (funnel pipeline, J(w) and Pareto,
+  mean change / wins / Bradley-Terry, MM iterations and why MM increases the likelihood); two summary tables.
+* Figures: `docs/slides/make_models_2026_11_05.py` -> `figures/m_*.png` (toys: tree, boosting x4, GP x4, priors,
+  ensemble, hierarchical kernel x3, classifier, Pareto x3, Bradley-Terry x4; first night: convolution x3 on a real
+  curve, masking, physics parts, Allan fit, state vector, drift correction, both-orders histogram, difference curves);
+  six e_*.png and difference_curve_correlation.png copied from the earlier decks.
