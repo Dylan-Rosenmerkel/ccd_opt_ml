@@ -204,5 +204,9 @@
     }
    }
   }
+ },
+ "pass_mark": {
+  "direction_clear_changes_new_amplifier_session_E": 0.9,
+  "set": "2026-11-09, by the user, before any session-E result (was 0.85 in the plan)"
  }
 }

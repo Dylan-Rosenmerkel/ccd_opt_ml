@@ -25,7 +25,7 @@ adds to task B (docs/overleaf_v2_training_plan_2026-11-04, "Task B", "The four-w
   median absolute error, Spearman; trained amplifiers and a new amplifier; vs the settings-only reference (bootstrap);
 * --holdout-session E: two more cells, "trained, E" and "new amplifier, E": trained once on all session-D rows / pairs
   (the new-amplifier cell without the test amplifier), scored on the session-E rows and pairs only.  Run it ONCE,
-  after the choice is frozen.  The level-1 pass mark: direction of clear changes >= 85 % on amplifiers not in
+  after the choice is frozen.  The level-1 pass mark: direction of clear changes >= 90 % on amplifiers not in
   training, on session E.
 
     .venv/bin/python lvl1/scorecard_v2.py --data processed_v2_trainD --out <dir>                 # session D only
