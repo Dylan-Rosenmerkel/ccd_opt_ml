@@ -14,7 +14,7 @@ adds to task B (docs/overleaf_v2_training_plan_2026-11-04, "Task B", "The four-w
     - "n -> n+1", "n -> n+2": neighbouring packets of one amplifier, both labels measured;
     - "random pairs": any two packets of one amplifier, labels drift-corrected (each packet's setting effect = log y -
       nominal interpolated in time), the funnel's training pairs;
-* image-label models are trained on the within-packet (image) and random pairs (both orders); strip-label models on the
+* image-label models are trained on the within-packet (image), n -> n+1, n -> n+2 and random pairs (both orders); strip-label models on the
   strip pairs (both orders);
 * relative models: no change; settings change (GP, trees; + amplifier in the trained cells); feature differences
   (trees, GP); combined trees on [A, B, B - A]; the direction classifier on [A, B, B - A] (the funnel default:
@@ -64,7 +64,7 @@ T = sc.T
 CLEAR = sc.CLEAR
 PLAN = ROOT / "lvl1" / "packet_plan_v2" / "plan.json"
 PAIR_TYPES = ("within packet (image)", "within packet (strip)", "n -> n+1", "n -> n+2", "random pairs")
-IMAGE_TRAIN = (0, 4)          # pair types the image-label models train on
+IMAGE_TRAIN = (0, 2, 3, 4)    # pair types the image-label models train on: within packet, n -> n+1, n -> n+2, random
 STRIP_TRAIN = (1,)            # ... and the strip-label models
 STRIP = {"sigma_e": "l1.l1: sigma_e (e)", "lambda": "l1.l1: lambda (e/pixel)", "gain": "l1.l1: gain (ADU/e)"}
 N_BLOCKS = 5
@@ -411,8 +411,8 @@ def report(abs_sc, rel_sc, info, cells) -> str:
          f"({info['sessions']}); {N_BLOCKS} contiguous time blocks of session D; fractional-window rows "
          f"{'kept' if info['keep_fractional'] else 'left out'}. Trace models never see the settings. "
          f"Pairs: {info['n_pairs']}.", "",
-         "Image-label change models train on the within-packet (image) and random pairs; strip-label models on the strip "
-         "pairs; both orders. The n -> n+1 / n+2 pairs (both labels measured) are test pairs only.", "",
+         "Image-label change models train on the within-packet (image), n -> n+1, n -> n+2 and random pairs (random capped per split); strip-label models on the strip "
+         "pairs; both orders. A test pair never shares a time block with a training pair.", "",
          f"Label noise of a change: {', '.join(f'{t} {100 * v:.1f} %' for t, v in zip(T, cm.NOISE))}; clear = "
          f"{', '.join(f'{t} > {100 * c:.1f} %' for t, c in zip(T, CLEAR))}.", ""]
     for cell in cells:
@@ -462,6 +462,7 @@ def main():
     parser.add_argument("--rel-models", nargs="+")
     parser.add_argument("--rescore", action="store_true")
     parser.add_argument("--weights", type=float, nargs="+", default=list(sl.DEFAULT_WEIGHTS))
+    parser.add_argument("--cells", nargs="+", help="only these cells (e.g. 'trained E' 'new E' for the session-E test)")
     parser.add_argument("--max-random-train", type=int, default=MAX_RANDOM_TRAIN,
                         help="random pairs kept per training split (0 = all)")
     args = parser.parse_args()
@@ -472,6 +473,8 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     cells = CELLS + (["trained E", "new E"] if args.holdout_session else [])
+    if args.cells:
+        cells = [c for c in cells if c in args.cells]
     files, rows, d = load(data, tuple(args.channels), args.holdout_session, args.keep_fractional)
     print(f"{len(d)} rows, {d.packet_id.nunique()} packets, sessions {d.session.value_counts().to_dict()}", flush=True)
     cache = out / "predictions.pkl"
