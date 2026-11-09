@@ -6,7 +6,8 @@ Rule, fixed in advance: the cell is "new" (amplifiers not in training: the level
 * direction: the highest share of clear changes called the right way on the between-packet RANDOM pairs (what the
   session-F funnel compares), ties broken by the n -> n+1 pairs;
 * size: the lowest RMS size error on the same pairs (direction-only models excluded).
-Candidates: every model that sees the traces; not the references (no change, settings change, settings + amplifier).
+Candidates: every model that sees the traces; not the references (no change, settings change, settings + amplifier,
+absolute settings-only models differenced).
 The choice for every other pair type and the trained-amplifier cell is listed next to it (information only).
 
     .venv/bin/python lvl1/freeze_choice_v2_taskB.py --scorecard <dir>/scorecard.json --out lvl1/frozen_choice_v2_taskB.json
@@ -20,7 +21,7 @@ import json
 import math
 from pathlib import Path
 
-REFERENCES = ("no change", "settings change", "settings + amplifier")
+REFERENCES = ("no change", "settings change", "settings + amplifier", "absolute settings")
 RULE_CELL, RULE_PAIRS, TIEBREAK = "new", "random pairs", "n -> n+1"
 
 

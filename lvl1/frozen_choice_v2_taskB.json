@@ -1,5 +1,5 @@
 {
- "frozen": "2026-11-09T17:35:16",
+ "frozen": "2026-11-09T17:35:26",
  "scorecard": "processed_v2_trainD/lvl1_results/taskB_scorecard_D/scorecard.json",
  "rule": "cell 'new', pair type 'random pairs' (tie-break 'n -> n+1'): per target, the highest direction on clear changes and the lowest RMS size error; trace models only (no references)",
  "info": {
@@ -31,15 +31,15 @@
     "always_up": 0.509090909090909,
     "n_clear": 220,
     "vs_settings": "same",
-    "runner_up": "absolute settings: trees, differenced"
+    "runner_up": "trace change: trees"
    },
    "size": {
-    "model": "absolute settings: trees, differenced",
-    "size_error": 1.330009418544171,
+    "model": "trace: combined trees [A, B, B-A]",
+    "size_error": 1.4351550712194658,
     "always_up": 0.509090909090909,
     "n_clear": 220,
-    "vs_settings": "same",
-    "runner_up": "trace: combined trees [A, B, B-A]"
+    "vs_settings": "worse",
+    "runner_up": "trace change: trees"
    },
    "other_pair_types_and_cells (information only)": {
     "trained / within packet (image)": {
@@ -51,16 +51,16 @@
      "size": "trace change: difference curves PCA + trees"
     },
     "trained / n -> n+1": {
-     "direction": "absolute settings + amplifier: gp, differenced",
-     "size": "absolute settings: trees, differenced"
+     "direction": "trace change: trees",
+     "size": "trace: combined trees [A, B, B-A]"
     },
     "trained / n -> n+2": {
      "direction": "trace change: trees",
-     "size": "absolute settings: trees, differenced"
+     "size": "trace: combined trees [A, B, B-A]"
     },
     "trained / random pairs": {
      "direction": "trace change: trees",
-     "size": "absolute settings: trees, differenced"
+     "size": "trace: combined trees [A, B, B-A]"
     },
     "new / within packet (image)": {
      "direction": "trace: direction classifier [A, B, B-A]",
@@ -71,16 +71,16 @@
      "size": "trace change: difference curves PCA + trees"
     },
     "new / n -> n+1": {
-     "direction": "absolute settings: trees, differenced",
-     "size": "absolute settings: trees, differenced"
+     "direction": "trace change: trees",
+     "size": "trace change: trees"
     },
     "new / n -> n+2": {
      "direction": "trace: direction classifier [A, B, B-A]",
-     "size": "absolute settings: trees, differenced"
+     "size": "trace: combined trees [A, B, B-A]"
     },
     "new / random pairs": {
      "direction": "trace: direction classifier [A, B, B-A]",
-     "size": "absolute settings: trees, differenced"
+     "size": "trace: combined trees [A, B, B-A]"
     }
    }
   },
@@ -112,15 +112,15 @@
     },
     "trained / n -> n+1": {
      "direction": "trace change: trees",
-     "size": "absolute settings + amplifier: gp, differenced"
+     "size": "trace: combined trees [A, B, B-A]"
     },
     "trained / n -> n+2": {
-     "direction": "absolute settings + amplifier: gp, differenced",
-     "size": "absolute settings + amplifier: gp, differenced"
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
     },
     "trained / random pairs": {
-     "direction": "absolute settings + amplifier: gp, differenced",
-     "size": "absolute settings + amplifier: gp, differenced"
+     "direction": "trace: combined trees [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
     },
     "new / within packet (image)": {
      "direction": "trace: combined trees [A, B, B-A]",
