@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "processed_AB"   # processed data folder; set with --data
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "lvl1"))
 
@@ -60,7 +61,14 @@ def accuracy(x: np.ndarray, amp: np.ndarray, packet: np.ndarray) -> float:
 
 
 def main():
-    d = real_inputs.load(ROOT / "processed_AB" / "model_inputs" / "features.npz")
+    import argparse
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
+    parser.add_argument("--data", default=str(DATA), help="processed data folder (dataset.csv, model_inputs/); default %(default)s")
+    parser.add_argument("--out", default=str(OUT), help="folder for the fingerprint table and lists; default %(default)s")
+    args = parser.parse_args()
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    d = real_inputs.load(Path(args.data).resolve() / "model_inputs" / "features.npz")
     rows = (d["board"] == 101) & np.isfinite(d["Y"]).all(1) & d["label_ok"] & ~d["fake"] & d["trace_ok"].astype(bool)
     amp, packet = d["channel"][rows], d["packet_id"][rows].astype(str)
     tiers = tl.load_tiers(OUT / "evidence_tiers.json")
@@ -72,15 +80,15 @@ def main():
                           "accuracy": accuracy(X[:, j], amp, packet),
                           "tiers": "+".join(sorted(t for t in tiers.get(n, set()) if t in ("P", "A1", "A2", "B", "C")))})
     t = pd.DataFrame(table).dropna(subset=["eta2"]).sort_values("eta2", ascending=False)
-    t.to_csv(OUT / "amp_fingerprint.csv", index=False)
+    t.to_csv(out / "amp_fingerprint.csv", index=False)
     for th in THRESHOLDS:
         cols = t.loc[t.eta2 > th, "column"].tolist()
-        (OUT / f"amp_fingerprint_eta{int(th * 100)}.txt").write_text(
-            f"# trace features whose variance is > {th:.0%} between amplifiers (lvl1/amp_fingerprint.py; board 101, A+B)\n"
+        (out / f"amp_fingerprint_eta{int(th * 100)}.txt").write_text(
+            f"# trace features whose variance is > {th:.0%} between amplifiers (lvl1/amp_fingerprint.py; board 101, {Path(args.data).name})\n"
             + "\n".join(cols) + "\n")
         print(f"eta2 > {th}: {len(cols)} columns ({sum(c.startswith('own') for c in cols)} own, "
               f"{sum(c.startswith('ref') for c in cols)} reference)")
-    print(f"{len(t)} feature columns; written {OUT / 'amp_fingerprint.csv'}")
+    print(f"{len(t)} feature columns; written {out / 'amp_fingerprint.csv'}")
 
 
 if __name__ == "__main__":

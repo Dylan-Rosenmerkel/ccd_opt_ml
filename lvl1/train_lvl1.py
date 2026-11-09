@@ -1187,6 +1187,8 @@ def main():
     parser.add_argument("--exclude-features", help="text file of trace features no model may see, one per line, as "
                                                    "'own: <name>' or 'ref: <name>' (e.g. lvl1/amp_fingerprint.py's lists)")
     parser.add_argument("--include-flagged", action="store_true", help="also use labels that WADERs flagged")
+    parser.add_argument("--exclude-fractional", action="store_true",
+                        help="leave out rows whose delayInt is not a whole number of ADC samples (fractional_window: the image's on-board CDS mixes N / N+1-sample windows, so its labels may be biased)")
     parser.add_argument("--allow-fake", action="store_true", help="also use FAKE (rehearsal) packets")
     parser.add_argument("--quick", action="store_true", help="short training (to test the pipeline)")
     parser.add_argument("--out", help="results directory (default: <processed>/lvl1_results/<date>)")
@@ -1202,6 +1204,10 @@ def main():
         rows &= base["label_ok"]
     if not args.allow_fake:
         rows &= ~base["fake"]
+    if args.exclude_fractional:
+        if "fractional_window" not in base:
+            raise SystemExit("--exclude-fractional: no fractional_window in the inputs (rebuild them with process_packet.py --rebuild-only)")
+        rows &= ~base["fractional_window"].astype(bool)
     if "trace_ok" in base:                      # no usable trace at the packet's own settings: nothing to predict from
         rows &= base["trace_ok"].astype(bool)
     for bc in args.exclude_amps:

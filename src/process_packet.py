@@ -64,7 +64,7 @@ from typing import Any
 import numpy as np
 
 from trace_features import trace_features
-from decode_trace import decode_trace
+from decode_trace import decode_trace, fractional_window
 from trace_regions import split_regions
 
 CONFIG_DEFAULT = Path(__file__).resolve().parent.parent / "configs" / "processing.toml"
@@ -648,10 +648,12 @@ def extract_labels(header: dict[str, Any], bounds: dict[str, tuple[float, float]
 # --------------------------------------------------------------------------- #
 
 def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders: bool = False,
-                   reuse_traces: bool = False) -> dict:
+                   reuse_traces: bool = False, reuse_labels: bool = False) -> dict:
     """Run steps 1-4 for one packet and write its results; returns the result summary.  ``reuse_traces``: take the
     traces' results from the packet's existing features.json (written by an earlier run) and redo only the images
-    and labels (e.g. after a change of the image processing)."""
+    and labels (e.g. after a change of the image processing).  ``reuse_labels``: the opposite: keep each board's
+    WADERs labels from the packet's existing labels.json and redo the traces and strips (e.g. after a change of the
+    trace decoding); boards without earlier labels are fitted as usual."""
     manifest = json.loads(Path(manifest_path).read_text())
     out = cfg.out_dir / manifest["packet_id"]
     out.mkdir(parents=True, exist_ok=True)
@@ -677,6 +679,11 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
     # -- images and labels -------------------------------------------------------
     images = []
     bounds = fit_bounds(cfg.waders_json)
+    previous: dict[int, dict] = {}
+    if reuse_labels and (out / "labels.json").exists():
+        old = json.loads((out / "labels.json").read_text())
+        previous = {im["board"]: im for im in old.get("images", []) if im.get("labels")}
+        previous_version = old.get("waders_version")
     for image in files["images"]:
         entry: dict[str, Any] = {"board": image["board"], "fits_original": str(image["fits"]) if image["fits"] else None}
         meta = json.loads(image["meta"].read_text()) if image["meta"].exists() else {}
@@ -711,7 +718,10 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
                 result["warnings"].append(f"drift check failed on board {image['board']} (image used as is): {exc}")
         header = read_fits_primary(fits)
         entry["image_header"] = {k: header.get(k) for k in ("NROW", "NCOL", "NDCM", "NPBIN", "NSBIN", "EXPOSURE")}
-        if not skip_waders:
+        if image["board"] in previous:
+            entry["labels"] = previous[image["board"]]["labels"]
+            entry["labels_reused"] = True
+        elif not skip_waders:
             raw = label_image(fits, out / "waders" / f"acm{image['board']}", meta, cfg, bounds, result, image["board"])
             entry.update({k: v for k, v in raw.items() if k in ("waders", "error")})
             labels = raw.get("labels")
@@ -734,7 +744,9 @@ def process_packet(manifest_path: str | Path, cfg: ProcessingConfig, skip_waders
                            drift_warning=used and lab["channel"] in (d.get("warning_channels") or []))
         images.append(entry)
 
-    labels = {"waders_version": waders_version(cfg) if not skip_waders else None,
+    labels = {"waders_version": (previous_version if previous and all(im.get("labels_reused") for im in images
+                                                                        if im.get("labels"))
+                                 else waders_version(cfg) if not skip_waders else None),
               "waders_json": str(cfg.waders_json), "fit_bounds": bounds,
               "images": [{k: v for k, v in im.items() if k in ("board", "labels", "error", "fake")} for im in images]}
     (out / "labels.json").write_text(json.dumps(_json_safe(labels), indent=1))
@@ -859,6 +871,12 @@ def dataset_rows(result: dict, manifest: dict) -> list[dict[str, Any]]:
                 row[f"image.{key}"] = value
             row["label.flags"] = "; ".join(label.get("flags", []))
             row["label.ok"] = not label.get("flags")
+            # delayInt not a whole number of ADC samples: the on-board image CDS mixes windows of N and N+1
+            # samples, so the image (and its labels) may carry discrete pixel offsets (decode_trace.window_samples).
+            # A flag only: label.ok is unchanged, the training decides whether to keep these rows.
+            delay_int = row.get("theta.delayInt")
+            row["label.fractional_window"] = (fractional_window(float(delay_int))
+                                              if delay_int not in (None, "") else False)
             # post.*: the new settings' traces taken after the image (absent before 2026-11-04)
             for kind, prefix in (("theta", "trace"), ("ref", "ref"), ("post", "post")):
                 if kind == "post" and (kind, board, ch) not in combined:
@@ -926,6 +944,13 @@ def main() -> None:
     parser.add_argument("--path-map", action="append", default=[], metavar="OLD=NEW",
                         help="map a DAQ path prefix to a local one (repeatable)")
     parser.add_argument("--skip-waders", action="store_true", help="traces only")
+    parser.add_argument("--reuse-labels", action="store_true",
+                        help="keep each packet's WADERs labels (labels.json) and redo only the traces and strips")
+    parser.add_argument("--no-rebuild", action="store_true",
+                        help="do not rebuild dataset.csv and the model inputs at the end (for parallel runs: rebuild once "
+                             "afterwards with --rebuild-only)")
+    parser.add_argument("--rebuild-only", action="store_true",
+                        help="only rebuild dataset.csv and the model inputs from the processed packets in --out")
     parser.add_argument("--reuse-traces", action="store_true",
                         help="keep each packet's trace results (features.json) and redo only the images and labels")
     args = parser.parse_args()
@@ -937,6 +962,11 @@ def main() -> None:
         old, new = item.split("=", 1)
         cfg.path_map = {old: new, **cfg.path_map}
 
+    if args.rebuild_only:
+        print(f"dataset: {build_dataset(cfg.out_dir)}")
+        if cfg.model_inputs:
+            build_model_inputs(cfg.out_dir)
+        return
     manifests = [Path(m) for m in args.manifests]
     if args.packets_dir:
         for path in sorted(Path(args.packets_dir).glob("*.json")):
@@ -949,12 +979,14 @@ def main() -> None:
         parser.error("give manifest files or --packets-dir")
 
     for path in manifests:
-        result = process_packet(path, cfg, args.skip_waders, args.reuse_traces)
+        result = process_packet(path, cfg, args.skip_waders, args.reuse_traces, args.reuse_labels)
         n_ok = sum(1 for t in result["traces"] if t.get("usable"))
         labels = [l for im in result["images"] for l in im.get("labels", [])]
         print(f"{result['packet_id']}: {n_ok}/{len(result['traces'])} traces usable, "
               f"{sum(1 for l in labels if not l['flags'])}/{len(labels)} labels without flags"
               + ("".join(f"\n   WARNING {w}" for w in result["warnings"])))
+    if args.no_rebuild:
+        return
     print(f"dataset: {build_dataset(cfg.out_dir)}")
     if cfg.model_inputs:
         build_model_inputs(cfg.out_dir)

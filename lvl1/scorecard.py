@@ -51,6 +51,7 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "processed"   # processed data folder; set with --data
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "lvl1"))
 
@@ -109,12 +110,12 @@ class Runner(tl.Runner):
 
 # --------------------------------------------------------------------------- data
 def load(channels=(0, 1, 3)):
-    files = {p.stem: real_inputs.load(p) for p in sorted((ROOT / "processed" / "model_inputs").glob("*.npz"))}
+    files = {p.stem: real_inputs.load(p) for p in sorted((DATA / "model_inputs").glob("*.npz"))}
     b = files["physics"]
     ok = ((b["board"] == 101) & np.isin(b["channel"], channels) & b["label_ok"] & ~b["fake"] & b["trace_ok"].astype(bool)
           & np.isfinite(b["Y"]).all(1))
     rows = np.flatnonzero(ok)
-    d = pd.read_csv(ROOT / "processed" / "dataset.csv", low_memory=False).iloc[rows].reset_index(drop=True).copy()
+    d = pd.read_csv(DATA / "dataset.csv", low_memory=False).iloc[rows].reset_index(drop=True).copy()
     assert (d.packet_id.to_numpy() == b["packet_id"][rows]).all() and (d.channel.to_numpy() == b["channel"][rows]).all()
     ts = pd.to_datetime(d["date_start"])
     d["hours"] = (ts - ts.min()).dt.total_seconds() / 3600
@@ -557,8 +558,10 @@ def plot(abs_sc, rel_sc, info, out: Path):
 
 
 def main():
+    global DATA
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--out", default=str(ROOT / "processed/lvl1_results/2026-11-04_scorecard"))
+    parser.add_argument("--data", default=str(DATA), help="processed data folder (dataset.csv, model_inputs/); default %(default)s")
+    parser.add_argument("--out", help="output folder (default <data>/lvl1_results/2026-11-04_scorecard)")
     parser.add_argument("--n-boot", type=int, default=1000)
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--channels", type=int, nargs="+", default=[0, 1, 3], help="board-101 amplifiers (default 0 1 3: no ch2)")
@@ -568,7 +571,9 @@ def main():
     parser.add_argument("--weights", type=float, nargs="+", default=list(sl.DEFAULT_WEIGHTS),
                         help="sigma_e weights w of the ranking objective w dlog sigma_e + (1-w) dlog lambda (default 1 .75 .5 .25 0)")
     args = parser.parse_args()
-    out = Path(args.out)
+    cm.set_data(args.data)
+    DATA = cm.DATA
+    out = Path(args.out) if args.out else DATA / "lvl1_results" / "2026-11-04_scorecard"
     out.mkdir(parents=True, exist_ok=True)
     files, rows, d = load(tuple(args.channels))
     cache = out / "predictions.pkl"

@@ -1,0 +1,221 @@
+{
+ "frozen": "2026-11-09T13:04:07",
+ "rule": "per target: lowest session-D setting-grouped CV error (RMS of log error) over model x feature set x source; no baselines, no amplifier-labelled references",
+ "inputs": {
+  "model_inputs": [
+   {
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_ablation/report.json",
+    "n_rows": 130,
+    "n_packets": 44,
+    "exclude_amps": [
+     "101:2"
+    ],
+    "exclude_features": "processed_v2_trainD/feature_study/amp_fingerprint_eta90.txt"
+   },
+   {
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_auto/report.json",
+    "n_rows": 130,
+    "n_packets": 44,
+    "exclude_amps": [
+     "101:2"
+    ],
+    "exclude_features": "processed_v2_trainD/feature_study/amp_fingerprint_eta90.txt"
+   }
+  ],
+  "model_inputs_l1": [
+   {
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_l1_auto/report.json",
+    "n_rows": 130,
+    "n_packets": 44,
+    "exclude_amps": [
+     "101:2"
+    ],
+    "exclude_features": "processed_v2_trainD/feature_study/amp_fingerprint_eta90.txt"
+   }
+  ],
+  "model_inputs_both": [
+   {
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json",
+    "n_rows": 130,
+    "n_packets": 44,
+    "exclude_amps": [
+     "101:2"
+    ],
+    "exclude_features": "processed_v2_trainD/feature_study/amp_fingerprint_eta90.txt"
+   },
+   {
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_auto/report.json",
+    "n_rows": 130,
+    "n_packets": 44,
+    "exclude_amps": [
+     "101:2"
+    ],
+    "exclude_features": "processed_v2_trainD/feature_study/amp_fingerprint_eta90.txt"
+   }
+  ]
+ },
+ "targets": {
+  "sigma_e": {
+   "choice": {
+    "source": "model_inputs_both",
+    "model": "sets",
+    "features": "P",
+    "target": "sigma_e",
+    "error": 0.1213158057181189,
+    "crps": 0.0680958078674456,
+    "rank": 0.7493793784207852,
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+   },
+   "runner_up": {
+    "source": "model_inputs_both",
+    "model": "physics_white",
+    "features": "P+A",
+    "target": "sigma_e",
+    "error": 0.12210431928765585,
+    "crps": 0.06602437947655956,
+    "rank": 0.7253022895677462,
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+   },
+   "best_per_source": {
+    "model_inputs_both": {
+     "source": "model_inputs_both",
+     "model": "sets",
+     "features": "P",
+     "target": "sigma_e",
+     "error": 0.1213158057181189,
+     "crps": 0.0680958078674456,
+     "rank": 0.7493793784207852,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+    },
+    "model_inputs": {
+     "source": "model_inputs",
+     "model": "sets",
+     "features": "P+A",
+     "target": "sigma_e",
+     "error": 0.122606986706098,
+     "crps": 0.06709749575792437,
+     "rank": 0.7364088989727108,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_ablation/report.json"
+    },
+    "model_inputs_l1": {
+     "source": "model_inputs_l1",
+     "model": "physics_white",
+     "features": "P+A+B",
+     "target": "sigma_e",
+     "error": 0.13222857538473282,
+     "crps": 0.06502801104514962,
+     "rank": 0.6733981087923233,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_l1_auto/report.json"
+    }
+   }
+  },
+  "lambda": {
+   "choice": {
+    "source": "model_inputs_both",
+    "model": "physics",
+    "features": "all",
+    "target": "lambda",
+    "error": 0.12357903128999534,
+    "crps": 0.07008644855290393,
+    "rank": 0.8434075787450716,
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+   },
+   "runner_up": {
+    "source": "model_inputs_both",
+    "model": "sets",
+    "features": "all",
+    "target": "lambda",
+    "error": 0.12357903128999534,
+    "crps": 0.07008644855290393,
+    "rank": 0.8434075787450716,
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+   },
+   "best_per_source": {
+    "model_inputs_both": {
+     "source": "model_inputs_both",
+     "model": "physics",
+     "features": "all",
+     "target": "lambda",
+     "error": 0.12357903128999534,
+     "crps": 0.07008644855290393,
+     "rank": 0.8434075787450716,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+    },
+    "model_inputs": {
+     "source": "model_inputs",
+     "model": "ridge",
+     "features": "P+A+B",
+     "target": "lambda",
+     "error": 0.15898811088783585,
+     "crps": 0.08475194237552044,
+     "rank": 0.8134199952691161,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_ablation/report.json"
+    },
+    "model_inputs_l1": {
+     "source": "model_inputs_l1",
+     "model": "trees",
+     "features": "all",
+     "target": "lambda",
+     "error": 0.17302586229862837,
+     "crps": 0.09824733336701906,
+     "rank": 0.7313779558816428,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_l1_auto/report.json"
+    }
+   }
+  },
+  "gain": {
+   "choice": {
+    "source": "model_inputs_both",
+    "model": "nn",
+    "features": "impl0",
+    "target": "gain",
+    "error": 0.013490879792429595,
+    "crps": 0.007336481490083217,
+    "rank": 0.2566167304681201,
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+   },
+   "runner_up": {
+    "source": "model_inputs_both",
+    "model": "trees",
+    "features": "P+A",
+    "target": "gain",
+    "error": 0.013522081891501364,
+    "crps": 0.007825532243018147,
+    "rank": 0.3142965183804662,
+    "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+   },
+   "best_per_source": {
+    "model_inputs_both": {
+     "source": "model_inputs_both",
+     "model": "nn",
+     "features": "impl0",
+     "target": "gain",
+     "error": 0.013490879792429595,
+     "crps": 0.007336481490083217,
+     "rank": 0.2566167304681201,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_both_ablation/report.json"
+    },
+    "model_inputs": {
+     "source": "model_inputs",
+     "model": "nn",
+     "features": "impl0",
+     "target": "gain",
+     "error": 0.014165614073163196,
+     "crps": 0.007893086312330554,
+     "rank": 0.20595141922424964,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_ablation/report.json"
+    },
+    "model_inputs_l1": {
+     "source": "model_inputs_l1",
+     "model": "trees",
+     "features": "all",
+     "target": "gain",
+     "error": 0.01603669558564199,
+     "crps": 0.009556588299345163,
+     "rank": 0.20832013514940342,
+     "report": "processed_v2_trainD/lvl1_results/taskA/model_inputs_l1_auto/report.json"
+    }
+   }
+  }
+ }
+}

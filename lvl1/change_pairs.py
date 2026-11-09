@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "processed"   # processed data folder; set with --data
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "lvl1"))
 
@@ -35,7 +36,7 @@ T = list(ct.LABELS)
 
 
 def load():
-    d = pd.read_csv(ROOT / "processed" / "dataset.csv", low_memory=False)
+    d = pd.read_csv(DATA / "dataset.csv", low_memory=False)
     d = d[(d.board == 101) & (d.channel != 2)]
     d = d[d["label.ok"].astype(str).str.lower().eq("true") & (d["trace.n_usable"] > 0)].copy()
     plan = {p["packet_id"]: str(p.get("session")) for p in __import__("json").loads(ct.PLAN.read_text())["packets"]}
@@ -78,6 +79,7 @@ def predict(kind, X, Y, tr, te):
 
 
 def main():
+    global DATA
     import argparse
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--max-hours", type=float, help="only pairs of packets taken within this many hours")
@@ -85,7 +87,9 @@ def main():
     parser.add_argument("--block-folds", action="store_true", help="folds = 5 contiguous blocks of packets in time")
     parser.add_argument("--models", nargs="*", default=["no change", "settings change: trees", "settings change: gp",
                                                         "trace change: trees", "trace change: gp"])
+    parser.add_argument("--data", default=str(DATA), help="processed data folder (dataset.csv, model_inputs/); default %(default)s")
     args = parser.parse_args()
+    DATA = ct.DATA = Path(args.data).resolve()
     d, F, Th, Y = load()
     P = pairs(d, args.max_hours, args.max_step)
     i, j = P[:, 0], P[:, 1]

@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "processed"   # processed data folder; set with --data
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "lvl1"))
 
@@ -92,14 +93,19 @@ def predict(D, tr, te, kind, k, picks):
 
 
 def main():
+    global DATA
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--k", type=int, default=6, help="bands per target")
-    parser.add_argument("--out", default=str(ROOT / "processed/lvl1_results/2026-11-04_change_models/handpicked.json"))
+    parser.add_argument("--data", default=str(DATA), help="processed data folder (dataset.csv, model_inputs/); default %(default)s")
+    parser.add_argument("--out", help="output file (default <data>/lvl1_results/2026-11-04_change_models/handpicked.json)")
     args = parser.parse_args()
+    cm.set_data(args.data)
+    DATA = cm.DATA
+    args.out = args.out or str(DATA / "lvl1_results" / "2026-11-04_change_models" / "handpicked.json")
     D = cm.build()
     ab, c = np.flatnonzero(D["session"] != "C"), np.flatnonzero(D["session"] == "C")
     folds = [ab[f] for f in grouped_folds(D["packet"][ab], 5, seed=0)]
-    names = [str(n) for n in real_inputs.load(ROOT / "processed/model_inputs/curves.npz")["curve_names"]]
+    names = [str(n) for n in real_inputs.load(DATA / "model_inputs" / "curves.npz")["curve_names"]]
     results = {}
     for kind in ("huber", "gp", "trees"):
         picks = {t: collections.Counter() for t in T}

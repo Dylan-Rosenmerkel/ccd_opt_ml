@@ -34,6 +34,7 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "processed"   # processed data folder; set with --data
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "lvl1"))
 
@@ -55,7 +56,7 @@ def build():
     A, B = d[[f"ref.{f}" for f in feats]].to_numpy(float), d[[f"trace.{f}" for f in feats]].to_numpy(float)
     pos = (np.nanmin(A, 0) > 0) & (np.nanmin(B, 0) > 0)
     lg = lambda X: np.where(pos, np.log(np.where(pos, X, 1)), X)
-    c = real_inputs.load(ROOT / "processed" / "model_inputs" / "curves.npz")
+    c = real_inputs.load(DATA / "model_inputs" / "curves.npz")
     key = {(p, int(b), int(ch)): i for i, (p, b, ch) in enumerate(zip(c["packet_id"], c["board"], c["channel"]))}
     idx = np.array([key[(p, 101, int(ch))] for p, ch in zip(d.packet_id, d.channel)])
     Y = d[[f"d_{t}" for t in T]].to_numpy(float)
@@ -205,7 +206,7 @@ def diff_curve_map(D, rows, out: Path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    names = [str(n) for n in real_inputs.load(ROOT / "processed" / "model_inputs" / "curves.npz")["curve_names"]]
+    names = [str(n) for n in real_inputs.load(DATA / "model_inputs" / "curves.npz")["curve_names"]]
     Dc = D["CB"][rows] - D["CA"][rows]
     summary = {}
     fig, axes = plt.subplots(1, 2, figsize=(15, 6.5), sharey=True)
@@ -227,18 +228,32 @@ def diff_curve_map(D, rows, out: Path):
     return summary
 
 
+def set_data(path):
+    """Point this module and change_test (whose load() it uses) at a processed data folder."""
+    global DATA
+    DATA = ct.DATA = Path(path).resolve()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--cross-hours", type=float, default=1.0, help="add cross-packet pairs within this many hours (0: none)")
-    parser.add_argument("--out", default=str(ROOT / "processed" / "lvl1_results" / "2026-11-04_change_models"))
+    parser.add_argument("--data", default=str(DATA), help="processed data folder (dataset.csv, model_inputs/); default %(default)s")
+    parser.add_argument("--out", help="output folder (default <data>/lvl1_results/2026-11-04_change_models)")
+    parser.add_argument("--plan", default=None, help="packet plan (default v1's); v2: lvl1/packet_plan_v2/plan.json")
+    parser.add_argument("--holdout", default=None, help="prospective-test session (default C; v2: E)")
+    parser.add_argument("--exclude-channels", type=int, nargs="*", default=None, help="board-101 channels left out (default 2)")
+    parser.add_argument("--exclude-fractional", action="store_true", default=None, help="drop fractional-window rows")
     args = parser.parse_args()
-    out = Path(args.out)
+    set_data(args.data)
+    ct.configure(plan=args.plan, holdout=args.holdout, exclude_channels=args.exclude_channels,
+                 exclude_fractional=args.exclude_fractional)
+    out = Path(args.out) if args.out else DATA / "lvl1_results" / "2026-11-04_change_models"
     out.mkdir(parents=True, exist_ok=True)
     D = build()
-    ab, c = np.flatnonzero(D["session"] != "C"), np.flatnonzero(D["session"] == "C")
+    ab, c = np.flatnonzero(D["session"] != ct.HOLDOUT), np.flatnonzero(D["session"] == ct.HOLDOUT)
     folds = [ab[f] for f in grouped_folds(D["packet"][ab], 5, seed=0)]
     from ml import deep
-    p = real_inputs.load(ROOT / "processed" / "model_inputs" / "pretrain.npz")
+    p = real_inputs.load(DATA / "model_inputs" / "pretrain.npz")
     pre = deep.Pretrainer(epochs=40).fit(np.nan_to_num(p["curves"][p["board"] == 101]), None)
     results = {"_info": {"rows_AB": int(len(ab)), "rows_C": int(len(c)), "cross_hours": args.cross_hours},
                "_difference_curve_map": diff_curve_map(D, ab, out)}
@@ -254,8 +269,8 @@ def main():
                 trn = np.setdiff1d(ab[D["amp"][ab] != a], te)
                 if len(tst) and len(trn):
                     pl[tst] = run_model(name, D, trn, tst, args.cross_hours, pre)
-        pc = run_model(name, D, ab, c, args.cross_hours, pre)
-        results[name] = {"new_amp": score(D["Y"][ab], pl[ab]), "c": score(D["Y"][c], pc)}
+        pc = run_model(name, D, ab, c, args.cross_hours, pre) if len(c) else None
+        results[name] = {"new_amp": score(D["Y"][ab], pl[ab]), "c": score(D["Y"][c], pc) if len(c) else None}
         r = results[name]["new_amp"]
         print(f"{name:30s} " + "  ".join(f"{t}: {r[t]['error']:5.1f} (med {r[t]['median']:4.1f}, dir "
                                         f"{r[t]['direction'] if r[t]['direction'] is not None else float('nan'):.2f})" for t in T), flush=True)

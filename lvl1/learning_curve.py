@@ -37,7 +37,10 @@ def main():
     parser.add_argument("--exclude-features")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--exclude-fractional", action="store_true", help="drop fractional-window rows")
+    em.add_config_args(parser)
     args = parser.parse_args()
+    em.configure(args.tier_file, args.plan, args.holdout_session, args.ablation_report)
 
     files = {p.stem: real_inputs.load(p) for p in sorted(Path(args.inputs).glob("*.npz"))}
     base = files["physics"]
@@ -46,9 +49,11 @@ def main():
     for bc in args.exclude_amps:
         b, c = (int(x) for x in bc.split(":"))
         ok &= ~((base["board"] == b) & (base["channel"] == c))
+    if args.exclude_fractional:
+        ok &= ~base["fractional_window"].astype(bool)
     rows = np.flatnonzero(ok)
     packets = base["packet_id"][rows].astype(str)
-    held = np.array([tl.matches_packet(p, tl.session_packets(em.PLAN, "C")) for p in packets])
+    held = np.array([tl.matches_packet(p, tl.session_packets(em.PLAN, em.HOLDOUT_SESSION)) for p in packets])
     test = np.flatnonzero(held)
     ab_packets = np.unique(packets[~held])
     runner = tl.Runner(files, rows, quick=False, tiers=tl.load_tiers(em.TIER_FILE))
