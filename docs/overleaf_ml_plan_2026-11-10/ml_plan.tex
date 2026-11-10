@@ -1,0 +1,194 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,booktabs,xcolor,enumitem,caption,array}
+\usepackage[section]{placeins}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{fvextra}
+\fvset{breaklines=true,fontsize=\footnotesize}
+\setlist{itemsep=2pt,topsep=3pt}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\emergencystretch}{3em}
+\newcommand{\se}{\sigma_e}
+
+\title{Machine learning for CCD commissioning: a plan, and how to test it on the data we have}
+\author{ccd\_opt\_ml}
+\date{2026-11-10}
+
+\begin{document}
+\maketitle
+
+\section*{Summary}
+The goal is to set up many CCDs for low noise ($\se$) and low dark charge ($\lambda$) with as few images per CCD as
+possible. The first year asked machine learning to predict each image's labels from a trace, using hundreds of labelled
+images from one module. That works for the noise and not for the dark charge, for reasons that are about the problem setup,
+not the method (Section~\ref{sec:why}). This plan points the machine learning at the parts of the problem where it can
+win:
+\begin{enumerate}
+\item \textbf{Learn across CCDs (the fleet).} A model trained on the CCDs already set up, which adapts to a new CCD from
+  one or a few of its images (\emph{few-shot}). The ``one calibration image'' result of board 102 is the simplest case.
+\item \textbf{Let the model choose what to measure next} (Bayesian optimisation, with the fleet model as prior): the
+  standard machine-learning tool for ``each measurement is expensive, find the best setting in few of them''.
+\item \textbf{Cheap measurements first}: traces (seconds) and level-1 strips (under a minute) carry most of the noise
+  and, for strips, the dark charge; images (10 minutes) only to confirm.
+\item \textbf{Physics for the obvious part, machine learning for the rest}: the timing effects are known physics; the
+  model learns what is left (voltage effects, interactions, CCD-to-CCD differences).
+\end{enumerate}
+The success measure is one number per CCD: \textbf{images needed to come within a few \% of its best setting, on noise and
+dark charge together}, and how that number falls as the fleet grows. Four tests (T1--T4) estimate it, and each part of
+it, on the v2 data already taken; the script is \texttt{lvl1/fleet\_tests.py} (Section~\ref{sec:tests}).
+
+\section{Why the first setup was hard}\label{sec:why}
+What worked: the traces predict the noise of an amplifier never seen in training about twice as well as the settings
+(9.7\,\% against 18.1\,\% on session E), and the direction of clear noise changes (88\,\% against 72\,\%).
+What did not, and why:
+\begin{itemize}
+\item \textbf{The dark charge is not in the input.} A trace is a 0.19\,s reading of the output amplifier with almost no
+  charge in it; the dark charge is electrons made in the CCD and its serial register during a 10-minute readout. No
+  model can predict what its input never recorded. (A strip does record it: it counts electrons.)
+\item \textbf{Too little data for the question.} 50--130 labelled packets, 3--4 amplifiers of one module, 15 knobs, with
+  voltage effects of a few \% next to label noise of 2--10\,\%. ``A new amplifier'' was close to one trial.
+\item \textbf{Simple physics already explains most of it.} A settings-only model explains 91\,\% of the dark-charge
+  changes, almost all through \texttt{delayInt}; what is left is close to the label noise. There was nothing left for
+  machine learning to find there.
+\item \textbf{The prize near nominal is small}: on the first night the good settings were within about 3\,\% of each
+  other in noise, while the models' error is about 13\,\%.
+\end{itemize}
+Machine learning pays off when (1) the input carries the information, (2) there is a lot of data relative to the
+complexity, and (3) simple physics does not already give the answer. Commissioning many CCDs can meet all three: the
+fleet supplies the data, the strips supply dark-charge information, and the model is pointed at the non-obvious part.
+
+\section{One calibration image, and learning across the fleet}
+Board 102 sat at nominal all night. Every model trained on board 101 predicted its levels badly ($\lambda$ about $-90$\,\%,
+$\se$ physics model $-30$\,\%). After correcting each model by its miss on board 102's \emph{first} image, every model was
+at the label scatter ($\se$ about 11\,\%, $\lambda$ about 8\,\%, gain 0.3\,\%). Each amplifier has its own level (an
+offset), and one image measures it. (Caveat: 102 never changed settings, so this showed that the level is fixed by one
+image, not that the response to the settings transfers.)
+
+This is the simplest form of the first idea. Write each label of amplifier (later: CCD) $a$ at settings $\theta$ as
+\[
+\log y_a(\theta) = \underbrace{f(\theta)}_{\text{shared by the fleet}} + \underbrace{c_a}_{\text{level}} +
+\underbrace{g_a(\theta)}_{\text{what is particular to } a}.
+\]
+The fleet teaches $f$, and how large $c_a$ and $g_a$ typically are. A new CCD needs only enough images to pin down its own
+$c_a$ (one image) and the part of $g_a$ that matters. A \emph{multi-task Gaussian process} learns this split directly:
+its kernel is the shared response times an amplifier similarity $\rho$ (1 = same shape), plus an amplifier-offset term,
+and $\rho$ and the offset size are learned from the fleet. With more CCDs in the fleet, $f$ and the priors on $c_a$,
+$g_a$ get better, and a new CCD needs fewer images. That is the property worth demonstrating: \textbf{images per CCD fall
+as the fleet grows}.
+
+\section{The obvious and the non-obvious parts}
+\textbf{Obvious}: effects that are large, smooth, the same on every amplifier and predictable from physics. The timing is
+the example: longer integration lowers the white noise and raises the slow noise; longer readout makes more dark charge
+($\lambda \propto \texttt{delayInt}^{0.5}$ on every amplifier in v2). A settings model or a formula gets these from a handful
+of points; machine learning adds nothing, as you said.
+
+\textbf{Non-obvious}: what you cannot write down in advance, and what differs between CCDs:
+\begin{itemize}
+\item small voltage effects of a few \% each, which add up over 15 knobs and interact (in v2 the corner
+  \texttt{delayRGH} high + VSUB high had $\lambda$ 80\,\% above the settings model on every amplifier: an interaction no
+  one predicted);
+\item effects that differ between CCDs (VSUB's effect on $\lambda$ differed 8$\times$ between amplifiers in v2: strong on
+  ch1 and ch3, flat on ch0 and ch2);
+\item whatever is left after the physics prediction.
+\end{itemize}
+In practice: give the model the physics as a baseline (or as its mean function) and let it learn the residual, and learn
+from the fleet \emph{which knobs are CCD-specific}: those are the only ones a new CCD needs measured. Test T4 measures
+this split on v2.
+
+\section{The plan: four parts}
+\begin{description}
+\item[M1 Fleet model (few-shot).] Multi-task GP (and simpler references: shared GP + offset, trace trees + offset) trained
+  on all amplifiers/CCDs; adapts to a new one from $k$ of its images. Grows with every CCD commissioned.
+\item[M2 Sequential search.] Bayesian optimisation with M1 as prior: after each image, choose the next setting by
+  expected improvement on $J(w) = w \log\se + (1-w)\log\lambda$. Start from one image at nominal (the calibration image).
+  Replaces the funnel: it ranks and updates as images come in, instead of ranking once.
+\item[M3 Cheap measurements.] Traces of every candidate setting (seconds each) as extra inputs to M1/M2; level-1 strips
+  as labels if they track the image labels (T3). The search then spends minutes per evaluation, not ten.
+\item[M4 Physics + residual.] The timing physics as the baseline; machine learning on the residual; the list of
+  CCD-specific knobs from the fleet.
+\end{description}
+Optional, cheap: trace-based checks for broken amplifiers before any image (board 102 ch0/ch1 were dead; the traces
+show it).
+
+\section{Tests on the data already taken}\label{sec:tests}
+All four tests treat one amplifier at a time as the ``new CCD'' and the other amplifiers as the fleet. \textbf{The new
+amplifier is scored on one block of packets in time, and the fleet trains only on the other blocks}: the amplifiers of a
+packet share its moment (drift, a stalled queue), which a CCD measured on another day would not share. (Without this,
+the v1 run below showed $\lambda$ on a ``new'' amplifier as easier than on a trained one: a leak.) Script:
+\texttt{lvl1/fleet\_tests.py}; driver: \texttt{lvl1/run\_fleet\_tests.sh}.
+
+\subsection*{T1 Few-shot: how many images of a new CCD does the model need?}
+Leave one amplifier out; give the model $k = 0, 1, 2, 4, 8$ of its images (random, from other time blocks); score its
+predictions on one block. Output: error of $\se$, $\lambda$, gain against $k$; the regret of the setting each model would
+pick (how much worse than the best in the block), for $\se$, $\lambda$ and $J(0.5)$; the multi-task GP's learned
+$\rho$ and offset size. \textbf{Pass (proposed):} at $k = 1$ the $\se$ error within $2\times$ the nominal label noise and
+the $\lambda$ error within $2\times$ its label noise; regret below 3\,\% ($\se$) and 10\,\% ($\lambda$) by $k \le 4$.
+
+\subsection*{T2 Bayesian optimisation replayed on the measured packets}
+For the left-out amplifier, its measured settings in one time block are the candidates (about 30 per block in v2). A
+strategy picks the next setting, ``takes the image'' (reveals the label), updates, and so on. Strategies: random order
+(200 draws); the fleet model's ranking without updates; BO with the fleet as prior; BO with the fleet plus the traces of
+every candidate; BO with no fleet data. Output: best-so-far against the number of images; images needed to come within
+2\,\% and 5\,\% of the best in the pool, for $w = 1, 0.5, 0$. \textbf{Pass (proposed):} BO with the fleet reaches 2\,\%
+in at most a third of the images random order needs, and in at most 10. Limits: the pool is the settings v2 happened to
+measure, so ``best in pool'' is not the true optimum, and a pool of 30 caps the gain.
+
+\subsection*{T3 Can the strip stand in for the image?}
+Per target, on the same packets: strip against image (correlation; error after an amplifier offset; error of a
+calibration model $\log y_\text{image} \sim \log y_\text{strip} + \text{amplifier}$, cross-validated by packet);
+repeatability at nominal of each; direction of the within-packet strip change (new against reference strip) against the
+image change, on clear changes. \textbf{Pass (proposed):} calibrated error at or below the image's own repeatability,
+change direction $\ge 90$\,\%. If $\lambda$ passes, the search can run on strips (about 1 minute) and image only to
+confirm.
+
+\subsection*{T4 What is obvious and what is left}
+Amplifier offsets removed (one calibration image), then: variance explained by the timing knobs alone; by all settings;
+what the voltages explain of the timing residual on trained amplifiers and on a new one; what is left against the label
+noise; and per voltage knob, the slope all amplifiers share against the amplifier-to-amplifier spread (flagged
+amplifier-specific when the spread exceeds twice the slope error). \textbf{Decision:} knobs flagged amplifier-specific
+are the ones a new CCD must measure; if the voltages explain nothing of the $\lambda$ residual on a new amplifier, the
+dark-charge search is timing + those few knobs.
+
+\subsection*{What the v1 run shows (code check, not the evidence)}
+The script runs on v1 (43 packets, 4 amplifiers, one knob at a time, 20 nominal repeats per amplifier); about 90\,s. v1 is
+the wrong design for these questions (most voltages moved by one max\_step, pools of about 20 candidates per block), so
+these numbers check the code, not the plan:
+\begin{itemize}
+\item T1: one image of the new amplifier takes the shared GP from 13.3 to 8.9\,\% on $\se$ and from 45 to 26.5\,\% on
+  $\lambda$; more images add little (8.2 and 23.2\,\% at $k = 8$). The multi-task GP learns $\rho = 1$: on v1 the
+  amplifiers share the response shape and differ in level, which is the structure that makes one image enough.
+\item T2: inconclusive on v1 (small pools, many nominal repeats); BO with fleet + traces reached 2\,\% of the best
+  $\lambda$ setting in 5 images against 13 for random order.
+\item T4: after the offsets, timing explains 66\,\% of the $\se$ variance; the voltages add nothing on v1 (they barely
+  moved); $\lambda$ is barely explained by any setting (26\,\% left against 10\,\% label noise): on the first night most
+  of its variation was the CCD's state, not the settings.
+\end{itemize}
+
+\section{After the tests}
+\begin{itemize}
+\item \textbf{T1 and T2 pass on v2:} the decisive test is live: run M2 on a board the fleet has not seen (board 102 with
+  working amplifiers, or the next CCD), count images to the best setting, and compare with your usual procedure. More
+  CCDs then help more than more packets on one CCD.
+\item \textbf{T3 passes for $\lambda$:} make the strip the default label of the search.
+\item \textbf{T4:} the CCD-specific knobs set the search space per CCD; everything else is set once per CCD type.
+\item \textbf{Data still worth taking} (lvl1/packet\_plan\_pre): the settling and exposure pre-tests, because they decide
+  whether the labels the search optimises mean what we think. The large v3 sets are only needed if T1--T4 show the
+  voltage response is the bottleneck.
+\end{itemize}
+
+\section{Commands}
+\begin{Verbatim}
+# on the machine with the v2 processed data (dataset.csv), from the repository root:
+DATA=processed_v2 bash lvl1/run_fleet_tests.sh          # all runs, ~5-20 min; results in processed_v2/lvl1_results/fleet_tests_<date>/
+# single tests:
+.venv/bin/python lvl1/fleet_tests.py fewshot --data processed_v2 --plan lvl1/packet_plan_v2/plan.json --sessions D E --channels 0 1 3 --drift --out <dir>
+.venv/bin/python lvl1/fleet_tests.py bo       ... ;  ... strips ... ;  ... residual ...
+# the v1 check:
+.venv/bin/python lvl1/fleet_tests.py all --data processed --plan lvl1/packet_plan/plan.json --sessions A B C --channels 0 1 2 3 --drift --out <dir>
+\end{Verbatim}
+Send back the output folder; the \texttt{.md} files hold the tables.
+
+\end{document}

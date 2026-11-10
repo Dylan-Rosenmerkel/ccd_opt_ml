@@ -1,0 +1,1038 @@
+{
+ "reviewed_limits": false,
+ "groups": {
+  "VSUB": [
+   "VSUB"
+  ],
+  "VDD": [
+   "VDD1",
+   "VDD2"
+  ],
+  "VR": [
+   "VR1",
+   "VR2"
+  ],
+  "RG_H": [
+   "RG_1_H",
+   "RG_2_H"
+  ],
+  "RG_L": [
+   "RG_1_L",
+   "RG_2_L"
+  ],
+  "SW_L": [
+   "SW_1_L",
+   "SW_2_L"
+  ],
+  "V1_L": [
+   "V1_A_L",
+   "V1_B_L"
+  ],
+  "V2_L": [
+   "V2_C_L"
+  ],
+  "V3_L": [
+   "V3_A_L",
+   "V3_B_L"
+  ],
+  "V_swing": [
+   "V1_A_H",
+   "V1_B_H",
+   "V2_C_H",
+   "V3_A_H",
+   "V3_B_H"
+  ],
+  "H1_L": [
+   "H1_A_L",
+   "H1_B_L"
+  ],
+  "H2_L": [
+   "H2_C_L"
+  ],
+  "H3_L": [
+   "H3_A_L",
+   "H3_B_L"
+  ],
+  "H_swing": [
+   "H1_A_H",
+   "H1_B_H",
+   "H2_C_H",
+   "H3_A_H",
+   "H3_B_H"
+  ],
+  "TG": [
+   "TG_A_H",
+   "TG_A_L",
+   "TG_B_H",
+   "TG_B_L"
+  ]
+ },
+ "box": {
+  "VSUB": [
+   -10.0,
+   25.0
+  ],
+  "VDD": [
+   -2.0,
+   2.0
+  ],
+  "VR": [
+   -1.0,
+   1.0
+  ],
+  "RG_H": [
+   -2.0,
+   1.0
+  ],
+  "RG_L": [
+   -2.0,
+   2.0
+  ],
+  "SW_L": [
+   -2.0,
+   0.0
+  ],
+  "V1_L": [
+   0.0,
+   0.5
+  ],
+  "V2_L": [
+   0.0,
+   0.5
+  ],
+  "V3_L": [
+   0.0,
+   0.5
+  ],
+  "V_swing": [
+   -0.5,
+   0.1
+  ],
+  "H1_L": [
+   -1.3,
+   0.2
+  ],
+  "H2_L": [
+   -1.5,
+   0.2
+  ],
+  "H3_L": [
+   -1.3,
+   0.2
+  ],
+  "H_swing": [
+   -0.8,
+   0.5
+  ],
+  "TG": [
+   0.0,
+   0.0
+  ]
+ },
+ "boards": [
+  "acm101"
+ ],
+ "run": {
+  "N_REF_SETS": 1,
+  "N_SETS": 1,
+  "N_POST_SETS": 0,
+  "IMAGE_TOML": "image_params/tc1/img32.toml"
+ },
+ "env": {
+  "L1_STRIP": 0
+ },
+ "packets": [
+  {
+   "session": "D",
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "packet_id": "D3_001",
+   "minutes": 13.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal with EXPOSURE 600 s",
+   "changes": {},
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "packet_id": "D3_002",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "one-at-a-time: VSUB -5 V",
+   "changes": {
+    "VSUB": 40.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_003",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: H1_L -1.3 V",
+   "changes": {
+    "H1_A_L": 5.4,
+    "H1_B_L": 5.2
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_004",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: VSUB +12.5 V",
+   "changes": {
+    "VSUB": 57.5
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_005",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 68.72,
+    "VDD1": -17.36,
+    "VDD2": -17.36,
+    "VR1": -2.31,
+    "VR2": -2.31,
+    "SW_1_L": -7.1,
+    "SW_2_L": -7.1,
+    "H1_A_L": 6.46,
+    "H1_B_L": 6.26,
+    "H2_C_L": 5.79,
+    "H3_A_L": 5.45,
+    "H3_B_L": 5.25,
+    "H1_A_H": 9.59,
+    "H1_B_H": 9.59,
+    "H2_C_H": 8.42,
+    "H3_A_H": 8.58,
+    "H3_B_H": 8.58
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_006",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 68.72,
+    "VDD1": -17.36,
+    "VDD2": -17.36,
+    "VR1": -2.31,
+    "VR2": -2.31,
+    "SW_1_L": -7.1,
+    "SW_2_L": -7.1,
+    "H1_A_L": 6.46,
+    "H1_B_L": 6.26,
+    "H2_C_L": 5.79,
+    "H3_A_L": 5.45,
+    "H3_B_L": 5.25,
+    "H1_A_H": 9.59,
+    "H1_B_H": 9.59,
+    "H2_C_H": 8.42,
+    "H3_A_H": 8.58,
+    "H3_B_H": 8.58
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_007",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "one-at-a-time: H_swing +0.5 V",
+   "changes": {
+    "H1_A_H": 10.0,
+    "H1_B_H": 10.0,
+    "H2_C_H": 9.5,
+    "H3_A_H": 10.0,
+    "H3_B_H": 10.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_008",
+   "minutes": 13.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "packet_id": "D3_009",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: H3_L +0.2 V",
+   "changes": {
+    "H3_A_L": 6.9,
+    "H3_B_L": 6.7
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_010",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: H2_L +0.2 V",
+   "changes": {
+    "H2_C_L": 6.9
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_011",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: SW_L -2 V",
+   "changes": {
+    "SW_1_L": -8.0,
+    "SW_2_L": -8.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_012",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 35.62,
+    "VDD1": -18.36,
+    "VDD2": -18.36,
+    "VR1": -2.71,
+    "VR2": -2.71,
+    "SW_1_L": -7.73,
+    "SW_2_L": -7.73,
+    "H1_A_L": 5.81,
+    "H1_B_L": 5.61,
+    "H2_C_L": 6.24,
+    "H3_A_L": 5.92,
+    "H3_B_L": 5.72,
+    "H1_A_H": 8.27,
+    "H1_B_H": 8.27,
+    "H2_C_H": 8.2,
+    "H3_A_H": 8.38,
+    "H3_B_H": 8.38
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_013",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 35.62,
+    "VDD1": -18.36,
+    "VDD2": -18.36,
+    "VR1": -2.71,
+    "VR2": -2.71,
+    "SW_1_L": -7.73,
+    "SW_2_L": -7.73,
+    "H1_A_L": 5.81,
+    "H1_B_L": 5.61,
+    "H2_C_L": 6.24,
+    "H3_A_L": 5.92,
+    "H3_B_L": 5.72,
+    "H1_A_H": 8.27,
+    "H1_B_H": 8.27,
+    "H2_C_H": 8.2,
+    "H3_A_H": 8.38,
+    "H3_B_H": 8.38
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_014",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "one-at-a-time: VSUB +25 V",
+   "changes": {
+    "VSUB": 70.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_015",
+   "minutes": 13.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "packet_id": "D3_016",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: H1_L +0.2 V",
+   "changes": {
+    "H1_A_L": 6.9,
+    "H1_B_L": 6.7
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_017",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: VR -1 V",
+   "changes": {
+    "VR1": -4.0,
+    "VR2": -4.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_018",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: VSUB -10 V",
+   "changes": {
+    "VSUB": 35.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_019",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 42.12,
+    "VDD1": -17.01,
+    "VDD2": -17.01,
+    "VR1": -3.94,
+    "VR2": -3.94,
+    "SW_1_L": -7.48,
+    "SW_2_L": -7.48,
+    "H1_A_L": 6.59,
+    "H1_B_L": 6.39,
+    "H2_C_L": 6.84,
+    "H3_A_L": 5.76,
+    "H3_B_L": 5.56,
+    "H1_A_H": 9.77,
+    "H1_B_H": 9.77,
+    "H2_C_H": 9.52,
+    "H3_A_H": 8.94,
+    "H3_B_H": 8.94
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_020",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 42.12,
+    "VDD1": -17.01,
+    "VDD2": -17.01,
+    "VR1": -3.94,
+    "VR2": -3.94,
+    "SW_1_L": -7.48,
+    "SW_2_L": -7.48,
+    "H1_A_L": 6.59,
+    "H1_B_L": 6.39,
+    "H2_C_L": 6.84,
+    "H3_A_L": 5.76,
+    "H3_B_L": 5.56,
+    "H1_A_H": 9.77,
+    "H1_B_H": 9.77,
+    "H2_C_H": 9.52,
+    "H3_A_H": 8.94,
+    "H3_B_H": 8.94
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_021",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "one-at-a-time: VDD +2 V",
+   "changes": {
+    "VDD1": -17.0,
+    "VDD2": -17.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_022",
+   "minutes": 13.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "packet_id": "D3_023",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: VDD -2 V",
+   "changes": {
+    "VDD1": -21.0,
+    "VDD2": -21.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_024",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "REPLICATE of one-at-a-time: H_swing +0.5 V",
+   "changes": {
+    "H1_A_H": 10.0,
+    "H1_B_H": 10.0,
+    "H2_C_H": 9.5,
+    "H3_A_H": 10.0,
+    "H3_B_H": 10.0
+   },
+   "block": "replicate",
+   "session": "D",
+   "packet_id": "D3_025",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: VR +1 V",
+   "changes": {
+    "VR1": -2.0,
+    "VR2": -2.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_026",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 66.32,
+    "VDD1": -19.13,
+    "VDD2": -19.13,
+    "VR1": -3.56,
+    "VR2": -3.56,
+    "SW_1_L": -7.61,
+    "SW_2_L": -7.61,
+    "H1_A_L": 5.43,
+    "H1_B_L": 5.23,
+    "H2_C_L": 5.92,
+    "H3_A_L": 6.33,
+    "H3_B_L": 6.13,
+    "H1_A_H": 8.14,
+    "H1_B_H": 8.14,
+    "H2_C_H": 8.13,
+    "H3_A_H": 9.04,
+    "H3_B_H": 9.04
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_027",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 66.32,
+    "VDD1": -19.13,
+    "VDD2": -19.13,
+    "VR1": -3.56,
+    "VR2": -3.56,
+    "SW_1_L": -7.61,
+    "SW_2_L": -7.61,
+    "H1_A_L": 5.43,
+    "H1_B_L": 5.23,
+    "H2_C_L": 5.92,
+    "H3_A_L": 6.33,
+    "H3_B_L": 6.13,
+    "H1_A_H": 8.14,
+    "H1_B_H": 8.14,
+    "H2_C_H": 8.13,
+    "H3_A_H": 9.04,
+    "H3_B_H": 9.04
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_028",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "REPLICATE of one-at-a-time: H3_L +0.2 V",
+   "changes": {
+    "H3_A_L": 6.9,
+    "H3_B_L": 6.7
+   },
+   "block": "replicate",
+   "session": "D",
+   "packet_id": "D3_029",
+   "minutes": 13.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "packet_id": "D3_030",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: VSUB +5 V",
+   "changes": {
+    "VSUB": 50.0
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_031",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: H2_L -1.5 V",
+   "changes": {
+    "H2_C_L": 5.2
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_032",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "one-at-a-time: H3_L -1.3 V",
+   "changes": {
+    "H3_A_L": 5.4,
+    "H3_B_L": 5.2
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_033",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 56.58,
+    "VDD1": -19.32,
+    "VDD2": -19.32,
+    "VR1": -2.68,
+    "VR2": -2.68,
+    "SW_1_L": -7.17,
+    "SW_2_L": -7.17,
+    "H1_A_L": 5.71,
+    "H1_B_L": 5.51,
+    "H2_C_L": 6.38,
+    "H3_A_L": 5.72,
+    "H3_B_L": 5.52,
+    "H1_A_H": 8.63,
+    "H1_B_H": 8.63,
+    "H2_C_H": 8.8,
+    "H3_A_H": 8.64,
+    "H3_B_H": 8.64
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_034",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 56.58,
+    "VDD1": -19.32,
+    "VDD2": -19.32,
+    "VR1": -2.68,
+    "VR2": -2.68,
+    "SW_1_L": -7.17,
+    "SW_2_L": -7.17,
+    "H1_A_L": 5.71,
+    "H1_B_L": 5.51,
+    "H2_C_L": 6.38,
+    "H3_A_L": 5.72,
+    "H3_B_L": 5.52,
+    "H1_A_H": 8.63,
+    "H1_B_H": 8.63,
+    "H2_C_H": 8.8,
+    "H3_A_H": 8.64,
+    "H3_B_H": 8.64
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_035",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "REPLICATE of one-at-a-time: SW_L -2 V",
+   "changes": {
+    "SW_1_L": -8.0,
+    "SW_2_L": -8.0
+   },
+   "block": "replicate",
+   "session": "D",
+   "packet_id": "D3_036",
+   "minutes": 13.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "packet_id": "D3_037",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 55.31,
+    "VDD1": -18.62,
+    "VDD2": -18.62,
+    "VR1": -3.83,
+    "VR2": -3.83,
+    "SW_1_L": -6.81,
+    "SW_2_L": -6.81,
+    "H1_A_L": 6.74,
+    "H1_B_L": 6.54,
+    "H2_C_L": 6.03,
+    "H3_A_L": 6.13,
+    "H3_B_L": 5.93,
+    "H1_A_H": 9.38,
+    "H1_B_H": 9.38,
+    "H2_C_H": 8.17,
+    "H3_A_H": 8.77,
+    "H3_B_H": 8.77
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_038",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 55.31,
+    "VDD1": -18.62,
+    "VDD2": -18.62,
+    "VR1": -3.83,
+    "VR2": -3.83,
+    "SW_1_L": -6.81,
+    "SW_2_L": -6.81,
+    "H1_A_L": 6.74,
+    "H1_B_L": 6.54,
+    "H2_C_L": 6.03,
+    "H3_A_L": 6.13,
+    "H3_B_L": 5.93,
+    "H1_A_H": 9.38,
+    "H1_B_H": 9.38,
+    "H2_C_H": 8.17,
+    "H3_A_H": 8.77,
+    "H3_B_H": 8.77
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_039",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "one-at-a-time: H_swing -0.8 V",
+   "changes": {
+    "H1_A_H": 8.7,
+    "H1_B_H": 8.7,
+    "H2_C_H": 8.2,
+    "H3_A_H": 8.7,
+    "H3_B_H": 8.7
+   },
+   "block": "oat",
+   "session": "D",
+   "packet_id": "D3_040",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "REPLICATE of one-at-a-time: H1_L +0.2 V",
+   "changes": {
+    "H1_A_L": 6.9,
+    "H1_B_L": 6.7
+   },
+   "block": "replicate",
+   "session": "D",
+   "packet_id": "D3_041",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 51.01,
+    "VDD1": -19.9,
+    "VDD2": -19.9,
+    "VR1": -2.93,
+    "VR2": -2.93,
+    "SW_1_L": -6.91,
+    "SW_2_L": -6.91,
+    "H1_A_L": 6.36,
+    "H1_B_L": 6.16,
+    "H2_C_L": 6.14,
+    "H3_A_L": 6.5,
+    "H3_B_L": 6.3,
+    "H1_A_H": 9.24,
+    "H1_B_H": 9.24,
+    "H2_C_H": 8.52,
+    "H3_A_H": 9.38,
+    "H3_B_H": 9.38
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_042",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 51.01,
+    "VDD1": -19.9,
+    "VDD2": -19.9,
+    "VR1": -2.93,
+    "VR2": -2.93,
+    "SW_1_L": -6.91,
+    "SW_2_L": -6.91,
+    "H1_A_L": 6.36,
+    "H1_B_L": 6.16,
+    "H2_C_L": 6.14,
+    "H3_A_L": 6.5,
+    "H3_B_L": 6.3,
+    "H1_A_H": 9.24,
+    "H1_B_H": 9.24,
+    "H2_C_H": 8.52,
+    "H3_A_H": 9.38,
+    "H3_B_H": 9.38
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_043",
+   "minutes": 23.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "packet_id": "D3_044",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 40.43,
+    "VDD1": -19.5,
+    "VDD2": -19.5,
+    "VR1": -2.19,
+    "VR2": -2.19,
+    "SW_1_L": -7.99,
+    "SW_2_L": -7.99,
+    "H1_A_L": 6.13,
+    "H1_B_L": 5.93,
+    "H2_C_L": 6.5,
+    "H3_A_L": 6.4,
+    "H3_B_L": 6.2,
+    "H1_A_H": 9.1,
+    "H1_B_H": 9.1,
+    "H2_C_H": 8.97,
+    "H3_A_H": 9.37,
+    "H3_B_H": 9.37
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_045",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 40.43,
+    "VDD1": -19.5,
+    "VDD2": -19.5,
+    "VR1": -2.19,
+    "VR2": -2.19,
+    "SW_1_L": -7.99,
+    "SW_2_L": -7.99,
+    "H1_A_L": 6.13,
+    "H1_B_L": 5.93,
+    "H2_C_L": 6.5,
+    "H3_A_L": 6.4,
+    "H3_B_L": 6.2,
+    "H1_A_H": 9.1,
+    "H1_B_H": 9.1,
+    "H2_C_H": 8.97,
+    "H3_A_H": 9.37,
+    "H3_B_H": 9.37
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_046",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 45.5,
+    "VDD1": -17.44,
+    "VDD2": -17.44,
+    "VR1": -2.82,
+    "VR2": -2.82,
+    "SW_1_L": -7.8,
+    "SW_2_L": -7.8,
+    "H1_A_L": 6.87,
+    "H1_B_L": 6.67,
+    "H2_C_L": 5.48,
+    "H3_A_L": 6.28,
+    "H3_B_L": 6.08,
+    "H1_A_H": 9.96,
+    "H1_B_H": 9.96,
+    "H2_C_H": 8.07,
+    "H3_A_H": 9.37,
+    "H3_B_H": 9.37
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_047",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 45.5,
+    "VDD1": -17.44,
+    "VDD2": -17.44,
+    "VR1": -2.82,
+    "VR2": -2.82,
+    "SW_1_L": -7.8,
+    "SW_2_L": -7.8,
+    "H1_A_L": 6.87,
+    "H1_B_L": 6.67,
+    "H2_C_L": 5.48,
+    "H3_A_L": 6.28,
+    "H3_B_L": 6.08,
+    "H1_A_H": 9.96,
+    "H1_B_H": 9.96,
+    "H2_C_H": 8.07,
+    "H3_A_H": 9.37,
+    "H3_B_H": 9.37
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_048",
+   "minutes": 23.8
+  },
+  {
+   "purpose": "dark Sobol (8 groups, nominal timing)",
+   "changes": {
+    "VSUB": 46.78,
+    "VDD1": -18.76,
+    "VDD2": -18.76,
+    "VR1": -2.45,
+    "VR2": -2.45,
+    "SW_1_L": -6.68,
+    "SW_2_L": -6.68,
+    "H1_A_L": 6.3,
+    "H1_B_L": 6.1,
+    "H2_C_L": 6.6,
+    "H3_A_L": 5.83,
+    "H3_B_L": 5.63,
+    "H1_A_H": 8.67,
+    "H1_B_H": 8.67,
+    "H2_C_H": 8.47,
+    "H3_A_H": 8.2,
+    "H3_B_H": 8.2
+   },
+   "block": "voltage",
+   "session": "D",
+   "packet_id": "D3_049",
+   "minutes": 13.8
+  },
+  {
+   "purpose": "the previous setting again with EXPOSURE 600 s",
+   "changes": {
+    "VSUB": 46.78,
+    "VDD1": -18.76,
+    "VDD2": -18.76,
+    "VR1": -2.45,
+    "VR2": -2.45,
+    "SW_1_L": -6.68,
+    "SW_2_L": -6.68,
+    "H1_A_L": 6.3,
+    "H1_B_L": 6.1,
+    "H2_C_L": 6.6,
+    "H3_A_L": 5.83,
+    "H3_B_L": 5.63,
+    "H1_A_H": 8.67,
+    "H1_B_H": 8.67,
+    "H2_C_H": 8.47,
+    "H3_A_H": 8.2,
+    "H3_B_H": 8.2
+   },
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "session": "D",
+   "packet_id": "D3_050",
+   "minutes": 23.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal (end of the session)",
+   "changes": {},
+   "block": "nominal",
+   "packet_id": "D3_051",
+   "minutes": 13.8
+  },
+  {
+   "session": "D",
+   "purpose": "nominal with EXPOSURE 600 s",
+   "changes": {},
+   "block": "exposure pair",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp600.toml"
+   },
+   "exposure_s": 600,
+   "packet_id": "D3_052",
+   "minutes": 23.8
+  }
+ ]
+}

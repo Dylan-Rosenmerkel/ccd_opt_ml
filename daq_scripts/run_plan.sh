@@ -10,7 +10,9 @@
 #   * otherwise take it: manual_packet.sh with the plan's N_REF_SETS / N_SETS / N_POST_SETS / IMAGE_TOML (plan.json
 #     "run"), the packet's changes file, its reference file <id>_ref.txt when the plan has one (the reference at the
 #     previous packet's settings), SCREEN=1 with the plan's screen trace sets for a trace-only funnel screen
-#     (plan.json "screen": true), and the answer "y" to its question.  manual_packet.sh waits for and checks the traces,
+#     (plan.json "screen": true), the plan's and the packet's "env" (any manual_packet.sh setting, e.g. IMAGE_TOML,
+#     PAUSE_S, L1_STRIP; the packet's wins), <id>_undo.txt / <id>_ref_undo.txt when the plan has them (UNDO_FILE /
+#     REF_UNDO_FILE: the rule-safe way back to nominal), and the answer "y" to its question.  manual_packet.sh waits for and checks the traces,
 #     retakes damaged ones and restarts the packet itself when too many are damaged.
 # Stops on the first packet that fails (manual_packet.sh exit code != 0), or before the next packet when the file
 # $RECORD_DIR/STOP exists (touch it to end a night cleanly; the runner removes it when it stops), or after TO.
@@ -110,6 +112,15 @@ for id in "${IDS[@]}"; do
     fi
     extra=()
     [[ -e $PLAN_DIR/${id}_ref.txt ]] && extra+=("REF_CHANGES_FILE=$PLAN_DIR/${id}_ref.txt")
+    # the rule-safe way back to nominal (plans that write <id>_undo.txt): sent by manual_packet.sh before its resets
+    [[ -e $PLAN_DIR/${id}_undo.txt ]] && extra+=("UNDO_FILE=$PLAN_DIR/${id}_undo.txt")
+    [[ -e $PLAN_DIR/${id}_ref_undo.txt ]] && extra+=("REF_UNDO_FILE=$PLAN_DIR/${id}_ref_undo.txt")
+    # plan.json "env" (plan level) and the packet's own "env" (it wins): any manual_packet.sh setting, per packet
+    while IFS= read -r kv; do [[ -n $kv ]] && extra+=("$kv"); done < <($PYTHON -c "
+import json, sys
+plan = json.load(open(sys.argv[1]))
+env = {**plan.get('env', {}), **next(p for p in plan['packets'] if p['packet_id'] == sys.argv[2]).get('env', {})}
+print('\\n'.join(f'{k}={v}' for k, v in env.items()))" "$PLAN_DIR/plan.json" "$id")
     [[ $SCREENS == *" $id "* ]] && extra+=(SCREEN=1 "N_REF_SETS=$SCREEN_REF_SETS" "N_SETS=$SCREEN_SETS" N_POST_SETS=0)
     log "taking $name ($PLAN_DIR/$id.txt${extra[*]+; ${extra[*]}})"
     if echo y | env ${extra[@]+"${extra[@]}"} PACKET_ID="$name" CHANGES_FILE="$PLAN_DIR/$id.txt" bash "$HERE/manual_packet.sh" >> "$LOG" 2>&1; then

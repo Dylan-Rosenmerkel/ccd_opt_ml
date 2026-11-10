@@ -1,0 +1,16 @@
+# image_params_32rows_exp900.toml -- image_params_32rows.toml with NROW = 32, EXPOSURE = 900 (2026-11-10, lvl1/make_packet_plan_v3split.py).
+# Copy to the cdaq image_params folder as image_params/tc1/img32_exp900.toml.  EXPOSURE in seconds: check the unit with scripts/image_time.py.
+subroutine = "AcquireImage"
+acq_level  = 2
+EXPOSURE = 900
+NDCM = 500
+NROW = 32
+NCOL = 1000
+NPBIN = 1
+NSBIN = 1
+NDCMPRE = 0
+NROWPRE = 0
+NROWPOST = 0
+NCOLPRE = 5300
+NCOLPOST = 0
+BOOLCLR = 1

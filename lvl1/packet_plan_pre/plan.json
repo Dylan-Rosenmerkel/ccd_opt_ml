@@ -1,0 +1,322 @@
+{
+ "reviewed_limits": false,
+ "groups": {
+  "VSUB": [
+   "VSUB"
+  ],
+  "VDD": [
+   "VDD1",
+   "VDD2"
+  ],
+  "VR": [
+   "VR1",
+   "VR2"
+  ],
+  "RG_H": [
+   "RG_1_H",
+   "RG_2_H"
+  ],
+  "RG_L": [
+   "RG_1_L",
+   "RG_2_L"
+  ],
+  "SW_L": [
+   "SW_1_L",
+   "SW_2_L"
+  ],
+  "V1_L": [
+   "V1_A_L",
+   "V1_B_L"
+  ],
+  "V2_L": [
+   "V2_C_L"
+  ],
+  "V3_L": [
+   "V3_A_L",
+   "V3_B_L"
+  ],
+  "V_swing": [
+   "V1_A_H",
+   "V1_B_H",
+   "V2_C_H",
+   "V3_A_H",
+   "V3_B_H"
+  ],
+  "H1_L": [
+   "H1_A_L",
+   "H1_B_L"
+  ],
+  "H2_L": [
+   "H2_C_L"
+  ],
+  "H3_L": [
+   "H3_A_L",
+   "H3_B_L"
+  ],
+  "H_swing": [
+   "H1_A_H",
+   "H1_B_H",
+   "H2_C_H",
+   "H3_A_H",
+   "H3_B_H"
+  ],
+  "TG": [
+   "TG_A_H",
+   "TG_A_L",
+   "TG_B_H",
+   "TG_B_L"
+  ]
+ },
+ "box": {
+  "VSUB": [
+   -10.0,
+   25.0
+  ],
+  "VDD": [
+   -2.0,
+   2.0
+  ],
+  "VR": [
+   -1.0,
+   1.0
+  ],
+  "RG_H": [
+   -2.0,
+   1.0
+  ],
+  "RG_L": [
+   -2.0,
+   2.0
+  ],
+  "SW_L": [
+   -2.0,
+   0.0
+  ],
+  "V1_L": [
+   0.0,
+   0.5
+  ],
+  "V2_L": [
+   0.0,
+   0.5
+  ],
+  "V3_L": [
+   0.0,
+   0.5
+  ],
+  "V_swing": [
+   -0.5,
+   0.1
+  ],
+  "H1_L": [
+   -1.3,
+   0.2
+  ],
+  "H2_L": [
+   -1.5,
+   0.2
+  ],
+  "H3_L": [
+   -1.3,
+   0.2
+  ],
+  "H_swing": [
+   -0.8,
+   0.5
+  ],
+  "TG": [
+   0.0,
+   0.0
+  ]
+ },
+ "boards": [
+  "acm101"
+ ],
+ "run": {
+  "N_REF_SETS": 1,
+  "N_SETS": 3,
+  "N_POST_SETS": 0,
+  "IMAGE_TOML": "image_params/tc1/img32.toml"
+ },
+ "env": {},
+ "packets": [
+  {
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "session": "P",
+   "packet_id": "PT_01",
+   "minutes": 15.6
+  },
+  {
+   "purpose": "settling: VSUB +15 V, image right after the change",
+   "changes": {
+    "VSUB": 60.0
+   },
+   "block": "settling",
+   "session": "P",
+   "packet_id": "PT_02",
+   "minutes": 15.6
+  },
+  {
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "session": "P",
+   "packet_id": "PT_03",
+   "minutes": 15.6
+  },
+  {
+   "purpose": "settling: VSUB +15 V, image 10 min after the change",
+   "changes": {
+    "VSUB": 60.0
+   },
+   "block": "settling",
+   "env": {
+    "PAUSE_S": 42.9,
+    "N_POST_SETS": 0,
+    "PHASE_TIMEOUT_S": 1800
+   },
+   "session": "P",
+   "packet_id": "PT_04",
+   "minutes": 28.6
+  },
+  {
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "session": "P",
+   "packet_id": "PT_05",
+   "minutes": 15.6
+  },
+  {
+   "purpose": "settling: VSUB +15 V, image 30 min after the change",
+   "changes": {
+    "VSUB": 60.0
+   },
+   "block": "settling",
+   "env": {
+    "PAUSE_S": 128.6,
+    "N_POST_SETS": 0,
+    "PHASE_TIMEOUT_S": 5400
+   },
+   "session": "P",
+   "packet_id": "PT_06",
+   "minutes": 55.7
+  },
+  {
+   "purpose": "settling control: nominal with the 30 min hold (does waiting alone move the labels)",
+   "changes": {},
+   "block": "nominal",
+   "env": {
+    "PAUSE_S": 128.6,
+    "N_POST_SETS": 0,
+    "PHASE_TIMEOUT_S": 5400
+   },
+   "session": "P",
+   "packet_id": "PT_07",
+   "minutes": 55.7
+  },
+  {
+   "purpose": "settling: H lows -1 V, image right after the change",
+   "changes": {
+    "H1_A_L": 5.7,
+    "H1_B_L": 5.5,
+    "H2_C_L": 5.7,
+    "H3_A_L": 5.7,
+    "H3_B_L": 5.5
+   },
+   "block": "settling",
+   "session": "P",
+   "packet_id": "PT_08",
+   "minutes": 15.6
+  },
+  {
+   "purpose": "settling: H lows -1 V, image 20 min after the change",
+   "changes": {
+    "H1_A_L": 5.7,
+    "H1_B_L": 5.5,
+    "H2_C_L": 5.7,
+    "H3_A_L": 5.7,
+    "H3_B_L": 5.5
+   },
+   "block": "settling",
+   "env": {
+    "PAUSE_S": 85.7,
+    "N_POST_SETS": 0,
+    "PHASE_TIMEOUT_S": 3600
+   },
+   "session": "P",
+   "packet_id": "PT_09",
+   "minutes": 42.1
+  },
+  {
+   "purpose": "nominal (drift, label noise)",
+   "changes": {},
+   "block": "nominal",
+   "session": "P",
+   "packet_id": "PT_10",
+   "minutes": 15.6
+  },
+  {
+   "purpose": "exposure: nominal, EXPOSURE 300 s",
+   "changes": {},
+   "block": "exposure",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp300.toml"
+   },
+   "exposure_s": 300,
+   "session": "P",
+   "packet_id": "PT_11",
+   "minutes": 20.6
+  },
+  {
+   "purpose": "exposure: nominal, EXPOSURE 900 s",
+   "changes": {},
+   "block": "exposure",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp900.toml"
+   },
+   "exposure_s": 900,
+   "session": "P",
+   "packet_id": "PT_12",
+   "minutes": 30.6
+  },
+  {
+   "purpose": "exposure: VSUB +15 V, EXPOSURE 300 s",
+   "changes": {
+    "VSUB": 60.0
+   },
+   "block": "exposure",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp300.toml"
+   },
+   "exposure_s": 300,
+   "session": "P",
+   "packet_id": "PT_13",
+   "minutes": 20.6
+  },
+  {
+   "purpose": "exposure: VSUB +15 V, EXPOSURE 900 s",
+   "changes": {
+    "VSUB": 60.0
+   },
+   "block": "exposure",
+   "env": {
+    "IMAGE_TOML": "image_params/tc1/img32_exp900.toml"
+   },
+   "exposure_s": 900,
+   "session": "P",
+   "packet_id": "PT_14",
+   "minutes": 30.6
+  },
+  {
+   "purpose": "nominal (end)",
+   "changes": {},
+   "block": "nominal",
+   "session": "P",
+   "packet_id": "PT_15",
+   "minutes": 15.6
+  }
+ ]
+}
