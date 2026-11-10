@@ -67,9 +67,19 @@ def logf(X: np.ndarray, pos: np.ndarray) -> np.ndarray:
         return np.where(pos, np.log(np.where(X > 0, X, np.nan)), X)
 
 
-def load_labelled(path: Path, board: int, skip_channels, exclude) -> pd.DataFrame:
+def rounded(changes: dict, step: int) -> dict:
+    """delayInt to the nearest multiple of step (half up); the rest unchanged."""
+    if not step or "delayInt" not in changes:
+        return dict(changes)
+    return {**changes, "delayInt": int(np.floor(changes["delayInt"] / step + 0.5) * step)}
+
+
+def load_labelled(path: Path, board: int, skip_channels, exclude, keep_fractional: bool = False) -> pd.DataFrame:
     d = pd.read_csv(path, low_memory=False)
     d = d[(d.board == board) & ~d.channel.isin(skip_channels) & ~d.packet_id.isin(exclude)]
+    if not keep_fractional and "label.fractional_window" in d:
+        # delayInt not a whole number of ADC samples: N / N+1 sample windows bias the image labels (2026-11)
+        d = d[~d["label.fractional_window"].astype(str).str.lower().eq("true")]
     d = d[d["label.ok"].astype(str).str.lower().eq("true") & (d["trace.n_usable"] > 0)].copy()
     ts = pd.to_datetime(d["date_start"])
     d["hours"] = (ts - ts.min()).dt.total_seconds() / 3600
@@ -281,6 +291,10 @@ def main():
     parser.add_argument("--skip-channels", type=int, nargs="*", default=[2])
     parser.add_argument("--exclude-train", nargs="*", default=[], help="packets never used for training (the screens always are)")
     parser.add_argument("--evaluate", action="store_true", help="the screens are labelled: compare each ranking's top k")
+    parser.add_argument("--keep-fractional", action="store_true", help="keep the training rows with fractional CDS windows")
+    parser.add_argument("--round-delayint", type=int, default=20,
+                        help="imaged packets (shortlist and controls): delayInt rounded to a multiple of this (whole ADC "
+                             "samples: no fractional-window labels; 0 = as screened)")
     args = parser.parse_args()
 
     plan = json.loads(Path(args.plan).read_text()) if args.plan else None
@@ -291,7 +305,8 @@ def main():
     if not screen_ids:
         raise SystemExit("no screens: give --screens or a --plan with screen packets")
     names = features()
-    d = load_labelled(Path(args.dataset), args.board, args.skip_channels, set(args.exclude_train) | set(screen_ids))
+    d = load_labelled(Path(args.dataset), args.board, args.skip_channels, set(args.exclude_train) | set(screen_ids),
+                      args.keep_fractional)
     names = [n for n in names if f"trace.{n}" in d and f"ref.{n}" in d]
     pos, fitted, n_pairs = train(d, names, args.pairs, args.target)
     found = [Path(args.screens_dir) / p for p in screen_ids if (Path(args.screens_dir) / p / "features.json").exists()]
@@ -347,8 +362,24 @@ def main():
                      + (f", sort {sort}" if m == "without reference" else ""),
                      "# predicted noise (not used to pick): " + ", ".join(
                          f"{c} {v:.3f}" for c, v in noise.loc[pick].items() if np.isfinite(v)) + f" e- (+-{100 * err:.0f} %)"]
-            lines += [f"acm101:{k}={v}" if isinstance(v, int) else f"acm101:{k}={v:g}" for k, v in changes[pick].items()]
+            ch = rounded(changes[pick], args.round_delayint)
+            if ch != changes[pick]:
+                lines.append(f"# delayInt rounded to a multiple of {args.round_delayint} for the image "
+                             f"(screened at {changes[pick]['delayInt']})")
+            lines += [f"acm101:{k}={v}" if isinstance(v, int) else f"acm101:{k}={v:g}" for k, v in ch.items()]
             (out_dir / f"{slot['packet_id']}.txt").write_text("\n".join(lines) + "\n")
+        rounded_controls = {}
+        for p in plan["packets"]:
+            if "control_of_screen" in p:
+                ch = rounded(p["changes"], args.round_delayint)
+                if ch != p["changes"]:
+                    f = out_dir / f"{p['packet_id']}.txt"
+                    head = [x for x in f.read_text().splitlines() if x.startswith("#") and "rounded" not in x]
+                    f.write_text("\n".join(head + [f"# delayInt rounded to a multiple of {args.round_delayint} for the "
+                                                    f"image (screened at {p['changes']['delayInt']})"]
+                                           + [f"acm101:{k}={v}" if isinstance(v, int) else f"acm101:{k}={v:g}"
+                                              for k, v in ch.items()]) + "\n")
+                    rounded_controls[p["packet_id"]] = [p["changes"]["delayInt"], ch["delayInt"]]
         (out_dir / "shortlist.json").write_text(json.dumps(
             {"weights": weights, "sort": sort, "methods": list(METHODS), "sigma_e_typical_error": err,
              "picks": {s_["packet_id"]: {"screen": p, "weight": w, "ranking": m,
@@ -358,7 +389,8 @@ def main():
              "skipped_as_controls": sorted(skip),
              "rankings": {f"{m} | {sl.weight_label(w)}": order[(m, w)] for m in METHODS for w in weights},
              "scores": {f"{m} | {sl.weight_label(w)}": scores[(m, w)].dropna().to_dict() for m in METHODS for w in weights},
-             "missing": missing}, indent=1, default=float))
+             "missing": missing, "round_delayint": args.round_delayint, "rounded_controls": rounded_controls,
+             "keep_fractional_training_rows": args.keep_fractional}, indent=1, default=float))
         print(f"\nwrote {len(chosen)} shortlist changes files and shortlist.json to {out_dir}: "
               + ", ".join(f"{s_['packet_id']} = {p} ({m}, {sl.weight_label(w)})" for s_, (p, w, m) in zip(slots, chosen)))
 
