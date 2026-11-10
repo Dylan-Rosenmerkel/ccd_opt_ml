@@ -1,0 +1,262 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,booktabs,graphicx,xcolor,enumitem,caption,float}
+\usepackage{hyperref}
+\setlist{itemsep=2pt,topsep=3pt}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\emergencystretch}{3em}
+\setlength{\parskip}{4pt}
+% every figure sits exactly where its text is ([H]); the text about a figure comes right before it
+\newcommand{\fig}[2]{\begin{figure}[H]\centering\includegraphics[width=\textwidth]{figures/#1}\caption{#2}\end{figure}}
+\newcommand{\takeaway}[1]{\par\noindent\fcolorbox{gray!50}{gray!8}{\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule}{\textbf{Take-away.} #1}}\par\medskip}
+
+\title{Level 1: what the data taught us, and what the next data will test}
+\author{ccd\_opt\_ml}
+\date{2026-11-10}
+
+\begin{document}
+\maketitle
+
+\section*{The story in five steps}
+\begin{enumerate}
+\item \textbf{First night (v1).} Dark charge and gain are mostly ``which amplifier is it''; a trace names its amplifier, so
+  models predicted them by recognising the amplifier. That fails on a new amplifier. Most of the error is one number per
+  amplifier, which cancels when two settings of the \emph{same} amplifier are compared: the idea of the change models.
+\item \textbf{What moves things (v2).} The integration time \texttt{delayInt} moves both noise and dark charge; after it,
+  the vertical clock lows (noise), VSUB and \texttt{delayRGH} (dark charge), VDD and VR (gain).
+\item \textbf{What v2 showed.} Change models carry over to new amplifiers; for the noise the traces beat the settings
+  (88--90\,\% against 69--72\,\% direction); for dark charge and gain the settings alone already get it.
+\item \textbf{The integration time did most of the work}, exactly as the physics says, and in v2 no voltage was ever
+  changed without changing the timing.
+\item \textbf{The next data (v3)} fixes the timing and moves each voltage on its own, over wider ranges, to measure what
+  the voltages do to noise and dark charge (effects down to about 1\,\% and 2\,\%).
+\end{enumerate}
+
+\paragraph{Words.} An \emph{image} (about 10 minutes) gives the true \textbf{noise} $\sigma_e$, \textbf{dark charge}
+$\lambda$ and \textbf{gain}. A \emph{trace} is a fast (0.2\,s) recording of the output. An \emph{absolute} model predicts
+a value; a \emph{change} model predicts how a value changes between two packets of the same amplifier. A \emph{new
+amplifier} is one the model never saw in training. ``Direction right'' counts clear changes ($\sigma_e$ $>$ 5\,\%,
+$\lambda$ $>$ 15\,\%, gain $>$ 1.2\,\%) whose up/down the model got right.
+
+% ======================================================================================================
+\section{What the first night (v1) taught us}
+
+\subsection{Dark charge and gain sort by amplifier}
+Each dot is one packet of the first night, per amplifier. The gain sits at a different level for each amplifier, and the
+dark charge too; the bar chart on the right says how much of each quantity is explained by knowing only the amplifier
+(red) or only the settings (blue). Gain: 0.83 by the amplifier, 0.05 by the settings. Dark charge: 0.31 by the
+amplifier, 0.01 by the settings. Noise: about equal (0.25 and 0.27).
+\fig{s1_amp_vs_settings.png}{v1: every packet per amplifier, and what explains each quantity.}
+\takeaway{Gain and dark charge are mostly a property of the amplifier; the noise depends on the settings as much as on
+the amplifier.}
+
+\subsection{A trace names its amplifier}
+For every trace feature we measured how much of its spread is just ``which amplifier'' ($\eta^2$, left). 47 of 246
+features are amplifier fingerprints ($\eta^2>0.9$), most of them from the reference trace (taken at nominal, so only the
+amplifier changes it). A classifier names the amplifier from one trace 98--100\,\% of the time (right). The own-trace
+noise features are mostly \emph{not} fingerprints (left, blue at low $\eta^2$): they follow the settings.
+\fig{s1_fingerprint.png}{v1: how much of each trace feature is the amplifier's identity, and how well a trace names its amplifier.}
+\takeaway{A model given traces always knows which amplifier it is looking at. For gain and dark charge, that is most of
+the answer on a known amplifier.}
+
+\subsection{So: good on known amplifiers, poor on a new one, and one image fixes most of it}
+A trace model (boosted trees on own and reference trace features) on amplifiers it knows, on a new amplifier, and on a
+new amplifier after one image of it (its level measured). Gain: 0.9\,\% on known amplifiers, 4.3\,\% on a new one
+(worse than the average, 2.5\,\%), 1.3\,\% after one image. Dark charge: 25.7 / 42.0 / 31.2\,\%. Noise: 10.3 / 14.7 /
+10.5\,\%.
+\fig{s1_known_new_onefix.png}{v1: typical error of a trace model.}
+\takeaway{On a new amplifier the model has learned a lookup with nothing to look up. One image of the new amplifier
+restores the noise and the gain; the dark charge only partly.}
+
+\subsection{The way out: predict changes}
+Left: the error of the absolute model on a new amplifier, split into the part that is one constant per amplifier (its
+offset) and the rest. The offset is most of it (dark charge 36 of 58\,\%, gain 4.2 of 5.1\,\%, noise 12.7 of 20\,\%).
+Comparing two settings of the \emph{same} amplifier removes that constant. That is the change model. Right: in v1 every
+change was measured against nominal, and nominal is near the best noise, so 96\,\% of the clear noise changes went
+\emph{up}: a model could score by always answering ``up''. v2 therefore compares packets with each other (51\,\% up).
+\fig{s1_change_idea.png}{Why change models, and why v2 changed how changes are measured.}
+\takeaway{Change models were built to cancel the amplifier's level; v2 was designed so that changes go both ways.}
+
+% ======================================================================================================
+\section{Which parameters move things (v2)}
+
+\subsection{Correlations: settings against the labels}
+Every number is a correlation ($-1$ to $+1$). Left: setting against label over all packets. Right: change of a setting
+against change of the label, for two packets of one amplifier (what the change models learn). The strongest by far is
+\texttt{delayInt}: noise $-0.68$, dark charge $+0.89$ (changes). Next: for the noise the vertical clock lows
+(\texttt{V1\_B\_L}, which in v2 moved together with the other V lows: $+0.42$) and \texttt{SW\_L} ($-0.29$); for the gain
+VDD ($-0.61$) and VR ($-0.55$); for the dark charge \texttt{RG\_L} ($-0.27$), \texttt{delay\_H} ($+0.19$) and VSUB.
+\fig{s2_corr_settings.png}{v2: correlation of each setting with each label (levels left, changes right).}
+
+\subsection{Correlations: settings against what the trace measures}
+The same, against key trace features (left of the black line) and the labels (right). \texttt{delayInt} drives the
+trace's noise power in every band ($+0.9$) and its white noise per skip ($-0.5$); \texttt{delayRGH} the
+pedestal-window settling ($+0.9$); \texttt{delay\_H} the baseline droop ($-0.7$); VR the reset-level scatter ($-0.5$).
+The vertical clock lows, which move the image noise ($+0.4$), barely show in any of these trace features.
+\fig{s2_corr_traces.png}{v2: correlation of each setting with trace features and labels.}
+
+\subsection{The effect of each setting, measured and as the best change models see it}
+All settings fitted together: the change of the label for a one-standard-deviation change of each setting, from the
+images (black) and from the predictions of two change models on a new amplifier (blue: settings only; green: traces
+only). Noise: \texttt{delayInt} $-13\,\%$, the vertical clock lows $+5.2\,\%$, VSUB $+2.4\,\%$. The trace model sees the
+clock-low effect ($+3.1\,\%$), the settings model does not ($-0.3\,\%$). Dark charge: \texttt{delayInt} $+27\,\%$, VSUB
+$+7.4\,\%$, \texttt{delayRGH} $+5.9\,\%$; the settings model sees VSUB ($+6.8\,\%$), the trace model hardly
+($+1.6\,\%$).
+\fig{s2_model_effects.png}{v2: per-setting effect on a change, measured and predicted.}
+\takeaway{\texttt{delayInt} first, by far. Second for the noise: the vertical clock low levels (which the traces pick
+up); for the dark charge: VSUB and \texttt{delayRGH} (which only the settings carry); for the gain: VDD and VR.}
+
+\subsection{What matters most: the top five in every view}
+For each label, the five settings that matter most in each view: the measured effect and the correlations (from the
+images), and what each model relies on or predicts (new amplifier). A setting that tops every row is a robust result;
+one that appears in only one row is that model's or that view's peculiarity. The last table lists the trace features
+the trace models use most. How to read the rows:
+\begin{itemize}
+\item \textbf{measured effect}: change of the label for a one-standard-deviation change of the setting, all settings
+  fitted together (so a setting gets credit only for what the others do not explain);
+\item \textbf{correlations}: how strongly the setting and the label move together, one setting at a time ($-1$ to $+1$);
+\item \textbf{relevance}: how much the Gaussian process uses the setting (1 / length scale, the largest set to 1);
+\item \textbf{predicted effect}: the same fit as the measured effect, on the model's predictions instead of the images:
+  what the model believes each setting does.
+\end{itemize}
+For the noise, \texttt{delayInt} is first in every row and the vertical clock lows second in four of seven; for the dark
+charge, \texttt{delayInt} first everywhere, then mostly VSUB and \texttt{delayRGH} (the correlations put RG\_L second);
+for the gain, VR and VDD first and second in every row except the settings GP, which did not learn the gain at all
+(without the amplifier's name, the settings explain almost none of it).
+\input{tables_rankings}
+
+% ======================================================================================================
+\section{What v2 showed}
+
+\subsection{Absolute models}
+Typical error on amplifiers seen in training (green) and on a new one (red). Noise: the trace physics model gets 14\,\%
+on a new amplifier against 20\,\% for the settings and 24\,\% for the average. Dark charge: on a known amplifier the
+settings plus the amplifier's name give 5\,\%; on a new amplifier every model is at 44--83\,\%, no better than the average
+(49\,\%). Gain: 1--1.6\,\% known, 3--4.5\,\% new.
+\fig{s3_absolute.png}{v2 absolute models (session D cross-validation).}
+
+\subsection{One image of the new amplifier}
+A new amplifier's error after 0, 1, 2, 4, 8 of its own images. Dark charge: 48 and 53\,\% for the lowest and highest
+amplifier (their level is far from the others'), 16\,\% for the middle one; one image brings all three to 17--18\,\%.
+\fig{s3_one_image.png}{v2: a new amplifier's error against the number of its images.}
+
+\subsection{Change models}
+Direction right on clear changes, new amplifier, random pairs of packets: session D cross-validation (blue) and the
+held-out session E (orange). Noise: trace models 85--90\,\% (E: 87--88\,\%) against 69--72\,\% for the settings; the
+90\,\% pass mark is met on D and missed by 2 points on E. Dark charge: 96--99\,\% for every model, settings included. Gain:
+the settings 94\,\%; the trace models 77--94\,\%.
+\fig{s3_change.png}{v2 change models on a new amplifier.}
+\takeaway{Change models carry over to new amplifiers. The traces add real information for the noise; for dark charge and
+gain the settings are enough.}
+
+% ======================================================================================================
+\section{The integration time did most of the work, and we knew it}
+
+\subsection{It does what the physics says}
+Noise against \texttt{delayInt}: it falls like white noise averaging down ($\propto 1/\sqrt{\texttt{delayInt}}$, dashed)
+and flattens above about 1500 cycles, where slow noise takes over. Dark charge: it grows in proportion to the readout
+time per pixel (dashed lines, one per amplifier, no fitted shape). Gain: no dependence.
+\fig{s4_physics.png}{v2: the labels against delayInt with the physics expectation.}
+
+\subsection{How much it explains}
+Share of the spread explained (cross-validated). The amplifier alone explains 0.19 of the noise, 0.36 of the dark charge
+and 0.70 of the gain. Adding \texttt{delayInt} alone brings noise and dark charge to 0.76 and 0.80; all the other settings
+and the traces add nothing beyond that (0.65--0.84). The gain needs VDD and VR (0.84 with all settings).
+\fig{s4_shares.png}{v2: share explained by the amplifier, delayInt, all timing, all settings, and traces.}
+
+\subsection{Without it}
+Left: direction right against how much \texttt{delayInt} changed. For the noise with small or no \texttt{delayInt}
+changes, the settings model is at 53--69\,\%, the trace classifier at 73--98\,\%. Right: a settings model not told
+\texttt{delayInt} falls from 76 to 50\,\% (noise) and from 97 to 54\,\% (dark charge) on changes where it moved: a coin
+flip.
+\fig{s4_without.png}{v2: the change models where delayInt does not change, and without delayInt.}
+\takeaway{Most of what the models learned in v2 is the integration time, which physics already predicts. In v2 no packet
+changed a voltage with the timing fixed, so v2 cannot tell us what the voltages do on their own.}
+
+% ======================================================================================================
+\section{What the next data will test}
+
+\subsection{Which settings moved, and together}
+Each square is how strongly two settings moved together over the packets (black = always together). v2 (left): the
+three vertical clock lows always together, the three horizontal lows always together, the clock swings never varied.
+v3 noise set (right): timing fixed (pink: held at nominal), every voltage moved on its own.
+\fig{s5_design_corr.png}{Settings moving together: v2 against the v3 noise set.}
+
+\subsection{Voltage changes at fixed timing, over wider ranges}
+Left: packets where a voltage changed and the timing did not: none in v2, 57--84 per voltage in the v3 noise set.
+Right: the range covered: VSUB 35--70\,V instead of 40--50\,V; VDD and VR twice as wide, RG and SW three to four times;
+the clock swings for the first time.
+\fig{s5_coverage.png}{What v3 adds.}
+
+\subsection{How small an effect each design can see}
+The smallest effect of each voltage (over its v3 range) that a linear fit of all settings together can tell from zero
+(2$\sigma$, 3 amplifiers). v3 noise set: dark charge 1.5--3.2\,\%, noise 0.7--1.4\,\%. v2 could not separate the clock
+lows at all (locked together), never varied the swings, and needed 6--11\,\% (dark charge) and 2.4--4.6\,\% (noise) for
+VSUB and the readout-stage voltages. TG is held at nominal in the v3 noise set (a TG change is not reset-safe).
+\fig{s5_detectable.png}{Smallest detectable voltage effect: v2 design against the v3 noise set.}
+\takeaway{v3 measures what each voltage does to noise and dark charge at a fixed integration time, the question v2 could
+not answer. The dark-charge add-on (v3d) adds one-voltage-at-a-time sweeps and exposure pairs that separate the dark
+current rate from charge made during readout.}
+
+% ======================================================================================================
+\clearpage
+\appendix
+\section{Model-by-model audit}
+Each figure is one model, with the checks that suit how that model works. All on v2 session D, new amplifier.
+
+\subsection{Settings Gaussian process (absolute)}
+A smooth function of the settings, with an error bar. (a--c) predicted against measured with the error bars; (d--f) are
+the error bars honest? (misses divided by the stated error bar should follow the black curve); (g--i) which settings it
+relies on (1 / length scale). Its error bars are too small on a new amplifier: 45\,\% (noise), 31\,\% (dark charge),
+37\,\% (gain) of the measurements lie within $\pm1\sigma$, against 68\,\% if honest; it does not know the amplifier's
+level. It relies on \texttt{delayInt}, the V lows and TG (noise), \texttt{delayInt}, VSUB, \texttt{delayRGH} (dark charge).
+\fig{appendix_abs_settings_gp.png}{Settings GP (absolute).}
+
+\subsection{Trace physics model (absolute)}
+Noise from a formula: $\sigma_e$ = (the trace's white noise per skip $/\sqrt{N}$) $\div$ a learned gain $\times$ a
+learned correction; dark charge learned with no formula. (a) The formula's trace term against the image's noise in ADU:
+correlation 0.77. (b) The learned gain: 3.0\,\% error. (c) The learned correction: typically 9\,\%. (d) Final noise:
+14\,\%. (e) Dark charge: 83\,\% (no formula, amplifier level unknown). (f) Error bars: noise 52/84\,\% within
+$\pm1/2\sigma$ (ideal 68/95), dark charge 2/9\,\%: far too confident.
+\fig{appendix_abs_physics.png}{Trace physics model (absolute).}
+
+\subsection{Trace boosted trees (absolute)}
+(a--c) predicted against measured; (d--f) the trace features it relies on; (g--i) how its prediction moves with its most
+important feature. For the dark charge its top features are slow-drift and step features of its own trace and an
+edge feature of the reference trace (taken at nominal, so it mostly identifies the amplifier).
+\fig{appendix_abs_trees.png}{Trace boosted trees (absolute).}
+
+\subsection{Settings change Gaussian process}
+Change of the settings $\to$ change of the label. (a--c) predicted against true change; (d--f) which setting changes it
+relies on; (g--i) its learned response to a change of \texttt{delayInt} alone, from three starting values. Noise: 69\,\%
+direction, relying on \texttt{delayInt}, VDD, TG; dark charge 97\,\% (\texttt{delayInt}, \texttt{delayRGH}, VSUB); gain
+93\,\% (VR, VDD).
+\fig{appendix_chg_settings_gp.png}{Settings change GP.}
+
+\subsection{Physics difference model (noise change)}
+$\Delta\log\sigma_e = \Delta\log(\text{trace white noise}) - \Delta\log g + \text{correction}$. (a) The trace's white
+noise alone: 68\,\% direction; (b) with the learned gain change: 68\,\%; (c) with the learned correction: 86\,\%; (d) the
+correction is typically 16\,\%: the white noise alone misses what does not average down.
+\fig{appendix_chg_physics.png}{Physics difference model.}
+
+\subsection{Combined trees (change)}
+Trees on the features of trace A, trace B and B $-$ A. (a--c) predicted against true change; (d--f) does it get the
+size right (slope 0.58 noise, 0.86 dark charge, 0.37 gain: it predicts changes too small); (g--i) which features
+(green) and which part (purple): for the dark charge it uses the difference B $-$ A almost entirely; for the noise all
+three parts.
+\fig{appendix_chg_combined_trees.png}{Combined trees (change).}
+
+\subsection{Direction classifier (change)}
+The probability that the label goes up from A to B. (a--c) is its confidence right (on the diagonal = yes; ROC area 0.95
+noise, 0.99 dark charge, 0.92 gain); (d--f) its answers for changes that truly went up (red) and down (blue); (g--i)
+accuracy when only its confident answers are kept: noise 89\,\% on all, 96\,\% on the most confident half.
+\fig{appendix_chg_classifier.png}{Direction classifier (change).}
+
+\section*{Files}
+Figures: \texttt{lvl1/story\_figures.py} (sections 1--5), \texttt{lvl1/model\_diagnostics\_v2.py} (appendix), and the
+one-image figure from \texttt{lvl1/amplifier\_identity.py}. Numbers: \texttt{story.json},
+\texttt{processed\_v2\_trainD/lvl1\_results/model\_diagnostics/}.
+
+\end{document}

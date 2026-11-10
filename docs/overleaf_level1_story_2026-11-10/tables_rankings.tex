@@ -1,0 +1,51 @@
+\begin{table}[H]\centering\small
+\caption{What matters most for the noise $\sigma_e$: the five largest settings in each view (v2; changes = two packets of one amplifier; new amplifier for the models). V lows / H lows: the vertical / horizontal clock lows, which moved together in v2; 1 SD of a setting = its standard deviation over the v2 packets.}
+\begin{tabular}{p{5.2cm}lllll}\toprule
+view & 1st & 2nd & 3rd & 4th & 5th\\\midrule
+Measured effect on a change (\%/SD, all settings fitted together) & delayInt $-$13.1 & V lows +5.2 & VSUB +2.4 & RG\_H +2.2 & SW\_L $-$1.9\\
+Correlation: setting change vs label change & delayInt $-$0.68 & V lows +0.42 & SW\_L $-$0.29 & VSUB +0.20 & TG $-$0.14\\
+Correlation: setting vs label (levels) & delayInt $-$0.59 & V lows +0.38 & SW\_L $-$0.36 & H lows $-$0.16 & RG\_L +0.10\\
+Settings GP (absolute): relevance (largest = 1) & delayInt 1.00 & V lows 0.19 & TG 0.14 & H lows 0.13 & delayRGH 0.08\\
+Settings change GP: relevance (largest = 1) & delayInt 1.00 & VDD 0.52 & TG 0.25 & RG\_L 0.23 & RG\_H 0.22\\
+Settings change GP: predicted effect (\%/SD) & delayInt $-$12.4 & delay\_H $-$2.6 & RG\_L +1.6 & H lows $-$1.6 & VDD +1.3\\
+Trace combined trees: predicted effect (\%/SD) & delayInt $-$9.4 & SW\_L $-$4.0 & V lows +3.1 & VR $-$2.7 & RG\_L $-$1.5\\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small
+\caption{What matters most for the dark charge $\lambda$: the five largest settings in each view (v2; changes = two packets of one amplifier; new amplifier for the models). V lows / H lows: the vertical / horizontal clock lows, which moved together in v2; 1 SD of a setting = its standard deviation over the v2 packets.}
+\begin{tabular}{p{5.2cm}lllll}\toprule
+view & 1st & 2nd & 3rd & 4th & 5th\\\midrule
+Measured effect on a change (\%/SD, all settings fitted together) & delayInt +26.7 & VSUB +7.4 & delayRGH +5.9 & delay\_H +3.6 & VDD +2.1\\
+Correlation: setting change vs label change & delayInt +0.89 & RG\_L $-$0.27 & delay\_H +0.19 & TG +0.18 & H lows +0.13\\
+Correlation: setting vs label (levels) & delayInt +0.63 & RG\_L $-$0.20 & H lows +0.17 & VSUB +0.16 & delay\_H +0.07\\
+Settings GP (absolute): relevance (largest = 1) & delayInt 1.00 & VSUB 0.21 & delayRGH 0.20 & V lows 0.01 & H lows 0.01\\
+Settings change GP: relevance (largest = 1) & delayInt 1.00 & delayRGH 0.31 & VSUB 0.29 & delay\_H 0.22 & VR 0.14\\
+Settings change GP: predicted effect (\%/SD) & delayInt +26.9 & VSUB +6.8 & delay\_H +3.7 & delayRGH +3.7 & VR $-$2.6\\
+Trace combined trees: predicted effect (\%/SD) & delayInt +25.5 & delayRGH +4.3 & RG\_L $-$2.4 & TG $-$2.1 & delay\_H +2.1\\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small
+\caption{What matters most for the gain: the five largest settings in each view (v2; changes = two packets of one amplifier; new amplifier for the models). V lows / H lows: the vertical / horizontal clock lows, which moved together in v2; 1 SD of a setting = its standard deviation over the v2 packets.}
+\begin{tabular}{p{5.2cm}lllll}\toprule
+view & 1st & 2nd & 3rd & 4th & 5th\\\midrule
+Measured effect on a change (\%/SD, all settings fitted together) & VR $-$0.7 & VDD $-$0.6 & delay\_H +0.2 & delayInt $-$0.2 & delayRGH $-$0.2\\
+Correlation: setting change vs label change & VDD $-$0.61 & VR $-$0.55 & delayRGH $-$0.21 & delay\_H +0.12 & delayInt $-$0.09\\
+Correlation: setting vs label (levels) & VDD $-$0.30 & VR $-$0.28 & delayRGH $-$0.08 & delay\_H +0.07 & RG\_H +0.04\\
+Settings GP (absolute): relevance (largest = 1) & \multicolumn{5}{l}{\textit{not learned: the GP fitted this label as noise (all length scales at their start value)}}\\
+Settings change GP: relevance (largest = 1) & VR 1.00 & VDD 0.68 & delay\_H 0.37 & delayRGH 0.28 & delayInt 0.28\\
+Settings change GP: predicted effect (\%/SD) & VR $-$0.6 & VDD $-$0.6 & delay\_H +0.2 & delayInt $-$0.2 & delayRGH $-$0.1\\
+Trace combined trees: predicted effect (\%/SD) & VR $-$0.5 & VDD $-$0.4 & RG\_H +0.2 & delayRGH $-$0.1 & V lows +0.1\\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small
+\caption{The trace features the trace models use most (permutation importance; ``ref.:'' = the reference trace taken at nominal).}
+\begin{tabular}{p{3.6cm}p{2.3cm}p{2.3cm}p{2.3cm}p{2.3cm}p{2.3cm}}\toprule
+model, label & 1st & 2nd & 3rd & 4th & 5th\\\midrule
+trace trees (absolute), noise $\sigma_e$ & signal-window settling (ADU) & line frequency, whole trace (k\dots{} & noise of 10-skip average & noise power 0.1-1 MHz & row-start recovery time (skips)\\
+trace trees (absolute), dark charge $\lambda$ & PC1 variance fraction & ref.: cycle variation in signal wind\dots{} & drift (ADU/ms) & in-window step rate (\%) & waveform modes for 90 \% of the\dots{}\\
+trace trees (absolute), gain & ref.: cycle variation in signal wind\dots{} & dip per volt SW (ADU/V) & cycle variation in signal wind\dots{} & ref.: ringing rms (ADU) & dip recovery time (us)\\
+trace combined trees (change), noise $\sigma_e$ & row-start recovery time (skips) & signal-window settling (ADU) & 1/f corner frequency (kHz) & transient time constant (us) & CDS-slope lever arm (samples)\\
+trace combined trees (change), dark charge $\lambda$ & row-start recovery time (skips) & baseline droop time constant (\dots{} & noise power 3-7.5 MHz & ringing frequency (MHz) & recovery amplitude ratio\\
+trace combined trees (change), gain & dip recovery time (us) & dip per volt SW (ADU/V) & Hadamard deviation n=50 (ADU) & baseline coupling (1e-3) & signal-window settling (ADU)\\
+\bottomrule\end{tabular}\end{table}
+
