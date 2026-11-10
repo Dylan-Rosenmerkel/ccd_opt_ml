@@ -1,0 +1,5 @@
+# L3_018_ref: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:VDD1=-18
+acm101:VDD2=-18
+acm101:VDD1=-19
+acm101:VDD2=-19

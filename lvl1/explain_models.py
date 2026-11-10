@@ -304,8 +304,46 @@ def native(model: str, obj, X, xnames: list[str], Y_train: np.ndarray) -> dict:
 # the run                                                                      #
 # --------------------------------------------------------------------------- #
 
+ABLATION_REPORTS: list[Path] = []      # v2: train_lvl1 --tier-ablation report.json files (set with configure)
+HOLDOUT_SESSION = "C"
+
+
+def configure(tier_file=None, plan=None, holdout_session=None, ablation_reports=None):
+    """Point the script at the v2 data: tier file, plan, held-out session (E) and the tier-ablation report(s) of the
+    session-D cross-validation that choose each model's feature set."""
+    global TIER_FILE, PLAN, HOLDOUT_SESSION, ABLATION_REPORTS
+    if tier_file:
+        TIER_FILE = Path(tier_file)
+    if plan:
+        PLAN = Path(plan)
+    if holdout_session:
+        HOLDOUT_SESSION = holdout_session
+    if ablation_reports:
+        ABLATION_REPORTS = [Path(r) for r in ablation_reports]
+
+
+def add_config_args(parser):
+    parser.add_argument("--tier-file", help="evidence tiers (default v1's real_AB file)")
+    parser.add_argument("--plan", help="packet plan (default v1's)")
+    parser.add_argument("--holdout-session", help="held-out session (default C; v2: E)")
+    parser.add_argument("--ablation-report", nargs="+", help="v2: report.json of train_lvl1 --tier-ablation (session-D CV); "
+                                                              "each model's set = its lowest-CV-error set per target")
+
+
 def chosen_sets() -> dict[str, dict[str, str]]:
     """Per model and target, the feature set with the lowest A+B cross-validation error."""
+    if ABLATION_REPORTS:                                                   # v2: from the session-D tier ablation
+        res = {}
+        for r in ABLATION_REPORTS:
+            res.update(json.loads(r.read_text())["results"])
+        out = {m: {t: "none" for t in TARGETS} for m in BASELINES}
+        for m in TRACE_MODELS:
+            cands = {k.split(" [", 1)[1][:-1]: v for k, v in res.items() if k.startswith(m + " [") and "scores" in v}
+            if not cands and m in res and "scores" in res[m]:
+                cands = {tl.MODEL_TIERS.get(m, tl.DEFAULT_MODEL_TIERS): res[m]}
+            if cands:
+                out[m] = {t: min(cands, key=lambda s: cands[s]["scores"][t]["error"]) for t in TARGETS}
+        return out
     ladder = json.loads(LADDER.read_text())["results"]
     out = {m: {t: "none" for t in TARGETS} for m in BASELINES}
     for m in TRACE_MODELS:
@@ -409,19 +447,32 @@ def main():
     parser.add_argument("--models", nargs="*", default=list(BASELINES + TRACE_MODELS))
     parser.add_argument("--repeats", type=int, default=20, help="shuffles per input group (default 20)")
     parser.add_argument("--repeats-single", type=int, default=3, help="shuffles per single input (default 3)")
+    parser.add_argument("--exclude-amps", nargs="*", default=[], metavar="BOARD:CHANNEL")
+    parser.add_argument("--exclude-fractional", action="store_true", help="drop fractional-window rows")
+    parser.add_argument("--exclude-features", help="trace features no model may see (amp_fingerprint list)")
+    add_config_args(parser)
     args = parser.parse_args()
+    configure(args.tier_file, args.plan, args.holdout_session, args.ablation_report)
 
     files = {p.stem: real_inputs.load(p) for p in sorted(Path(args.inputs).glob("*.npz"))}
     base = files["physics"]
     rows = (np.isin(base["board"], [101]) & np.isfinite(base["Y"]).all(1) & base["label_ok"] & ~base["fake"]
             & base["trace_ok"].astype(bool))
+    for bc in args.exclude_amps:
+        b, c = (int(x) for x in bc.split(":"))
+        rows &= ~((base["board"] == b) & (base["channel"] == c))
+    if args.exclude_fractional:
+        rows &= ~base["fractional_window"].astype(bool)
     rows = np.flatnonzero(rows)
     packets = base["packet_id"][rows].astype(str)
-    held = np.array([tl.matches_packet(p, tl.session_packets(PLAN, "C")) for p in packets])
+    held = np.array([tl.matches_packet(p, tl.session_packets(PLAN, HOLDOUT_SESSION)) for p in packets])
     train, ho = np.flatnonzero(~held), np.flatnonzero(held)
     test_all = np.arange(len(rows))
     runner = tl.Runner(files, rows, quick=False, tiers=tl.load_tiers(TIER_FILE))
-    print(f"{len(train)} A+B rows (fit), {len(ho)} session C rows")
+    if args.exclude_features:
+        runner.exclude = {ln.strip() for ln in Path(args.exclude_features).read_text().splitlines()
+                          if ln.strip() and not ln.startswith("#")}
+    print(f"{len(train)} training rows (fit), {len(ho)} session {HOLDOUT_SESSION} rows")
 
     sets = chosen_sets()
     out = Path(args.out)

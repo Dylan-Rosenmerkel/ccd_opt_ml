@@ -1,0 +1,6 @@
+# L3_083: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:V1_A_H=9.9
+acm101:V1_B_H=9.9
+acm101:V2_C_H=9.9
+acm101:V3_A_H=9.9
+acm101:V3_B_H=9.9

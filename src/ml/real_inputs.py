@@ -29,7 +29,9 @@ Common part of every labeled file (row i = one amplifier in one packet; ONE TRAC
                                            errors from WADERs); NaN where missing
     label_ok, fake                         WADERs fit without flags; packet made of copied files (rehearsal)
     trace_ok                               at least one usable trace at the packet's own settings
-    theta, theta_names                     the settings (as the boards report them)
+    fractional_window                      delayInt not a whole number of ADC samples: the image may carry pixel
+                                           offsets (keep or drop these labels in the training)
+    theta, theta_names                    the settings (as the boards report them)
 
 Nothing here is fitted to the data (no standardization, no imputation), so nothing leaks between training and test
 rows: every model's preparation happens inside its training folds (lvl1/train_lvl1.py).
@@ -85,7 +87,11 @@ def common(df: pd.DataFrame) -> dict[str, np.ndarray]:
     # L1_41 every trace at the new settings was damaged; a model then predicts from filled-in values, not from a trace)
     n_usable = pd.to_numeric(df.get("trace.n_usable"), errors="coerce") if "trace.n_usable" in df else None
     trace_ok = (n_usable.fillna(0).to_numpy() > 0) if n_usable is not None else np.ones(len(df), bool)
-    return {"packet_id": df["packet_id"].astype(str).to_numpy(), "board": df["board"].to_numpy(int),
+    # fractional_window: delayInt is not a whole number of ADC samples, so the image's on-board CDS mixes windows of
+    # N and N+1 samples (decode_trace.window_samples); a flag for the training to keep or drop these labels
+    fractional = (df["label.fractional_window"].astype(str).str.lower().eq("true").to_numpy()
+                  if "label.fractional_window" in df else np.zeros(len(df), bool))
+    return {"fractional_window": fractional,"packet_id": df["packet_id"].astype(str).to_numpy(), "board": df["board"].to_numpy(int),
             "channel": df["channel"].to_numpy(int), "amplifier": df.get("amplifier", pd.Series([""] * len(df))).astype(str).to_numpy(),
             "Y": Y, "Y_err": E, "targets": np.array(TARGETS), "label_ok": ok, "trace_ok": trace_ok,
             "fake": df.get("fake", pd.Series([False] * len(df))).astype(str).str.lower().eq("true").to_numpy(),

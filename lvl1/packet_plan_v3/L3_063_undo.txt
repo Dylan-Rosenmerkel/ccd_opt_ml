@@ -1,0 +1,2 @@
+# L3_063: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:H2_C_L=6.7

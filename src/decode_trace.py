@@ -48,6 +48,28 @@ from pathlib import Path
 import numpy as np
 
 SAMPLE_RATE_HZ = 15e6          # ADC sample rate (also assumed by commant)
+SEQUENCER_CLOCK_HZ = 100e6     # sequencer clock: delays such as delayInt are in these cycles
+SAMPLES_PER_CYCLE = SAMPLE_RATE_HZ / SEQUENCER_CLOCK_HZ   # 0.15: delayInt 1000 -> 150 samples
+
+
+def window_samples(delay_int_cycles: float) -> float:
+    """
+    ADC samples in one CDS window of ``delay_int_cycles`` sequencer cycles (1000 -> 150).
+
+    When this is not a whole number (delayInt not a multiple of 20 cycles), the windows
+    alternate between N and N+1 samples.  The traces handle that (window means), but the
+    on-board image CDS is built from window SUMS, so a pixel's pedestal and signal windows
+    of different lengths shift its value by a whole baseline sample: such images can show
+    discrete offset levels ~10 ADU apart and no resolved electron peaks (v2 night,
+    2026-11-05: 23 of 25 rejected WADERs fits).
+    """
+    return float(delay_int_cycles) * SAMPLES_PER_CYCLE
+
+
+def fractional_window(delay_int_cycles: float) -> bool:
+    """True if a delayInt of this many cycles gives a non-integer number of samples per window."""
+    n = window_samples(delay_int_cycles)
+    return abs(n - round(n)) > 1e-6
 _KEYWORD_BIT = 1 << 31
 _MAX_WINDOW = 5000             # a skip-window header carries n <= this many samples
 
@@ -172,15 +194,22 @@ class DecodedTrace:
         """
         Signs that part of the trace was lost or corrupted (empty list = looks healthy).
 
-        Checked: every pedestal window has the same length; the inline sums equal the sums of
-        the raw samples; every pixel has the same number of inline records.  A damaged trace
-        (e.g. UDP packets dropped during the acquisition) fails these checks and should not
-        be used as a repeat or for training.
+        Checked: every pedestal window has the same length, up to one sample (see below); the
+        inline sums equal the sums of the raw samples; every pixel has the same number of inline
+        records.  A damaged trace (e.g. UDP packets dropped during the acquisition) fails these
+        checks and should not be used as a repeat or for training.
+
+        Window lengths may alternate between N and N+1 samples: the ADC samples every 20/3
+        clock cycles, so a delayInt that is not a multiple of 20 cycles (e.g. 470 -> 70.5
+        samples) gives windows of 70 and 71 samples.  That is the sequencer's timing, not
+        damage (the inline sums still match the raw samples exactly), and skips() uses window
+        MEANS, so the CDS is unaffected.  Only lengths more than one sample from the median
+        are flagged.  (The on-board image CDS is affected; see SAMPLES_PER_CYCLE.)
         """
         problems = []
         starts, ends = self.window_slices()
         lengths = ends - starts
-        odd = int(np.sum(lengths != np.median(lengths)))
+        odd = int(np.sum(np.abs(lengths - np.median(lengths)) > 1))
         if odd:
             problems.append(f"{odd} pedestal windows have an unusual length")
         mismatch = self.check_l1()

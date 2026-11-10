@@ -1,0 +1,2 @@
+# L3_074_ref: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:V2_C_L=7.9

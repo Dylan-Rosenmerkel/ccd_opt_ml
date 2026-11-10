@@ -409,6 +409,9 @@ class Runner:
             out["X_trace"], out["X_ref"] = out["X_trace"][:, keep], out["X_ref"][:, keep]
             out["feature_names"] = np.asarray(out["feature_names"])[keep]
         if self.no_settings and "theta" in out and np.asarray(out["theta"]).size:
+            # the no-trace references (settings, settings_amp*) keep the settings: they ARE the settings-only answer
+            # (before 2026-11-10 --no-settings blanked them too, so "settings" silently became the mean)
+            out["theta_reference"] = out["theta"]
             out["theta"] = np.full(np.shape(out["theta"]), np.nan)      # all-NaN: prep_columns drops every setting
         if self.exclude and "feature_names" in out and "X_trace" in out:
             # an excluded column becomes all-NaN, so prep_columns drops it (own and reference blocks separately)
@@ -609,7 +612,8 @@ class Runner:
 
     def settings(self, train, test):
         """Baseline: a GP on the settings alone (no trace)."""
-        th = self.f("features")["theta"]
+        d_ = self.f("features")
+        th = d_.get("theta_reference", d_["theta"])
         xtr, xte, keep = prep_columns(th[train], th[test])
         if not keep.any():                      # every training packet at the same settings: nothing to learn
             return self.mean(train, test)
@@ -617,7 +621,8 @@ class Runner:
 
     def _settings_amp(self, train, test):
         """The settings and the amplifier's one-hot (no trace)."""
-        th = self.f("features")["theta"]
+        d_ = self.f("features")
+        th = d_.get("theta_reference", d_["theta"])
         onehot = np.eye(self.amp_id.max() + 1)[self.amp_id]
         xtr, xte, _ = prep_columns(np.hstack([th[train], onehot[train]]), np.hstack([th[test], onehot[test]]))
         return xtr, xte
@@ -1187,6 +1192,8 @@ def main():
     parser.add_argument("--exclude-features", help="text file of trace features no model may see, one per line, as "
                                                    "'own: <name>' or 'ref: <name>' (e.g. lvl1/amp_fingerprint.py's lists)")
     parser.add_argument("--include-flagged", action="store_true", help="also use labels that WADERs flagged")
+    parser.add_argument("--exclude-fractional", action="store_true",
+                        help="leave out rows whose delayInt is not a whole number of ADC samples (fractional_window: the image's on-board CDS mixes N / N+1-sample windows, so its labels may be biased)")
     parser.add_argument("--allow-fake", action="store_true", help="also use FAKE (rehearsal) packets")
     parser.add_argument("--quick", action="store_true", help="short training (to test the pipeline)")
     parser.add_argument("--out", help="results directory (default: <processed>/lvl1_results/<date>)")
@@ -1202,6 +1209,10 @@ def main():
         rows &= base["label_ok"]
     if not args.allow_fake:
         rows &= ~base["fake"]
+    if args.exclude_fractional:
+        if "fractional_window" not in base:
+            raise SystemExit("--exclude-fractional: no fractional_window in the inputs (rebuild them with process_packet.py --rebuild-only)")
+        rows &= ~base["fractional_window"].astype(bool)
     if "trace_ok" in base:                      # no usable trace at the packet's own settings: nothing to predict from
         rows &= base["trace_ok"].astype(bool)
     for bc in args.exclude_amps:

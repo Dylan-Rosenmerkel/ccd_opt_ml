@@ -1,0 +1,212 @@
+{
+ "frozen": "2026-11-09T17:35:26",
+ "scorecard": "processed_v2_trainD/lvl1_results/taskB_scorecard_D/scorecard.json",
+ "rule": "cell 'new', pair type 'random pairs' (tie-break 'n -> n+1'): per target, the highest direction on clear changes and the lowest RMS size error; trace models only (no references)",
+ "info": {
+  "n_rows": 127,
+  "n_packets": 43,
+  "channels": [
+   0,
+   1,
+   3
+  ],
+  "sessions": {
+   "D": 127
+  },
+  "keep_fractional": false,
+  "n_pairs": {
+   "within packet (image)": 83,
+   "within packet (strip)": 74,
+   "n -> n+1": 124,
+   "n -> n+2": 121,
+   "random pairs": 2626
+  },
+  "max_random_train": 800
+ },
+ "targets": {
+  "gain": {
+   "direction": {
+    "model": "trace: direction classifier [A, B, B-A]",
+    "direction": 0.9363636363636364,
+    "always_up": 0.509090909090909,
+    "n_clear": 220,
+    "vs_settings": "same",
+    "runner_up": "trace change: trees"
+   },
+   "size": {
+    "model": "trace: combined trees [A, B, B-A]",
+    "size_error": 1.4351550712194658,
+    "always_up": 0.509090909090909,
+    "n_clear": 220,
+    "vs_settings": "worse",
+    "runner_up": "trace change: trees"
+   },
+   "other_pair_types_and_cells (information only)": {
+    "trained / within packet (image)": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "trained / within packet (strip)": {
+     "direction": "trace change: shared-encoder net",
+     "size": "trace change: difference curves PCA + trees"
+    },
+    "trained / n -> n+1": {
+     "direction": "trace change: trees",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "trained / n -> n+2": {
+     "direction": "trace change: trees",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "trained / random pairs": {
+     "direction": "trace change: trees",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "new / within packet (image)": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "new / within packet (strip)": {
+     "direction": "trace change: shared-encoder net",
+     "size": "trace change: difference curves PCA + trees"
+    },
+    "new / n -> n+1": {
+     "direction": "trace change: trees",
+     "size": "trace change: trees"
+    },
+    "new / n -> n+2": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "new / random pairs": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    }
+   }
+  },
+  "lambda": {
+   "direction": {
+    "model": "trace: combined trees [A, B, B-A]",
+    "direction": 0.9762611275964391,
+    "always_up": 0.5074183976261127,
+    "n_clear": 337,
+    "vs_settings": "same",
+    "runner_up": "trace: direction classifier [A, B, B-A]"
+   },
+   "size": {
+    "model": "trace: combined trees [A, B, B-A]",
+    "size_error": 14.893071379520292,
+    "always_up": 0.5074183976261127,
+    "n_clear": 337,
+    "vs_settings": "same",
+    "runner_up": "trace change: trees"
+   },
+   "other_pair_types_and_cells (information only)": {
+    "trained / within packet (image)": {
+     "direction": "trace change: trees",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "trained / within packet (strip)": {
+     "direction": "trace change: shared-encoder net",
+     "size": "trace change: hand-picked bands + gp"
+    },
+    "trained / n -> n+1": {
+     "direction": "trace change: trees",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "trained / n -> n+2": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "trained / random pairs": {
+     "direction": "trace: combined trees [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "new / within packet (image)": {
+     "direction": "trace: combined trees [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "new / within packet (strip)": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace change: difference curves PCA + trees"
+    },
+    "new / n -> n+1": {
+     "direction": "trace: combined trees [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "new / n -> n+2": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    },
+    "new / random pairs": {
+     "direction": "trace: combined trees [A, B, B-A]",
+     "size": "trace: combined trees [A, B, B-A]"
+    }
+   }
+  },
+  "sigma_e": {
+   "direction": {
+    "model": "trace: direction classifier [A, B, B-A]",
+    "direction": 0.9039408866995073,
+    "always_up": 0.5147783251231527,
+    "n_clear": 406,
+    "vs_settings": "better",
+    "runner_up": "trace: combined trees [A, B, B-A]"
+   },
+   "size": {
+    "model": "trace: physics difference + correction (sigma_e)",
+    "size_error": 17.20164494487081,
+    "always_up": 0.5147783251231527,
+    "n_clear": 406,
+    "vs_settings": "better",
+    "runner_up": "trace: combined trees [A, B, B-A]"
+   },
+   "other_pair_types_and_cells (information only)": {
+    "trained / within packet (image)": {
+     "direction": "trace change: shared-encoder net",
+     "size": "trace: physics difference + correction (sigma_e)"
+    },
+    "trained / within packet (strip)": {
+     "direction": "trace change: shared-encoder net",
+     "size": "trace change: shared-encoder net"
+    },
+    "trained / n -> n+1": {
+     "direction": "trace: combined trees [A, B, B-A]",
+     "size": "trace: physics difference + correction (sigma_e)"
+    },
+    "trained / n -> n+2": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: physics difference + correction (sigma_e)"
+    },
+    "trained / random pairs": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "absolute trace: physics, differenced"
+    },
+    "new / within packet (image)": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: physics difference + correction (sigma_e)"
+    },
+    "new / within packet (strip)": {
+     "direction": "trace change: shared-encoder net",
+     "size": "trace change: shared-encoder net"
+    },
+    "new / n -> n+1": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: physics difference + correction (sigma_e)"
+    },
+    "new / n -> n+2": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: physics difference + correction (sigma_e)"
+    },
+    "new / random pairs": {
+     "direction": "trace: direction classifier [A, B, B-A]",
+     "size": "trace: physics difference + correction (sigma_e)"
+    }
+   }
+  }
+ },
+ "pass_mark": {
+  "direction_clear_changes_new_amplifier_session_E": 0.9,
+  "set": "2026-11-09, by the user, before any session-E result (was 0.85 in the plan)"
+ }
+}

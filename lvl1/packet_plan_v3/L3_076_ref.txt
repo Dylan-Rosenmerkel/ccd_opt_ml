@@ -1,0 +1,7 @@
+# L3_076: the reference settings (those of the previous packet)
+# lines in a rule-safe order, large changes ramped (a pin may appear several times: the last value holds)
+acm101:H1_A_H=9.75
+acm101:H1_B_H=9.75
+acm101:H2_C_H=9.25
+acm101:H3_A_H=9.75
+acm101:H3_B_H=9.75

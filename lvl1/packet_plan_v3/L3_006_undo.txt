@@ -1,0 +1,7 @@
+# L3_006: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:VSUB=60
+acm101:VSUB=55
+acm101:VSUB=50
+acm101:VSUB=45
+acm101:delayInt=1000
+acm101:delayRGH=800

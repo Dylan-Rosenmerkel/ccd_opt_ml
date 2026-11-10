@@ -96,14 +96,20 @@ def read_l1(path: str | Path, ncol: int | None = None, nskip: int | None = None)
             break
         p = w[o + 1:o + 1 + k * pix].reshape(k, pix)
         hdr = p[:, 0:4 * nskip:2]
-        n = int(hdr[0, 0] & 0xFFFFF)
-        good = (p[:, -1] == EPIX) & ((hdr >> 28) == 5).all(1) & ((hdr & 0xFFFFF) == n).all(1)
+        counts = hdr & 0xFFFFF                   # samples in each window: pedestal (even), signal (odd columns)
+        n = int(np.median(counts))
+        # Windows may alternate between N and N+1 samples when delayInt is not a whole number of ADC samples
+        # (decode_trace.window_samples); allow that, flag anything further off.
+        good = (p[:, -1] == EPIX) & ((hdr >> 28) == 5).all(1) & (np.abs(counts - n) <= 1).all(1)
         ped, sig = s31(p[:, 1:4 * nskip:4]), s31(p[:, 3:4 * nskip:4])
         tot = s31(p[:, 4 * nskip + 3]) * (1 << 31) + (p[:, 4 * nskip + 4] & 0x7FFFFFFF)
         good &= tot == (sig - ped).sum(axis=1)
         if not good.all():
             problems.append(f"row {r}: {int((~good).sum())} of {k} pixels fail the layout checks")
-        values.append((ped[good] - sig[good]) / n)
+        # window MEANS (each sum over its own sample count): with equal counts this is (ped - sig) / n as before;
+        # with N / N+1 windows it avoids the one-baseline-sample offset that a shared n would add
+        n_ped, n_sig = np.maximum(counts[:, 0::2], 1), np.maximum(counts[:, 1::2], 1)
+        values.append((ped[good] / n_ped[good] - sig[good] / n_sig[good]))
         rows.append(np.full(int(good.sum()), r))
         cols.append(np.flatnonzero(good))
         n_samples = n

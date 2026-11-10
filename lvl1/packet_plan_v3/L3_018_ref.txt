@@ -1,0 +1,6 @@
+# L3_018: the reference settings (those of the previous packet)
+# lines in a rule-safe order, large changes ramped (a pin may appear several times: the last value holds)
+acm101:VDD1=-18
+acm101:VDD2=-18
+acm101:VDD1=-17
+acm101:VDD2=-17
