@@ -409,6 +409,9 @@ class Runner:
             out["X_trace"], out["X_ref"] = out["X_trace"][:, keep], out["X_ref"][:, keep]
             out["feature_names"] = np.asarray(out["feature_names"])[keep]
         if self.no_settings and "theta" in out and np.asarray(out["theta"]).size:
+            # the no-trace references (settings, settings_amp*) keep the settings: they ARE the settings-only answer
+            # (before 2026-11-10 --no-settings blanked them too, so "settings" silently became the mean)
+            out["theta_reference"] = out["theta"]
             out["theta"] = np.full(np.shape(out["theta"]), np.nan)      # all-NaN: prep_columns drops every setting
         if self.exclude and "feature_names" in out and "X_trace" in out:
             # an excluded column becomes all-NaN, so prep_columns drops it (own and reference blocks separately)
@@ -609,7 +612,8 @@ class Runner:
 
     def settings(self, train, test):
         """Baseline: a GP on the settings alone (no trace)."""
-        th = self.f("features")["theta"]
+        d_ = self.f("features")
+        th = d_.get("theta_reference", d_["theta"])
         xtr, xte, keep = prep_columns(th[train], th[test])
         if not keep.any():                      # every training packet at the same settings: nothing to learn
             return self.mean(train, test)
@@ -617,7 +621,8 @@ class Runner:
 
     def _settings_amp(self, train, test):
         """The settings and the amplifier's one-hot (no trace)."""
-        th = self.f("features")["theta"]
+        d_ = self.f("features")
+        th = d_.get("theta_reference", d_["theta"])
         onehot = np.eye(self.amp_id.max() + 1)[self.amp_id]
         xtr, xte, _ = prep_columns(np.hstack([th[train], onehot[train]]), np.hstack([th[test], onehot[test]]))
         return xtr, xte

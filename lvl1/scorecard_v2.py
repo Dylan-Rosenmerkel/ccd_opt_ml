@@ -497,6 +497,8 @@ def main():
     (out / "scorecard.json").write_text(json.dumps({"info": info, "absolute": abs_sc, "relative": rel_sc, "ranking": rank_sc},
                                                    indent=1, default=float))
     sc_cells, sc.CELLS = sc.CELLS, tuple(c for c in cells if c in rank_sc)
+    sc.CELL_NAME.setdefault("trained E", "trained amplifiers, session E")
+    sc.CELL_NAME.setdefault("new E", "new amplifier, session E")
     try:
         rank_md = sc.ranking_report(rank_sc, args.weights)
     finally:
