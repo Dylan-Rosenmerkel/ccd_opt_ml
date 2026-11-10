@@ -1,0 +1,231 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,booktabs,graphicx,xcolor,enumitem,caption,array}
+\usepackage[section]{placeins}
+\usepackage{hyperref}
+\setlist{itemsep=2pt,topsep=3pt}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\emergencystretch}{3em}
+\newcommand{\fig}[2]{\begin{figure}[ht]\centering\includegraphics[width=\textwidth]{figures/#1}\caption{#2}\end{figure}}
+\newcommand{\read}[1]{\par\noindent\textbf{How to read it:} #1\par}
+\newcommand{\shows}[1]{\par\noindent\textbf{What it shows:} #1\par\medskip}
+
+\title{How well do the level-1 models work? A plain-language guide to the v2 results}
+\author{ccd\_opt\_ml}
+\date{2026-11-10}
+
+\begin{document}
+\maketitle
+
+\section*{In one page}
+We image a CCD at many settings and measure, from each image, its \textbf{noise} ($\sigma_e$), its \textbf{dark
+charge} ($\lambda$) and its \textbf{gain}. Images are slow (about 10 minutes), so we tried to predict them from things
+that are fast: the \emph{settings} we chose, and a short \emph{trace} (0.2\,s of the output signal). The findings:
+\begin{enumerate}
+\item \textbf{The dark charge is mostly set by two things: which amplifier it is, and how long the readout takes
+  (\texttt{delayInt}).} Four amplifiers of the same CCD, at the same settings, have dark charges from 0.20 to 0.50
+  e$^-$/pixel. On amplifiers they know, the models predict the dark charge mainly by recognising the amplifier (a trace
+  gives it away 99\,\% of the time) and reading \texttt{delayInt}.
+\item \textbf{That is why they fail on an amplifier they have never seen}: they cannot know its level, so they guess
+  roughly the average of the others. A low-dark-charge amplifier is then predicted 45\,\% too high, a high one 50\,\% too
+  low. \textbf{One image of the new amplifier fixes this} (error 48--53\,\% $\to$ 17--18\,\%).
+\item \textbf{Predicting a \emph{change} avoids the problem}: the level cancels when you compare two settings of the
+  same amplifier. The change models get the direction of a dark-charge change right 97--98\,\% of the time on a new
+  amplifier, as on a known one.
+\item \textbf{The integration time \texttt{delayInt} does most of the work}: alone it explains 76\,\% of the dark-charge
+  spread and 51\,\% of the noise spread. Without it, models that use only the settings fall to 50--54\,\% (a coin flip)
+  on the changes where it moved. When \texttt{delayInt} stays the same, the trace models still call the noise direction
+  71--93\,\% of the time: the trace sees the noise itself.
+\item \textbf{We never had data to train on ``timing fixed, voltages changed''}: in v2 every change of voltage came with
+  a change of timing. The v3 noise set is the first data of that kind.
+\end{enumerate}
+
+\section{The words used}
+\begin{description}
+\item[Image] The slow, full measurement (about 10 minutes). It gives the true values (``labels''): noise $\sigma_e$
+  (electrons; lower is better), dark charge $\lambda$ (electrons per pixel; lower is better), gain (ADU per electron).
+\item[Trace] A fast recording (0.2\,s) of the output signal. It contains the noise directly, but almost no dark charge.
+\item[Settings] What we set: timing (\texttt{delayInt} = the integration time of each sample, and other delays) and
+  voltages (clock levels, VSUB, etc.). In v2 all of them were changed together in every packet.
+\item[Packet] One measurement at one setting: traces, a short strip and an image, on four amplifiers at once.
+\item[Amplifier] Each CCD has four outputs (ch0--ch3). They see the same settings but behave a little differently.
+\item[Absolute model] Predicts the value (e.g. $\lambda = 0.31$) at a setting.
+\item[Change model] Predicts the \emph{change} between two packets of the same amplifier (e.g. ``$\lambda$ goes up by
+  20\,\%''), or only its direction (up or down).
+\item[Settings model / trace model] A model that sees only the settings / only the traces. Hybrid models see both.
+\item[Classifier] A change model that answers only ``up or down?'', with a probability.
+\item[New amplifier] The test that matters for a new CCD: the model is trained on the other amplifiers and tested on
+  one it has never seen.
+\item[Clear change] A change bigger than the measurement can resolve: $\sigma_e$ $>$ 5\,\%, $\lambda$ $>$ 15\,\%, gain
+  $>$ 1.2\,\%. ``Direction right'' is counted on these only.
+\item[Typical error] The root-mean-square error in \% (log units). 10\,\% means a prediction is typically 10\,\% off.
+\end{description}
+
+\section{How everything was tested}
+All numbers are from session D of v2 (127 measurements on three amplifiers, ch0, ch1, ch3). The night is cut into five
+blocks in time. A model is always trained on four blocks and tested on the fifth, and for the ``new amplifier'' test
+also never sees the tested amplifier. So every prediction is for packets the model has not seen.
+
+\section{Which amplifier is it? How the models predict the dark charge}
+
+\fig{amp_levels.png}{Each amplifier at the same (nominal) settings.}
+\read{each bar is one amplifier, all read out with identical settings; the line on top is the spread of repeated
+measurements.}
+\shows{the dark charge is 0.20 (ch0), 0.26 (ch1), 0.40 (ch3), 0.50 (ch2) e$^-$/pixel at the same settings: a factor 2.5.
+The noise differs by about 20\,\%, the gain by 6\,\%. Each amplifier has its own \emph{level}.}
+
+\fig{amp_share.png}{How much of each quantity is set by the amplifier, by the settings, or by both.}
+\read{1 would mean ``explains everything''. Red: knowing only which amplifier; blue: knowing only the settings; green:
+both.}
+\shows{for the dark charge, the amplifier alone explains 50\,\%, the settings alone 34\,\%, both together 88\,\%. For the
+gain the amplifier is almost everything (76\,\%). For the noise the settings matter more (40\,\%) than the amplifier
+(18\,\%).}
+
+\fig{amp_from_trace.png}{Can a model tell which amplifier a trace came from?}
+\read{a classifier sees one trace and names the amplifier; tested on packets it never saw. Guessing would give 25\,\%.}
+\shows{99\,\% right, even after removing the trace features we already knew were amplifier ``fingerprints''. So a trace
+model always effectively knows which amplifier it is looking at.}
+
+\fig{amp_known_vs_new.png}{Absolute models on amplifiers they know (green) and on a new one (red).}
+\read{lower is better. The dashed line: a model told the settings and which amplifier it is (no trace).}
+\shows{on known amplifiers, the trace models predict the dark charge to 13--23\,\%. On a new amplifier they fall to
+50--83\,\%. A model that is simply \emph{told} the amplifier and the settings gets 5\,\%. So on known amplifiers the dark
+charge is predicted mostly by recognising the amplifier and reading the settings, not by measuring dark charge in the
+trace (a trace hardly contains any).}
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+dark charge, new amplifier: average error of the prediction & ch0 & ch1 & ch3\\
+\midrule
+settings model & $+45$\,\% & $+9$\,\% & $-53$\,\%\\
+trace physics model & $+122$\,\% & $+55$\,\% & $-46$\,\%\\
+trace trees & $+57$\,\% & $+39$\,\% & $-51$\,\%\\
+\bottomrule
+\end{tabular}
+\end{center}
+A new amplifier gets roughly the level of the others: ch0, the lowest, is predicted far too high; ch3, the highest, far
+too low; ch1, in the middle, comes off best.
+
+\fig{amp_calibration_image.png}{A new amplifier after 0, 1, 2, 4, 8 images of it (the model learns its level from them).}
+\read{left of each panel: no image of the new amplifier; moving right: more of its images.}
+\shows{with no image, the dark-charge error is 48\,\% (ch0) and 53\,\% (ch3) but only 16\,\% for ch1, whose level is near
+the average. \textbf{One image brings all three to 17--18\,\%}; more images add little. The same for the gain (3.5--4.5\,\%
+$\to$ 1.1--1.3\,\%). So the amplifier-to-amplifier problem is mostly a \emph{level}, and one image measures it.}
+
+\fig{amp_changes.png}{Change models on amplifiers they know (green) and on a new one (red).}
+\read{higher is better; ``direction right'' on clear changes between two packets of one amplifier.}
+\shows{almost no loss on a new amplifier: dark charge 97--98\,\% (known 98--99\,\%), noise 88--90\,\% with the trace
+models (settings only 69\,\%). Comparing two settings of the \emph{same} amplifier cancels its level. That is why the change
+models carry over to new amplifiers and the absolute models do not.}
+
+\section{The integration time (\texttt{delayInt})}
+
+\fig{delayint_effect.png}{What \texttt{delayInt} does (top) and how much of the changes is left without it (bottom).}
+\read{top: each dot is a measurement, relative to its amplifier's average; lines are smooth fits per amplifier. Bottom:
+the spread of changes between two packets: all changes (blue), with the part \texttt{delayInt} explains removed (orange),
+and pairs where \texttt{delayInt} stayed the same (green). Dotted lines: the ``clear change'' size.}
+\shows{the noise falls with a longer integration time and flattens above about 1500 cycles; the dark charge rises
+steadily (longer readout, more dark charge). \texttt{delayInt} alone explains 51\,\% of the noise spread and 76\,\% of the
+dark-charge spread; nothing of the gain (the negative number means ``no better than the average''). Removing its part
+shrinks the typical change from 27 to 16\,\% (noise) and from 40 to 17\,\% (dark charge): what is left is the other
+settings and the measurement scatter. All amplifiers respond the same way: the lines lie on top of each other.}
+
+\fig{delayint_accuracy.png}{How often the change models are right, against how much \texttt{delayInt} changed.}
+\read{left on each axis: pairs where \texttt{delayInt} stayed the same (within 7\,\%); right: it doubled or more.
+Dashed lines: settings-only models.}
+\shows{when \texttt{delayInt} changes a lot, almost every model is right ($\geq$ 96\,\%). When it stays the same: for the
+noise the settings-only models are near a coin flip (62--69\,\%), while the trace models get 69--85\,\% and the hybrid
+(settings + traces) 87--93\,\%. For the dark charge, everything is right on the few pairs where \texttt{delayInt} stayed
+the same (40 pairs; there \texttt{delayRGH}, another delay, did the work).}
+
+\fig{delayint_removed.png}{Experiment: what happens when the integration time is taken away.}
+\read{orange: test pairs where \texttt{delayInt} stayed the same; blue: test pairs where it changed. Three set-ups:
+trained on all pairs; trained \emph{only} on pairs with \texttt{delayInt} unchanged; a settings model not told
+\texttt{delayInt}.}
+\shows{
+\begin{itemize}
+\item a settings model \emph{not told} \texttt{delayInt} falls to 50\,\% (noise) and 54\,\% (dark charge) on the changes
+  where it moved: a coin flip. Most of what the settings models know is \texttt{delayInt}.
+\item trained \emph{only} on pairs with \texttt{delayInt} unchanged (144 training pairs, almost all of them a setting
+  against itself), the models learn little: on noise 53\,\% (settings) and 76\,\% (traces) on such pairs, against 58\,\% and
+  71\,\% when trained on everything. v2 simply has no data of this kind to learn from.
+\end{itemize}}
+
+\section{Diagnostics of the change models}
+
+\fig{change_scatter_sigma_e.png}{Every change model: predicted against true change of the noise (new amplifier).}
+\read{each dot is a pair of packets. Perfect = on the diagonal. Dots in the top-right and bottom-left squares have the
+direction right. Orange: \texttt{delayInt} unchanged. For the two classifiers the vertical axis is ``how sure it is that
+the noise goes up'' (top = sure up, bottom = sure down).}
+\shows{the settings-only models scatter widely (69--73\,\% direction, typical error 27--30\,\%). The trace models lie close
+to the diagonal (85--91\,\%, error 16--18\,\%). The orange dots sit near the centre: with \texttt{delayInt} fixed the
+changes are small and harder to call. The classifiers are usually certain (dots at the top and bottom edges) and
+usually right. The same figures exist for the dark charge and the gain (\texttt{change\_scatter\_lambda.png},
+\texttt{change\_scatter\_gain.png}).}
+
+\fig{direction_vs_size.png}{How big a change must be before each model calls it right.}
+\read{left = small changes, right = large ones. 50\,\% is a coin flip. Dotted vertical line: the ``clear change'' size.}
+\shows{every model is near a coin flip (50--70\,\%) on changes smaller than the measurement scatter. For the dark charge
+almost every model passes 90\,\% from changes of about 15--20\,\% and reaches 100\,\% above 40\,\%. For the noise the trace
+models pass 90\,\% from changes of about 20\,\%, while the settings-only models (dashed) stay at 76--86\,\% even for the
+largest changes: the traces resolve noise changes that the settings cannot explain.}
+
+\fig{classifier_reliability.png}{The two direction classifiers: is their stated confidence right?}
+\read{if the classifier says ``70\,\% sure it goes up'', it should be right 70\,\% of the time: points on the diagonal.
+Grey bars: how many pairs got each confidence. ``ROC area'': 0.5 = useless, 1 = perfect.}
+\shows{ROC area 0.95 (noise), 0.99--1.00 (dark charge), 0.92--0.94 (gain): they separate up from down very well. Most
+pairs get a confident answer at the ends.}
+
+\fig{size_calibration.png}{Do the size models get the \emph{size} of a change right?}
+\read{each point averages the pairs with a similar true change. On the dotted line = right size. Flatter than the line =
+the model predicts changes too small.}
+\shows{every model predicts the changes too small. Slopes for the noise: 0.35--0.38 for the settings models (they
+predict a third of the real change) and 0.58--0.70 for the trace models; for the dark charge 0.71--0.93. For ranking
+settings this does not matter (the order is kept); for quoting an expected improvement it does.}
+
+\fig{by_pair_type.png}{Direction by kind of pair.}
+\read{within packet: the same packet's reference and new traces; $n\to n{+}1$, $n\to n{+}2$: neighbouring packets;
+random: any two packets of the night.}
+\shows{for the noise the trace models get 83--95\,\% on every kind of pair; the settings-only model 65--85\,\%, lowest
+on $n\to n{+}2$ (65\,\%) and within-packet (67\,\%) pairs. For the dark charge every model is 92--100\,\% except on the
+strip pairs (71--86\,\%: the strip's dark charge is a different, noisier measurement).}
+
+\fig{by_amplifier.png}{Direction for each amplifier when it is the new one.}
+\shows{no amplifier is much harder than the others: on the noise the trace models get 84--93\,\% whichever amplifier is
+new (settings only 65--73\,\%); on the dark charge 96--100\,\%.}
+
+\section{Diagnostics of the absolute models}
+
+\fig{abs_pred_vs_true_lambda.png}{Absolute models: predicted against measured dark charge, new amplifier.}
+\read{each colour is one amplifier; on the dotted line = perfect.}
+\shows{each colour forms its own line, shifted from the diagonal: the shape is right, the level is wrong. That is the
+amplifier level of Section 3. The noise and gain versions are \texttt{abs\_pred\_vs\_true\_sigma\_e.png} and
+\texttt{\_gain.png}.}
+
+\fig{abs_residuals.png}{Where the absolute models miss: against \texttt{delayInt} (top) and against time (bottom).}
+\read{0 = no miss; lines are running averages.}
+\shows{noise: every model predicts 5--20\,\% too low at the shortest integration times; at the longest the trace
+models predict 20--25\,\% too high (the settings model 10\,\%). Over the night the noise misses wander by about $\pm$10\,\%.
+Dark charge: the misses are dominated by the amplifier level (each model's line sits 0--50\,\% above zero over the whole
+night, the new-amplifier offset of Section 3) rather than by \texttt{delayInt} or time. Gain: within a few \%.}
+
+\section{What this means}
+\begin{itemize}
+\item For predicting values (absolute models), the hard part is not the settings but the \textbf{amplifier's level}.
+  Recognising a known amplifier is easy (99\,\%); guessing the level of an unknown one is not. \textbf{One image of a new
+  amplifier (or CCD) solves most of it.}
+\item For comparing settings (change models), the level cancels: they carry over to new amplifiers.
+\item \textbf{\texttt{delayInt} dominates v2.} The settings models are mostly \texttt{delayInt} models. The traces add the
+  most where \texttt{delayInt} does not change, but v2 has few such pairs and none where only voltages changed.
+\item \textbf{The next question} --- how the voltages move the noise and the dark charge at a fixed integration time ---
+  needs the v3 noise set (voltage-only packets at nominal timing). v2 cannot answer it.
+\end{itemize}
+
+\section*{Files}
+Figures and tables: \texttt{processed\_v2\_trainD/lvl1\_results/diagnostics/} (\texttt{diagnostics.md},
+\texttt{amplifier\_identity.md}). Scripts: \texttt{lvl1/diagnostics\_v2.py}, \texttt{lvl1/amplifier\_identity.py}.
+
+\end{document}

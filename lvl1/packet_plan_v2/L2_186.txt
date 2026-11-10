@@ -1,0 +1,34 @@
+# L2_186 (session F): funnel SHORTLIST 5 = screen L2_133
+# picked by lvl1/funnel_shortlist.py: ranking without reference, weight 0:1 (sigma_e:lambda), sort bradley-terry
+# predicted noise (not used to pick): sigma_e ch0 0.274, sigma_e ch1 0.302, sigma_e ch3 0.298, sigma_e mean 0.292 e- (+-11 %)
+# delayInt rounded to a multiple of 20 for the image (screened at 310)
+acm101:delayInt=320
+acm101:delay_Ha=1650
+acm101:delay_Hb=1650
+acm101:delay_Hc=1650
+acm101:delayRGH=550
+acm101:VDD1=-19.01
+acm101:VDD2=-19.01
+acm101:VR1=-2.71
+acm101:VR2=-2.71
+acm101:VSUB=48.13
+acm101:RG_1_H=8.76
+acm101:RG_2_H=8.76
+acm101:RG_1_L=3.34
+acm101:RG_2_L=3.34
+acm101:SW_1_L=-6.43
+acm101:SW_2_L=-6.43
+acm101:H1_A_L=7
+acm101:H1_B_L=6.8
+acm101:H2_C_L=7
+acm101:H3_A_L=7
+acm101:H3_B_L=6.8
+acm101:V1_A_L=8.16
+acm101:V1_B_L=7.96
+acm101:V2_C_L=8.16
+acm101:V3_A_L=8.16
+acm101:V3_B_L=7.96
+acm101:TG_A_H=7.34
+acm101:TG_A_L=7.34
+acm101:TG_B_H=7.34
+acm101:TG_B_L=7.34

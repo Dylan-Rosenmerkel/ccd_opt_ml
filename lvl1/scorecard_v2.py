@@ -63,6 +63,8 @@ from ml import models, real_inputs  # noqa: E402
 T = sc.T
 CLEAR = sc.CLEAR
 PLAN = ROOT / "lvl1" / "packet_plan_v2" / "plan.json"
+AUX = ()                   # extra training sessions (another night, e.g. v1: A B C): always trained on, never scored
+TRAIN, TEST = "D", "E"     # the training session and the held-out session (--train-session, --holdout-session; v3: G, H)
 PAIR_TYPES = ("within packet (image)", "within packet (strip)", "n -> n+1", "n -> n+2", "random pairs")
 IMAGE_TRAIN = (0, 2, 3, 4)    # pair types the image-label models train on: within packet, n -> n+1, n -> n+2, random
 STRIP_TRAIN = (1,)            # ... and the strip-label models
@@ -73,8 +75,22 @@ REL_MODELS = ("no change", "settings change: gp", "settings change: trees", "set
               "settings + amplifier: trees", "trace change: trees", "trace change: gp", "trace: combined trees [A, B, B-A]",
               "trace: direction classifier [A, B, B-A]", "trace change: shared-encoder net",
               "trace change: difference curves PCA + trees", "trace change: hand-picked bands + gp",
-              "trace: physics difference (sigma_e)", "trace: physics difference + correction (sigma_e)")
-DIRECTION_ONLY = ("trace: direction classifier [A, B, B-A]",)
+              "trace: physics difference (sigma_e)", "trace: physics difference + correction (sigma_e)",
+              "settings + trace: combined trees", "settings + trace: residual trees",
+              "settings + trace: direction classifier")
+# 2026-11-10: "trace change: gp" dropped (collapses with many features: worse than settings on every target, and
+# 40-90 min per cell).  Added after the session-E test (exploratory, NOT part of the frozen protocol): the
+# settings + trace hybrids (the settings change, corrected by the traces) and the averages below.
+DROPPED = ("trace change: gp",)
+REL_MODELS = tuple(m for m in REL_MODELS if m not in DROPPED)
+# averages of the predicted change (NaN-aware: a member without a prediction for a pair is left out)
+ENSEMBLES = {"ensemble: trace models": ("trace change: trees", "trace: combined trees [A, B, B-A]",
+                                        "trace: physics difference + correction (sigma_e)",
+                                        "absolute trace: physics, differenced"),
+             "ensemble: settings + trace": ("settings + trace: combined trees", "settings + trace: residual trees",
+                                            "trace: physics difference + correction (sigma_e)",
+                                            "absolute trace: physics, differenced")}
+DIRECTION_ONLY = ("trace: direction classifier [A, B, B-A]", "settings + trace: direction classifier")
 SIGMA_ONLY = ("trace: physics difference (sigma_e)", "trace: physics difference + correction (sigma_e)")
 CELLS = ["trained", "new"]
 CELL_NAME = {"trained": "trained amplifiers", "new": "new amplifier", "trained E": "trained amplifiers, session E",
@@ -94,11 +110,11 @@ def load(data: Path, channels, holdout: str | None, keep_fractional: bool):
     if not keep_fractional:
         ok &= ~b["fractional_window"].astype(bool)
     d = pd.read_csv(data / "dataset.csv", low_memory=False)
-    plan = json.loads(PLAN.read_text())["packets"]
+    plan = json.loads(Path(PLAN).read_text())["packets"]
     session = {p["packet_id"]: str(p["session"]) for p in plan}
     planned = [ct.planned_id(p, session) for p in b["packet_id"]]
     ses = np.array([session.get(p, "?") if p else "?" for p in planned])
-    ok &= np.isin(ses, ["D", "E"]) if holdout else (ses == "D")
+    ok &= np.isin(ses, [TRAIN, TEST, *AUX]) if holdout else np.isin(ses, [TRAIN, *AUX])
     rows = np.flatnonzero(ok)
     d = d.iloc[rows].reset_index(drop=True).copy()
     assert (d.packet_id.to_numpy() == b["packet_id"][rows]).all() and (d.channel.to_numpy() == b["channel"][rows]).all()
@@ -108,9 +124,10 @@ def load(data: Path, channels, holdout: str | None, keep_fractional: bool):
     d["nominal"] = d.planned_id.isin(nominal)
     ts = pd.to_datetime(d["date_start"])
     d["hours"] = (ts - ts.min()).dt.total_seconds() / 3600
-    first = d[d.session == "D"].groupby("packet_id").hours.min().sort_values()
+    first = d[d.session == TRAIN].groupby("packet_id").hours.min().sort_values()
     block = {p: min(N_BLOCKS - 1, r * N_BLOCKS // len(first)) for r, p in enumerate(first.index)}
     d["block"] = d.packet_id.map(block).fillna(-1).astype(int)          # session-E rows: block -1 (never in the CV)
+    d.loc[d.session.isin(AUX), "block"] = -2                            # extra training sessions: always trained on
     return files, rows, d
 
 
@@ -187,6 +204,31 @@ def rel_predict(name, TR, P, tr, te, onehot):
     out = np.full((len(te), 3), np.nan)
     if name == "no change":
         return np.zeros((len(te), 3))
+    if name.startswith("settings + trace"):
+        TH, F = np.nan_to_num(TR["TH"]), TR["F"]
+        if name.endswith("residual trees"):
+            # the settings change first (trees on d theta, out-of-fold on the training pairs), then trees on the
+            # settings and the traces for what it misses
+            dT = TH[B] - TH[A]
+            base = np.full(Y.shape, np.nan)
+            folds = np.arange(len(tr)) % 3
+            for k in range(3):
+                a_, b_ = tr[folds != k], tr[folds == k]
+                Xtr, Ytr = _both(dT[a_], Y[a_])
+                base[b_] = sc.fit_predict("trees", Xtr, Ytr, dT[b_])
+            Xtr, Ytr = _both(dT[tr], Y[tr])
+            base[te] = sc.fit_predict("trees", Xtr, Ytr, dT[te])
+            Xr = np.hstack([dT, F[A], F[B], F[B] - F[A]])
+            Xrs = np.hstack([-dT, F[B], F[A], F[A] - F[B]])
+            XX, RR = np.vstack([Xr[tr], Xrs[tr]]), np.vstack([Y[tr] - base[tr], -(Y[tr] - base[tr])])
+            m = np.isfinite(RR).all(1)
+            corr = sc.fit_predict("trees", XX[m], RR[m], np.vstack([Xr[te], Xrs[te]]))
+            return base[te] + 0.5 * (corr[:len(te)] - corr[len(te):])
+        X = np.hstack([TH[A], TH[B], TH[B] - TH[A], F[A], F[B], F[B] - F[A]])
+        Xs = np.hstack([TH[B], TH[A], TH[A] - TH[B], F[B], F[A], F[A] - F[B]])
+        XX, YY = np.vstack([X[tr], Xs[tr]]), np.vstack([Y[tr], -Y[tr]])
+        f = fs.direction_model(XX, YY, noise=tuple(cm.NOISE)) if "classifier" in name else fs.gbt(XX, YY)
+        return 0.5 * (f(X[te]) - f(Xs[te]))
     if name.startswith("settings"):
         return sc.rel_predict(name, TR, P, tr, te, onehot)
     if name in ("trace change: trees", "trace change: gp"):
@@ -231,7 +273,7 @@ def rel_predict(name, TR, P, tr, te, onehot):
     raise ValueError(name)
 
 
-def run_relative(TR, P, d, abs_preds, cells, only=None):
+def run_relative(TR, P, d, abs_preds, cells, only=None, skip_refs=False):
     amp, blk, ses = d.channel.to_numpy(), d.block.to_numpy(), d.session.to_numpy()
     ba, bb, pamp, typ = blk[P["ra"]], blk[P["rb"]], amp[P["ra"]], P["type"]
     pses = ses[P["ra"]]
@@ -245,20 +287,20 @@ def run_relative(TR, P, d, abs_preds, cells, only=None):
         splits = []
         if holdout:
             for a in (np.unique(amp) if base == "new" else [None]):
-                te = np.flatnonzero((pses == "E") & ((pamp == a) if a is not None else True))
-                tr = np.flatnonzero((pses == "D") & ((pamp != a) if a is not None else True))
+                te = np.flatnonzero((pses == TEST) & ((pamp == a) if a is not None else True))
+                tr = np.flatnonzero(np.isin(pses, [TRAIN, *AUX]) & ((pamp != a) if a is not None else True))
                 if len(te) and len(tr):
                     splits.append((tr, te))
         else:
             for k in range(N_BLOCKS):
                 for a in (np.unique(amp) if base == "new" else [None]):
                     te = np.flatnonzero((ba == k) & (bb == k) & ((pamp == a) if a is not None else True))
-                    tr = np.flatnonzero((ba != k) & (bb != k) & (ba >= 0) & (bb >= 0)
+                    tr = np.flatnonzero((((ba != k) & (bb != k) & (ba >= 0) & (bb >= 0)) | ((ba == -2) & (bb == -2)))
                                         & ((pamp != a) if a is not None else True))
                     if len(te) and len(tr):
                         splits.append((tr, te))
         for name in REL_MODELS:
-            if only and name not in only and name not in (REL_REF[cell], "no change"):
+            if only and name not in only and (skip_refs or name not in (REL_REF[cell], "no change")):
                 continue
             if "amplifier" in name and base == "new":
                 continue
@@ -280,6 +322,8 @@ def run_relative(TR, P, d, abs_preds, cells, only=None):
                         pr[tef] = rel_predict(name, TR, P, trf, tef, onehot)
             preds[cell][name] = pr
             print(f"relative {cell:10s} {name:48s} {time.time() - t0:5.0f} s", flush=True)
+        if skip_refs:
+            continue
         packet_pair = np.isin(P["type"], (2, 3, 4))
         for name, m in abs_preds[cell].items():
             if name in sc.NOT_DIFFERENCED:
@@ -290,15 +334,26 @@ def run_relative(TR, P, d, abs_preds, cells, only=None):
     return preds
 
 
+def add_ensembles(preds):
+    for cell in preds:
+        for ens, members in ENSEMBLES.items():
+            got = [preds[cell][m] for m in members if m in preds[cell]]
+            if len(got) > 1:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    preds[cell][ens] = np.nanmean(np.stack(got), axis=0)
+    return preds
+
+
 def run_absolute(files, rows, d, cells, quick, only=None):
     runner = sc.Runner(files, rows, quick, tl.load_tiers(ct.TIERS))
     amp, blk, ses = d.channel.to_numpy(), d.block.to_numpy(), d.session.to_numpy()
-    D = ses == "D"
+    D = np.isin(ses, [TRAIN, *AUX])
     splits = {"trained": [(np.flatnonzero(D & (blk != k)), np.flatnonzero(blk == k)) for k in range(N_BLOCKS)],
               "new": [(np.flatnonzero(D & (blk != k) & (amp != a)), np.flatnonzero((blk == k) & (amp == a)))
                       for a in np.unique(amp) for k in range(N_BLOCKS)],
-              "trained E": [(np.flatnonzero(D), np.flatnonzero(ses == "E"))],
-              "new E": [(np.flatnonzero(D & (amp != a)), np.flatnonzero((ses == "E") & (amp == a))) for a in np.unique(amp)]}
+              "trained E": [(np.flatnonzero(D), np.flatnonzero(ses == TEST))],
+              "new E": [(np.flatnonzero(D & (amp != a)), np.flatnonzero((ses == TEST) & (amp == a))) for a in np.unique(amp)]}
     preds = {cell: {} for cell in cells}
     for name, (method, spec, sees_settings, mcells) in sorted(sc.ABS_MODELS.items(), key=lambda kv: not kv[1][2]):
         if only and name not in only and name not in REF.values() and name != "mean":
@@ -358,6 +413,9 @@ def score_relative(P, d, preds, n_boot, cells):
                     r[t] = {"n": int(sel.sum()), "n_clear": int(clear.sum()),
                             "clear_up": float(np.mean(y[clear] > 0)) if clear.any() else np.nan,
                             "direction": sc.direction(y, q, CLEAR[i]),
+                            "direction_confident_half": (float(np.mean(np.sign(q[clear][np.abs(q[clear]) >= np.median(np.abs(q[clear]))])
+                                                                       == np.sign(y[clear][np.abs(q[clear]) >= np.median(np.abs(q[clear]))])))
+                                                         if clear.sum() > 3 else np.nan),
                             "size_error": 100 * sc.rms(q - y) if size else np.nan,
                             "median_error": float(100 * np.median(np.abs(q - y))) if size else np.nan,
                             "spearman": float(spearmanr(y, q)[0]) if np.std(q) > 0 else np.nan,
@@ -387,7 +445,7 @@ def score_ranking(P, d, rel_preds, abs_preds, weights, cells):
         if not len(Q["type"]):
             continue
         ses = d.session.to_numpy()[Q["ra"]]
-        want = "E" if cell.endswith("E") else "D"
+        want = TEST if cell.endswith("E") else TRAIN
         keep = ses == want
         Qc = {k: (v[keep] if isinstance(v, np.ndarray) and len(v) == len(Q["type"]) else v) for k, v in Q.items()}
         rpc = {k: v[keep] for k, v in rp.items()}
@@ -453,7 +511,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--data", required=True, help="processed data folder (dataset.csv, model_inputs/)")
     parser.add_argument("--out", required=True)
-    parser.add_argument("--holdout-session", choices=("E",), help="also score session E (trained on D): ONCE, after the freeze")
+    parser.add_argument("--holdout-session", help="also score this held-out session (cells 'trained E', 'new E'; trained on the training session): ONCE, after the freeze")
+    parser.add_argument("--train-session", default="D", help="the training session (v2: D, v3: G)")
+    parser.add_argument("--extra-train-sessions", nargs="*", default=[], help="sessions of other nights trained on but never scored (v1: A B C; with a merged data set, lvl1/merge_processed.py)")
+    parser.add_argument("--plan", default=str(PLAN), help="plan.json of the data (v3: lvl1/packet_plan_v3/plan.json)")
     parser.add_argument("--channels", type=int, nargs="+", default=[0, 1, 3])
     parser.add_argument("--keep-fractional", action="store_true", help="keep the rows with fractional CDS windows")
     parser.add_argument("--n-boot", type=int, default=1000)
@@ -462,11 +523,14 @@ def main():
     parser.add_argument("--rel-models", nargs="+")
     parser.add_argument("--rescore", action="store_true")
     parser.add_argument("--weights", type=float, nargs="+", default=list(sl.DEFAULT_WEIGHTS))
+    parser.add_argument("--add-to", help="folder of an earlier run: reuse its predictions.pkl, train only --rel-models")
     parser.add_argument("--cells", nargs="+", help="only these cells (e.g. 'trained E' 'new E' for the session-E test)")
     parser.add_argument("--max-random-train", type=int, default=MAX_RANDOM_TRAIN,
                         help="random pairs kept per training split (0 = all)")
     args = parser.parse_args()
     globals()["MAX_RANDOM_TRAIN"] = args.max_random_train
+    globals().update(TRAIN=args.train_session, TEST=args.holdout_session or "E", PLAN=Path(args.plan),
+                     AUX=tuple(args.extra_train_sessions))
     data = Path(args.data).resolve()
     cm.set_data(data)
     sc.DATA = data
@@ -478,14 +542,25 @@ def main():
     files, rows, d = load(data, tuple(args.channels), args.holdout_session, args.keep_fractional)
     print(f"{len(d)} rows, {d.packet_id.nunique()} packets, sessions {d.session.value_counts().to_dict()}", flush=True)
     cache = out / "predictions.pkl"
-    if args.rescore:
+    if args.add_to:
+        # reuse every prediction of an earlier run (same data, cells, cap); train only the --rel-models given
+        Y, Y_err, abs_preds, P, rel_preds = pickle.loads((Path(args.add_to) / "predictions.pkl").read_bytes())
+        TR = sc.trace_table(files, rows, d)
+        new_ = run_relative(TR, P, d, abs_preds, cells, args.rel_models, skip_refs=True)
+        for cell in cells:
+            for k in DROPPED:
+                rel_preds[cell].pop(k, None)
+            rel_preds[cell].update(new_[cell])
+        rel_preds = add_ensembles(rel_preds)
+        cache.write_bytes(pickle.dumps((Y, Y_err, abs_preds, P, rel_preds)))
+    elif args.rescore:
         Y, Y_err, abs_preds, P, rel_preds = pickle.loads(cache.read_bytes())
     else:
         Y, Y_err, abs_preds = run_absolute(files, rows, d, cells, args.quick, args.abs_models)
         TR = sc.trace_table(files, rows, d)
         P = make_pairs(d, Y)
         print("pairs:", {t: int((P["type"] == k).sum()) for k, t in enumerate(PAIR_TYPES)}, flush=True)
-        rel_preds = run_relative(TR, P, d, abs_preds, cells, args.rel_models)
+        rel_preds = add_ensembles(run_relative(TR, P, d, abs_preds, cells, args.rel_models))
         cache.write_bytes(pickle.dumps((Y, Y_err, abs_preds, P, rel_preds)))
     abs_sc = score_absolute(Y, abs_preds, d.packet_id.to_numpy(), args.n_boot, cells)
     rel_sc = score_relative(P, d, rel_preds, args.n_boot, cells)
@@ -493,7 +568,7 @@ def main():
     info = {"n_rows": len(d), "n_packets": int(d.packet_id.nunique()), "channels": args.channels,
             "sessions": d.session.value_counts().to_dict(), "keep_fractional": args.keep_fractional,
             "n_pairs": {t: int((P["type"] == k).sum()) for k, t in enumerate(PAIR_TYPES)},
-            "max_random_train": MAX_RANDOM_TRAIN}
+            "max_random_train": MAX_RANDOM_TRAIN, "extra_train_sessions": list(AUX)}
     (out / "scorecard.json").write_text(json.dumps({"info": info, "absolute": abs_sc, "relative": rel_sc, "ranking": rank_sc},
                                                    indent=1, default=float))
     sc_cells, sc.CELLS = sc.CELLS, tuple(c for c in cells if c in rank_sc)
