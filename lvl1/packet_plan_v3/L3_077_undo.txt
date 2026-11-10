@@ -1,0 +1,5 @@
+# L3_077: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:TG_A_H=7.4
+acm101:TG_A_L=7.4
+acm101:TG_B_H=7.4
+acm101:TG_B_L=7.4

@@ -1,0 +1,5 @@
+# L3_101: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:VR1=-3.5
+acm101:VR2=-3.5
+acm101:VR1=-3
+acm101:VR2=-3

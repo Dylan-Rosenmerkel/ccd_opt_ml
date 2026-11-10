@@ -1,0 +1,3 @@
+# L3_042: the reference settings (those of the previous packet)
+# lines in a rule-safe order, large changes ramped (a pin may appear several times: the last value holds)
+acm101:VSUB=50

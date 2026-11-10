@@ -1,0 +1,2 @@
+# L3_042_ref: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:VSUB=45

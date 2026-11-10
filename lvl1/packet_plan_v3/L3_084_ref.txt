@@ -1,0 +1,7 @@
+# L3_084: the reference settings (those of the previous packet)
+# lines in a rule-safe order, large changes ramped (a pin may appear several times: the last value holds)
+acm101:V1_A_H=9.4
+acm101:V1_B_H=9.4
+acm101:V2_C_H=9.4
+acm101:V3_A_H=9.4
+acm101:V3_B_H=9.4

@@ -1,0 +1,7 @@
+# L3_088: the reference settings (those of the previous packet)
+# lines in a rule-safe order, large changes ramped (a pin may appear several times: the last value holds)
+acm101:VSUB=50
+acm101:VSUB=55
+acm101:VSUB=60
+acm101:VSUB=65
+acm101:delayInt=500

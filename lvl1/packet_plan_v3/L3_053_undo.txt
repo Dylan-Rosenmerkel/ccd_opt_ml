@@ -1,0 +1,9 @@
+# L3_053: back to nominal, rule-safe order (send before the .bcf reset)
+acm101:RG_1_L=4.5
+acm101:RG_2_L=4.5
+acm101:RG_1_L=4
+acm101:RG_2_L=4
+acm101:RG_1_L=3.5
+acm101:RG_2_L=3.5
+acm101:RG_1_L=3
+acm101:RG_2_L=3
