@@ -144,6 +144,14 @@ if [[ -n ${REF_CHANGES_FILE:-} ]]; then
 fi
 
 # Nominal configuration files, restored at the start and at the end:  board=file
+# The way back (2026-11-10): UNDO_FILE / REF_UNDO_FILE (optional; run_plan.sh passes <id>_undo.txt / <id>_ref_undo.txt
+# when the plan has them): the lines that take the boards from the new / the reference settings back to nominal,
+# ramped and in a rule-safe order.  They are sent before every reset from those settings, so the .bcf reload (which
+# restores the pins in an order we do not control) starts from nominal.  Without the files: as before.
+UNDO=(); REF_UNDO=()
+if [[ -n ${UNDO_FILE:-} ]]; then read_changes "$UNDO_FILE"; UNDO=("${LINES[@]}"); fi
+if [[ -n ${REF_UNDO_FILE:-} ]]; then read_changes "$REF_UNDO_FILE"; REF_UNDO=("${LINES[@]}"); fi
+AT=nominal   # the settings the boards are at: nominal, ref or new (set as run_packet queues the changes)
 BCF="acm101=module_PA03.bcf acm102=ccd_PQ04.bcf"
 SEQ="reference_v5_pumping.seq"   # the sequencer the boards must run (checked by the readback, not loaded)
 # -----------------------------------------------------------------------------
@@ -432,6 +440,12 @@ apply() {   # apply <NAME=VALUE | acmNNN:NAME=VALUE> ...: queue the parameter ch
   done
 }
 
+leave() {   # leave: the way back from the current settings (AT), if an undo file was given; before a reset
+  if [[ $AT == ref && ${#REF_UNDO[@]} -gt 0 ]]; then apply "${REF_UNDO[@]}"; fi
+  if [[ $AT == new && ${#UNDO[@]} -gt 0 ]]; then apply "${UNDO[@]}"; fi
+  AT=nominal
+}
+
 run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart) / 1 (stop)
   # 0. standalone mode, then the nominal configuration (the sequencer is uploaded in standalone).  (The external
   #    clock is set once per session by hand; the daq.use_external_clock() line was removed on the DAQ, 2026-11-02.)
@@ -441,7 +455,7 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
   # 1. the reference: nominal, or (REF_CHANGES) the previous packet's settings with their own settling traces; a flush,
   #    the reference strip, then the reference traces, so that they end right before the change
   if (( ${#REF_CHANGES[@]} )); then
-    apply "${REF_CHANGES[@]}"
+    apply "${REF_CHANGES[@]}"; AT=ref
     if (( N_SETTLE_TRACES > 0 )); then traces "${PACKET_ID}_settleref" "$N_SETTLE_TRACES" "${TRACE_CHANNELS%% *}"; fi
   fi
   flushes "$FLUSH_BEFORE_REF"
@@ -454,8 +468,8 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
 
   # 2. change the parameters (from a non-nominal reference: through a reset to nominal first, so no reference knob
   #    is left behind)
-  if (( ${#REF_CHANGES[@]} )); then nominal; fi
-  apply "${CHANGES[@]}"
+  if (( ${#REF_CHANGES[@]} )); then leave; nominal; fi
+  apply "${CHANGES[@]}"; AT=new
 
   # 3. settling traces (first channel; the first acquisition recompiles the sequencer), then the new traces right
   #    after the change, the new strip, a flush
@@ -463,7 +477,7 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
   traces "${PACKET_ID}_new" "$N_SETS"
   check_phase "${PACKET_ID}_new" "$N_SETS" || return $?
   if (( SCREEN )); then            # trace-only packet: back to nominal, done
-    nominal
+    leave; nominal
     return 0
   fi
   strip "${PACKET_ID}_l1new" || return $?
@@ -490,7 +504,7 @@ run_packet() {   # the packet's commands; returns 0, or check_phase's 2 (restart
     (( rc == 2 )) && echo "  ${PACKET_ID}_post: many damaged post-image traces; the packet is kept"
   fi
   flushes "$FLUSH_AFTER_IMAGE"
-  nominal
+  leave; nominal
 }
 
 [[ ${DRY_RUN:-0} == 1 ]] || mkdir -p "$MARK_DIR"
@@ -505,7 +519,7 @@ while :; do
     echo "$PACKET_ID: $DAMAGED damaged traces (more than $MAX_DAMAGED): stopping it, resetting the boards, restarting the packet"
     set_status "restarted: $DAMAGED damaged traces"
     q "daq.set_standalone()" "$POOL"
-    nominal
+    leave; nominal
     attempt=$(( attempt + 1 ))
     if (( attempt > MAX_RESTARTS )); then
       echo "ERROR: $BASE_ID restarted $MAX_RESTARTS times and still too many damaged traces: giving up"

@@ -1,0 +1,11 @@
+# PT_09: back to nominal, ramped, rule-safe order (run_plan.sh passes it as UNDO_FILE)
+acm101:H1_A_L=6.2
+acm101:H1_B_L=6
+acm101:H2_C_L=6.2
+acm101:H3_A_L=6.2
+acm101:H3_B_L=6
+acm101:H1_A_L=6.7
+acm101:H1_B_L=6.5
+acm101:H2_C_L=6.7
+acm101:H3_A_L=6.7
+acm101:H3_B_L=6.5

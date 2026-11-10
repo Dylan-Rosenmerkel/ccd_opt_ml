@@ -1,0 +1,4 @@
+# D3_005: back to nominal, ramped, rule-safe order (run_plan.sh passes it as UNDO_FILE)
+acm101:VSUB=53.333
+acm101:VSUB=49.167
+acm101:VSUB=45
