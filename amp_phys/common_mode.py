@@ -54,7 +54,7 @@ def main():
                     "date_start", "theta.VSUB", "theta.VDD1", "theta.VR1"])
     when = d.groupby("packet_id").date_start.first()
     groups = defaultdict(dict)
-    for f in glob.glob(str(Path(args.data) / "N3_*" / "traces" / "*_acm*_ch*.npz")):
+    for f in glob.glob(str(Path(args.data) / "*" / "traces" / "*_acm*_ch*.npz")):
         p = Path(f)
         m = re.match(r"(\w+?)_acm(\d+)_ch(\d)\.npz", p.name)
         groups[(p.parts[-3], m.group(1))][(int(m.group(2)), int(m.group(3)))] = f
@@ -144,7 +144,8 @@ def main():
         L.append(f"| {nm} | {100 * share[f'{nm} common share']:.1f} % | {100 * share2[f'{nm} other-board share']:.1f} % |")
     T = S["board-102 temperature change (K, rel. 300 K)"]
     L += ["", f"Noise thermometry (board 102): temperature spread {T.std():.2f} K (RMS), range {T.quantile(0.05):.2f} to "
-          f"{T.quantile(0.95):.2f} K (5-95 %), drift {np.polyfit(S.hours, T, 1)[0]:+.3f} K/h."]
+          f"{T.quantile(0.95):.2f} K (5-95 %), drift "
+          f"{np.polyfit(S.hours[np.isfinite(S.hours) & np.isfinite(T)], T[np.isfinite(S.hours) & np.isfinite(T)], 1)[0]:+.3f} K/h."]
     (out / "common_mode.md").write_text("\n".join(L) + "\n")
     S.to_csv(out / "common_mode_per_trace.csv", index=False)
     print("\n".join(L))

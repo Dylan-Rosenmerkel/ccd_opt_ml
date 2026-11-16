@@ -302,3 +302,70 @@ Hinge fits of each output against each rail, with all other rails regressed out.
 - This is a process-variation measurement that would otherwise need SIMS or C–V on a broken-out die.
 - Precision is limited by the Sobol design (every rail moves at once). Single-rail stepping (NEXT_RUN_PLAN B4) gives
   ±0.05 V.
+
+## 13. The cabling change, seen in the data (`common_mode.py` on v1, v2, v3)
+
+The user confirms the grounding/cabling changed. Nominal reference traces only, board 101, per-skip variance split into
+the part shared with the other channels and the amplifier's own:
+
+| run | dates | shared share | shared variance (ADU²) | own variance (ADU²) | per-skip RMS | dead-channel RMS (board 102) |
+|---|---|---|---|---|---|---|
+| v1 | Nov 2–3 | 61.2 % | 68.8 | 43.6 | 10.60 | 5.42 |
+| v2 | Nov 5–7 | 60.7 % | 68.0 | 43.8 | 10.54 | 5.44 |
+| v3 | Nov 10–12 | 52.5 % | **47.0** | 42.5 | **9.46** | 5.41 |
+
+- **What changed.** Between Nov 7 and Nov 10 the shared variance fell by a third. Each amplifier's own noise is
+  unchanged (43.6 → 42.5), and the board-102 electronics are unchanged (5.42 → 5.41). This is the signature of a
+  setup (grounding) improvement, not of the amplifiers, and it shows `common_mode.py` works as a grounding metric.
+- **What is left.** Removing the remaining shared part would bring the per-skip RMS from 9.46 to ~6.5 ADU (−31 %).
+
+## 14. Crosstalk between the channels (`crosstalk.py`, October board-101 images)
+
+Charge read on one amplifier appears simultaneously on the others at the ~10⁻⁴ level. Target e⁻ per 10⁴ source e⁻:
+
+| source \ target | ch0 | ch1 | ch2 | ch3 |
+|---|---|---|---|---|
+| ch0 | – | +1.2 | **−1.6** | +1.2 |
+| ch1 | +1.2 | – | +0.6 | **−0.7** |
+| ch2 | **−0.6** | +1.4 | – | +1.4 |
+| ch3 | +0.6 | **−0.9** | +1.4 | – |
+
+- **The pattern.** The pairs ch0↔ch2 and ch1↔ch3 couple with negative sign; every other pair couples positively.
+  That points to the routing (the cable or connector pairing of the video lines, or a shared return), not to the CCDs.
+- **Why it matters.** A 10⁴ e⁻ track makes ±1 e⁻ ghosts on the other CCDs. That can fake single-electron events
+  unless it is subtracted, and the matrix makes subtraction possible.
+
+## 15. Clock → sense-node coupling capacitances (absolute, with C_sn known)
+
+Feedthrough per volt (in equivalent electrons) minus the pickup seen on the dead channels, times q, gives the
+capacitance of each clock to the sense node. The method assumes board 102's pickup equals board 101's.
+
+| | ch0 | ch1 | ch2 | ch3 |
+|---|---|---|---|---|
+| RG → sense node (fF) | 0.26 | 0.21 | **0.37** | 0.21 |
+| SW → sense node (fF) | 0.12 | 0.08 | 0.13 | 0.10 |
+| H → first skip (fF) | 0.009 | 0.010 | 0.010 | 0.010 |
+
+- **A new process quantity.** 0.21–0.37 fF over the 6 µm-wide reset gate at 0.454 fF/µm² is an overlap of
+  ≈ 0.08–0.14 µm. That is the lateral diffusion / alignment of the sense-node implant under RG, which is otherwise
+  only measurable in cross-section.
+- **101 ch2 has ~1.7× the RG overlap of the others.** That is consistent with its other anomalies (RTS, noise, glow
+  at the amplifier end).
+
+## 16. Doing this on a new amplifier in another setup
+
+What transfers, and what each step needs:
+
+| step | needs | transfers to a new setup if |
+|---|---|---|
+| chain calibration (ADU/µV) | one channel with a known passive input: an unconnected channel, a dead amplifier, or a switchable known resistor | the frontend's load and preamp are known (schematic) |
+| conversion gain, injected noise, follower inversion | the chain calibration, the layout W/L, C_ox (recipe), the CCD temperature | similar geometry: same equations, new priors |
+| common-mode / grounding metric | ≥ 2 channels digitised simultaneously | always |
+| crosstalk matrix | one image with tracks | always |
+| clock couplings (fF) | feedthrough features + a pickup reference (dead channel) | always |
+| knees / channel potentials | single-rail voltage steps | always; the dose interpretation needs the recipe |
+| gain / dark-charge equations | the 3 shared slopes (VDD −1.6 %/V is universal here) + one image of the new CCD | same transistor design; refit the slopes for a new design |
+| transconductance per amplifier | the DC output level (a voltmeter on the video line, or the VDD supply current) | always; one bench reading closes it: g_m = 2 I_D / V_ov with I_D = V_out / R_L |
+
+The ML models do not transfer this way: they learn amplifier identities. The physics quantities are defined
+independently of the setup, so a new setup only needs new priors (schematic, layout, recipe), not new training data.
