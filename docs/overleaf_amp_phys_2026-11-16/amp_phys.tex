@@ -57,7 +57,7 @@ standard CCD characterisation; \std{} items are standard and are automated here.
 \item \textbf{Every clock line's coupling to the sense node}, measured from the clock edges in the raw traces: RG
   0.15--0.37\,fF, SW 0.08--0.13, H 0.011--0.016, V $<0.003$\,fF (Section~\ref{sec:coupling}). \novel
 \item \textbf{Device physics from operating data.} Sense-node capacitance $\approx$80--90\,fF and follower gain
-  $\approx$0.8--0.9 from the layout (a kTC-noise route gives 45\,fF and 0.44: open); buried-channel depth $\approx$0.6\,\textmu m (from the reset charge injection); a 0.85\,V
+  $\approx$0.8--0.9 from the layout (a kTC-noise route gives 45\,fF and 0.44: open); buried-channel depth $\approx$0.55\,\textmu m (from the reset charge injection; also from a single trace); a 0.85\,V
   channel-potential offset between CCDs ($\approx$0.6\,\% of the implant dose); a $\sim$0.1\,\textmu m gate overlap,
   1.7$\times$ larger on ch2 (Sections~\ref{sec:sn}--\ref{sec:knees}). \novel
 \item \textbf{Each channel reads its own CCD} (the module carries four). The weak VSUB response of ch0/ch2 sits in their
@@ -347,19 +347,28 @@ schematic). Right: the series capacitances through which the gate sees the chann
 \paragraph{Charge injection.} When RG switches the reset transistor off, the charge in its channel,
 $Q=C_\text{eff}WL\,(V_\text{overdrive})$, leaves through both ends, roughly half onto the sense node
 (Figure~\ref{fig:inj}, left). The overdrive is set by RG$_\text{high}-$VR. Indeed, the measured reset jump depends on RG$_\text{high}$
-and VR with equal and opposite coefficients, i.e. on RG$_\text{high}-$VR only, rising by \textbf{2.1--2.4\,fF per volt}
+and VR with equal and opposite coefficients, i.e. on RG$_\text{high}-$VR only, rising by \textbf{2.3--2.6\,fF per volt}
 on all four CCDs (Figure~\ref{fig:inj}, right).
 \fig{charge_injection.png}{Left: what happens at reset. Right: the measured jump (as charge on the sense node) against
-RG$_\text{high}-$VR over the 80 v3 settings.\label{fig:inj}}
+RG$_\text{high}-$VR over the v3 settings with a valid image (broken-readout settings left out).\label{fig:inj}}
 
 \paragraph{From the slope to the depth.}
 \begin{itemize}
-\item $\tfrac12C_\text{eff}\times36\,\text{\textmu m}^2=2.25$\,fF $\Rightarrow C_\text{eff}\approx0.125$\,fF/\textmu m$^2$.
-\item With the recipe's 76\,nm oxide-equivalent ($C_{ox}=0.454$), the silicon part is $1/(1/0.125-1/0.454)=0.172$\,fF/\textmu m$^2$,
-  so $x_{ch}=\varepsilon_{Si}/0.172\approx$ \textbf{0.6\,\textmu m}.
+\item $\tfrac12C_\text{eff}\times36\,\text{\textmu m}^2=2.38$\,fF (mean of 2.27, 2.39, 2.60, 2.27 on ch0--3)
+  $\Rightarrow C_\text{eff}\approx0.132$\,fF/\textmu m$^2$.
+\item With the recipe's 76\,nm oxide-equivalent ($C_{ox}=0.454$), the silicon part is $1/(1/0.132-1/0.454)=0.186$\,fF/\textmu m$^2$,
+  so $x_{ch}=\varepsilon_{Si}/0.186\approx$ \textbf{0.55\,\textmu m} (0.59, 0.55, 0.49, 0.59 on ch0--3; ch2 the thinnest).
 \item Check: boron at 150\,keV has a projected range of $\approx$0.45\,\textmu m (straggle 0.1\,\textmu m), deepened by
   the later oxidations and anneals. 0.5--0.7\,\textmu m is what the process should give. \novel
 \end{itemize}
+\paragraph{From one trace instead of a scan.} One trace gives the injected charge at one setting,
+$Q=\tfrac12C_\text{eff}WL\,(\text{RG}_\text{high}-\text{VR}-V^*)$, where $V^*$ is the line's intercept. The four
+amplifiers share it: $V^*=9.38$, 9.57, 9.44, 9.50\,V, a property of the reset-transistor design. Nominal sits only
+2.4--2.6\,V above it, so $V^*$ must be known to $\sim$0.1\,V; with $V^*=9.47\pm0.08$\,V one nominal trace gives 0.60,
+0.63, 0.54, 0.65\,\textmu m, within 0.05\,\textmu m of the scan (\texttt{depth\_from\_trace.py}). The gate overlap does not
+follow from one trace (its $\sim$1\,fC feedthrough sits on the 5--6\,fC injection at the same edge); one extra trace with
+RG$_\text{low}$ changed gives it. \novel
+
 \paragraph{Oxide thickness: what can and cannot be separated.} Every electrical handle (this injection, the knees of
 Section~\ref{sec:knees}, the output-FET gate capacitance) measures the \emph{combination} $t_{eq}/\varepsilon_{ox}+x_{ch}/\varepsilon_{Si}
 \approx8.0$\,\textmu m$^2$/fF. Assuming $t_{eq}=76$\,nm gives $x_{ch}\approx0.6$\,\textmu m. Assuming $x_{ch}=0.45$\,\textmu m

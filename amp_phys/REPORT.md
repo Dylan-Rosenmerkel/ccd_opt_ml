@@ -791,3 +791,9 @@ injection-split assumption (30–70 %) still dominates the absolute value (≈ 0
 (feedthrough ≈ 1 fC on top of 5–6 fC injection at the same edge) cannot be separated from one trace: it needs one
 extra trace with RG_low changed. Not yet applicable to the LSM traces: their reset event has a different shape and
 position (sequencer `refrence_v4_DM10.seq`, RG high 8 µs); the edge must be mapped from that sequence first.
+
+**Valid-operating-point rerun of the scan regressions** (`clock_edges.py`, `sense_node_coupling.py`, 2026-11-16).
+Reset injection slope (edge 0, RG_1_H) 2.22/2.13/2.43/2.10 → **2.27/2.39/2.60/2.27 fF/V** (depth 0.59/0.55/0.49/0.59 µm;
+mean 0.55 µm); RG_1_L feedthrough at that edge 0.15–0.22 → 0.12–0.18 fF; H couplings 0.012–0.023 fF (unchanged range).
+New with the broken points removed: the reset edge also depends on H2 high/low (0.20–0.23 / 0.11–0.12 fF): it sits on
+the H2 waveform's tail. The settled mutual-capacitance matrix is unchanged except ch1 RG_1_H (3.2σ → 1.1σ).
