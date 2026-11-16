@@ -41,6 +41,7 @@ GRADES = {
     "offset": ("abs", 100, 500),                  # e: unsettled SW/OG transient
     "slow": ("low", 5.0, 15.0),                   # uV/rtHz 0.2-1 kHz
     "corr": ("low", 0.3, 0.6), "burst": ("low", 0.05, 0.15), "static": ("low", 2.0, 4.0),
+    "setup500": ("low", 0.04, 0.08),               # e: setup (100 Hz-1 kHz) left in a 500-skip pixel, static record
     "charge_rel": ("low", 1.3, 2.0),              # blank-image charge / median of the same board
 }
 CAT = {  # summary card: category -> graded keys
@@ -48,7 +49,7 @@ CAT = {  # summary card: category -> graded keys
     "Read noise": ["cds", "skip_e", "img", "img_ratio"],
     "Transistor (1/f, traps)": ["onef", "nt", "kurt", "kurt90"],
     "Timing": ["settle", "slope", "offset"],
-    "Setup": ["slow", "corr", "burst", "static"],
+    "Setup": ["setup500", "slow", "corr", "burst", "static"],
     "Charge (vs same board)": ["charge_rel"],
 }
 RANK = {"good": 0, "fair": 1, "poor": 2}
@@ -120,6 +121,11 @@ def load():
                              "corner": t["1/f corner (kHz)"], "share": t["1/f share at 10 us"],
                              "nt": t["N_t A=0.85 C_ox (eV^-1 cm^-3)"] / 1e16})
     D = pd.DataFrame(rows)
+    sn = RES / "per_channel/setup_noise_N/setup_noise_N.csv"
+    if sn.exists():
+        S = pd.read_csv(sn).groupby("label").median(numeric_only=True)
+        D["setup500"] = D["label"].map(S["setup 100-1000 Hz at 500 skips (e)"])
+        D["setupshare"] = D["label"].map(S["setup share of 500-skip variance"])
     D["board"] = D["label"].str.extract(r"(1\d\d)")[0]
     D["charge_rel"] = D["charge"] / D.groupby("board")["charge"].transform("median")
     return D
@@ -216,7 +222,7 @@ def main():
     U = {"cg": "conv.\\ gain", "csn": "$C_\\text{sn}$", "cds": "CDS noise", "skip_e": "per skip", "img": "image",
          "img_ratio": "image/expectation", "white": "white", "corner": "1/f corner", "onef": "1/f at 500 skips", "nt": "$N_t$", "kurt": "kurtosis",
          "kurt90": "kurtosis p90", "settle": "settling", "slope": "slope", "offset": "offset", "rg": "RG",
-         "slow": "slow noise", "corr": "corr.", "burst": "bursts", "static": "static", "charge_rel": "charge/median"}
+         "setup500": "setup at 500 skips", "slow": "slow noise", "corr": "corr.", "burst": "bursts", "static": "static", "charge_rel": "charge/median"}
     (OUT / "card.tex").write_text(summary(D))
     (OUT / "sense_node.tex").write_text(table(D, [
         ("gain (ADU/e)", "gain", 2, False), ("conv.\\ gain (\\textmu V/e)", "cg", 2, False),
@@ -244,13 +250,16 @@ def main():
         "tab:tim", thresholds(["settle", "slope", "offset"], U)
         + " RG, H and V: relative only, not graded (they include board pickup and the whole transfer waveform)."))
     (OUT / "setup.tex").write_text(table(D, [
+        ("setup at 500 skips (e)", "setup500", 3, True), ("its share", "setupshare", 2, False),
         ("slow 0.2--1\\,kHz (\\textmu V/$\\sqrt{\\text{Hz}}$)", "slow", 1, True),
         ("1--10\\,kHz (\\textmu V/$\\sqrt{\\text{Hz}}$)", "mid", 2, False),
         ("skip corr.", "corr", 2, True), ("bursts", "burst", 2, True),
         ("static 0.2--1\\,kHz", "static", 2, True), ("blank-image charge (e/pix)", "charge", 2, False),
         ("charge / board median", "charge_rel", 2, True)],
         "The setup (and the charge in blank images).", "tab:setup",
-        thresholds(["slow", "corr", "burst", "static", "charge_rel"], U)
+        thresholds(["setup500", "slow", "corr", "burst", "static", "charge_rel"], U)
+        + " Setup at 500 skips: the static-record spectrum at 100\\,Hz--1\\,kHz integrated through the exact CDS + "
+        "500-skip filter, in electrons (LSM only: PA03 has no static records)."
         + " Blank-image charge depends on temperature and exposure, so it is graded only against the other channels of the same board."))
     (OUT / "history.tex").write_text(history())
     D.to_csv(OUT / "graded_values.csv", index=False)

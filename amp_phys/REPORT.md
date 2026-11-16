@@ -805,3 +805,18 @@ ADU), LSM pulses 2.7–5.5 samples (a feedthrough + charging fit is degenerate; 
 32k/42k). The V* calibration of §28 therefore holds per sequencer. Sequencer-independent route: two traces on the same
 setup differing only in RG_high (the dynamics cancel in the difference) give that setup's slope and V*; a third with
 RG_low changed gives the overlap. Requested for the LSM boards; no LSM depths are reported until then.
+
+## 29. The setup in electrons at N skips (`setup_noise_N.py`, 2026-11-16)
+
+Per-skip σ_CDS is blind to slow pickup (CDS ∝ f² below ~1 kHz; Oct→Nov σ_CDS −3 % while images −30 %). A noise spectrum
+integrated through the exact CDS + N-skip filter gives the setup's share of an N-skip pixel, in electrons.
+
+- **LSM static records** (validation: predicted per-skip σ / trace σ = 0.97 median): setup band 100 Hz–1 kHz at 500
+  skips = ACM110 0.012–0.024 e (0.7–1.9 % of the variance); ACM106 ch1/ch3, ACM109 ch2/ch3 0.04–0.07 e (11–22 %);
+  ACM109 ch0/ch1, ACM106 ch2 0.09–0.12 e (36–41 %); ACM106 ch0 0.14 e (67 %). Images are 1.4× the predicted total
+  (180 K dark charge).
+- **Clocked traces cannot give it.** The waveform-removed residual is dominated by reset-pulse jitter and cycle joins
+  (σ_1 ≈ 1400 e on PA03: unusable). The trace CDS series itself (time domain, `skip_averaging.py`) gives σ_128 ≈ 3.5 e on
+  board 101 (99 % excess) and 1.6 e on board 102, ~12× what board 101's images show (0.144 e at 500 skips). On the LSM
+  the clocked-trace 0.2–1 kHz level is 2–50× the static one. Clocked-trace setup numbers (§ cabling, §26) hold for
+  like-for-like comparisons only; PA03 needs static records for the electron number.

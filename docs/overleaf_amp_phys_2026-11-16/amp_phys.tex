@@ -274,6 +274,17 @@ over the dead-channel floor at 200\,Hz--1\,kHz (October 48.8, now 34.8\,\textmu 
 traces; electronics 1.6). It takes one trace and no charge, and must always be compared at the same trace length. From a
 simultaneous image or strip: $\rho_\text{sim}$, the mean correlation of zero-electron pixels between the amplifiers,
 row baseline removed (October 0.25, November 0.05, target 0), which says how much of the remainder is shared. \novel
+
+\paragraph{The setup in electrons.} The per-skip $\sigma_\text{CDS}$ is blind to slow pickup (October to November it
+changed by 3\,\% while the images improved by 30\,\%): the CDS suppresses $f<1$\,kHz as $f^2$. A 500-skip pixel lasts
+16\,ms and does not average that band away. Integrating a noise spectrum at 100\,Hz--1\,kHz through the exact CDS +
+500-skip filter and dividing by the gain gives the setup's contribution to the image read noise in electrons
+(\texttt{setup\_noise\_N.py}). On the LSM static records (clocks frozen) it is 0.01--0.02\,e on ACM110 and up to 0.14\,e
+(two-thirds of the 500-skip variance) on ACM106 ch0, between channels that look identical per skip. It needs a
+\emph{static} record: clocked traces carry slow variation that is not image noise (PA03's trace CDS series has
+$\sim$3.5\,e at 128 skips, $\sim$12$\times$ its images; the LSM clocked-trace band is 2--50$\times$ its static one). The
+clocked-trace numbers above hold for comparisons made the same way, not as absolute setup noise; one static record per
+channel would give PA03 the electron number.
 \caveat{Solid for ch0/ch1. ch2/ch3 scatter more (ch2 has its own problem). The October images had longer exposures
 (10--100\,s), but that adds $\le$0.1\,e$^-$/pixel and the zero-electron selection excludes it.}
 

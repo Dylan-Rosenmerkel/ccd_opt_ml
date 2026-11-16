@@ -137,10 +137,23 @@ and transistors, no charge. \textbf{Skip corr.}: the correlation
 of consecutive skips (slow noise as the skipper sees it; LSM values corrected for their 7-skip pixels).
 \textbf{Bursts}: share of 1\,ms blocks with 1.5$\times$ the median noise. \textbf{Static}: the same band in a record with
 all clocks frozen (LSM only). \textbf{Blank-image charge}: electrons per pixel in blank images (dark current + spurious
-charge; at 180\,K mostly dark current, so not graded on the same footing).}
+charge; at 180\,K mostly dark current, so not graded on the same footing). \textbf{Setup at 500 skips}: what the
+setup actually costs an image. The per-skip $\sigma_\text{CDS}$ cannot see slow pickup (the CDS suppresses
+$f<1$\,kHz as $f^2$), but a 500-skip pixel lasts 16\,ms and does not average it away. The static-record spectrum at
+100\,Hz--1\,kHz is integrated through the exact CDS + 500-skip filter and divided by the gain: electrons on the image's
+scale, and its share of the 500-skip variance.}
 \input{tables/setup.tex}
 \input{tables/history.tex}
 \begin{itemize}[nosep]
+\item \textbf{The setup in electrons (LSM, static records):} 0.01--0.02\,e at 500 skips on ACM110 (1--2\,\% of the
+  variance), 0.04--0.12\,e on ACM106/109, 0.14\,e on ACM106 ch0 (67\,\%). Channels that look identical per skip (3.3--4.4\,e)
+  differ by up to two-thirds of their 500-skip noise. The same static spectra predict the measured per-skip noise of the
+  traces to 0.97 (median), so the integration is sound; the images are 1.4$\times$ the predicted total (180\,K dark charge).
+\item \textbf{Why only from static records:} the clocked traces carry slow variation that is not image noise. PA03's
+  trace CDS series has $\sim$3.5\,e at 128 skips, $\sim$12$\times$ what its images show (0.144\,e at 500 skips); on the
+  LSM the clocked-trace 0.2--1\,kHz level is 2--50$\times$ the static one. Clocked-trace numbers (the column
+  ``slow 0.2--1\,kHz'' and Table~\ref{tab:hist}) are valid for comparisons made the same way (October vs November, board
+  101 vs 102), not as absolute setup noise. PA03 needs static records for the electron number.
 \item \textbf{PA03 board 101 is the noisy setup}: 35\,\textmu V/$\sqrt{\text{Hz}}$ on all four channels, 10\,\% bursty blocks,
   skip correlation 0.64--0.71. The cabling change lowered it by 29\,\% at equal trace length (Table~\ref{tab:hist}); it is still 3--13$\times$
   the LSM. The images tolerate it: board 101's 500-skip images reach the white-noise expectation (Table~\ref{tab:noise}).
