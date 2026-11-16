@@ -407,3 +407,67 @@ short (mean 441 cycles, 21 images), nominal (1000, 16), long (2046, 22). The nom
 
 **To pin it down.** One image per window length at fixed nominal voltages (5 windows, 300–3000 cycles), plus a
 short-circuit / cable-swap test of the ch0/ch2 and ch1/ch3 returns.
+
+## 18. CORRECTION to §11 and §13: the "common-mode noise" is slow baseline wander, not white noise
+
+`common_mode.py --detrend 3` removes a cubic per pixel (the AC-coupling droop and wander below ~250 Hz; the frontend's
+100 nF / 100 kΩ coupling has τ ≈ 10 ms ≈ one 500-skip pixel). After that, the channels are **uncorrelated**:
+
+| run | per-pixel mean removed: common share / per-skip RMS | cubic removed: common share / per-skip RMS |
+|---|---|---|
+| v1 (Nov 2–3) | 61 % / 10.60 ADU | 0.1 % / 5.79 ADU |
+| v3 (Nov 10–12) | 52 % / 9.46 ADU | 0.1 % / 5.75 ADU |
+
+What this means:
+- **The shared part is slow** baseline droop/wander, common to all channels.
+  - Its size tracks the in-trace drift (ρ = +0.80) and RG_high − VR (the video DC level through the reset), with equal
+    and opposite RG_H (+17) and VR (−15 pp/V) coefficients.
+  - It is mostly removed by the per-pixel/row baseline. That is why common-mode subtraction gives nothing at 500 skips
+    and 8–30 % at 1000–10000 skips, where a pixel lasts long enough for the slow wander to become pixel-to-pixel noise.
+- **The cabling change (between Nov 7 and Nov 10) reduced the slow wander by about a third.** The white noise is
+  unchanged.
+- **The white per-skip noise (5.8 ADU, 19–22 nV/√Hz at the input) has no channel-to-channel correlation.** The
+  unexplained white term of §6/§8 is therefore per channel, not a shared supply/substrate/ground injection.
+- **Leading candidate now:** the frontend's 20 kΩ load Johnson noise, insufficiently shunted by the follower if its
+  drain current is low. That reopens the low-g_m branch of §6.
+- **Deciding measurement:** the DC level of each video line (or the VDD current) → I_D → g_m.
+- **Grounding metric:** report both bands. Slow-wander share (mean only) for grounding/cabling, white share (detrended)
+  for supply injection. Both are in `common_mode.py`.
+
+## 19. Mutual capacitances between the sense node and the voltage lines (`sense_node_coupling.py`)
+
+| line | C to sense node | how | status |
+|---|---|---|---|
+| RG (reset gate) | **0.21–0.37 fF** (ch2 0.37) | edge feedthrough minus dead-channel pickup (§15) | measured |
+| SW (summing well) | **0.08–0.13 fF** | same | measured |
+| H clocks (first skip) | **0.009–0.010 fF** | same | measured |
+| all lines, settled level | ≤ 0.01–0.03 fF effective | regression of the empty-skip CDS on all 18 rails | CDS cancels every line's step (same level in both windows): by design |
+| OG (output gate) | ~0.2–0.6 fF (estimate) | layout: adjacent gate, the measured RG overlap length 0.08–0.14 µm | not varied in v3 |
+| VDD / drain (output FET C_gd) | **~2–4 fF** (estimate) | W = 55–60 µm × the same overlap × 0.454 fF/µm² | not varied with a switching edge; the largest coupling |
+| VR (reset drain) | ≪ 0.01 fF with RG off | only through the reset channel | – |
+| VSUB (substrate) | ~0.01–0.03 fF (estimate) | sense-node area / 635 µm of depleted Si | – |
+| DG, TG, V clocks | – | not resolvable: not switching in the skip cycle, or not varied | – |
+
+Edge amplitudes per volt of each rail (pulse and dip heights, regressed on all rails) are in
+`results/v3n/sense_node_coupling.md`. They include cable pickup, and the lockstep A/B rails limit the separation.
+
+**Noise sensitivity per line** = injected noise × C_sn / C_line. The source noise each line would need to make
+22 nV/√Hz at the sense node:
+
+| line | needed noise |
+|---|---|
+| VDD/drain | **0.6 µV/√Hz** |
+| OG | 5 µV/√Hz |
+| RG | 7 µV/√Hz |
+| SW | 19 µV/√Hz |
+| VSUB | ~60 µV/√Hz |
+| H | ~190 µV/√Hz |
+
+VDD/drain is the most sensitive line. Any per-channel noise on VDD1/VDD2 (each regulator feeds two channels; their
+noise would correlate within a pair, which §18 does not see) would have to stay below ~0.6 µV/√Hz.
+
+**How to measure every line directly ("capacitance tomography").** During one trace set, dither each line with a small
+square wave at its own frequency (e.g. 20 mV, frequencies 1–20 kHz chosen not to alias with the skip rate), then
+lock-in demodulate the CDS at each frequency. The amplitude at f_k / the dither amplitude = A·C_k/C_sn. That gives the
+full sense-node capacitance vector in one acquisition, including DC-held lines (VDD, VR, VSUB, OG, DG, TG). It needs a
+firmware option to add a small modulation to the DAC / pot settings.

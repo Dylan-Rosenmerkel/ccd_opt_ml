@@ -35,11 +35,19 @@ CH = [(101, 0), (101, 1), (101, 2), (101, 3), (102, 0), (102, 1), (102, 2), (102
 NAMES = [f"{b} ch{c}" for b, c in CH]
 
 
+DETREND = 0
+
+
 def residual(f, skip0):
     z = np.load(f, allow_pickle=True)
     if "cds" not in z.files:
         return None
     c = z["cds"].astype(float)[:, skip0:]
+    if DETREND > 0:                                           # per-pixel polynomial: removes the AC-coupling droop
+        t = np.linspace(-1, 1, c.shape[1])
+        V = np.vander(t, DETREND + 1)
+        c = c - (c @ np.linalg.pinv(V).T) @ V.T
+        return c.ravel()
     return (c - c.mean(1, keepdims=True)).ravel()            # per-pixel mean removed, skip order kept
 
 
@@ -47,8 +55,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--data", required=True)
     ap.add_argument("--skip0", type=int, default=20)
+    ap.add_argument("--detrend", type=int, default=0, help="per-pixel polynomial order removed (0 = mean only)")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
+    globals()["DETREND"] = args.detrend
     out = Path(args.out)
     d = pd.read_csv(Path(args.data) / "dataset.csv", low_memory=False, usecols=["packet_id", "board", "channel",
                     "date_start", "theta.VSUB", "theta.VDD1", "theta.VR1"])

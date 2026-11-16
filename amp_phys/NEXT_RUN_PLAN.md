@@ -5,6 +5,10 @@ will be analysed (scripts in `amp_phys/`).
 
 ## A. The setup's common-mode noise: find it and reduce it by changing the grounding
 
+> **Correction (REPORT §18):** the shared part is slow baseline wander/droop (≲ 250 Hz), not white noise; the white
+> per-skip noise is uncorrelated between channels. Use the slow-wander share for grounding/cabling, the detrended share
+> for supply injection, and add the DC level of each video line (follower current) to settle the white-noise source.
+
 **What we know (v3n, `common_mode.py`):**
 - On board 101, ~50 % of each channel's per-skip noise variance is common to its four channels (correlation 0.52–0.56).
 - Board 101 and board 102 are **anti-correlated (−0.3)** although two ACMs digitise them. A shared source with
@@ -74,3 +78,6 @@ give (`chain_calibration.py`), and the high-skip floor (0.1 e⁻) should drop.
   channel mapping different between traces and FITS, or is ch3's amplifier alive with no charge reaching it?
 - Which traces are theta1–3 / ref / post (settings, flush before)?
 - Was anything about grounding or cabling changed between 2026-10-14 and 2026-11-10?
+
+| B8 | **Capacitance tomography**: dither every line (VDD, VR, OG, DG, TG, SW, RG, H, V, VSUB) with a small square wave at its own frequency during one trace set | The full sense-node ↔ line mutual-capacitance vector per amplifier, incl. DC-held lines | firmware: small modulation on the DAC / pot outputs | lock-in on the CDS (REPORT §19) |
+| B9 | **DC level of each video line** (voltmeter at the frontend input) or the VDD supply current | follower current → g_m, follower gain, C_sn per amplifier; decides whether the white noise is the load resistor | bench | `chain_calibration.py` |
