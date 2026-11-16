@@ -600,3 +600,62 @@ and its own part.
 - Take one simultaneous trace set per configuration.
 - Minimise σ_shared (or SNI at the operating skip count), and check that e_w approaches the frontend floor.
 - One number per board, ~1 min of data, no image needed.
+
+## 23. CORRECTION: the traces of the four channels are NOT simultaneous; the valid October vs November comparison
+
+**What was wrong.** Each channel's trace is its own acquisition, about 1 s apart (e.g. ch0 18:56:04, ch1 :05, ch2 :06,
+ch3 :07; the other three streams of each file are empty frames, `process_packet.py`). Consequences:
+- The cross-channel trace analyses of **§11, §13, §18 and the setup noise index of §22 do not measure simultaneous
+  (setup) noise.**
+- Their "shared" component (~50 % of the per-skip variance, ~5 e⁻) is a **pattern locked to the readout sequence**: the
+  baseline/offset evolve identically in every acquisition.
+- "White noise uncorrelated between channels" is trivially true for separate acquisitions. It says nothing about shared
+  supplies.
+- The v1/v2 → v3 change of that pattern is not the cabling change.
+
+**Still valid** (the images are simultaneous: the four amplifiers are read into one file): crosstalk (§14), mutual
+capacitances (§17), and the image common-mode tests (§11, `cms_images.py`).
+
+**October vs November, the cabling change** (`oct_nov.py`). Board 101, 500-skip unbinned images at October's nominal
+voltages (VSUB 45.1, VR −3.0, VDD −19.0, H1 high 9.5, V1 high 9.9, delay_H 1800): 12 October images vs 14–25 per
+November period. Pixels where all four amplifiers are in the 0-e⁻ peak; row baseline removed. Medians:
+
+| period | σ_0e ch0 / ch1 / ch2 / ch3 (e⁻) | simultaneous correlation between amplifiers | common-mode subtraction gain |
+|---|---|---|---|
+| **October** | **0.207 / 0.210 / 0.532 / 0.270** | **0.19–0.28** | **5–8 %** |
+| Nov 2–3 (v1) | 0.154 / 0.179 / 0.517 / 0.371 | 0.03–0.06 | 0.1–0.7 % |
+| Nov 5–7 (v2) | 0.144 / 0.147 / 0.349 / 0.247 | 0.02–0.08 | 0.1–0.7 % |
+| Nov 10–12 (v3) | **0.145 / 0.148 / 0.332 / 0.291** | **0.02–0.07** | **≈ 0 %** |
+
+Without the row baseline the October correlation is 0.20–0.30 (Nov v3: 0.07–0.12).
+
+**What this shows.**
+- **In October ~20–28 % of the pixel noise was common to the four amplifiers.** After the cabling change it is 2–7 %,
+  and subtracting it gains nothing.
+- **σ_0e fell ≈ 30 % on ch0 and ch1** (0.21 → 0.145–0.15 e⁻) at the same nominal settings.
+- ch2 and ch3 also improved but scatter more: ch2 has its own RTS / high-floor problem, and ch3 varies.
+- The October images had longer exposures (10–100 s vs 0–1 s). At ~40–75 e⁻/pix/day that is ≤ 0.1 e⁻/pix, and the
+  0-e⁻ selection excludes it.
+- The ADC/gain scale also moved by 6 % between October and November, on all amplifiers alike (image agent). That is
+  consistent with a change in the readout chain at the same time.
+
+**Trace white noise per channel** (valid: one acquisition per channel), at the video input:
+
+| period | ch0 | ch1 | ch2 | ch3 (nV/√Hz) |
+|---|---|---|---|---|
+| Oct 8 | 20.2 | 20.8 | (broken traces) | 23.8 |
+| Oct 12 | 20.7 | 21.2 | (broken traces) | 23.7 |
+| Nov 2–3 / 5–7 / 10–12 | 19.9 / 19.9 / 19.8 | 20.4 / 20.4 / 20.2 | 21.2–21.7 | 22.1 / 22.3 / 21.9 |
+
+- The white part improved by only 2–8 %. The cabling change mainly removed **simultaneous, low-frequency common-mode
+  noise**, which is what the 500-skip pixels are sensitive to.
+
+**A valid single setup-noise number.** From one image, or from traces once they are recorded simultaneously:
+- **ρ_sim**: the mean simultaneous correlation of 0-e⁻ pixels between the amplifiers of a board, row baseline removed.
+- or, equivalently, **the common-mode subtraction gain in %**.
+- October: ρ_sim ≈ 0.25 / 5–8 %. November: ρ_sim ≈ 0.05 / ≈ 0 %.
+- Target: ρ_sim → 0 with the white trace density at its floor.
+
+**To make it a ~1 min trace measurement:** record the traces of all four channels in the same acquisition (a firmware /
+script option: the streams of the other three channels are currently empty frames). Then `setup_noise_index.py`
+measures simultaneous noise as intended.

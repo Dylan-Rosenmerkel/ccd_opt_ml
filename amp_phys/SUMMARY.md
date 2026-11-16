@@ -7,6 +7,11 @@ next measurements are in [NEXT_RUN_PLAN.md](NEXT_RUN_PLAN.md).
 **Legend.** "Novel" = a measurement or method not part of standard CCD characterisation, as far as we know.
 "Standard" = known quantities, now automated per trace with error bars.
 
+> **Correction (REPORT §23):** the per-channel traces are separate acquisitions (~1 s apart), so the cross-channel
+> trace quantities (#12 common share, the trace-based setup index) describe a sequence-locked pattern, not simultaneous
+> setup noise. Setup noise is measured from the simultaneous images: October ρ_sim ≈ 0.25 → November ≈ 0.05, σ_0e −30 %
+> on ch0/ch1 after the cabling change. Use ρ_sim / the image CMS gain until traces are recorded simultaneously.
+
 ## 1. From traces alone (no image, no documents)
 
 | # | quantity | value (board 101, v3) | method | novel? | used for |

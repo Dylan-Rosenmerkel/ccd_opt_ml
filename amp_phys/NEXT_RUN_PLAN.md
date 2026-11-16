@@ -3,7 +3,12 @@
 Written 2026-11-16. Each item names what it measures, why it was not measurable before, what to take, and how it
 will be analysed (scripts in `amp_phys/`).
 
-## A. The setup's common-mode noise: find it and reduce it by changing the grounding
+## A. The setup's common-mode noise
+
+> **Correction 2 (REPORT §23):** traces of different channels are separate acquisitions. The setup metric is the
+> simultaneous correlation of 0-e⁻ pixels between amplifiers in ONE image (ρ_sim; October 0.25 → November 0.05) and
+> the image common-mode-subtraction gain. Firmware item: record all four channels in the same trace acquisition so
+> that the ~1 min trace metric becomes valid.: find it and reduce it by changing the grounding
 
 > **Correction (REPORT §18):** the shared part is slow baseline wander/droop (≲ 250 Hz), not white noise; the white
 > per-skip noise is uncorrelated between channels. Use the slow-wander share for grounding/cabling, the detrended share
