@@ -1,0 +1,29 @@
+== PA03 101 ch0 (8 traces)
+duration (ms)                                                       189.708
+skip period (us)                                                     32.600
+CDS white per skip (ADU)                                              5.183
+CDS white (nV/rtHz)                                                  18.733
+CDS lag-1 autocorr                                                    0.712
+per-skip level scatter (ADU)                                        168.327
+reset pulse height (ADU)                                          52006.288
+settling tau after reset (us)                                         1.088
+pedestal-window slope (ADU/us)                                       -1.679
+signal-window slope (ADU/us)                                          6.613
+SW feedthrough (signal - pedestal level of the template, ADU)       -27.338
+in-window power above 3 MHz (share)                                   0.000
+static-gap noise rms (ADU)                                        30500.241
+settling tau after H transfer (us)                                    3.120
+windows / static-gap noise density 0.2-3 MHz                          0.005
+H-transfer waveform peak-to-peak (ADU)                           109088.000
+V-transfer waveform peak-to-peak (ADU)                           129383.500
+V transfers in trace                                                  2.500
+ASD 200-1000 Hz (nV/rtHz)                                         35308.270
+ASD 1000-10000 Hz (nV/rtHz)                                        3797.472
+ASD 10000-100000 Hz (nV/rtHz)                                       488.776
+ASD 100000-1e+06 Hz (nV/rtHz)                                       131.690
+ASD 1e+06-7.5e+06 Hz (nV/rtHz)                                       33.929
+burst fraction (1 ms blocks > 1.5x median rms)                        0.106
+stationarity (CV of 1 ms block rms)                                   0.366
+drift of the per-skip level over the trace (ADU/ms)                  58.799
+excess kurtosis of the CDS                                           -0.022
+lines (kHz), first trace: 2546, 2607, 5215, 5276, 6380, 6534
