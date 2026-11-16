@@ -38,7 +38,7 @@ import parameter_influence as pi  # noqa: E402
 # diverging: blue (negative) - neutral gray - red (positive)
 CMAP = LinearSegmentedColormap.from_list("div", ["#1c5cab", "#2a78d6", "#f0efec", "#e34948", "#b02a2a"])
 INK, MUTED = "#0b0b0b", "#8a8984"
-PRETTY = {"SW_1_L": "SW low", "RG_1_H": "RG high", "RG_1_L": "RG low", "V1_B_H": "V1 high", "V1_B_L": "V1 low",
+PRETTY = {"SW_1_L": "SW low", "SW_1_H": "SW high", "RG_1_H": "RG high", "RG_1_L": "RG low", "V1_B_H": "V1 high", "V1_B_L": "V1 low",
           "V2_C_H": "V2 high", "V2_C_L": "V2 low", "V3_B_H": "V3 high", "V3_B_L": "V3 low", "H1_B_H": "H1 high",
           "H1_B_L": "H1 low", "H2_C_H": "H2 high", "H2_C_L": "H2 low", "H3_B_H": "H3 high", "H3_B_L": "H3 low",
           "VSUB": "VSUB", "VDD1": "VDD", "VR1": "VR"}
@@ -95,14 +95,53 @@ def main():
     d = pi.load(Path(args.data), [Path(p) for p in args.plan], args.sessions, args.channels, pi.NOISE)
     K, members, _ = pi.knobs(d)
     K.columns = [nice_knob(c) for c in K.columns]
+    # derived quantities: each clock's swing (high - low) and the reset overdrive RG_high - VR.  Swings that moved in
+    # lockstep (one shared knob in the design, e.g. all V swings) are merged under one name.
+    num = lambda c: pd.to_numeric(d[c], errors="coerce").astype(float).to_numpy()
+    swings = {}
+    for h in [c for c in d.columns if c.startswith("theta.") and c.endswith("_H")]:
+        lo = h[:-2] + "_L"
+        if lo not in d:
+            continue
+        s = num(h) - num(lo)
+        if not np.isfinite(s).all() or np.nanstd(s) < 0.01:
+            continue
+        base = nice_knob(h[len("theta."):]).replace(" high", "")
+        for k, (v, names) in swings.items():
+            if np.allclose(v, s) or abs(np.corrcoef(v, s)[0, 1]) > 0.999:
+                names.append(base)
+                break
+        else:
+            swings[base] = (s, [base])
+    D = {}
+    swing_of = {}                                            # high-rail column -> the swing column replacing it
+    for base, (s, names) in swings.items():
+        uniq = sorted(set(n for n in names))
+        if any(n.startswith("V") and n[1:2].isdigit() for n in uniq) and len(uniq) > 1:
+            label = "V swing"
+        elif any(n.startswith("H") and n[1:2].isdigit() for n in uniq) and len(uniq) > 1:
+            label = "H swing"
+        else:
+            label = f"{uniq[0]} swing"
+        D[label] = s
+        for n in uniq:
+            swing_of[f"{n} high"] = label
+    if "theta.RG_1_H" in d and "theta.VR1" in d:
+        D["RG high - VR"] = num("theta.RG_1_H") - num("theta.VR1")
+    D = pd.DataFrame(D, index=K.index)
+    # plain matrices: every knob + the derived quantities; partial correlations: each clock as (low, swing)
+    K_all = pd.concat([K, D], axis=1)
+    K_part = pd.concat([K.drop(columns=[c for c in K.columns if c in swing_of]),
+                        D[[c for c in D.columns if c.endswith("swing")]]], axis=1)
+    print("derived:", list(D.columns), "| partial set:", list(K_part.columns))
     outs = {OUT_NICE[t]: d[f"log_{t}"] for t in pi.LAB} | {f"trace: {n}": d[f"log_{n}"] for n in pi.NOISE}
     O = pd.DataFrame(outs)
     amp = d.channel.to_numpy()
     n_eff = d.packet_id.nunique()
     thr = 1.96 / np.sqrt(n_eff)
-    A = pd.concat([K, O], axis=1)
+    A = pd.concat([K_all, O], axis=1)
     W = A - A.groupby(amp).transform("mean")                  # within amplifier
-    nk = K.shape[1]
+    nk = K_all.shape[1]
 
     # 1 full matrices
     for meth, fn in (("pearson", "corr_full.png"), ("spearman", "corr_full_spearman.png")):
@@ -119,14 +158,14 @@ def main():
         plt.close(fig)
 
     # 2 knobs x outputs: plain vs partial
-    Cko = W.corr().loc[K.columns, O.columns]
+    Cko = W.corr().loc[K_all.columns, O.columns]
     onehot = np.eye(len(np.unique(amp)))[np.unique(amp, return_inverse=True)[1]][:, 1:]
-    P = pd.DataFrame({c: partial_corr(K.to_numpy(float), O[c].to_numpy(float), onehot) for c in O.columns},
-                     index=K.columns)
+    P = pd.DataFrame({c: partial_corr(K_part.to_numpy(float), O[c].to_numpy(float), onehot) for c in O.columns},
+                     index=K_part.columns)
     P.round(3).to_csv(out / "corr_partial.csv")
     fig, axs = plt.subplots(1, 2, figsize=(17, 8.5))
     heat(axs[0], Cko, thr, "Correlation: voltage vs output (within amplifier)", fs=7, seps=(3,))
-    heat(axs[1], P, thr, "Partial correlation: this voltage alone (other voltages + amplifier held fixed)", fs=7, seps=(3,))
+    heat(axs[1], P, thr, "Partial correlation: this knob alone (each clock as low + swing; others + amplifier held fixed)", fs=7, seps=(3,))
     fig.colorbar(axs[1].images[0], ax=axs, fraction=0.02, pad=0.01, label="correlation")
     fig.savefig(out / "corr_knobs_outputs.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -138,7 +177,7 @@ def main():
     for ax, a in zip(np.atleast_1d(axs), amps):
         m = amp == a
         ne = d.packet_id[m].nunique()
-        Ca = A[m].corr().loc[K.columns, O.columns]
+        Ca = A[m].corr().loc[K_all.columns, O.columns]
         heat(ax, Ca, 1.96 / np.sqrt(ne), f"amplifier ch{a} ({m.sum()} rows)", fs=6.5, seps=(3,))
         rows.append(Ca.assign(amplifier=a))
     pd.concat(rows).round(3).to_csv(out / "corr_per_amp.csv")
@@ -148,7 +187,7 @@ def main():
 
     # 4 design
     fig, ax = plt.subplots(figsize=(10, 9))
-    heat(ax, K.groupby(d.packet_id).first().corr(), thr,
+    heat(ax, K_all.groupby(d.packet_id).first().corr(), thr,
          "Design check: correlation between the voltages over the packets (0 = varied independently)", fs=7)
     fig.tight_layout()
     fig.savefig(out / "corr_design.png", dpi=150)
@@ -171,7 +210,7 @@ def main():
              for i in range(len(Co)) for j in range(i + 1, len(Co))]
     for _, a_, b_, r in sorted(pairs, reverse=True)[:10]:
         L.append(f"- {a_} ~ {b_}: {r:+.2f}")
-    D = K.groupby(d.packet_id).first().corr().to_numpy()
+    D = K_all.groupby(d.packet_id).first().corr().to_numpy()
     off = np.abs(D[~np.eye(len(D), dtype=bool)])
     L += ["", f"Design: largest |correlation| between two voltages over the packets {off.max():.2f}, median {np.median(off):.2f}."]
     (out / "correlations.md").write_text("\n".join(L) + "\n")

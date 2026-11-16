@@ -41,14 +41,14 @@
 
 | output | 1st | 2nd | 3rd | 4th | 5th |
 |---|---|---|---|---|---|
-| σe (noise) | VSUB +0.55* (+0.63) | VDD +0.20 (-0.04) | RG high -0.17 (-0.06) | VR +0.16 (+0.17) | SW low +0.15 (-0.21) |
-| λ (dark charge) | VSUB +0.84* (+0.88) | SW low +0.16 (-0.18) | VDD +0.10 (-0.20) | RG low +0.09 (+0.13) | V3 high +0.09 (+0.02) |
-| gain | VDD -0.75* (-0.63) | VR -0.58* (-0.40) | SW low -0.20 (+0.10) | RG high +0.18 (-0.20) | H2 low +0.15 (+0.07) |
-| trace: white noise | VDD -0.51* (-0.54) | VSUB +0.50* (+0.55) | H3 low +0.09 (-0.10) | RG high +0.09 (-0.01) | SW low -0.09 (-0.03) |
-| trace: 1/f corner | RG low +0.09 (+0.03) | VSUB -0.08 (-0.02) | VDD -0.08 (-0.01) | RG high +0.07 (+0.01) | V1 high -0.05 (-0.03) |
-| trace: Allan dev n=50 | SW low -0.12 (-0.01) | VDD -0.11 (-0.12) | RG high -0.08 (-0.08) | RG low +0.08 (+0.06) | V3 low +0.07 (-0.06) |
-| trace: power 0.1-1 MHz | VDD -0.29* (-0.29) | VR -0.24* (-0.28) | RG high -0.18 (-0.28) | RG low -0.13 (-0.06) | V1 low +0.10 (+0.00) |
-| trace: power 1-3 MHz | RG low -0.25* (-0.23) | RG high -0.13 (-0.09) | VR -0.11 (-0.11) | V1 low +0.11 (-0.04) | H2 low +0.09 (+0.06) |
-| trace: power 3-7.5 MHz | RG low -0.21 (-0.18) | RG high -0.12 (-0.09) | VSUB +0.12 (+0.14) | V1 low +0.10 (-0.01) | VR -0.10 (-0.06) |
-| trace: slow/fast CDS power | VSUB -0.42* (-0.43) | SW low -0.12 (+0.05) | V1 low -0.10 (-0.09) | VR +0.10 (+0.03) | H1 low -0.09 (+0.06) |
+| σe (noise) | VSUB +0.55* (+0.63) | VDD +0.20 (-0.04) | RG swing -0.17 (-0.10) | H3 low -0.16 (-0.35) | VR +0.16 (+0.17) |
+| λ (dark charge) | VSUB +0.84* (+0.88) | VDD +0.10 (-0.20) | V1 low +0.09 (+0.29) | H swing -0.08 (-0.02) | RG swing -0.08 (-0.12) |
+| gain | VDD -0.75* (-0.63) | VR -0.58* (-0.40) | H3 low +0.27* (+0.20) | RG swing +0.18 (-0.20) | V3 low -0.18 (-0.17) |
+| trace: white noise | VDD -0.51* (-0.54) | VSUB +0.50* (+0.55) | V3 low -0.16 (+0.03) | H1 low -0.15 (-0.11) | V1 low -0.14 (+0.07) |
+| trace: 1/f corner | H swing +0.38* (+0.44) | SW swing +0.14 (+0.01) | RG low +0.11 (+0.03) | V1 low -0.10 (-0.01) | V swing -0.10 (-0.01) |
+| trace: Allan dev n=50 | VDD -0.11 (-0.12) | H1 low -0.11 (-0.07) | V2 low -0.10 (-0.08) | V3 low -0.09 (-0.06) | SW swing +0.09 (+0.01) |
+| trace: power 0.1-1 MHz | VDD -0.29* (-0.29) | VR -0.24* (-0.28) | RG low -0.22 (-0.06) | RG swing -0.18 (-0.10) | H swing -0.14 (-0.17) |
+| trace: power 1-3 MHz | RG low -0.24* (-0.23) | H swing -0.19 (-0.23) | H1 low +0.18 (+0.14) | H3 low -0.17 (-0.09) | RG swing -0.13 (+0.14) |
+| trace: power 3-7.5 MHz | RG low -0.22 (-0.18) | H3 low -0.19 (-0.15) | V1 low -0.18 (-0.01) | H1 low +0.17 (+0.11) | H swing -0.14 (-0.18) |
+| trace: slow/fast CDS power | VSUB -0.42* (-0.43) | V2 low -0.10 (-0.19) | VR +0.10 (+0.03) | H swing +0.09 (+0.05) | V3 low -0.09 (-0.16) |
 

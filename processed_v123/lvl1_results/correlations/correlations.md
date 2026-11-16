@@ -6,16 +6,16 @@ Knob groups that moved together: delay_Ha (+2) = delay_Ha+delay_Hb+delay_Hc; SW 
 
 | output | 1st | 2nd | 3rd | 4th | 5th |
 |---|---|---|---|---|---|
-| σe (noise) | delayInt -0.58 | SW low +0.26 | VSUB +0.24 | V1 low +0.23 | VDD +0.13 (n.s.) |
-| λ (dark charge) | VSUB +0.68 | delayInt +0.54 | delayRGH +0.19 | SW low +0.12 (n.s.) | VDD +0.08 (n.s.) |
-| gain | VDD -0.55 | VR -0.44 | SW low -0.32 | V3 high -0.12 (n.s.) | VSUB +0.10 (n.s.) |
-| trace: white noise | delayInt -0.60 | VSUB +0.16 | V1 low +0.15 | V1 high -0.14 | SW low +0.13 (n.s.) |
-| trace: 1/f corner | delayInt -0.45 | delayRGH -0.34 | SW low +0.08 (n.s.) | RG low +0.06 (n.s.) | V3 high -0.06 (n.s.) |
-| trace: Allan dev n=50 | SW low +0.10 (n.s.) | V1 low +0.06 (n.s.) | RG low +0.06 (n.s.) | H1 low +0.05 (n.s.) | VSUB +0.05 (n.s.) |
-| trace: power 0.1-1 MHz | delayInt +0.98 | SW low +0.18 | delayRGH +0.10 (n.s.) | H3 low -0.10 (n.s.) | V1 low +0.09 (n.s.) |
-| trace: power 1-3 MHz | delayInt +0.99 | delay_Ha (+2) -0.21 | TG_B_H (+3) +0.13 (n.s.) | V1 high +0.09 (n.s.) | RG low -0.08 (n.s.) |
-| trace: power 3-7.5 MHz | delayInt +0.89 | SW low +0.22 | RG low -0.14 | V1 low +0.10 (n.s.) | V3 high +0.08 (n.s.) |
-| trace: slow/fast CDS power | delayInt +0.15 | V1 low -0.08 (n.s.) | V3 high -0.08 (n.s.) | VSUB -0.07 (n.s.) | TG_B_H (+3) +0.06 (n.s.) |
+| σe (noise) | delayInt -0.58 | VSUB +0.24 | H2 low +0.14 (n.s.) | V2 low +0.13 (n.s.) | VDD +0.13 (n.s.) |
+| λ (dark charge) | VSUB +0.68 | delayInt +0.54 | delayRGH +0.19 | H swing -0.09 (n.s.) | VDD +0.08 (n.s.) |
+| gain | VDD -0.55 | VR -0.44 | H2 low -0.11 (n.s.) | V swing -0.11 (n.s.) | V3 low -0.10 (n.s.) |
+| trace: white noise | delayInt -0.60 | VSUB +0.16 | delay_Ha (+2) +0.12 (n.s.) | H2 low +0.08 (n.s.) | V2 low +0.05 (n.s.) |
+| trace: 1/f corner | delayInt -0.45 | delayRGH -0.34 | H swing +0.18 | V1 low -0.06 (n.s.) | RG low +0.06 (n.s.) |
+| trace: Allan dev n=50 | H2 low +0.09 (n.s.) | V1 low -0.08 (n.s.) | H swing +0.07 (n.s.) | V3 low +0.05 (n.s.) | VSUB +0.05 (n.s.) |
+| trace: power 0.1-1 MHz | delayInt +0.98 | V2 low +0.12 (n.s.) | V3 low +0.11 (n.s.) | H swing +0.10 (n.s.) | delayRGH +0.10 (n.s.) |
+| trace: power 1-3 MHz | delayInt +0.99 | delay_Ha (+2) -0.21 | TG_B_H (+3) +0.13 (n.s.) | RG low -0.10 (n.s.) | H1 low +0.08 (n.s.) |
+| trace: power 3-7.5 MHz | delayInt +0.89 | H1 low +0.17 | H swing +0.11 (n.s.) | RG low -0.10 (n.s.) | V3 low +0.09 (n.s.) |
+| trace: slow/fast CDS power | delayInt +0.15 | H3 low -0.08 (n.s.) | V1 low -0.08 (n.s.) | VSUB -0.07 (n.s.) | H swing +0.06 (n.s.) |
 
 Largest correlations between outputs (within amplifier):
 
@@ -30,4 +30,4 @@ Largest correlations between outputs (within amplifier):
 - σe (noise) ~ trace: power 0.1-1 MHz: -0.48
 - trace: white noise ~ trace: Allan dev n=50: +0.47
 
-Design: largest |correlation| between two voltages over the packets 0.85, median 0.09.
+Design: largest |correlation| between two voltages over the packets 1.00, median 0.09.

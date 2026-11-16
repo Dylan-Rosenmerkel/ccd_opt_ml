@@ -6,16 +6,16 @@ Knob groups that moved together: SW low = SW_1_L+SW_2_L; RG high = RG_1_H+RG_2_H
 
 | output | 1st | 2nd | 3rd | 4th | 5th |
 |---|---|---|---|---|---|
-| σe (noise) | VSUB +0.54 | VDD +0.20 (n.s.) | RG high -0.17 (n.s.) | VR +0.16 (n.s.) | SW low +0.15 (n.s.) |
-| λ (dark charge) | VSUB +0.84 | SW low +0.16 (n.s.) | VDD +0.10 (n.s.) | RG low +0.09 (n.s.) | V3 high +0.08 (n.s.) |
-| gain | VDD -0.75 | VR -0.58 | SW low -0.20 (n.s.) | RG high +0.18 (n.s.) | H2 low +0.15 (n.s.) |
-| trace: white noise | VDD -0.51 | VSUB +0.50 | H3 low +0.09 (n.s.) | RG high +0.09 (n.s.) | SW low -0.09 (n.s.) |
-| trace: 1/f corner | RG low +0.09 (n.s.) | VSUB -0.08 (n.s.) | VDD -0.08 (n.s.) | RG high +0.07 (n.s.) | V1 high -0.05 (n.s.) |
-| trace: Allan dev n=50 | SW low -0.12 (n.s.) | VDD -0.11 (n.s.) | RG high -0.08 (n.s.) | RG low +0.08 (n.s.) | V3 low +0.07 (n.s.) |
-| trace: power 0.1-1 MHz | VDD -0.29 | VR -0.24 | RG high -0.18 (n.s.) | RG low -0.13 (n.s.) | V1 low +0.10 (n.s.) |
-| trace: power 1-3 MHz | RG low -0.25 | RG high -0.13 (n.s.) | VR -0.11 (n.s.) | V1 low +0.11 (n.s.) | H2 low +0.09 (n.s.) |
-| trace: power 3-7.5 MHz | RG low -0.21 (n.s.) | RG high -0.13 (n.s.) | VSUB +0.12 (n.s.) | V1 low +0.11 (n.s.) | VR -0.10 (n.s.) |
-| trace: slow/fast CDS power | VSUB -0.42 | SW low -0.13 (n.s.) | V1 low -0.10 (n.s.) | VR +0.09 (n.s.) | H1 low -0.08 (n.s.) |
+| σe (noise) | VSUB +0.54 | VDD +0.20 (n.s.) | RG swing -0.17 (n.s.) | VR +0.16 (n.s.) | H3 low -0.16 (n.s.) |
+| λ (dark charge) | VSUB +0.84 | VDD +0.10 (n.s.) | V1 low +0.09 (n.s.) | H swing -0.08 (n.s.) | RG swing -0.08 (n.s.) |
+| gain | VDD -0.75 | VR -0.58 | H3 low +0.27 | RG swing +0.18 (n.s.) | V3 low -0.18 (n.s.) |
+| trace: white noise | VDD -0.51 | VSUB +0.50 | V3 low -0.16 (n.s.) | H1 low -0.15 (n.s.) | V1 low -0.14 (n.s.) |
+| trace: 1/f corner | H swing +0.38 | SW swing +0.14 (n.s.) | RG low +0.11 (n.s.) | V1 low -0.10 (n.s.) | V swing -0.10 (n.s.) |
+| trace: Allan dev n=50 | VDD -0.11 (n.s.) | H1 low -0.11 (n.s.) | V2 low -0.10 (n.s.) | V3 low -0.09 (n.s.) | SW swing +0.09 (n.s.) |
+| trace: power 0.1-1 MHz | VDD -0.29 | VR -0.24 | RG low -0.22 (n.s.) | RG swing -0.18 (n.s.) | H swing -0.14 (n.s.) |
+| trace: power 1-3 MHz | RG low -0.24 | H swing -0.19 (n.s.) | H1 low +0.18 (n.s.) | H3 low -0.17 (n.s.) | RG swing -0.13 (n.s.) |
+| trace: power 3-7.5 MHz | RG low -0.22 (n.s.) | H3 low -0.19 (n.s.) | V1 low -0.18 (n.s.) | H1 low +0.17 (n.s.) | H swing -0.14 (n.s.) |
+| trace: slow/fast CDS power | VSUB -0.42 | V2 low -0.10 (n.s.) | VR +0.09 (n.s.) | H swing +0.09 (n.s.) | V3 low -0.09 (n.s.) |
 
 Largest correlations between outputs (within amplifier):
 
@@ -30,4 +30,4 @@ Largest correlations between outputs (within amplifier):
 - gain ~ trace: white noise: +0.38
 - gain ~ trace: power 0.1-1 MHz: +0.34
 
-Design: largest |correlation| between two voltages over the packets 0.83, median 0.16.
+Design: largest |correlation| between two voltages over the packets 1.00, median 0.15.
