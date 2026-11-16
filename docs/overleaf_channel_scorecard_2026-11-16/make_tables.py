@@ -188,11 +188,13 @@ def summary(D):
 
 
 def history():
-    a = pd.read_csv(RES / "anatomy/trace_anatomy.csv").groupby("label").median(numeric_only=True)
-    m = {"Oct 101ch1": "101 ch1, October (before cabling)", "Nov v1 101ch1": "101 ch1, Nov 2--3",
+    a = pd.read_csv(RES / "anatomy/trace_anatomy.csv")
+    a = a[a["duration (ms)"] < 300]                 # equal 0.2 s lengths (9 of 12 October traces are 1.1 s long)
+    a = a.groupby("label").median(numeric_only=True)
+    m = {"Oct 101ch1": "101 ch1, October (before cabling; 0.2\\,s traces)", "Nov v1 101ch1": "101 ch1, Nov 2--3",
          "Nov v3 101ch1": "101 ch1, Nov 10--12", "Nov v3 dead 102ch0": "102 ch0, no charge (same-board reference)"}
     L = ["\\begin{table}[H]\\centering\\small",
-         "\\caption{Setup history of PA03 (12 traces each): the cabling change seen from the trace alone.}\\label{tab:hist}",
+         "\\caption{Setup history of PA03 at equal trace length (0.2\\,s): the cabling change seen from the trace alone.}\\label{tab:hist}",
          "\\begin{tabular}{lrrrrr}\\toprule",
          "trace set & CDS noise & slow noise 0.2--1\\,kHz & skip-to-skip corr. & bursts & 1--7.5\\,MHz\\\\",
          " & (nV/$\\sqrt{\\text{Hz}}$) & (\\textmu V/$\\sqrt{\\text{Hz}}$) & & & (nV/$\\sqrt{\\text{Hz}}$)\\\\\\midrule"]
