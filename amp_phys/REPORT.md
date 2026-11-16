@@ -715,3 +715,16 @@ of §6, in which the load resistor explains most of the white noise.
 - The subtraction assumes board 101's electronics jitter equals board 102's.
 - 102 ch3 adds almost nothing above its dead neighbours (149 vs 145–148), consistent with its reset not producing charge.
 - **Decisive:** the DC level of the video line.
+
+## 26. Corrections (2026-11-16, after review)
+
+- **Single-trace cabling comparison: compare equal lengths.** 9 of the 12 October traces in `trace_anatomy.csv` are
+  1.1 s long (Nov: 0.19 s) and sit ~40 % higher below 1 kHz than the three 0.19 s October traces. Like-for-like
+  (0.2 s October, n = 3 → Nov 10–12): spectrum 200 Hz–1 kHz 48.8 → 34.8 µV/√Hz (−29 %), 1–10 kHz 5.2 → 3.7 (−28 %),
+  10–100 kHz −15 %; skip-to-skip correlation 0.71 → 0.68 (not a useful metric at this level). The earlier 37–49 % and
+  0.87 → 0.68 are withdrawn. The images (ρ_sim 0.25 → 0.05, σ_0e −30 %) remain the solid result.
+- **Own white (9–13 nV/√Hz, window fit) vs dead-channel frontend (17.0): inconsistent, not an agreement.** The frontend
+  noise is per-channel, so it belongs to "own"; own white below 17 requires the live follower to shunt it (high g_m),
+  which §25 argues against, or the fit to count band-limited white noise (≈0.9 µs settling) as 1/f. Until the window
+  fit is run on the dead board-102 channels of the v2 strips, the 1/f share and N_t are upper limits. The window
+  optimum uses only the fitted σ₁(τ) and is unaffected.
