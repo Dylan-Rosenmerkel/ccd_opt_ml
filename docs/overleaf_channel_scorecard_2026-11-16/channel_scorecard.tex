@@ -23,8 +23,8 @@
 Every number here comes from the \textbf{raw readout traces} (plus, where marked, the images of the same channel), measured
 the same way for every amplifier:
 \begin{itemize}[nosep]
-\item \textbf{PA03}, board 101 (ch0--ch3, four CCDs) and board 102 (ch3 live but without charge; ch0 dead, the
-  \emph{electronics-only reference}), November v3 data, 130\,K. Trace numbers are medians over 8 traces; the
+\item \textbf{PA03}, board 101 (ch0--ch3, four CCDs) and board 102 (every channel has an output transistor, but no charge is clocked to ch0--ch2, and none reaches ch3 in
+  the traces: a \emph{same-board reference without charge}), November v3 data, 130\,K. Trace numbers are medians over 8 traces; the
   ``p90'' columns use all 127 traces of each channel.
 \item \textbf{LSM} production modules DM07/DM09/DM10 on ACM boards 106, 109 and 110, 180\,K, one trace and one static
   noise record per channel, and the 500/1000-skip images processed by the LSM pipeline (gain, noise, dark charge).
@@ -41,14 +41,16 @@ measured and why it matters.
 telegraph noise except episodically on 101 ch2) on a \textbf{poor setup}: board 101 carries $\sim$35\,\textmu V/$\sqrt{\text{Hz}}$
 of slow pickup. The LSM setup is much quieter in its traces, its transistors have the same oxide quality, but its
 \textbf{images are noisier} at 180\,K and its \textbf{timing after the summing well is not settled} on several channels.
-Three LSM channels and one PA03 channel are individually bad (Section~\ref{sec:verdicts}).
+Most channels are good or fair in most categories; the individually problematic ones are ACM109 ch1 (trappy
+transistor), ACM110 ch3 (interference), and on PA03 the setup of board 101 and 101 ch2's extra charge and telegraph
+episodes (Section~\ref{sec:verdicts}).
 
 % ===================================================================================================================
 \clearpage
 \section{Sense node: how many microvolts one electron makes}
 \what{\textbf{Conversion gain} $CG=\text{gain}/G$: the image gain (ADU per electron, from the single-electron peaks)
-divided by the readout-chain gain $G$ (0.875\,ADU/\textmu V by design; 0.853 measured on board 102 from the dead
-channels' Johnson noise). \textbf{Sense-node capacitance} $C_\text{sn}=A\,q/CG$ with follower gain $A=0.85$ (layout).
+divided by the readout-chain gain $G$ (0.875\,ADU/\textmu V by design; the earlier 0.853 from board 102 assumed an open input, which does not hold,
+since those channels have transistors). \textbf{Sense-node capacitance} $C_\text{sn}=A\,q/CG$ with follower gain $A=0.85$ (layout).
 \textbf{Why it matters:} a smaller node gives more volts per electron, so every voltage noise source costs fewer
 electrons. Everything else being equal, the read noise in electrons scales with $C_\text{sn}$.}
 \input{tables/sense_node.tex}
@@ -61,8 +63,8 @@ electrons. Everything else being equal, the read noise in electrons scales with 
 % ===================================================================================================================
 \section{Read noise}
 \what{\textbf{CDS noise}: the white noise of one skip (pedestal minus signal, 10\,\textmu s windows), converted to the
-video input: $\sigma_1/G\cdot\sqrt{\tau}$ in nV/$\sqrt{\text{Hz}}$. The frontend alone (load resistor + preamp) gives
-17.0--17.1. \textbf{Per skip (e)}: the same in electrons ($\sigma_1/\text{gain}$). \textbf{Image}: the read noise the
+video input: $\sigma_1/G\cdot\sqrt{\tau}$ in nV/$\sqrt{\text{Hz}}$. An open input (load resistor + preamp only) would give 17.1; the board-102 channels without charge measure 17.0
+(transistor present: a reference, not the bare frontend). \textbf{Per skip (e)}: the same in electrons ($\sigma_1/\text{gain}$). \textbf{Image}: the read noise the
 images reach after 500 skips (zero-electron peak width). \textbf{Image/expectation}: that, divided by white-noise averaging
 $\sigma_1/\sqrt{500}$: 1 = the skips average perfectly; above 1, slow noise or charge arriving during the skipping adds.}
 \input{tables/noise.tex}
@@ -122,7 +124,8 @@ per-line mutual capacitances in fF need a voltage scan; PA03 only, Section~\ref{
 \section{The setup}
 \what{The repeating waveform is removed from the trace (the median skip cycle); what is left is noise.
 \textbf{Slow noise 0.2--1\,kHz}: its spectral density at low frequency: pickup and wander from cabling, grounding,
-supplies. The dead channel (1.6\,\textmu V/$\sqrt{\text{Hz}}$) is the electronics floor. \textbf{Skip corr.}: the correlation
+supplies. The board-102 channels without charge (1.5--1.6\,\textmu V/$\sqrt{\text{Hz}}$) are the reference: same electronics
+and transistors, no charge. \textbf{Skip corr.}: the correlation
 of consecutive skips (slow noise as the skipper sees it; LSM values corrected for their 7-skip pixels).
 \textbf{Bursts}: share of 1\,ms blocks with 1.5$\times$ the median noise. \textbf{Static}: the same band in a record with
 all clocks frozen (LSM only). \textbf{Blank-image charge}: electrons per pixel in blank images (dark current + spurious
@@ -132,12 +135,12 @@ charge; at 180\,K mostly dark current, so not graded on the same footing).}
 \begin{itemize}[nosep]
 \item \textbf{PA03 board 101 is the noisy setup}: 35\,\textmu V/$\sqrt{\text{Hz}}$ on all four channels, 10\,\% bursty blocks,
   skip correlation 0.64--0.71. The cabling change halved it (Table~\ref{tab:hist}), but it is still 3--13$\times$ the LSM.
-\item \textbf{Board 102 does not have it} (ch3 1.5, like the dead channel): the slow pickup enters on board 101's side
+\item \textbf{Board 102 does not have it} (ch3 1.5, like ch0): the slow pickup enters on board 101's side
   (its CCD connection, cable or ACM), not through the whole cryostat.
-\item LSM: ACM110 ch0--ch2 and ACM106 ch3 are near the electronics floor. ACM110 ch3 has a 30.6\,kHz comb with
+\item LSM: ACM110 ch0--ch2 and ACM106 ch3 are close to that reference. ACM110 ch3 has a 30.6\,kHz comb with
   harmonics (external interference, only while clocking); ACM109 ch1 has bursts.
 \end{itemize}
-\fig[0.85]{raw_psd_oct_nov.png}{PA03 101 ch1: the trace spectrum before and after the cabling change, with the dead channel.}
+\fig[0.85]{raw_psd_oct_nov.png}{PA03 101 ch1: the trace spectrum before and after the cabling change, with a board-102 channel without charge.}
 \fig[0.6]{static_psd.png}{LSM: the static noise records (all clocks frozen) of all twelve channels.}
 
 % ===================================================================================================================
@@ -179,7 +182,10 @@ dark-charge response to VSUB & ch0/ch2 weak (register) & VSUB scan\\\bottomrule
 
 \section*{Caveats}
 \begin{itemize}[nosep]
-\item LSM nV/$\sqrt{\text{Hz}}$ values assume PA03's design chain gain (no dead channel on ACM106/109/110); their electron
+\item Board-102 ch0--ch2 were first treated as ``dead'' (no transistor, electronics only). They have output transistors
+  and only receive no charge; their 1/f fits look like transistors (corner 100--130\,kHz, $N_t\approx2\times10^{16}$).
+  They are used here as a same-board reference without charge, not as the bare-electronics floor.
+\item LSM nV/$\sqrt{\text{Hz}}$ values assume PA03's design chain gain (no independent chain calibration on ACM106/109/110); their electron
   values use their own image gains and are unaffected.
 \item LSM image extension EXT$n$ is taken as channel $n-1$ (as on PA03); to be confirmed.
 \item LSM: one trace per channel; a single unusual trace can move a row. PA03: 8 traces (127 for the p90 columns).
