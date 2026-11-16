@@ -369,3 +369,41 @@ What transfers, and what each step needs:
 
 The ML models do not transfer this way: they learn amplifier identities. The physics quantities are defined
 independently of the setup, so a new setup only needs new priors (schematic, layout, recipe), not new training data.
+
+## 17. Mutual capacitances between the channels (`crosstalk.py` at three CDS windows, `mutual_capacitance.py`)
+
+**Method.** v2 varied the CDS window (delayInt). The board-101 crosstalk was measured on images grouped by window:
+short (mean 441 cycles, 21 images), nominal (1000, 16), long (2046, 22). The nominal matrix reproduces the October one
+(e.g. ch0→ch2 −1.54 vs −1.6 × 10⁻⁴), so it is stable across runs.
+
+**Model per pair:** k(τ) = a/τ + b.
+- **a/τ: capacitance between the video lines after the followers.** A source step injects a pulse of area
+  R_out·C_m·ΔV into the target line, and the CDS window averages it, so C_m = a / R_out. R_out = 2.5–5 kΩ (follower
+  ‖ 20 kΩ load, §8).
+- **b: τ-independent.**
+  - Charge sharing at the sense nodes would be positive, with C_m,sn = b·C_sn.
+  - A shared return impedance gives a negative b, with Z = −b·R_L.
+
+| pair (both directions) | C_m between video lines (pF) | τ-independent b (10⁻⁴) | reading of b |
+|---|---|---|---|
+| ch0–ch1 | 0.2–0.6 | ≈ 0 | – |
+| ch2–ch3 | 0.24–0.85 | ≈ 0 (−0.6 ± 1.4, +0.4 ± 0.7) | – |
+| ch0–ch3 | 0.08–0.35 | ≈ 0 | – |
+| ch1–ch2 | 0.11–0.26 | ≈ 0 | – |
+| ch0–ch2 | 0.11–0.41 | **−2.0 ± 0.9, −1.2 ± 0.4** | shared return **Z ≈ 2–4 Ω** |
+| ch1–ch3 | 0.06–0.16 | **−1.3 ± 0.7, −1.3 ± 0.5** | shared return **Z ≈ 2.6 Ω** |
+
+**Readings.**
+- The neighbouring lines (ch0–ch1, ch2–ch3) have the largest capacitance, ~0.3–0.6 pF. That is consistent with
+  adjacent conductors over a cable / flex length.
+- ch0/ch2 and ch1/ch3 share a few-ohm return path. That is a grounding defect with a number on it, and it is the same
+  pairing as the negative entries of the crosstalk matrix.
+- Sense-node (in-cryostat) mutual capacitance: no positive τ-independent term is seen. So C_m,sn ≲ 0.01 fF
+  (|b| ≲ 1 × 10⁻⁴ × 85 fF): the CCDs do not couple inside the package at a measurable level.
+
+**Caveats.**
+- The a terms carry ~30–100 % errors: 3 window groups, and the other settings also vary between the groups.
+- The model assumes the coupled pulse decays well within the window (τ_line ≈ R_out × C_line ≲ 1 µs ≪ 3–20 µs).
+
+**To pin it down.** One image per window length at fixed nominal voltages (5 windows, 300–3000 cycles), plus a
+short-circuit / cable-swap test of the ch0/ch2 and ch1/ch3 returns.
