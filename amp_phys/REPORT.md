@@ -765,3 +765,10 @@ About half of board 101's image variance is the transistors' own 1/f noise (uppe
 `physics_sheet.py` and the scorecard (good ≤ 0.10 e, fair ≤ 0.15 e). The board-102 channels meant as an open-input
 check have transistors (1/f corner 100–130 kHz, N_t ≈ 2×10¹⁶), so a true open-input test is still missing.
 Figure: `results/lsm_hightemp/static_fit/static_fit.png`.
+
+**Validity filter (added).** Operating points where the readout breaks (merged peaks, most columns hot;
+`label.ok = False`, 27 of 127 board-101 packets) are left out of the ML scorecards, the correlation matrices,
+`physics_model.py` and `datasheet.py`. Today's trace analyses (per-channel anatomy, `trap_from_trace.py`,
+`skip_averaging.py`) had not filtered them; rerun on the 93 packets valid on all four channels: per-skip noise and
+slow-noise medians move < 3 %, ch2 N_t 1.78 → 1.87, ch2 transistor 1/f at 500 skips 0.114 → 0.117 e; ch2's
+highest-kurtosis traces (N3_094, N3_116, N3_026) are all valid packets, so its telegraph episodes stand.

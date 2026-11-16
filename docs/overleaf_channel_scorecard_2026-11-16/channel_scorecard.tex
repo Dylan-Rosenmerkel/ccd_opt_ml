@@ -25,7 +25,7 @@ the same way for every amplifier:
 \begin{itemize}[nosep]
 \item \textbf{PA03}, board 101 (ch0--ch3, four CCDs) and board 102 (every channel has an output transistor, but no charge is clocked to ch0--ch2, and none reaches ch3 in
   the traces: a \emph{same-board reference without charge}), November v3 data, 130\,K. Trace numbers are medians over 8 traces; the
-  ``p90'' columns use all 127 traces of each channel.
+  ``p90'' columns use all 93 packets whose images are valid. Operating points where the readout breaks (merged peaks, most columns hot; flagged by the image fit) are left out everywhere: their traces do not describe a working amplifier, and they are a separate valid/invalid outcome for the optimiser.
 \item \textbf{LSM} production modules DM07/DM09/DM10 on ACM boards 106, 109 and 110, 180\,K, one trace and one static
   noise record per channel, and the 500/1000-skip images processed by the LSM pipeline (gain, noise, dark charge).
 \end{itemize}
@@ -102,7 +102,7 @@ white noise (right).\label{fig:cds}}
 \item The LSM 1/f corners (61--99\,kHz) are higher than PA03's (16--39\,kHz): at 180\,K the 1/f power grows with $kT$
   and the white part is lower. Graded the same; read the LSM column with that in mind.
 \item \textbf{Likely trappy transistors} (LSM: one trace each, to be confirmed): ACM109 ch1 (corner 334\,kHz, kurtosis 2.7) and ACM110 ch1 (corner 174\,kHz,
-  $N_t=2.4\times10^{16}$). PA03 101 ch2 is clean in its median trace but has the most telegraph episodes over all 127
+  $N_t=2.4\times10^{16}$). PA03 101 ch2 is clean in its median trace but has the most telegraph episodes over all 93 valid
   traces (kurtosis p90 0.17, maximum 0.70 against $\le$0.22 on the others).
 \item ACM109 ch3: the fit fails (21\,\% residual, its window is still settling), so no trap numbers.
 \end{itemize}
@@ -196,7 +196,7 @@ dark-charge response to VSUB & ch0/ch2 weak (register) & VSUB scan\\\bottomrule
 \item LSM nV/$\sqrt{\text{Hz}}$ values assume PA03's design chain gain (no independent chain calibration on ACM106/109/110); their electron
   values use their own image gains and are unaffected.
 \item LSM image extension EXT$n$ is taken as channel $n-1$ (as on PA03); to be confirmed.
-\item LSM: one trace per channel; a single unusual trace can move a row. PA03: 8 traces (127 for the p90 columns).
+\item LSM: one trace per channel; a single unusual trace can move a row. PA03: 8 traces of valid packets (93 for the p90 columns).
 \item Temperatures differ (130 vs 180\,K): thermal noise, 1/f power and dark current all grow with temperature; the
   setup numbers (room-temperature electronics and cabling) do not.
 \end{itemize}

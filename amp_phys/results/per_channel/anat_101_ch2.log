@@ -1,29 +1,29 @@
 == PA03 101 ch2 (8 traces)
-duration (ms)                                                       188.907
+duration (ms)                                                       188.846
 skip period (us)                                                     32.600
-CDS white per skip (ADU)                                              5.653
-CDS white (nV/rtHz)                                                  20.432
-CDS lag-1 autocorr                                                    0.678
-per-skip level scatter (ADU)                                        165.345
-reset pulse height (ADU)                                          54430.725
-settling tau after reset (us)                                         0.905
-pedestal-window slope (ADU/us)                                       -1.696
-signal-window slope (ADU/us)                                          6.284
-SW feedthrough (signal - pedestal level of the template, ADU)       -27.393
+CDS white per skip (ADU)                                              5.704
+CDS white (nV/rtHz)                                                  20.613
+CDS lag-1 autocorr                                                    0.675
+per-skip level scatter (ADU)                                        165.406
+reset pulse height (ADU)                                          55519.862
+settling tau after reset (us)                                         0.928
+pedestal-window slope (ADU/us)                                       -1.641
+signal-window slope (ADU/us)                                          6.501
+SW feedthrough (signal - pedestal level of the template, ADU)       -28.121
 in-window power above 3 MHz (share)                                   0.000
-static-gap noise rms (ADU)                                        29799.958
-settling tau after H transfer (us)                                    3.149
+static-gap noise rms (ADU)                                        28927.765
+settling tau after H transfer (us)                                    3.152
 windows / static-gap noise density 0.2-3 MHz                          0.005
-H-transfer waveform peak-to-peak (ADU)                           106467.500
-V-transfer waveform peak-to-peak (ADU)                           132189.000
-V transfers in trace                                                  2.500
-ASD 200-1000 Hz (nV/rtHz)                                         35025.404
-ASD 1000-10000 Hz (nV/rtHz)                                        3736.036
-ASD 10000-100000 Hz (nV/rtHz)                                       490.446
-ASD 100000-1e+06 Hz (nV/rtHz)                                       132.976
-ASD 1e+06-7.5e+06 Hz (nV/rtHz)                                       34.705
+H-transfer waveform peak-to-peak (ADU)                           103166.000
+V-transfer waveform peak-to-peak (ADU)                           129330.500
+V transfers in trace                                                  3.000
+ASD 200-1000 Hz (nV/rtHz)                                         33864.677
+ASD 1000-10000 Hz (nV/rtHz)                                        3719.299
+ASD 10000-100000 Hz (nV/rtHz)                                       483.511
+ASD 100000-1e+06 Hz (nV/rtHz)                                       132.397
+ASD 1e+06-7.5e+06 Hz (nV/rtHz)                                       34.568
 burst fraction (1 ms blocks > 1.5x median rms)                        0.084
-stationarity (CV of 1 ms block rms)                                   0.296
-drift of the per-skip level over the trace (ADU/ms)                  54.006
-excess kurtosis of the CDS                                           -0.009
+stationarity (CV of 1 ms block rms)                                   0.286
+drift of the per-skip level over the trace (ADU/ms)                  52.544
+excess kurtosis of the CDS                                            0.022
 lines (kHz), first trace: 1288, 2546, 2607, 2761, 5430, 6595
