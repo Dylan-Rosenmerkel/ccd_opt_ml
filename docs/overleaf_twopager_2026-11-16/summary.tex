@@ -1,0 +1,134 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=1.5cm,top=1.3cm,bottom=1.3cm]{geometry}
+\usepackage[table]{xcolor}
+\usepackage{booktabs,graphicx,amsmath,enumitem,tabularx}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\setlength{\parindent}{0pt}\setlength{\parskip}{3pt}
+\setlist{nosep,leftmargin=1.2em}
+\pagestyle{empty}
+\definecolor{acc}{RGB}{30,80,140}
+\definecolor{boxbg}{RGB}{236,242,250}
+\definecolor{warnbg}{RGB}{252,244,228}
+\definecolor{good}{RGB}{190,232,190}\definecolor{fair}{RGB}{252,226,160}\definecolor{poor}{RGB}{244,182,176}
+\newcommand{\head}[1]{\par\medskip{\color{acc}\large\bfseries #1}\par\vspace{2pt}}
+\newcommand{\key}[2][boxbg]{\par\colorbox{#1}{\parbox{\dimexpr\linewidth-2\fboxsep}{#2}}\par}
+
+\begin{document}
+{\color{acc}\LARGE\bfseries Amplifier and setup diagnostics from a single readout trace}\\[2pt]
+{\small Skipper-CCD output amplifiers: PA03 (130\,K, boards 101/102) and LSM production modules DM07/09/10 (180\,K) \hfill 16 November 2026}
+
+\key{\textbf{In one sentence.} From one raw trace of one channel (about 0.2\,s, no image, no charge) we measure, on one
+common scale for every amplifier and test stand, the \textbf{slow pickup the setup adds}, the \textbf{white and 1/f
+noise of the output transistor}, and whether the \textbf{readout timing is settled}, and we have checked these against
+what the images actually reach.}
+
+\head{The problem}
+The read noise of a skipper CCD has three sources: the readout electronics, the CCD's own output transistor, and the
+setup (cabling, grounding, supplies). Until now they were separated only with full images or voltage scans, or judged by
+eye on noise spectra. A noisy channel could therefore not quickly be blamed on what can be fixed (the setup) or on what
+cannot (a defective transistor), and two test stands could not be compared on a common number.
+
+\head{What is new}
+\begin{enumerate}
+\item \textbf{A setup number from one trace.} Every skip repeats the same clock waveform; subtracting the median skip
+  cycle leaves only noise. Its spectral level at 200\,Hz--1\,kHz (\textmu V/$\sqrt{\text{Hz}}$ at the video input) measures
+  slow pickup on one absolute scale for any channel, board or test stand. This is the band a 500-skip pixel ($\sim$16\,ms)
+  is exposed to. A \emph{static record} (all clocks frozen, as the LSM stand already takes) gives the same number without
+  the waveform removal and is the cleanest version.
+\item \textbf{Transistor noise from the same trace.} The CDS removes slow noise only partly; what is left of the
+  transistor's 1/f noise does not average away with more skips. White noise falls as the CDS window gets longer, 1/f
+  noise does not. Forming windows of 2--9\,\textmu s \emph{in software} from the raw samples of each 10\,\textmu s window and
+  fitting the exact CDS filter separates the two. This gives the 1/f corner and, through the McWhorter model, an
+  \emph{upper limit} on the gate-oxide trap density. On PA03 it agrees with a hardware window scan over 100 strips
+  (within 15\,\% on two amplifiers, a factor 1.6 on the other two).
+\item \textbf{Defect and timing flags.} Telegraph (single-trap) noise from the kurtosis of the noise; an unsettled
+  signal window from the slope inside it and the offset between the two CDS windows.
+\end{enumerate}
+
+\head{Main results: the setup}
+\begin{minipage}[t]{0.49\linewidth}\vspace{0pt}\footnotesize
+\begin{tabularx}{\linewidth}{@{}Xr@{}}\toprule
+\textbf{setup number}, 0.2--1\,kHz (\textmu V/$\sqrt{\text{Hz}}$) & \\\midrule
+PA03 board 101, October (0.2\,s traces) & \cellcolor{poor}48.8\\
+PA03 board 101, Nov 2--3 (after cabling) & \cellcolor{poor}42.8\\
+PA03 board 101, Nov 10--12 & \cellcolor{poor}34.8\\
+LSM ACM106 / ACM109, typical channel & \cellcolor{fair}5--15\\
+LSM ACM110, quietest channels & \cellcolor{good}2.6--4.2\\
+PA03 board 102, channels without charge & \cellcolor{good}1.5--1.6\\\bottomrule
+\end{tabularx}
+\par\smallskip\normalsize
+\begin{itemize}
+\item Board 101 carries the most slow pickup measured: 20$\times$ board 102 in the same cryostat, 3--13$\times$ the LSM.
+\item The cabling change lowered it by 29\,\% at equal trace length. The images confirm the change independently: the
+  noise shared between amplifiers fell from 25\,\% to 5\,\%, and the read noise of ch0/ch1 by 30\,\%.
+\end{itemize}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\linewidth}\vspace{0pt}
+\includegraphics[width=\linewidth]{figures/raw_psd_low.png}\\[-2pt]
+{\footnotesize One PA03 channel before and after the cabling change, and a channel without charge (one trace each; the
+October trace shown is 1.1\,s long, which inflates it; the table compares equal 0.2\,s lengths, medians of 3--12 traces).}
+\end{minipage}
+
+\clearpage
+\head{Main results: the amplifiers, and what the images see}
+\begin{minipage}[t]{0.56\linewidth}\vspace{0pt}\footnotesize
+\begin{tabularx}{\linewidth}{@{}Xrrrr@{}}\toprule
+ & PA03 101 & PA03 101 & LSM & LSM\\
+ & ch0, ch1 & ch2, ch3 & good channels & flagged\\\midrule
+sense-node capacitance (fF) & 84--85 & 89 & 86--95 & 87--93\\
+noise per skip (e) & 3.7--3.9 & 4.2--4.4 & 3.3--3.7 & 4.1--4.3\\
+image noise, 500 skips (e) & \cellcolor{good}0.144--0.147 & \cellcolor{good}0.164--0.173 & 0.19--0.33 & 0.19--0.27\\
+images vs white averaging & \cellcolor{good}0.84--0.88 & \cellcolor{good}0.86--0.89 & 1.2--2.0 & 1.0--1.5\\
+1/f corner (kHz) & 16--34 & 27--39 & 61--99 & 117--334\\
+trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 & $\le$1.2--1.5 & $\le$2.0--2.4\\\bottomrule
+\end{tabularx}
+{\par\scriptsize LSM flagged: ACM109 ch1, ACM110 ch1, ACM110 ch3. LSM values in nV use the PA03 design chain gain.}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.41\linewidth}\vspace{0pt}
+\includegraphics[width=\linewidth]{figures/oxide_traps_tau.png}\\[-2pt]
+{\footnotesize The window handle (PA03, hardware scan, 100 strips): noise against the CDS window with white + 1/f fits.}
+\end{minipage}
+
+\begin{itemize}
+\item \textbf{The CDS and skip averaging reject most of board 101's pickup.} Its 500-skip images reach 0.144--0.173\,e,
+  at (slightly below) what white-noise averaging of one skip predicts. In the current images the noise is set by the
+  per-skip white noise, not by the remaining pickup. In October, with more pickup, the images did suffer (25\,\% of the
+  pixel noise was shared between amplifiers). The setup number is therefore a diagnostic of pickup; the level the images
+  tolerate is the next thing to calibrate.
+\item \textbf{The same amplifier design on both module sets:} sense nodes of 84--95\,fF, per-skip noise of 3.3--4.4\,e,
+  trap upper limits of the same order. PA03 is representative of the production amplifiers.
+\item \textbf{The LSM images are worse than their traces predict} (1.0--2.0$\times$ the white-noise expectation): at
+  180\,K the blank images carry $\sim$1\,e/pixel, and charge arriving while a pixel is skipped broadens the zero-electron peak.
+\item \textbf{Candidate problem channels, diagnosed by cause:} ACM109 ch1, telegraph noise and a 334\,kHz 1/f corner, so
+  a likely trappy transistor (one trace; to be confirmed); ACM110 ch3, a 30.6\,kHz interference comb (setup); ACM110 ch1,
+  more 1/f noise; PA03 101 ch2, extra charge in images (glow) and telegraph episodes in 1 of 127 traces.
+\item \textbf{Readout timing:} 5--10\,\textmu s CDS windows are optimal at fixed readout time (20--30\,\textmu s costs
+  9--32\,\%). The wait after the summing-well pulse is too short on LSM board 109 (signal window still drifting
+  7--21\,e/\textmu s) and the LSM CDS offsets reach $-1550$\,e against $\sim-20$\,e on PA03.
+\end{itemize}
+
+\head{What it can be used for}
+\begin{itemize}
+\item \textbf{Setup debugging in minutes:} change a ground or a cable, take one trace or static record, read the number.
+\item \textbf{Run monitoring:} one static record per channel per run; a jump flags a new noise source before it shows in images.
+\item \textbf{Amplifier screening of production modules} from data already taken: 1/f corner, telegraph flag and timing per
+  channel, separating a defective transistor (replace) from a noisy environment (fix).
+\item \textbf{Comparing test stands} on one scale, and \textbf{choosing readout timing} (window length, settling waits).
+\item \textbf{Physics features for the voltage-optimisation ML}, separating ``noisy settings'' from ``noisy day''.
+\end{itemize}
+
+\key[warnbg]{\small\textbf{Corrections made today, and limits.}
+(1) Board 102 ch0--2 have output transistors; only no charge is sent to them. They are a no-charge reference, not a
+bare-electronics floor; results that used them as one (the 0.853\,ADU/\textmu V calibration, the noise budget, the pickup
+share of the reset feedthrough, the output-stage noise, the kTC sense-node estimate) are being rechecked.
+(2) The October trace numbers are compared at equal 0.2\,s length (48.8, not 67.6).
+(3) Trap densities are upper limits: the window fit has not been run on an open input, and band-limited white noise may
+be counted as 1/f. (4) LSM verdicts rest on one trace per channel. (5) Absolute nV values use the design chain gain.}
+
+\head{Next measurements}
+\textbf{A board-101 trace with charge clocking off} (is the pickup from the cabling, or does it come with charge?);
+\textbf{more LSM traces per channel} (confirm the flagged channels); \textbf{the setup number against image noise} at
+several pickup levels (what level the images tolerate); \textbf{LSM images at 130\,K} (is their excess a temperature effect?).
+Details: the \texttt{amp\_phys} report and the colour-graded channel scorecard.
+\end{document}
