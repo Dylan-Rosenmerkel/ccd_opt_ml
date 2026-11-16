@@ -47,11 +47,14 @@ standard CCD characterisation; \std{} items are standard and are automated here.
   ADU/\textmu V measured, against $0.875$ by design. From it: 1.51--1.62\,\textmu V per electron at the video input,
   and the read noise in nV/$\sqrt{\text{Hz}}$ (Section~\ref{sec:cal}). \novel
 \item \textbf{The output transistor is not what limits the noise.} Its thermal noise is at most 4.9\,nV/$\sqrt{\text{Hz}}$
-  at 130\,K; the measured white noise is 19--22. The rest is the frontend's load resistor and an unexplained term whose
-  origin one DC reading would decide (Section~\ref{sec:noise}).
-\item \textbf{The cabling change, quantified.} October: the four amplifiers share 20--28\,\% of their pixel noise
-  (simultaneous images). November: 2--7\,\%. Read noise $-30\,\%$ on ch0/ch1 at the same settings
-  (Section~\ref{sec:octnov}). \novel
+  at 130\,K; the measured white noise is 19--22. A dead channel's trace gives the frontend alone (17.0); the live output
+  stage adds $\approx$10\,nV/$\sqrt{\text{Hz}}$ on top, mostly the transistor's 1/f noise passing the CDS
+  (Sections~\ref{sec:noise}, \ref{sec:traps}).
+\item \textbf{The cabling change, quantified, and visible in a single trace.} The template-removed spectrum of one
+  trace fell by 37--49\,\% below 1\,kHz (and 33--36\,\% from 1--100\,kHz) while the MHz floor did not move; the
+  correlation of consecutive skips fell from 0.87 to 0.68--0.75. Independently, on simultaneous images: the four
+  amplifiers share 20--28\,\% of their pixel noise in October and 2--7\,\% in November, and the read noise of ch0/ch1
+  fell 30\,\% at the same settings (Section~\ref{sec:octnov}). \novel
 \item \textbf{Every clock line's coupling to the sense node}, measured from the clock edges in the raw traces: RG
   0.15--0.37\,fF, SW 0.08--0.13, H 0.011--0.016, V $<0.003$\,fF (Section~\ref{sec:coupling}). \novel
 \item \textbf{Device physics from operating data.} Sense-node capacitance $\approx$80--90\,fF; follower gain
@@ -65,7 +68,9 @@ standard CCD characterisation; \std{} items are standard and are automated here.
   The transistor's 1/f noise is 55--80\,\% of the single-skip noise; the 10\,\textmu s window is near-optimal and longer
   windows cost 9--32\,\% at fixed readout time (Section~\ref{sec:traps}). \novel
 \item \textbf{Corrections made on the way} are listed in Section~\ref{sec:corrections}. The most important: the four
-  channels' traces are separate acquisitions, so ``common-mode'' must be measured on simultaneous images.
+  channels' traces are separate acquisitions, so a correlation \emph{between} channels' traces is not setup noise. The
+  setup noise itself is visible in each trace's spectrum; only splitting it into shared and own parts needs simultaneous
+  data (images or level-1 strips).
 \end{enumerate}
 
 % =====================================================================================================================
@@ -151,7 +156,10 @@ Three sources add in quadrature at the video input:
   20\,k$\Omega$ load: it is a small part of the measured 19--22.
 \item \textbf{The load resistor and preamp}: 17.1\,nV/$\sqrt{\text{Hz}}$ on an open input. A working follower's own
   output resistance ($\approx1/g_m$) shunts the load resistor's noise; how much depends on $g_m$.
-\item \textbf{Everything else}: a term the first two do not explain.
+\item \textbf{Everything else}: a term the first two do not explain. The traces measure it directly: the CDS white
+  noise is 19.5--19.6\,nV/$\sqrt{\text{Hz}}$ on the live amplifier and 17.0 on a dead channel (12 traces each,
+  spread $\pm$0.3), so the live output stage adds $\sqrt{19.6^2-17.0^2}\approx10$\,nV/$\sqrt{\text{Hz}}$. That is the
+  ``own white'' level of 9--13 found independently from the window dependence in Section~\ref{sec:traps}.
 \end{enumerate}
 \fig{noise_budget.png}{The white-noise budget for the two possible transistor currents. With $g_m\approx300$\,\textmu S
 (favoured by the layout, Section~\ref{sec:sn}) most of the noise is the unexplained term; with $g_m\approx20$\,\textmu S
@@ -163,10 +171,55 @@ load network adds to it, and Section~\ref{sec:octnov} shows that the cabling mat
 
 % =====================================================================================================================
 \section{The cabling change: October vs November}\label{sec:octnov}
-\paragraph{Why images, not traces.} Shared (setup) noise shows up as a correlation between amplifiers digitised at the
-same instant. The four amplifiers' traces are \emph{separate} acquisitions, one after the other; the four amplifiers of an
-image are read together (Figure~\ref{fig:sim}). So setup noise must be measured on images (or on traces recorded
-simultaneously, a firmware option).
+\paragraph{First, from the trace alone.} A raw trace is a deterministic waveform (the clocks, reset and transfers,
+identical every skip cycle) plus noise. Averaging all skip cycles of a trace gives the waveform (the \emph{template});
+subtracting it leaves the noise, whose spectrum is the setup-plus-amplifier noise at the video input over the whole
+188\,ms, at every frequency from 200\,Hz to 7.5\,MHz (Figure~\ref{fig:anat}). The dead channel, recorded the same way,
+is the electronics-only reference: anything a live channel has above it comes in through the CCD, its bias and clock
+lines and the cabling.
+\fig{trace_anatomy_v3_ch1.png}{One trace dissected (board 101 ch1, November). Top left: the median skip cycle with the
+pedestal (blue) and signal (green) windows, the summing-well dip and the reset pulse. Top right: the median horizontal
+transfer. Bottom left: the noise spectrum of the whole trace once the waveform is removed. Bottom right: the quantities
+extracted.\label{fig:anat}}
+\fig{raw_psd_oct_nov.png}{The template-removed spectrum of one trace (101 ch1) before and after the cabling change,
+with a dead channel. Left: below 20\,kHz the live channel is 10--60$\times$ above the electronics, and the cabling change
+halved it. Right: above $\sim$200\,kHz the curves meet the dead channel's lines; nothing changed there.\label{fig:rawpsd}}
+\begin{table}[H]\centering\small
+\resizebox{\textwidth}{!}{\begin{tabular}{lcccc}\toprule
+median of 12 traces & October & Nov 2--3 & Nov 10--12 & dead channel\\\midrule
+spectrum 200\,Hz--1\,kHz (\textmu V/$\sqrt{\text{Hz}}$) & \textbf{67.6} & 42.8 & \textbf{34.8} & 1.6\\
+spectrum 1--10\,kHz (\textmu V/$\sqrt{\text{Hz}}$) & 7.0 & 4.5 & 3.7 & 1.1\\
+spectrum 10--100\,kHz (nV/$\sqrt{\text{Hz}}$) & 736 & 532 & 472 & 173\\
+spectrum 0.1--1\,MHz (nV/$\sqrt{\text{Hz}}$) & 156 & 128 & 123 & 57\\
+spectrum 1--7.5\,MHz (nV/$\sqrt{\text{Hz}}$) & 31.6 & 29.5 & 29.4 & 10.6\\
+CDS white noise (nV/$\sqrt{\text{Hz}}$) & 20.1 & 19.5 & 19.6 & 17.0\\
+correlation of consecutive skips & \textbf{0.87} & 0.75 & \textbf{0.68} & 0.26\\
+variation of the noise level, 1\,ms blocks (CV) & 0.48 & 0.44 & 0.35 & 0.04\\
+1\,ms blocks with bursts ($>1.5\times$ median rms) & 14\,\% & 12\,\% & 11\,\% & 0\\
+excess kurtosis of the CDS & 0.00 & $-0.01$ & 0.01 & $-0.05$\\
+settling time after reset / after an H transfer (\textmu s) & 0.87 / 3.14 & 0.85 / 3.14 & 0.95 / 3.16 & 1.56 / 3.01\\\bottomrule
+\end{tabular}}\end{table}
+\begin{itemize}
+\item \textbf{The setup noise is in the trace.} Below 100\,kHz the live channel is 3--40$\times$ above the electronics,
+  and that excess fell 37--49\,\% (below 1\,kHz) after the cabling change, more by Nov 10--12 than by Nov 2--3. The
+  variability of the noise (bursts, block-to-block changes) fell with it.
+\item \textbf{Only the low frequencies changed.} The MHz floor and the CDS white noise moved by 3--7\,\%. The change
+  removed slow, low-frequency pickup, exactly the noise that 500-skip pixels average over.
+\item \textbf{The skip-to-skip correlation} is a one-number summary of that slow noise as the skipper sees it: 0.87 in
+  October, 0.68 now, 0.26 on the electronics alone.
+\item \textbf{Settling after an H transfer is the electronics', not the CCD's} (3.0--3.2\,\textmu s on the dead channel
+  too); the live output settles \emph{faster} than the dead input after reset.
+\item \textbf{The noise of ch1 is Gaussian} (kurtosis 0): no single-trap telegraph noise, unlike ch2
+  (Section~\ref{sec:health}).
+\end{itemize}
+\caveat{The October traces are longer (1.1\,s against 0.19\,s) and come from other packets; the bands above are
+normalised spectra, so the length does not bias them, but small differences in window slopes or feedthrough between
+the periods are not attributable to the cabling.}
+
+\paragraph{Second, shared or own: images.} Whether that slow noise is common to the four amplifiers (the cabling, a
+shared return) or each amplifier's own needs the amplifiers digitised at the same instant. The four amplifiers' traces
+are \emph{separate} acquisitions, one after the other; the four amplifiers of an image (and of a level-1 strip) are read
+together (Figure~\ref{fig:sim}).
 \begin{figure}[H]\centering\includegraphics[width=0.9\textwidth]{figures/not_simultaneous.png}
 \caption{Traces vs images: only the image is simultaneous across the amplifiers.}\label{fig:sim}\end{figure}
 
@@ -191,10 +244,11 @@ Nov 10--12 & \textbf{0.145 / 0.148} / 0.332 / 0.291 & \textbf{0.02--0.07} & $\ap
   low-frequency \emph{shared} noise, which is exactly what 500-skip pixels are sensitive to.
 \end{itemize}
 
-\paragraph{A single setup-quality number.} $\rho_\text{sim}$: the mean simultaneous correlation of zero-electron pixels
-between the amplifiers of a board, row baseline removed. Equivalently, the gain from common-mode subtraction. October
-0.25, November 0.05; the target is 0. It needs one image. It would become a one-minute trace measurement once the traces
-record all channels in the same acquisition. \novel
+\paragraph{Setup-quality numbers.} From \emph{one trace} of one channel: the excess of the template-removed spectrum
+over the dead-channel floor at 200\,Hz--1\,kHz (October 67.6, now 34.8\,\textmu V/$\sqrt{\text{Hz}}$, electronics 1.6),
+and the correlation of consecutive skips (0.87 $\to$ 0.68; electronics 0.26). Both take one trace and no charge. From a
+simultaneous image or strip: $\rho_\text{sim}$, the mean correlation of zero-electron pixels between the amplifiers,
+row baseline removed (October 0.25, November 0.05, target 0), which says how much of the remainder is shared. \novel
 \caveat{Solid for ch0/ch1. ch2/ch3 scatter more (ch2 has its own problem). The October images had longer exposures
 (10--100\,s), but that adds $\le$0.1\,e$^-$/pixel and the zero-electron selection excludes it.}
 
@@ -483,6 +537,8 @@ video-line capacitance, shared return & \novel{} indicative & 30--100\,\% errors
 $C_{sn}$, $A$, $g_m$ & \novel{} model & one DC reading decides\\
 gate overlap under RG & \novel{} model & scales with the oxide thickness\\
 buried-channel depth & \novel{} model & charge split, gate area; oxide degeneracy\\
+setup noise from one trace (spectrum excess, skip correlation) & \novel{} solid & needs a dead-channel reference\\
+output-stage noise = live $-$ dead in quadrature ($\approx$10\,nV/$\sqrt{\text{Hz}}$) & \novel{} solid & assumes the same frontend\\
 oxide trap density, 1/f corner per amplifier & \novel{} solid relative, model absolute & follower gain, $C$ choice; upper limit\\
 optimal CDS window (5--10\,\textmu s) & \novel{} solid & own noise only (shared noise makes long windows worse)\\
 dose difference from knees & \novel{} indicative & blurred by the multi-rail design\\
@@ -507,7 +563,8 @@ It becomes established knowledge once it is checked against the designers' inten
   layout inversion contradicts it.
 \item A ``$\sim$50\,\% shared per-skip noise'' between the channels, measured on traces, was withdrawn. The four
   channels' traces are separate acquisitions, so the shared part was a pattern repeating with the readout sequence, not
-  simultaneous setup noise. Setup noise is now measured on simultaneous images (Section~\ref{sec:octnov}).
+  simultaneous setup noise. The setup noise is now measured from each trace's own template-removed spectrum, and its
+shared part from simultaneous images and strips (Section~\ref{sec:octnov}).
 \item The board-102 working amplifier was first identified as ch3 from its traces. The images show charge only on ch2:
   open.
 \item Counting single electrons inside the current traces does not work (their pixels carry varying charge or level).
@@ -539,7 +596,8 @@ All in \texttt{amp\_phys/} (results in \texttt{amp\_phys/results/}). \texttt{dat
 dead-channel rule, knees, outliers); \texttt{chain\_calibration.py} (Johnson calibration, noise budget);
 \texttt{oct\_nov.py} (October/November); \texttt{clock\_edges.py}, \texttt{v\_edges.py}, \texttt{sense\_node\_coupling.py}
 (couplings); \texttt{channel\_knees.py}; \texttt{crosstalk.py}, \texttt{mutual\_capacitance.py};
-\texttt{physics\_model.py}; \texttt{oxide\_traps\_tau.py} (1/f, trap density, window optimum); \texttt{images/} (units, tracks, dark, defects, pocket pumping); \texttt{cms\_images.py};
+\texttt{physics\_model.py}; \texttt{oxide\_traps\_tau.py} (1/f, trap density, window optimum); \texttt{trace\_anatomy.py} (whole-trace
+dissection); \texttt{raw\_psd.py} (level-0 spectra); \texttt{images/} (units, tracks, dark, defects, pocket pumping); \texttt{cms\_images.py};
 \texttt{trace\_electrons.py}, \texttt{trace\_read\_noise.py} (negative results); \texttt{common\_mode.py},
 \texttt{setup\_noise\_index.py} (valid only for simultaneous acquisitions). Detailed numbers: \texttt{REPORT.md}
 \S\,1--23; summary: \texttt{SUMMARY.md}; plan: \texttt{NEXT\_RUN\_PLAN.md}. Figures of this document:

@@ -215,7 +215,7 @@ def main():
         except Exception as ex:
             print("skip", Path(t).name, ex)
             continue
-        r.update({"label": a.label, "file": Path(t).name})
+        r.update({"label": a.label, "file": str(Path(t).parent.parent.name + "/" + Path(t).name) if Path(t).parent.name == "traces" else Path(t).name})
         rows.append(r)
         keep = keep or extra
     R = pd.DataFrame(rows)
