@@ -797,3 +797,11 @@ Reset injection slope (edge 0, RG_1_H) 2.22/2.13/2.43/2.10 → **2.27/2.39/2.60/
 mean 0.55 µm); RG_1_L feedthrough at that edge 0.15–0.22 → 0.12–0.18 fF; H couplings 0.012–0.023 fF (unchanged range).
 New with the broken points removed: the reset edge also depends on H2 high/low (0.20–0.23 / 0.11–0.12 fF): it sits on
 the H2 waveform's tail. The settled mutual-capacitance matrix is unchanged except ch1 RG_1_H (3.2σ → 1.1σ).
+
+**Mapping the reset edge on another sequencer (LSM).** `reset_pulse.py` finds the reset pulses from the waveform alone
+(no flags): PA03 −280/+1626, LSM −268/+1626 samples from the H flag. Their heights are not comparable: PA03 pulses are
+11–14 samples (the sense node still charging toward VR, τ ≈ 0.4–0.7 µs, when they end; the two pulses agree, 47k/50k
+ADU), LSM pulses 2.7–5.5 samples (a feedthrough + charging fit is degenerate; the two pulses of one ACM106 trace differ,
+32k/42k). The V* calibration of §28 therefore holds per sequencer. Sequencer-independent route: two traces on the same
+setup differing only in RG_high (the dynamics cancel in the difference) give that setup's slope and V*; a third with
+RG_low changed gives the overlap. Requested for the LSM boards; no LSM depths are reported until then.
