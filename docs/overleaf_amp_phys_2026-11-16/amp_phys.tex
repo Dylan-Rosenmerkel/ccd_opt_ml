@@ -60,6 +60,10 @@ standard CCD characterisation; \std{} items are standard and are automated here.
   1.7$\times$ larger on ch2 (Sections~\ref{sec:sn}--\ref{sec:knees}). \novel
 \item \textbf{Each channel reads its own CCD} (the module carries four). The weak VSUB response of ch0/ch2 sits in their
   serial registers, not in the amplifiers (Section~\ref{sec:images}).
+\item \textbf{Oxide traps and 1/f noise.} From how each amplifier's own noise depends on the CDS window: trap density
+  $\approx2\times10^{16}$\,eV$^{-1}$cm$^{-3}$ (good oxide) on ch0/1/3, 1.5$\times$ higher on ch2 (twice the 1/f corner).
+  The transistor's 1/f noise is 55--80\,\% of the single-skip noise; the 10\,\textmu s window is near-optimal and longer
+  windows cost 9--32\,\% at fixed readout time (Section~\ref{sec:traps}). \novel
 \item \textbf{Corrections made on the way} are listed in Section~\ref{sec:corrections}. The most important: the four
   channels' traces are separate acquisitions, so ``common-mode'' must be measured on simultaneous images.
 \end{enumerate}
@@ -153,9 +157,9 @@ Three sources add in quadrature at the video input:
 (favoured by the layout, Section~\ref{sec:sn}) most of the noise is the unexplained term; with $g_m\approx20$\,\textmu S
 the load resistor explains most of it. One bench reading decides: the DC level of the video line (or the VDD current)
 gives the transistor current and hence $g_m$.}
-\takeaway{The CCD amplifiers' intrinsic thermal noise is not the limit. The limit is in the readout environment: the
-frontend's load network, plus a term to be identified. Section~\ref{sec:octnov} shows that the cabling already matters a
-lot at the pixel level.}
+\takeaway{The CCD amplifiers' intrinsic \emph{thermal} noise is not the limit. Most of the ``unexplained'' term turns out
+to be the output transistors' own \emph{1/f} noise, which the CDS does not remove (Section~\ref{sec:traps}). The frontend's
+load network adds to it, and Section~\ref{sec:octnov} shows that the cabling matters a lot at the pixel level.}
 
 % =====================================================================================================================
 \section{The cabling change: October vs November}\label{sec:octnov}
@@ -298,6 +302,81 @@ regressed out.\label{fig:kd}}
 gives $\pm$0.05\,V.}
 
 % =====================================================================================================================
+\section{Oxide traps and the transistor's 1/f noise}\label{sec:traps}
+\paragraph{The physics.} The gate oxide of the output transistor contains traps. Carriers in the channel tunnel into
+them and back out, each with its own time constant; the sum over many traps with a broad spread of time constants is
+1/f noise. In the McWhorter number-fluctuation model the gate-referred noise is
+\begin{equation}S_{V_g}(f)=\frac{q^2kT\lambda N_t}{WL\,C^2\,f}
+\quad\Longrightarrow\quad N_t=\frac{K_{V_g}\,WL\,C^2}{q^2kT\lambda},\end{equation}
+where $K_{V_g}=S_{V_g}f$ is the 1/f coefficient at the gate (= the sense node), $WL\approx345$\,\textmu m$^2$ (layout),
+$C$ the gate capacitance per area, $T=130$\,K and $\lambda\approx0.1$\,nm the tunnelling attenuation length. $N_t$ is the
+trap density per energy and volume: about $10^{16}$--$10^{17}$\,eV$^{-1}$cm$^{-3}$ for good thermal oxide, $\sim10^{18}$
+for poor oxide.
+
+\paragraph{Why the noise-vs-skips curve cannot measure it.} The CDS subtracts two windows 13.8\,\textmu s apart. That
+suppresses low frequencies as $f^2$, so what is left of the 1/f noise sits at 10--40\,kHz, close to the skip rate
+(Figure~\ref{fig:cdsT}, left). Averaging skips then reduces it almost exactly like white noise (right). A first attempt
+that tried to read the 1/f level from how the noise falls with more skips therefore failed: the two shapes are almost the
+same.
+\fig{cds_transfer.png}{Left: the CDS filter and what white and 1/f noise look like after it. Right: the noise of an
+average of $N$ skips, for white and for 1/f noise at the input: both fall as $1/\sqrt N$.\label{fig:cdsT}}
+
+\paragraph{The handle that works: the window length.} White noise in a CDS falls as $1/\sqrt\tau$ with the window length
+$\tau$; the 1/f part is almost independent of $\tau$. The v2 data varied the window from 3 to 30\,\textmu s, and every v2
+packet has a level-1 strip at its own settings, with all channels recorded simultaneously. For each amplifier:
+\begin{enumerate}
+\item take its per-skip values and subtract the part shared with the other channels (the setup), leaving its \emph{own}
+  noise;
+\item measure the single-skip noise $\sigma_1$ in each of the 100 strips;
+\item fit $\sigma_1^2(\tau)=S_wI_w(\tau)+K\,I_f(\tau)$, where $I_w$ and $I_f$ are the white and 1/f noise integrated
+  through the \emph{exact} filter of each setting: CDS windows $\tau$, centres $\tau+3.8$\,\textmu s apart, the skip
+  period growing with $\tau$, and the consecutive-skip difference used to remove the pixel charge.
+\end{enumerate}
+\fig{oxide_traps_tau.png}{Single-skip noise against the CDS window over the 100 v2 strips. Left: each amplifier's own
+noise, with the white + 1/f fits; they describe the data closely. Right: the total noise. It turns back \emph{up} above
+$\sim$15\,\textmu s: the shared (setup) slow noise leaks in more as the windows get longer.\label{fig:otau}}
+
+\paragraph{Results.}
+\begin{table}[H]\centering\small
+\begin{tabular}{lcccc}\toprule
+ & ch0 & ch1 & ch2 & ch3\\\midrule
+own white noise at the video input (nV/$\sqrt{\text{Hz}}$) & 10.2 & 10.4 & 8.7 & 13.1\\
+1/f corner frequency & 52\,kHz & 51\,kHz & \textbf{106\,kHz} & 34\,kHz\\
+1/f share of the single-skip noise (10\,\textmu s window) & 66\,\% & 66\,\% & \textbf{80\,\%} & 56\,\%\\
+$N_t$, $A=0.85$, $C=C_{ox}$ (eV$^{-1}$cm$^{-3}$) & $1.9\times10^{16}$ & $1.9\times10^{16}$ & $\mathbf{2.8\times10^{16}}$ & $2.0\times10^{16}$\\
+$N_t$, $A=0.44$, $C=C_{ox}$ & $7.0\times10^{16}$ & $7.0\times10^{16}$ & $1.0\times10^{17}$ & $7.5\times10^{16}$\\
+$N_t$, $A=0.85$, $C=C_\text{eff}$ (buried channel) & $1.4\times10^{15}$ & $1.4\times10^{15}$ & $2.1\times10^{15}$ & $1.5\times10^{15}$\\\bottomrule
+\end{tabular}\end{table}
+\begin{itemize}
+\item \textbf{The oxides are good.} All four amplifiers sit in the range of good thermal oxide. No output transistor has
+  a damaged or contaminated gate oxide.
+\item \textbf{ch2 is worse, for a physical reason.} It has $\sim$1.5$\times$ the trap density and twice the 1/f corner.
+  That fits its telegraph noise, its higher noise floor and its least stable noise: the amplifier excluded since v1 has a
+  gate oxide with more traps, including at least one large single trap. \novel
+\item \textbf{Most of each amplifier's single-skip noise is 1/f.} Its own white noise is only 9--13\,nV/$\sqrt{\text{Hz}}$;
+  the 1/f part is 55--80\,\% of the variance. This is most of the ``unexplained'' term of Section~\ref{sec:noise}: the
+  transistors' own 1/f noise passing through the CDS, not setup injection.
+\item \textbf{The skipper noise floor is not this 1/f.} The excess at long averaging (at 240 skips the total noise is
+  2.4$\times$ white, the own noise 1.3$\times$) comes from slower, steeper-spectrum wander, mostly shared between the
+  channels: the setup (Section~\ref{sec:octnov}).
+\end{itemize}
+
+\paragraph{A practical rule: the optimal window.} For a fixed readout time, a longer window means fewer skips. With the
+fitted white and 1/f levels, the noise at fixed time is lowest for 5--8\,\textmu s windows (Figure~\ref{fig:wopt}). The
+present 10\,\textmu s is within 1--5\,\% of that optimum. Longer windows cost 9--32\,\% at the same total time, because the
+1/f part does not shrink while the number of skips does. Including the shared slow noise, which grows with the window
+(Figure~\ref{fig:otau}, right), long windows are even worse.
+\fig{window_optimum.png}{Left: each amplifier's single-skip noise against the window, split into white (dashed) and 1/f
+(dotted). Right: the noise reached in a fixed readout time, relative to the present 10\,\textmu s window.\label{fig:wopt}}
+\takeaway{Spend a fixed image time on more skips, not on longer CDS windows. 5--10\,\textmu s windows are optimal for these
+amplifiers.}
+\caveat{The comparison between amplifiers (ch2 worst), the 1/f share and the optimal window are robust. The absolute
+$N_t$ depends on two choices: the follower gain (0.44 instead of 0.85 makes it $\sim$3.7$\times$ higher, still good) and
+whether the traps couple through the oxide capacitance or the buried-channel coupling ($\sim$13$\times$ lower), plus the
+standard $\lambda$. They are upper limits: any own slow noise that is not the transistor's 1/f also counts. The DC level
+of the video line, which settles the follower gain, firms up the scale.}
+
+% =====================================================================================================================
 \section{Between the channels: crosstalk, video-line capacitance, shared return}\label{sec:xtalk}
 When one amplifier reads a large charge (a track), a tiny fraction appears on the others at the same instant:
 $\sim10^{-4}$, so a $10^4$\,e$^-$ track makes $\pm1$\,e$^-$ ghosts. Two mechanisms can cause it. They are separated by
@@ -404,6 +483,8 @@ video-line capacitance, shared return & \novel{} indicative & 30--100\,\% errors
 $C_{sn}$, $A$, $g_m$ & \novel{} model & one DC reading decides\\
 gate overlap under RG & \novel{} model & scales with the oxide thickness\\
 buried-channel depth & \novel{} model & charge split, gate area; oxide degeneracy\\
+oxide trap density, 1/f corner per amplifier & \novel{} solid relative, model absolute & follower gain, $C$ choice; upper limit\\
+optimal CDS window (5--10\,\textmu s) & \novel{} solid & own noise only (shared noise makes long windows worse)\\
 dose difference from knees & \novel{} indicative & blurred by the multi-rail design\\
 thickness, diffusion, gain, noise vs skips & \std{} solid & energy calibration for $<$7\,\%\\
 resistivity bound & \novel{} solid as a bound & assumes full depletion at nominal\\
@@ -448,6 +529,7 @@ fine VR scan & gate vs wiring capacitance per amplifier\\
 RG edge slowed by an RC & the charge split of the injection $\Rightarrow$ depth to $\sim$10\,\%\\
 pocket pumping at 6 phase times & trap emission times and energies per CCD\\
 CDS window scan at fixed voltages & video-line capacitances to $\sim$10\,\%\\
+telegraph steps of ch2 vs one trapped charge & trap location and the gate coupling, independently\\
 grounding configurations, one image each & $\rho_\text{sim}\to0$, white noise toward the frontend floor\\\bottomrule
 \end{tabular}\end{table}
 
@@ -457,7 +539,7 @@ All in \texttt{amp\_phys/} (results in \texttt{amp\_phys/results/}). \texttt{dat
 dead-channel rule, knees, outliers); \texttt{chain\_calibration.py} (Johnson calibration, noise budget);
 \texttt{oct\_nov.py} (October/November); \texttt{clock\_edges.py}, \texttt{v\_edges.py}, \texttt{sense\_node\_coupling.py}
 (couplings); \texttt{channel\_knees.py}; \texttt{crosstalk.py}, \texttt{mutual\_capacitance.py};
-\texttt{physics\_model.py}; \texttt{images/} (units, tracks, dark, defects, pocket pumping); \texttt{cms\_images.py};
+\texttt{physics\_model.py}; \texttt{oxide\_traps\_tau.py} (1/f, trap density, window optimum); \texttt{images/} (units, tracks, dark, defects, pocket pumping); \texttt{cms\_images.py};
 \texttt{trace\_electrons.py}, \texttt{trace\_read\_noise.py} (negative results); \texttt{common\_mode.py},
 \texttt{setup\_noise\_index.py} (valid only for simultaneous acquisitions). Detailed numbers: \texttt{REPORT.md}
 \S\,1--23; summary: \texttt{SUMMARY.md}; plan: \texttt{NEXT\_RUN\_PLAN.md}. Figures of this document:

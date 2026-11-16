@@ -397,3 +397,85 @@ if __name__ == "__main__":
             print("ok", f.__name__)
         except Exception as e:
             print("FAILED", f.__name__, e)
+
+
+def cds_transfer():
+    """Why the transistor's 1/f noise survives the CDS and then averages down like white noise."""
+    f = np.logspace(1, np.log10(7.5e6), 4000)
+    tau, dt, T = 10e-6, 13.8e-6, 32.6e-6
+    x = np.pi * f * tau
+    cds = 4 * np.sin(np.pi * f * dt) ** 2 * (np.sin(x) / x) ** 2
+    fig, axs = plt.subplots(1, 2, figsize=(13, 4.3))
+    ax = axs[0]
+    ax.loglog(f, cds, color=INK, lw=1.2, label="CDS filter |H$_{CDS}$|$^2$")
+    ax.loglog(f, cds / f * 1e4, color=ORANGE, lw=1.5, label="1/f noise after the CDS (arb.)")
+    ax.loglog(f, cds * 0.5, color=BLUE, lw=1.0, ls="--", label="white noise after the CDS (arb.)")
+    ax.axvspan(1e4, 4e4, color=ORANGE, alpha=0.12)
+    ax.text(1.1e4, 3e-4, "what is left of the 1/f\nsits at 10–40 kHz,\nnear the skip rate", fontsize=8)
+    ax.set_xlabel("frequency (Hz)")
+    ax.set_ylim(1e-6, 10)
+    ax.legend(frameon=False, fontsize=8, loc="lower center")
+    ax.set_title("The CDS suppresses low frequencies as f$^2$: 1/f noise survives only near the skip rate", loc="left", fontsize=9)
+    ax = axs[1]
+    Ns = np.array([1, 2, 5, 10, 20, 40, 80, 160, 240])
+    df = np.gradient(f)
+    def sig(N, w):
+        y = np.pi * f * T
+        avg = np.nan_to_num((np.sin(N * y) / (N * np.sin(y))) ** 2, nan=1.0)
+        return np.sqrt(np.sum(cds * avg * w * df))
+    for w, lab, c in ((np.ones_like(f), "white", BLUE), (1 / f, "transistor 1/f", ORANGE)):
+        s = np.array([sig(N, w) for N in Ns])
+        ax.loglog(Ns, s / s[0], "o-", color=c, label=lab, ms=4)
+    ax.loglog(Ns, 1 / np.sqrt(Ns), "k:", lw=1, label="1/√N")
+    ax.set_xlabel("skips averaged N")
+    ax.set_ylabel("noise of the N-skip average (relative)")
+    ax.legend(frameon=False, fontsize=8)
+    ax.set_title("…so averaging skips reduces it like white noise:\nits level cannot be read from the noise-vs-N curve",
+                 loc="left", fontsize=9)
+    fig.tight_layout()
+    fig.savefig(OUT / "cds_transfer.png", dpi=170)
+    plt.close(fig)
+
+
+def window_optimum():
+    import sys
+    sys.path.insert(0, str(ROOT / "amp_phys"))
+    from oxide_traps_tau import integrals
+    R = pd.read_csv(ROOT / "amp_phys/results/v2/oxide_traps_tau/oxide_traps_tau.csv")
+    R = R[R.kind == "own"]
+    taus = np.array([2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30])
+    I = {t: integrals(t * 1e-6) for t in taus}
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4.2))
+    cols = {0: BLUE, 1: ORANGE, 2: GRAY, 3: AQUA}
+    for _, r in R.iterrows():
+        c = int(r.channel)
+        w = np.array([r["S_w (ADU^2/Hz)"] * I[t][0] for t in taus])
+        k = np.array([r["K (ADU^2)"] * I[t][1] for t in taus])
+        axs[0].plot(taus, np.sqrt(w), ls="--", color=cols[c])
+        axs[0].plot(taus, np.sqrt(k), ls=":", color=cols[c])
+        axs[0].plot(taus, np.sqrt(w + k), color=cols[c], lw=1.8, label=f"ch{c}")
+        T = 32.6 + 2 * (taus - 10)
+        ft = (w + k) * T
+        axs[1].plot(taus, np.sqrt(ft / ft[list(taus).index(10)]), "o-", color=cols[c], ms=3, label=f"ch{c}")
+    axs[0].set_xlabel("CDS window τ (µs)")
+    axs[0].set_ylabel("own single-skip noise (ADU)")
+    axs[0].set_title("total (solid) = white (dashed, ∝ 1/√τ) + 1/f (dotted, ≈ constant)", loc="left", fontsize=9)
+    axs[0].legend(frameon=False, fontsize=8)
+    axs[1].axvline(10, color=INK, ls=":", lw=1)
+    axs[1].text(10.4, 1.27, "now: 10 µs", fontsize=8)
+    axs[1].set_xlabel("CDS window τ (µs)")
+    axs[1].set_ylabel("noise at FIXED readout time (relative to 10 µs)")
+    axs[1].set_title("optimum 5–8 µs; longer windows cost 9–32 %", loc="left", fontsize=9)
+    axs[1].legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig(OUT / "window_optimum.png", dpi=170)
+    plt.close(fig)
+
+
+if __name__ == "__main__":
+    for f_ in (cds_transfer, window_optimum):
+        try:
+            f_()
+            print("ok", f_.__name__)
+        except Exception as e:
+            print("FAILED", f_.__name__, e)
