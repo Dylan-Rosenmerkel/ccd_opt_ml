@@ -81,7 +81,8 @@ noise per skip (e) & 3.7--3.9 & 4.2--4.4 & 3.3--3.7 & 4.1--4.3\\
 image noise, 500 skips (e) & \cellcolor{good}0.144--0.147 & \cellcolor{good}0.164--0.173 & 0.19--0.33 & 0.19--0.27\\
 images vs white averaging & \cellcolor{good}0.84--0.88 & \cellcolor{good}0.86--0.89 & 1.2--2.0 & 1.0--1.5\\
 1/f corner (kHz) & 16--34 & 27--39 & 61--99 & 117--334\\
-trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 & $\le$1.2--1.5 & $\le$2.0--2.4\\\bottomrule
+trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 & $\le$1.2--1.5 & $\le$2.0--2.4\\
+\textbf{transistor 1/f left at 500 skips (e)} & \cellcolor{good}0.08--0.11 & \cellcolor{fair}0.11--0.13 & \cellcolor{fair}0.11--0.12 & \cellcolor{fair}0.15--0.16\\\bottomrule
 \end{tabularx}
 {\par\scriptsize LSM flagged: ACM109 ch1, ACM110 ch1, ACM110 ch3. LSM values in nV use the PA03 design chain gain.}
 \end{minipage}\hfill
@@ -96,6 +97,10 @@ trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 
   per-skip white noise, not by the remaining pickup. In October, with more pickup, the images did suffer (25\,\% of the
   pixel noise was shared between amplifiers). The setup number is therefore a diagnostic of pickup; the level the images
   tolerate is the next thing to calibrate.
+\item \textbf{The amplifier-health number, cross-checked.} The 1/f \emph{level} from the readout trace agrees with a
+  direct fit of the LSM static-record spectra (no CDS model) to $1.01\pm0.13$; the white/1/f split and the corner do not,
+  so they are not used. Expressed as the transistor's 1/f noise left in a 500-skip pixel, it is 0.08--0.13\,e on board 101:
+  \textbf{about half of the image variance comes from the output transistors themselves} (upper limit).
 \item \textbf{The same amplifier design on both module sets:} sense nodes of 84--95\,fF, per-skip noise of 3.3--4.4\,e,
   trap upper limits of the same order. PA03 is representative of the production amplifiers.
 \item \textbf{The LSM images are worse than their traces predict} (1.0--2.0$\times$ the white-noise expectation): at
@@ -123,12 +128,13 @@ trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 
 bare-electronics floor; results that used them as one (the 0.853\,ADU/\textmu V calibration, the noise budget, the pickup
 share of the reset feedthrough, the output-stage noise, the kTC sense-node estimate) are being rechecked.
 (2) The October trace numbers are compared at equal 0.2\,s length (48.8, not 67.6).
-(3) Trap densities are upper limits: the window fit has not been run on an open input, and band-limited white noise may
-be counted as 1/f. (4) LSM verdicts rest on one trace per channel. (5) Absolute nV values use the design chain gain.}
+(3) Trap densities are upper limits (no open-input test yet); their 1/f level is now cross-checked against static
+spectra, and band-limited white noise turned out not to be the main bias. (4) LSM verdicts rest on one trace per channel. (5) Absolute nV values use the design chain gain.}
 
 \head{Next measurements}
 \textbf{A board-101 trace with charge clocking off} (is the pickup from the cabling, or does it come with charge?);
 \textbf{more LSM traces per channel} (confirm the flagged channels); \textbf{the setup number against image noise} at
-several pickup levels (what level the images tolerate); \textbf{LSM images at 130\,K} (is their excess a temperature effect?).
+several pickup levels (what level the images tolerate); \textbf{LSM images at 130\,K} (is their excess a temperature effect?); \textbf{simultaneous static records} (is the
+uniform 1/f level from the transistors or a shared bias rail?).
 Details: the \texttt{amp\_phys} report and the colour-graded channel scorecard.
 \end{document}

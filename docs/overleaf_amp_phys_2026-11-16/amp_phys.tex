@@ -65,8 +65,10 @@ standard CCD characterisation; \std{} items are standard and are automated here.
 \item \textbf{Oxide traps and 1/f noise.} From how each amplifier's own noise depends on the CDS window: trap density
   $\lesssim2\times10^{16}$\,eV$^{-1}$cm$^{-3}$ (good oxide) on ch0/1/3, 1.5$\times$ higher on ch2 (twice the 1/f corner).
   The part of the noise that does not shrink with the window is 55--80\,\% of the single-skip noise; how much of it is
-  the transistor's 1/f is an upper limit until the same fit is run on a dead channel. Independent of that labelling, the
-  10\,\textmu s window is near-optimal and longer windows cost 9--32\,\% at fixed readout time
+  the transistor's 1/f is an upper limit. The 1/f \emph{level} is cross-checked: on the LSM modules it agrees with a
+  direct fit of the static-record spectrum to $1.01\pm0.13$, while the white/1/f split does not. As a health number, the
+  transistor's 1/f noise left in a 500-skip pixel is 0.08--0.13\,e on board 101, 34--57\,\% of the image variance.
+  Independent of the labelling, the 10\,\textmu s window is near-optimal and longer windows cost 9--32\,\% at fixed readout time
   (Section~\ref{sec:traps}). \novel
 \item \textbf{Corrections made on the way} are listed in Section~\ref{sec:corrections}. The most important: the four
   channels' traces are separate acquisitions, so a correlation \emph{between} channels' traces is not setup noise. The
@@ -448,6 +450,48 @@ $N_t$, $A=0.85$, $C=C_\text{eff}$ (buried channel) & $1.4\times10^{15}$ & $1.4\t
   channels: the setup (Section~\ref{sec:octnov}).
 \end{itemize}
 
+\paragraph{From one trace, and a cross-check that does not use the CDS.} The same window handle works on a single raw
+trace: shorter windows are formed \emph{in software} from the samples inside each 10\,\textmu s window (2--9.3\,\textmu s,
+fixed spacing), and the same exact-filter fit is applied (\texttt{trap\_from\_trace.py}). On board 101 it reproduces the
+strip result within 15\,\% on ch1/ch3 and a factor 1.6 on ch0/ch2. It still shares the model with the strip method, so
+it is a second implementation, not an independent test. The independent test comes from the LSM production modules
+(DM07/09/10, 180\,K), whose test stand also records \emph{static} traces: all clocks frozen, the output simply sampled
+for 0.1\,s. Their spectrum can be fitted directly, with no CDS model, as $S(f)=(S_w+K/f)\,L(f)+S_0$, where $L$ is the
+frontend's anti-alias roll-off (fitted corner 470--690\,kHz) and $S_0$ the floor behind it (Figure~\ref{fig:sfit}).
+\fig{static_fit.png}{Left: a static record (ACM109 ch0) with its direct fit, split into the 1/f part and the
+band-limited white part. Right: the 1/f level $K$ of each LSM channel from the readout-trace windows against $K$ from its
+static spectrum. The two flagged channels have telegraph noise or an interference comb in their readout trace that the
+static record did not catch.\label{fig:sfit}}
+\begin{itemize}
+\item \textbf{The 1/f level $K$ is robust:} the two methods agree to $1.01\pm0.13$ on the 9 clean channels. Since
+  $N_t\propto K$, the trap density no longer rests on one method (it remains an upper limit, with the follower-gain and
+  capacitance choices of the caveat below).
+\item \textbf{The white/1/f split and the corner are not robust:} the white level during readout is $\sim$1.3$\times$
+  the static one. Adding the measured roll-off $L(f)$ to the window fit does not close the gap (it widens it to 1.4$\times$),
+  so band-limited white noise being counted as 1/f is not the main effect; clocking-related white noise is a candidate.
+  The corner frequency is therefore not used as a health number.
+\item \textbf{The static record is blind to episodes:} ACM109 ch1 (telegraph noise) and ACM110 ch3 (a 30.6\,kHz comb)
+  look normal when static. A trace taken during readout is needed to catch them.
+\item \textbf{The 1/f level is nearly the same on all twelve LSM channels} (21--28\,nV/$\sqrt{\text{Hz}}$ at 10\,kHz),
+  across three boards and three modules. That points to the transistor design, but 1/f noise on a shared bias rail
+  (VDD, VR) would look the same; simultaneous static records on several channels would separate the two.
+\end{itemize}
+
+\paragraph{A health number in electrons.} Only the robust part, $K$, is needed to say what the transistor's 1/f noise
+costs an image: pass it through the exact CDS filter and the average of $N=500$ skips, and divide by the gain,
+$\sigma_{1/f}(500)=\sqrt{K\,I_f(500)}/\text{gain}$. (Through the CDS, 1/f noise still averages down almost like white
+noise: $\times0.040$ against $\times0.045$ from 1 to 500 skips.)
+\begin{table}[H]\centering\small
+\begin{tabular}{lccccc}\toprule
+ & 101 ch0 & 101 ch1 & 101 ch2 & 101 ch3 & LSM channels\\\midrule
+transistor 1/f left at 500 skips (e) & 0.084 & 0.111 & 0.114 & 0.128 & 0.11--0.16\\
+image read noise at 500 skips (e) & 0.144 & 0.147 & 0.164 & 0.173 & 0.19--0.33\\
+transistor 1/f share of the image variance & 34\,\% & 57\,\% & 49\,\% & 55\,\% & 14--64\,\%\\\bottomrule
+\end{tabular}\end{table}
+\takeaway{About half of what board 101's images see comes from the output transistors' own 1/f noise (an upper limit). It
+is the single number to compare amplifiers by: in electrons, on the image's scale, built only on the cross-checked 1/f
+level.}
+
 \paragraph{A practical rule: the optimal window.} For a fixed readout time, a longer window means fewer skips. The
 fitted curve $\sigma_1(\tau)$ describes the measured noise whatever its parts are called, so this rule does not depend
 on the inconsistency above. With it, the noise at fixed time is lowest for 5--8\,\textmu s windows (Figure~\ref{fig:wopt}). The
@@ -463,8 +507,10 @@ $N_t$ depends on two choices: the follower gain (0.44 instead of 0.85 makes it $
 whether the traps couple through the oxide capacitance or the buried-channel coupling ($\sim$13$\times$ lower), plus the
 standard $\lambda$. They are upper limits: any own noise that does not shrink with the window (band-limited white noise
 of the chain, slow noise that is not the transistor's) also counts. The 100 strips also differ in the other voltages,
-not only $\tau$; the fit treats that as scatter. Two checks firm up the numbers: the same fit on the dead board-102
-channels (expect no 1/f), and the DC level of the video line (the follower gain).}
+not only $\tau$; the fit treats that as scatter. The board-102 channels first meant as an open-input check turned out to have transistors (no charge is clocked to
+them): their fits look like transistors (corner 100--130\,kHz, $N_t\approx2\times10^{16}$), so a true open-input test is
+still missing. The DC level of the video line (the follower gain) and simultaneous static records (transistor or shared
+rail) would firm up the numbers.}
 
 % =====================================================================================================================
 \section{Between the channels: crosstalk, video-line capacitance, shared return}\label{sec:xtalk}
@@ -646,7 +692,8 @@ All in \texttt{amp\_phys/} (results in \texttt{amp\_phys/results/}). \texttt{dat
 dead-channel rule, knees, outliers); \texttt{chain\_calibration.py} (Johnson calibration, noise budget);
 \texttt{oct\_nov.py} (October/November); \texttt{clock\_edges.py}, \texttt{v\_edges.py}, \texttt{sense\_node\_coupling.py}
 (couplings); \texttt{channel\_knees.py}; \texttt{crosstalk.py}, \texttt{mutual\_capacitance.py};
-\texttt{physics\_model.py}; \texttt{oxide\_traps\_tau.py} (1/f, trap density, window optimum); \texttt{trace\_anatomy.py} (whole-trace
+\texttt{physics\_model.py}; \texttt{oxide\_traps\_tau.py} (1/f, trap density, window optimum); \texttt{trap\_from\_trace.py} (the same from one
+trace); \texttt{static\_fit.py}, \texttt{static\_fit\_figure.py} (static-spectrum cross-check); \texttt{trace\_anatomy.py} (whole-trace
 dissection); \texttt{raw\_psd.py} (level-0 spectra); \texttt{images/} (units, tracks, dark, defects, pocket pumping); \texttt{cms\_images.py};
 \texttt{trace\_electrons.py}, \texttt{trace\_read\_noise.py} (negative results); \texttt{common\_mode.py},
 \texttt{setup\_noise\_index.py} (valid only for simultaneous acquisitions). Detailed numbers: \texttt{REPORT.md}

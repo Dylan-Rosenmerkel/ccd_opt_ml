@@ -728,3 +728,40 @@ of §6, in which the load resistor explains most of the white noise.
   which §25 argues against, or the fit to count band-limited white noise (≈0.9 µs settling) as 1/f. Until the window
   fit is run on the dead board-102 channels of the v2 strips, the 1/f share and N_t are upper limits. The window
   optimum uses only the fitted σ₁(τ) and is unaffected.
+
+## 27. The 1/f level cross-checked without the CDS; an amplifier-health number in electrons (2026-11-16)
+
+**Single-trace window fit.** `trap_from_trace.py` forms 2–9.3 µs windows in software inside each 10 µs window of one
+raw trace and fits σ₁²(τ) = S_w I_w + K I_f with the exact filter. On board 101 (8 v3 traces per channel) it reproduces the
+strip result (§24) within 15 % on ch1/ch3 and ×1.6 on ch0/ch2. Same model, so a second implementation, not a test.
+
+**Independent test: LSM static records** (DM07/09/10, ACM 106/109/110, 180 K; all clocks frozen, 0.1 s).
+`static_fit.py` fits S(f) = (S_w + K/f)·L(f) + S_0 directly (2 kHz–4 MHz, L = 1/(1+(f/f_c)^2n)); f_c = 470–690 kHz,
+n ≈ 1.4–2.2, S_0 ≈ 4.5–5 nV/√Hz.
+
+| quantity | window method / static spectrum (9 clean channels) |
+|---|---|
+| 1/f level K | **1.01 ± 0.13** |
+| white level | 1.28 (1.39 with the roll-off added to the window fit) |
+| 1/f corner | not consistent (static 84–181 kHz, windows 48–99 kHz) |
+
+- K is robust; N_t ∝ K, so the trap density (still an upper limit) is now backed by two methods.
+- The white/corner split is not robust; adding the measured roll-off makes it worse, so band-limited white counted as
+  1/f (§26) is not the main effect. The corner is dropped as a health number.
+- Static records miss episodes: ACM109 ch1 (telegraph) and ACM110 ch3 (30.6 kHz comb) look normal when static.
+- 1/f at 10 kHz is 21–28 nV/√Hz on all 12 LSM channels: transistor design, or 1/f on a shared rail (VDD/VR).
+  Test: simultaneous static records on several channels.
+
+**Health number.** σ_1/f(500) = √(K·I_f(500))/gain, the transistor's 1/f noise left in a 500-skip pixel (through the
+CDS, 1/f still averages ×0.040 vs ×0.045 for white from 1 to 500 skips):
+
+| | 101 ch0 | 101 ch1 | 101 ch2 | 101 ch3 | LSM (12) |
+|---|---|---|---|---|---|
+| σ_1/f(500) (e) | 0.084 | 0.111 | 0.114 | 0.128 | 0.11–0.16 |
+| image σ, 500 skips (e) | 0.144 | 0.147 | 0.164 | 0.173 | 0.19–0.33 |
+| share of image variance | 34 % | 57 % | 49 % | 55 % | 14–64 % |
+
+About half of board 101's image variance is the transistors' own 1/f noise (upper limit). Used in
+`physics_sheet.py` and the scorecard (good ≤ 0.10 e, fair ≤ 0.15 e). The board-102 channels meant as an open-input
+check have transistors (1/f corner 100–130 kHz, N_t ≈ 2×10¹⁶), so a true open-input test is still missing.
+Figure: `results/lsm_hightemp/static_fit/static_fit.png`.
