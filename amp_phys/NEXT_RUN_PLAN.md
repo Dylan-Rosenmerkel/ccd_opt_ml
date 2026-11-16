@@ -81,3 +81,4 @@ give (`chain_calibration.py`), and the high-skip floor (0.1 e⁻) should drop.
 
 | B8 | **Capacitance tomography**: dither every line (VDD, VR, OG, DG, TG, SW, RG, H, V, VSUB) with a small square wave at its own frequency during one trace set | The full sense-node ↔ line mutual-capacitance vector per amplifier, incl. DC-held lines | firmware: small modulation on the DAC / pot outputs | lock-in on the CDS (REPORT §19) |
 | B9 | **DC level of each video line** (voltmeter at the frontend input) or the VDD supply current | follower current → g_m, follower gain, C_sn per amplifier; decides whether the white noise is the load resistor | bench | `chain_calibration.py` |
+| B10 | **Clock-line capacitance** (LCR at the connector per V/H phase, warm and cold) and/or the clock edge scoped at the feedthrough | Dielectric thickness t_eq = ε_ox·A/C directly. With the reset injection, this splits out the buried-channel depth per CCD | bench, ~1 h | REPORT §21 |

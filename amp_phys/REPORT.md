@@ -516,3 +516,51 @@ firmware option to add a small modulation to the DAC / pot settings.
 | VDD/drain | ~2–4 fF | layout estimate (C_gd of the output FET) |
 | VSUB | ~0.01–0.03 fF | depletion estimate |
 | TG, DG | – | not varied in v3; tomography (NEXT_RUN_PLAN B8) |
+
+## 21. Oxide (dielectric) thickness: what the data can and cannot separate
+
+**The degeneracy.** Every electrical handle on the gates measures the gate-to-channel coupling of the buried channel:
+
+    1 / C_eff = t_eq / ε_ox + x_ch / ε_Si
+
+with t_eq the oxide-equivalent dielectric thickness and x_ch the depth of the channel maximum. This one combination
+appears in the reset charge injection, in the channel potential vs dose (the knees: V_pinch ≈ q N_s / C_eff when the
+potential maximum sits mid-layer), and in the output-FET gate capacitance.
+
+- **Measured:** 1/C_eff ≈ **8.0 µm²/fF** (C_eff ≈ 0.125 fF/µm²; ±30 % from the charge-partition assumption). It is
+  the same on the four CCDs within ±7 % (injection 2.10–2.43 fF/V).
+- **Split with one prior:**
+
+| assumed | gives |
+|---|---|
+| t_eq = 76 nm (recipe: 50 nm SiO₂ + 50 nm Si₃N₄) | x_ch ≈ 0.60 µm |
+| x_ch = 0.45 µm (boron 150 keV projected range, no diffusion) | t_eq ≈ 126 nm |
+| x_ch = 0.6 µm | t_eq ≈ 76 nm (the recipe value) |
+
+- The recipe values (76 nm, ~0.5–0.6 µm after diffusion) are mutually consistent with the measured combination.
+- **What does not work yet:** the vertical-clock steps in the traces. Their relaxation should contain the V line's
+  RC (R_series × C_line, with C_line = ε_ox × gate area / t_eq). But the steps overlap and mix several couplings, and
+  exponential fits are unstable (τ from 4 to 60 µs, many failures).
+
+**How to separate them (cheap, non-destructive).** Each of these weighs the oxide alone, because the gate couples to a
+surface layer (the channel stops / accumulated surface) over a large area, not to the buried channel:
+1. **Clock-line capacitance at the connector** (LCR meter, warm and at 130 K, CCD powered down): C_line = ε_ox · A / t_eq
+   for each V and H phase, with A from the layout (array area per phase). A V phase is ~1/3 of the array, giving
+   ~0.1–0.3 µF at 76 nm, easily measured. The ratio between phases checks the area bookkeeping.
+2. **Scope the clock edge at the cryostat feedthrough:** τ = R_series × C_line with R_series known from the schematics
+   (V: 49.9 + 5.1 Ω; H/RG/SW: 100 + 15 Ω).
+3. **The charge-partition check** (RG edge speed varied with an RC) pins the ½ split, which tightens C_eff to ~10 %.
+
+With t_eq from 1 or 2 and C_eff from the reset injection, the buried-channel depth follows per CCD to ~10–15 %.
+
+**Other layer quantities and where they stand:**
+
+| quantity | status | how |
+|---|---|---|
+| silicon thickness | **615–655 µm** (measured) | muon tracks (§10) |
+| full depletion, field-free layer | depleted at nominal; field-free ≲ 50 µm | diffusion profile of tracks |
+| substrate doping / resistivity | **ρ ≳ 25–35 kΩ·cm** | thickness + depletion (§10) |
+| buried-channel dose variation between CCDs | ~0.6 % (CCD_B vs D/C) | knees (§12) |
+| lateral overlap under RG | 0.08–0.14 µm | coupling / (C_ox × width) (§15). Assumes t_eq = 76 nm: scales ∝ t_eq |
+| field (thick) oxide under the sense line | only a bound | C_fixed (60–80 fF) over ~100 µm × 6 µm of line → the field dielectric must be ≳ 0.2–0.3 µm-equivalent if the line dominates C_fixed |
+| poly, metal, passivation thickness | not accessible | they do not enter any electrical quantity we measure |
