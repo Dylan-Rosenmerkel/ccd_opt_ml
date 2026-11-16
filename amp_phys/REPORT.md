@@ -564,3 +564,39 @@ With t_eq from 1 or 2 and C_eff from the reset injection, the buried-channel dep
 | lateral overlap under RG | 0.08–0.14 µm | coupling / (C_ox × width) (§15). Assumes t_eq = 76 nm: scales ∝ t_eq |
 | field (thick) oxide under the sense line | only a bound | C_fixed (60–80 fF) over ~100 µm × 6 µm of line → the field dielectric must be ≳ 0.2–0.3 µm-equivalent if the line dominates C_fixed |
 | poly, metal, passivation thickness | not accessible | they do not enter any electrical quantity we measure |
+
+## 22. A single setup-noise number (`setup_noise_index.py`)
+
+**Inputs.** One simultaneous trace set (~1 min, all channels of a board). Per channel, the per-skip CDS values are
+averaged over blocks of n skips. The deterministic droop curve (the same in every pixel) is removed with
+`--remove-pattern`. Each channel's block noise is split into a shared part (explained by the board's other channels)
+and its own part.
+
+**Recommended figures of merit, to compute and minimise per configuration:**
+1. **σ_shared (e⁻)**: the shared (setup) noise per skip-block. On board 101 it is **constant with n**: it does not
+   average down.
+2. **SNI_n = σ_shared / σ_own** at the operating averaging n: the factor of setup noise over the amplifier's own noise.
+3. **e_w (nV/√Hz)**: the white input noise density, against the 17.1 nV/√Hz open-frontend floor.
+
+| run | board | e_w (nV/√Hz) | σ_shared (e⁻), n = 1 / 10 / 120 | σ_own (e⁻), n = 1 / 10 / 120 | SNI_1 / SNI_10 / SNI_120 |
+|---|---|---|---|---|---|
+| v1 (Nov 2–3) | 101 | 20.7 | 5.25 / 5.67 / 5.45 | 4.86 / 1.37 / 0.33 | 1.09 / 4.19 / 16.5 |
+| v2 (Nov 5–7) | 101 | 21.0 | 5.18 / 5.62 / 5.39 | 4.91 / 1.40 / 0.34 | 1.08 / 4.12 / 15.9 |
+| v3 (Nov 10–12, after the cabling change) | 101 | 20.5 | **4.31 / 4.80 / 4.62** | 4.74 / 1.33 / 0.33 | **0.92 / 3.62 / 14.1** |
+| v1 / v2 / v3 | 102 | 16.8–17.0 (at the open floor) | – | – | 0.33–0.35 / 1.5–1.6 / 5.7–5.9 |
+
+**Reading.**
+- The shared component is a **slow wander of the CDS offset** (≈ 5 e⁻ equivalent). The CDS cancels baseline drift, so
+  it must be the clock-feedthrough offset wandering, identically on every channel.
+- That points to a slow wander of the shared clock/bias levels (it scales with RG_high − VR, §18).
+- The cabling change reduced it by ~15 % (5.4 → 4.6 e⁻). Each amplifier's own noise is unchanged (≈ 4.8 e⁻ per skip,
+  falling as 1/√n).
+- Most of it averages out within a 500-skip pixel and the row baseline removes the rest. That is why common-mode
+  subtraction does not help the 500-skip images, but does help at 1000–10000 skips.
+- Board 102's white noise sits at the open-frontend Johnson floor (16.8–17.0 vs 17.1 nV/√Hz). Its setup index is ~3×
+  lower than board 101's.
+
+**For a new setup:**
+- Take one simultaneous trace set per configuration.
+- Minimise σ_shared (or SNI at the operating skip count), and check that e_w approaches the frontend floor.
+- One number per board, ~1 min of data, no image needed.
