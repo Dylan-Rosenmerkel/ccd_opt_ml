@@ -23,9 +23,9 @@ noise of the output transistor}, and whether the \textbf{readout timing is settl
 what the images actually reach.}
 
 \head{The problem}
-Skipper-CCD read noise has three sources: the readout electronics, the CCD's output transistor, and the setup (cabling,
-grounding, supplies). They were separated only with full images or voltage scans, or judged by eye on noise spectra, so
-a noisy channel could not quickly be blamed on what can be fixed (the setup) or what cannot (the transistor).
+Read noise comes from the electronics, the CCD's output transistor and the setup (cabling, grounding). Separating them
+needed images or voltage scans, or judging spectra by eye, so a noisy channel could not quickly be blamed on what can be
+fixed (the setup) or what cannot (the transistor).
 
 \head{What is new}
 \begin{enumerate}
@@ -79,11 +79,10 @@ the October trace here is 1.1\,s long, which inflates it; the table compares equ
 
 \head{What it can be used for}
 \begin{itemize}
-\item \textbf{Setup debugging and run monitoring:} one trace or static record per channel gives the pickup level in
-  seconds; a jump flags a new noise source before it shows in images.
-\item \textbf{Amplifier screening of production modules} from data already taken: 1/f corner, telegraph flag and timing
-  per channel, separating a defective transistor (replace) from a noisy environment (fix).
-\item \textbf{Comparing test stands} on one scale, and \textbf{choosing readout timing} (window length, settling waits).
+\item \textbf{Setup debugging, run monitoring, test-stand comparison:} one trace or static record per channel gives
+  the pickup level in seconds, on one scale.
+\item \textbf{Amplifier screening of production modules} from data already taken (1/f corner, telegraph flag, timing),
+  separating a defective transistor (replace) from a noisy environment (fix); \textbf{choosing readout timing}.
 \item \textbf{Physics features for the voltage-optimisation ML}, separating ``noisy settings'' from ``noisy day''.
 \end{itemize}
 
