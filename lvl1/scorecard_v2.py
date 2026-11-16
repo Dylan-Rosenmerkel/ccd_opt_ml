@@ -70,6 +70,7 @@ IMAGE_TRAIN = (0, 2, 3, 4)    # pair types the image-label models train on: with
 STRIP_TRAIN = (1,)            # ... and the strip-label models
 STRIP = {"sigma_e": "l1.l1: sigma_e (e)", "lambda": "l1.l1: lambda (e/pixel)", "gain": "l1.l1: gain (ADU/e)"}
 N_BLOCKS = 5
+LAMBDA_FLOOR = 0.005      # e-/pixel: lambda labels below this are failed fits (dropped)
 MAX_RANDOM_TRAIN = 800        # random training pairs kept per split (fixed-seed subsample; all other pairs kept)
 REL_MODELS = ("no change", "settings change: gp", "settings change: trees", "settings + amplifier: gp",
               "settings + amplifier: trees", "trace change: trees", "trace change: gp", "trace: combined trees [A, B, B-A]",
@@ -109,6 +110,9 @@ def load(data: Path, channels, holdout: str | None, keep_fractional: bool):
           & np.isfinite(b["Y"]).all(1))
     if not keep_fractional:
         ok &= ~b["fractional_window"].astype(bool)
+    # a lambda at the fit's floor (v3: 0.001 e-/pixel on 3 of ~300 rows, where the zero peak was too broad to fit) is a
+    # failed fit, not a measurement: in log units it sits ~6 below every other row
+    ok &= b["Y"][:, 1] > np.log(LAMBDA_FLOOR)
     d = pd.read_csv(data / "dataset.csv", low_memory=False)
     plan = json.loads(Path(PLAN).read_text())["packets"]
     session = {p["packet_id"]: str(p["session"]) for p in plan}

@@ -1,0 +1,73 @@
+# amp_phys priors: design / process / readout values used by the physics inversion (phase 2) and the chain calibration.
+# Sources (2026-11-16, from the user): "CCD Recipe.pdf" (process flow), the ACM circuitry guide v1.3 (D. Rosenmerkel,
+# C. Zhu), the DAMIC-M frontend board schematic FE_ADA4817_MK2 (UZH, 2024-03-06), and a micrograph of one output corner.
+# Process values are TARGETS; the amplifiers show process variation, so every prior gets a width.
+
+[process]
+device = "p-channel CCD on high-resistivity n-type Si (boron buried channel, phosphorus channel stops)"
+gate_oxide_nm = 50.0            # thermal oxide, 50 nm target (frontside step 12 / gates 6, 10, 14)
+gate_nitride_nm = 50.0          # LPCVD nitride on the oxide (step 14): ON stack under poly 1
+eps_ox = 3.9
+eps_nitride = 7.5
+# C_ox of the ON stack: eps0 / (t_ox/3.9 + t_n/7.5) = 0.454 fF/um^2 (oxide alone: 0.69 fF/um^2)
+cox_fF_per_um2 = 0.454
+cox_rel_width = 0.15            # thickness variation (process)
+field_oxide_nm = 100.0
+poly_thickness_um = [0.3, 0.5]
+buried_channel_boron_cm2 = 1.3e13   # 150 keV
+notch_boron_cm2 = 0.5e12            # 150 keV
+channel_stop_phos_cm2 = 1.0e12      # 80 keV
+p_plus_boron_cm2 = 1.0e15
+n_plus_phos_cm2 = 1.0e15
+backside_isdp_um = 1.0              # in-situ phosphorus-doped poly backside contact
+cmp_removal_um_max = 20.0
+silicon_thickness_um = 670.0        # DAMIC-M nominal; TO BE CHECKED with cosmic tracks (phase 3)
+resistivity_kohm_cm = 10.0          # user, 2026-11-16: "order of 10 kOhm cm", n-type
+pixel_um = 15.0                     # DAMIC-M nominal; to be checked
+
+[readout.frontend]                   # FE_ADA4817_MK2, per channel
+load_resistor_ohm = 20000.0          # R300: video input to GND = the source-follower load
+bias_resistor_ohm = 100000.0         # R301 after the 100 nF coupling capacitor (in parallel at signal frequencies)
+coupling_cap_F = 100e-9              # high-pass with 100k: ~16 Hz
+preamp = "ADA4817-1 (FET input), non-inverting gain 1 + 1150/91 = 13.64, pole 1/(2 pi 1.15k 10p) = 13.8 MHz"
+preamp_gain = 13.64
+preamp_en_nV = 4.0                   # ADA4817 input voltage noise density
+diff_driver_gain = 2.004             # ADA4932, 499/249
+frontend_gain_diff = 27.34           # V differential out per V at AIN
+input_range_mV = 150.0               # +-150 mV -> +-2.048 V per leg
+board_temperature_K = 300.0          # frontend is outside the cryostat (assumption)
+ccd_temperature_K = 130.0            # user, 2026-11-16
+
+[readout.acm]
+adc = "LTC2387-18, 18 bit, 15 Msps, differential, 4.096 V reference (LTC6655)"
+adc_fullscale_diff_V = 8.192
+adc_lsb_uV = 31.25                   # 8.192 V / 2^18, if the ACM input buffer (ADA4896) has unity gain: TO BE CHECKED
+clock_dac = "AD5371, 14 bit"
+bias_pot = "AD5293-20, 1024 steps (VDD, Vdrain, VR, VSUB set by digital pots: the VSUB readback steps)"
+vsub_range_V = [40.0, 90.0]
+
+[readout.filters]                    # RC on the clock lines (ACM output + frontend board)
+v_clock_tau_us = 2.35                # frontend 49.9 ohm x 47 nF (V1-3, TG); ACM adds 5.1 ohm x 100 nF (0.5 us)
+h_rg_sw_og_dg_tau_ns = 33.0          # frontend 100 ohm x 330 pF
+sw_h2c_acm_tau_ns = 15.0             # ACM 15 ohm x 1 nF
+
+[timing]                             # 10 ns cycles (lvl1/make_packet_plan.py TIMING)
+delayInt_cycles = 1000               # CDS window 10 us at nominal
+cycle_ns = 10.0
+
+[layout]
+# micrograph of one output corner (scale bar 100 um); gate order from the array: V1 V2 V3 | TG | H1 H2 H3 -> SW -> OG
+# -> sense node (Video) with RG / VR (reset) and the output FET (Vdd, Drain); DG = dump gate. W and L of the output FET
+# need a higher-magnification image of the gate region.
+um_per_px_displayed = 0.303
+
+[layout.measured]   # from the layout screenshot (user, 2026-11-16): scale bar 40 um in two 20 um halves (~95 px each),
+                    # cross-checked with the serial-register period (15 um pixel = ~75 px): ~5 px/um, +-5 %.
+                    # Layer identification is an inference: TO BE CONFIRMED.
+pixel_um_check = 15.0
+output_fet_L_um = [5.5, 6.5]        # width of the poly strip between the source and drain contact columns
+output_fet_W_um = [55.0, 60.0]      # overlap of that strip with the diffusion
+output_fet_WL_um2 = [330.0, 360.0]
+reset_fet_W_um = 6.0
+reset_fet_L_um = 6.0
+sense_line_poly_length_um = 100.0   # the gate poly continues ~100 um to the end of the serial register

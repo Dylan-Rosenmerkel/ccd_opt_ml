@@ -1,0 +1,6 @@
+amp,chain gain (ADU/uV),conversion gain at AIN (uV/e),white noise at AIN (nV/rtHz),above the dead-channel floor (nV/rtHz),electronics share of the variance if unshunted (%),rise time (ns)
+101 ch0,0.8749,1.6161,20.2148,10.7938,71.489,436.1289
+101 ch1,0.8749,1.5941,20.6006,11.5002,68.8363,367.3854
+101 ch2,0.8749,1.5235,21.3501,12.7945,64.0876,353.2421
+101 ch3,0.8749,1.5325,22.2217,14.2012,59.159,362.6903
+102 ch3,0.853,1.5131,18.7615,7.7373,82.9926,594.3826

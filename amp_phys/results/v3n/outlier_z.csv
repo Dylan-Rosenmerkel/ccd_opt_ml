@@ -1,0 +1,75 @@
+,101 ch0,101 ch1,101 ch2,101 ch3,102 ch3
+gain | gain (ADU/e),1.73,0.98,-0.49,-0.3,-2.0
+gain | C_sn relative to board-101 mean,-1.68,-0.99,0.46,0.27,2.11
+image | sigma_e (e),-1.23,-0.99,-0.09,0.37,3.05
+image | lambda (e/pix),-0.91,-0.68,-0.13,-0.29,7.33
+image | lambda dark,-0.73,-0.52,-0.67,-0.06,8.38
+image | lambda CIC,-1.33,-0.86,0.39,-0.15,3.1
+image | lambda overscan,-1.14,-0.6,-0.22,-0.05,5.51
+image | lambda active,-1.11,-0.71,-0.11,-0.07,5.19
+noise | white noise per skip (ADU),-0.24,0.05,0.63,1.61,-3.19
+noise | null-CDS noise (ADU),0.65,-0.13,1.0,0.46,-5.3
+noise | white noise per skip (e),-0.98,-0.4,0.87,2.22,-1.17
+noise | null-CDS noise (e),0.34,-0.34,1.35,0.62,-3.54
+noise | jump-robust CDS sigma (e),-1.03,-0.45,0.84,2.32,-1.04
+noise | correlated noise floor (e),,,,,
+noise | Allan dev n=50 (e),-1.14,-0.01,-0.1,4.33,-0.74
+noise | noise of 50-skip average (e),-1.41,0.01,0.07,3.62,-0.71
+noise | 1/f corner (kHz),0.78,0.65,0.16,0.39,-15.53
+noise | 1/f exponent,0.26,-0.01,3.15,-1.3,-0.88
+noise | Lorentzian corner (kHz),-0.52,-0.52,-0.52,-0.52,3.36
+noise | slow/fast CDS power,0.56,0.51,-1.68,1.55,-1.29
+RTS / traps (amplifier) | CDS excess kurtosis,-1.22,-0.37,4.0,-0.17,-0.24
+RTS / traps (amplifier) | whitened CDS kurtosis,-0.8,-0.33,2.78,-0.38,-0.58
+RTS / traps (amplifier) | in-window step rate (%),-0.5,-0.5,-0.5,-0.49,48.44
+RTS / traps (amplifier) | in-window step amplitude (e),,1.07,,0.37,-6.92
+RTS / traps (amplifier) | jump share of CDS variance,-1.49,-0.31,3.37,0.05,-0.39
+RTS / traps (amplifier) | largest CDS step (t),-0.09,-0.19,-1.88,0.28,2.81
+coupling (e/V) | SW -> sense node (e/V),-0.78,0.35,-1.45,-0.1,3.08
+coupling (e/V) | RG -> sense node (e/V),0.41,-0.04,1.84,-0.04,-3.19
+coupling (e/V) | H -> first skip (e/V),0.33,0.56,0.49,0.61,-21.51
+coupling (e/V) | pulse/dip ratio (RG/SW),1.52,-0.91,0.52,0.58,-2.09
+coupling (e/V) | H-transfer peak-to-peak (e),,,,,
+coupling (e/V) | pre-pulse dip / pulse,-0.98,1.95,-1.75,0.53,0.3
+coupling (e/V) | baseline coupling (1e-3),0.38,0.94,0.7,-0.04,-5.93
+bandwidth | rise time (ns),0.14,-0.62,-0.8,-0.68,5.66
+bandwidth | recovery tau1 (us),0.07,0.75,-0.21,1.39,-3.48
+bandwidth | recovery tau2 (us),-0.15,-2.82,0.55,-0.13,1.88
+bandwidth | ringing frequency (MHz),0.51,0.53,0.47,0.49,-99.56
+bandwidth | ringing rms (e),0.43,0.89,0.82,-0.18,-4.97
+bandwidth | settling time after pulse (us),0.15,-0.86,-1.26,-0.03,3.67
+bandwidth | dip recovery time (us),-0.91,0.39,-1.28,-0.14,3.12
+bandwidth | edge jitter (ns),-0.78,1.41,-0.1,1.21,-1.86
+charge transfer | charge-loss slope (%),,,,,
+charge transfer | charged-pixel skewness,,,,,
+lines / grounding | line count,2.09,0.25,0.25,-1.32,-1.34
+lines / grounding | strongest line (kHz),-0.48,-0.51,-0.51,-0.49,15.07
+lines / grounding | strongest line amplitude (e),0.71,-0.15,1.42,0.02,-3.59
+"lines / grounding | line phase coherence, pixel clock",-0.14,-0.51,-1.12,0.29,2.5
+stability | gain scatter (%),0.32,0.48,0.19,0.25,-2.71
+stability | gain drift (%/h),0.45,0.22,0.3,0.4,-2.91
+stability | sigma_e scatter (%),-0.71,-0.82,0.1,-0.55,5.67
+stability | sigma_e drift (%/h),-0.5,-0.93,0.9,-1.98,0.89
+stability | lambda scatter (%),-0.42,-0.67,-0.79,-0.1,7.44
+stability | lambda drift (%/h),-1.37,0.07,-1.14,1.36,1.01
+stability | white noise scatter (%),-1.05,-0.82,1.52,1.28,-0.78
+stability | white noise drift (%/h),-2.53,0.49,1.33,0.07,-1.18
+responses (v3 scan) | gain vs VDD (%/V),-0.39,1.76,-1.02,0.15,
+responses (v3 scan) | gain vs VR (%/V),-0.77,1.8,0.68,-1.43,
+responses (v3 scan) | white noise (ADU) vs VDD (%/V),0.18,0.13,-1.15,1.4,
+responses (v3 scan) | rise time vs VDD (%/V),0.51,-0.24,-0.22,-0.27,
+responses (v3 scan) | recovery tau1 vs VDD (%/V),1.31,-0.24,-1.16,0.2,
+responses (v3 scan) | SW feedthrough vs SW low (%/V),,,,,
+responses (v3 scan) | RG feedthrough vs RG high (%/V),-0.27,1.59,-2.02,0.43,
+responses (v3 scan) | lambda vs VSUB (%/V),-0.9,0.93,-1.44,1.38,
+responses (v3 scan) | lambda active vs VSUB (%/V),-0.23,2.07,-2.3,0.2,
+responses (v3 scan) | lambda overscan vs VSUB (%/V),0.01,1.87,-2.95,0.12,
+responses (v3 scan) | lambda dark vs VSUB (%/V),0.61,1.4,-2.46,-0.15,
+responses (v3 scan) | lambda CIC vs VSUB (%/V),-0.88,2.07,-1.37,0.45,
+responses (v3 scan) | sigma_e vs VSUB (%/V),-0.86,1.93,-1.29,0.55,
+responses (v3 scan) | white noise (ADU) vs VSUB (%/V),-0.16,0.64,-0.14,-0.2,
+responses (v3 scan) | CIC vs H swing (%/V),-0.18,-0.62,-0.31,0.75,
+responses (v3 scan) | CIC vs V swing (%/V),0.12,-0.3,0.58,-0.14,
+responses (v3 scan) | 1/f corner vs H swing (%/V),-1.07,-1.04,0.61,1.51,
+knees (v3 scan) | lambda knee in VSUB (V),-1.11,0.08,0.5,0.17,
+knees (v3 scan) | sigma_e knee in VR (V),2.08,0.03,-0.41,-0.99,

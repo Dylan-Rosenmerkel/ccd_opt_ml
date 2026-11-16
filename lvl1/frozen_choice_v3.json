@@ -1,0 +1,275 @@
+{
+ "frozen": "2026-11-16T07:06:36",
+ "source": "processed_v3n/lvl1_results/scorecard_G/scorecard.json",
+ "rule": "per target and cell: top 3 absolute models by typical error % (baselines excluded); top 3 change models by size error % on random pairs (no-change and direction-only excluded), plus the top direction-only model by direction on clear changes; physics models, settings references and baselines always kept",
+ "absolute": {
+  "trained": {
+   "sigma_e": [
+    {
+     "model": "trace: physics",
+     "error_pct": 6.33
+    },
+    {
+     "model": "settings + amplifier: trees",
+     "error_pct": 6.38
+    },
+    {
+     "model": "trace: trees",
+     "error_pct": 6.46
+    }
+   ],
+   "lambda": [
+    {
+     "model": "settings + amplifier: gp",
+     "error_pct": 11.06
+    },
+    {
+     "model": "settings + amplifier: trees",
+     "error_pct": 11.9
+    },
+    {
+     "model": "trace: trees",
+     "error_pct": 20.64
+    }
+   ],
+   "gain": [
+    {
+     "model": "settings + amplifier: gp",
+     "error_pct": 0.82
+    },
+    {
+     "model": "settings + amplifier: trees",
+     "error_pct": 1.01
+    },
+    {
+     "model": "trace: physics",
+     "error_pct": 1.11
+    }
+   ]
+  },
+  "new": {
+   "sigma_e": [
+    {
+     "model": "trace: trees",
+     "error_pct": 11.91
+    },
+    {
+     "model": "trace: physics",
+     "error_pct": 13.97
+    },
+    {
+     "model": "trace: nn",
+     "error_pct": 15.31
+    }
+   ],
+   "lambda": [
+    {
+     "model": "trace: trees",
+     "error_pct": 39.94
+    },
+    {
+     "model": "trace: physics",
+     "error_pct": 51.48
+    },
+    {
+     "model": "trace: nn",
+     "error_pct": 57.25
+    }
+   ],
+   "gain": [
+    {
+     "model": "settings: trees",
+     "error_pct": 3.69
+    },
+    {
+     "model": "settings: gp",
+     "error_pct": 3.74
+    },
+    {
+     "model": "trace: physics",
+     "error_pct": 3.95
+    }
+   ]
+  }
+ },
+ "relative": {
+  "trained": {
+   "sigma_e": [
+    {
+     "model": "ensemble: settings + trace",
+     "size_error_pct": 7.99,
+     "spearman": 0.778
+    },
+    {
+     "model": "settings + trace: combined trees",
+     "size_error_pct": 8.05,
+     "spearman": 0.781
+    },
+    {
+     "model": "ensemble: trace models",
+     "size_error_pct": 8.53,
+     "spearman": 0.716
+    }
+   ],
+   "lambda": [
+    {
+     "model": "settings + trace: combined trees",
+     "size_error_pct": 14.0,
+     "spearman": 0.964
+    },
+    {
+     "model": "absolute settings + amplifier: gp, differenced",
+     "size_error_pct": 14.42,
+     "spearman": 0.957
+    },
+    {
+     "model": "absolute settings + amplifier: trees, differenced",
+     "size_error_pct": 16.43,
+     "spearman": 0.94
+    }
+   ],
+   "gain": [
+    {
+     "model": "absolute settings + amplifier: gp, differenced",
+     "size_error_pct": 1.02,
+     "spearman": 0.946
+    },
+    {
+     "model": "absolute settings + amplifier: trees, differenced",
+     "size_error_pct": 1.41,
+     "spearman": 0.897
+    },
+    {
+     "model": "settings + trace: combined trees",
+     "size_error_pct": 1.45,
+     "spearman": 0.907
+    }
+   ]
+  },
+  "new": {
+   "sigma_e": [
+    {
+     "model": "ensemble: settings + trace",
+     "size_error_pct": 9.35,
+     "spearman": 0.667
+    },
+    {
+     "model": "ensemble: trace models",
+     "size_error_pct": 9.45,
+     "spearman": 0.646
+    },
+    {
+     "model": "trace change: difference curves PCA + trees",
+     "size_error_pct": 9.7,
+     "spearman": 0.59
+    }
+   ],
+   "lambda": [
+    {
+     "model": "ensemble: settings + trace",
+     "size_error_pct": 25.31,
+     "spearman": 0.907
+    },
+    {
+     "model": "settings + trace: combined trees",
+     "size_error_pct": 25.32,
+     "spearman": 0.934
+    },
+    {
+     "model": "settings + trace: residual trees",
+     "size_error_pct": 32.56,
+     "spearman": 0.895
+    }
+   ],
+   "gain": [
+    {
+     "model": "settings change: gp",
+     "size_error_pct": 2.27,
+     "spearman": 0.78
+    },
+    {
+     "model": "settings change: trees",
+     "size_error_pct": 2.27,
+     "spearman": 0.771
+    },
+    {
+     "model": "ensemble: settings + trace",
+     "size_error_pct": 2.3,
+     "spearman": 0.778
+    }
+   ]
+  }
+ },
+ "direction": {
+  "trained": {
+   "sigma_e": [
+    {
+     "model": "settings + trace: direction classifier",
+     "direction": 0.927
+    }
+   ],
+   "lambda": [
+    {
+     "model": "settings + trace: direction classifier",
+     "direction": 0.992
+    }
+   ],
+   "gain": [
+    {
+     "model": "settings + trace: direction classifier",
+     "direction": 0.967
+    }
+   ]
+  },
+  "new": {
+   "sigma_e": [
+    {
+     "model": "settings + trace: direction classifier",
+     "direction": 0.88
+    }
+   ],
+   "lambda": [
+    {
+     "model": "settings + trace: direction classifier",
+     "direction": 0.993
+    }
+   ],
+   "gain": [
+    {
+     "model": "settings + trace: direction classifier",
+     "direction": 0.89
+    }
+   ]
+  }
+ },
+ "abs_models": [
+  "amplifier mean",
+  "mean",
+  "settings + amplifier: gp",
+  "settings + amplifier: trees",
+  "settings: gp",
+  "settings: trees",
+  "trace: nn",
+  "trace: physics",
+  "trace: trees"
+ ],
+ "rel_models": [
+  "no change",
+  "settings + amplifier: gp",
+  "settings + amplifier: trees",
+  "settings + trace: combined trees",
+  "settings + trace: direction classifier",
+  "settings + trace: residual trees",
+  "settings change: gp",
+  "settings change: trees",
+  "trace change: difference curves PCA + trees",
+  "trace change: trees",
+  "trace: combined trees [A, B, B-A]",
+  "trace: physics difference (sigma_e)",
+  "trace: physics difference + correction (sigma_e)"
+ ],
+ "ensembles": [
+  "ensemble: settings + trace",
+  "ensemble: trace models"
+ ]
+}
