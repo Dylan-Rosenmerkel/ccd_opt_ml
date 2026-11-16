@@ -28,6 +28,20 @@ SW_PA03 = {"RG": 8.88 - 3.0, "SW": 1.0 + 7.1, "H": 9.1 - 6.1, "V": 9.85 - 8.0}
 SW_LSM = {"RG": 9.0 - 3.0, "SW": 1.0 + 6.0, "H": 9.5 - 6.5, "V": 9.9 - 7.7}
 
 
+_F = np.logspace(-1, np.log10(7.5e6), 400000)
+_DF = np.gradient(_F)
+
+
+def onef_integral(N, tau=10e-6, dt=13.8e-6, T=32.6e-6):
+    """int |H|^2/f df for the CDS (windows tau, centres dt apart) averaged over N skips of period T."""
+    x = np.pi * _F * tau
+    H = 4 * np.sin(np.pi * _F * dt) ** 2 * (np.sin(x) / x) ** 2
+    y = np.pi * _F * T
+    with np.errstate(all="ignore"):
+        A = np.nan_to_num((np.sin(N * y) / (N * np.sin(y))) ** 2, nan=1.0)
+    return np.sum(H * A / _F * _DF)
+
+
 def anat(path, labels=None):
     d = pd.read_csv(path)
     return d.groupby("label").median(numeric_only=True)
@@ -64,6 +78,7 @@ def main():
                              sig_img=w.loc[(b, c), "sig"], img_skips=1000, charge=w.loc[(b, c), "dc"], swings=SW_LSM,
                              kurt_p90=np.nan, **la.loc[lab].to_dict(),
                              **{f"trap {k}": v for k, v in lt.loc[lab].to_dict().items()}))
+    I500 = onef_integral(500)
     out = []
     for r in rows:
         g, sw = r["gain"], r["swings"]
@@ -81,6 +96,9 @@ def main():
              "white part (nV/rtHz)": r["trap white ASD (nV/rtHz)"], "1/f corner (kHz)": r["trap 1/f corner (kHz)"],
              "N_t (1e16 /eV/cm3)": r["trap N_t A=0.85 C_ox (eV^-1 cm^-3)"] / 1e16,
              "trap-fit residual": r["trap fit rms rel. residual"],
+             # amplifier health: the transistor's own 1/f noise in the 500-skip pixel (upper limit; robust: the 1/f
+             # level K agrees with the static-record spectrum to 1.01 +- 0.13 on the LSM channels)
+             "transistor 1/f at 500 skips (e)": np.sqrt(max(r["trap 1/f K (ADU^2)"], 0) * I500) / g,
              "kurtosis (median trace)": r["excess kurtosis of the CDS"], "kurtosis p90 (all traces)": r["kurt_p90"],
              # couplings
              "RG feedthrough per volt (e/V)": r["reset pulse height (ADU)"] / g / sw["RG"],

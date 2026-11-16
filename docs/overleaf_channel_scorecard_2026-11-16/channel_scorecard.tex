@@ -91,6 +91,13 @@ run on an open input, and band-limited white noise can be counted as 1/f. Consis
 white noise (right).\label{fig:cds}}
 \input{tables/transistor.tex}
 \begin{itemize}[nosep]
+\item \textbf{The health number: the transistor's 1/f noise left in a 500-skip pixel}, in electrons:
+  $\sqrt{K\,I_f(500)}/\text{gain}$, with $K$ the fitted 1/f level and $I_f$ the exact CDS + 500-skip filter. It uses only
+  the 1/f \emph{level} $K$, which is robust: on the LSM channels $K$ from the readout trace agrees with $K$ fitted
+  directly to the static-record spectrum (no CDS model, clocks frozen) to $1.01\pm0.13$. The white/1/f \emph{split}
+  and the corner frequency do not agree between the two (white 1.3$\times$ higher during readout), so they are shown but
+  not graded. On PA03 board 101 the transistor's 1/f noise is 0.08--0.13\,e, i.e.\ 34--57\,\% of the image variance at
+  500 skips: about half of what the images see comes from the transistor itself.
 \item \textbf{Similar in both module sets:} $N_t\le1.1$--$2.3\times10^{16}$ (upper limits) on every good channel.
 \item The LSM 1/f corners (61--99\,kHz) are higher than PA03's (16--39\,kHz): at 180\,K the 1/f power grows with $kT$
   and the white part is lower. Graded the same; read the LSM column with that in mind.

@@ -31,7 +31,8 @@ GRADES = {
     "img": ("low", 0.20, 0.30),                   # e after 500 skips: 0.3 e still resolves single electrons
     "img_ratio": ("low", 1.25, 2.0),              # images vs white-noise averaging
     "white": ("low", 10, 15),
-    "corner": ("low", 100, 200),                  # kHz
+    "corner": ("low", 100, 200),                  # kHz (method-dependent: shown, not used in the card)
+    "onef": ("low", 0.10, 0.15),                  # e: transistor 1/f noise left in a 500-skip pixel
     "nt": ("low", 3.0, 10.0),                     # 1e16 /eV/cm3: good thermal oxide 1e16-1e17
     "kurt": ("abs", 0.5, 1.5), "kurt90": ("abs", 0.15, 0.5),  # telegraph noise (p90: episodes over many traces)
     "resid": ("low", 0.05, 0.05),
@@ -45,7 +46,7 @@ GRADES = {
 CAT = {  # summary card: category -> graded keys
     "Sense node": ["csn"],
     "Read noise": ["cds", "skip_e", "img", "img_ratio"],
-    "Transistor (1/f, traps)": ["corner", "nt", "kurt", "kurt90"],
+    "Transistor (1/f, traps)": ["onef", "nt", "kurt", "kurt90"],
     "Timing": ["settle", "slope", "offset"],
     "Setup": ["slow", "corr", "burst", "static"],
     "Charge (vs same board)": ["charge_rel"],
@@ -102,6 +103,7 @@ def load():
             "white": g(s, "white part (nV/rtHz)") if fit_ok else np.nan,
             "corner": g(s, "1/f corner (kHz)") if fit_ok else np.nan, "share": g(s, "1/f share") if fit_ok else np.nan,
             "nt": g(s, "N_t (1e16 /eV/cm3)") if fit_ok else np.nan, "resid": g(p, "trap-fit residual"),
+            "onef": g(p, "transistor 1/f at 500 skips (e)") if fit_ok else np.nan,
             "kurt": g(s, "kurtosis"), "kurt90": g(s, "kurtosis p90 (all traces)"),
             "settle": g(s, "reset settling (us)"), "slope": g(p, "signal-window slope (e/us)"),
             "offset": g(p, "CDS offset (signal - pedestal, e)"), "rg": g(p, "RG feedthrough per volt (e/V)") / 1e3,
@@ -212,7 +214,7 @@ def main():
     OUT.mkdir(exist_ok=True)
     D = load()
     U = {"cg": "conv.\\ gain", "csn": "$C_\\text{sn}$", "cds": "CDS noise", "skip_e": "per skip", "img": "image",
-         "img_ratio": "image/expectation", "white": "white", "corner": "1/f corner", "nt": "$N_t$", "kurt": "kurtosis",
+         "img_ratio": "image/expectation", "white": "white", "corner": "1/f corner", "onef": "1/f at 500 skips", "nt": "$N_t$", "kurt": "kurtosis",
          "kurt90": "kurtosis p90", "settle": "settling", "slope": "slope", "offset": "offset", "rg": "RG",
          "slow": "slow noise", "corr": "corr.", "burst": "bursts", "static": "static", "charge_rel": "charge/median"}
     (OUT / "card.tex").write_text(summary(D))
@@ -227,11 +229,12 @@ def main():
         "Read noise: per skip at the input and in electrons, and what the images reach after 500 skips.", "tab:noise",
         thresholds(["cds", "skip_e", "img", "img_ratio"], U)))
     (OUT / "transistor.tex").write_text(table(D, [
-        ("white (nV/$\\sqrt{\\text{Hz}}$)", "white", 1, True), ("1/f corner (kHz)", "corner", 0, True),
+        ("1/f at 500 skips (e)", "onef", 3, True),
+        ("white (nV/$\\sqrt{\\text{Hz}}$)", "white", 1, False), ("1/f corner (kHz)", "corner", 0, False),
         ("1/f share", "share", 2, False), ("$N_t$ ($10^{16}$/eV/cm$^3$)", "nt", 2, True),
         ("kurtosis", "kurt", 2, True), ("kurtosis p90", "kurt90", 2, True), ("fit resid.", "resid", 3, True)],
         "Output transistor: white and 1/f noise, oxide trap density, telegraph noise.", "tab:tr",
-        thresholds(["white", "corner", "nt", "kurt", "kurt90"], U)
+        thresholds(["onef", "nt", "kurt", "kurt90"], U)
         + " Fit residual above 5\\,\\% $\\Rightarrow$ the trap numbers are withheld."))
     (OUT / "timing.tex").write_text(table(D, [
         ("reset settling (\\textmu s)", "settle", 2, True), ("window slope (e/\\textmu s)", "slope", 1, True),

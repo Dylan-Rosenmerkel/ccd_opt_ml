@@ -7,7 +7,8 @@ last tau of the pedestal window and the last tau of the signal window (fixed cen
 settled end of each window).  Per skip, consecutive-skip differences within a pixel; sigma_1^2(tau) fitted with
     sigma_1^2 = S_w I_w(tau) + K I_f(tau),   |H|^2 = 4 sin^2(pi f dt) sinc^2(f tau) x 2 sin^2(pi f T)
 -> 1/f corner K/S_w, white ASD, and N_t (McWhorter, as oxide_traps_tau.py).  TOTAL noise (setup included): an upper
-limit on the transistor's own 1/f.
+limit on the transistor's own 1/f.  --filter-fc adds the frontend roll-off (white noise is band-limited; without
+it short windows under-count white noise and the fit moves it into 1/f).
 
     .venv/bin/python amp_phys/trap_from_trace.py --traces <npz|csv> ... --label <name> --drop 20 --out <dir>
 """
@@ -30,9 +31,14 @@ DF = np.gradient(F)
 TAUS = (30, 45, 60, 90, 120, 140)                       # samples (2 - 9.3 us)
 
 
+FILT = {"fc": None, "n": 2.0}                       # frontend roll-off (static_fit.py: ~550 kHz, order ~2)
+
+
 def integrals(tau, dt, T):
     x = np.pi * F * tau
     H = 4 * np.sin(np.pi * F * dt) ** 2 * (np.sin(x) / x) ** 2 * 2 * np.sin(np.pi * F * T) ** 2
+    if FILT["fc"]:                                  # white and 1/f both pass the frontend filter
+        H = H / (1 + (F / FILT["fc"]) ** (2 * FILT["n"]))
     return np.sum(H * DF), np.sum(H / F * DF)
 
 
@@ -73,8 +79,11 @@ def main():
     ap.add_argument("--wl-um2", type=float, default=345.0)
     ap.add_argument("--t", type=float, default=130.0)
     ap.add_argument("--lam-nm", type=float, default=0.1)
+    ap.add_argument("--filter-fc", type=float, help="frontend roll-off corner (Hz), from static_fit.py")
+    ap.add_argument("--filter-n", type=float, default=2.0)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    FILT.update(fc=a.filter_fc, n=a.filter_n)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
