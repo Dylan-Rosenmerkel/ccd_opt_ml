@@ -84,7 +84,7 @@ images vs white averaging & \cellcolor{good}0.84--0.88 & \cellcolor{good}0.86--0
 trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 & $\le$1.2--1.5 & $\le$2.0--2.4\\
 \textbf{transistor 1/f left at 500 skips (e)} & \cellcolor{good}0.08--0.11 & \cellcolor{fair}0.11--0.13 & \cellcolor{fair}0.11--0.12 & \cellcolor{fair}0.15--0.16\\\bottomrule
 \end{tabularx}
-{\par\scriptsize LSM flagged: ACM109 ch1, ACM110 ch1, ACM110 ch3. LSM values in nV use the PA03 design chain gain.}
+{\par\scriptsize LSM flagged for follow-up (all working): ACM109 ch1, ACM110 ch1, ACM110 ch3. LSM values in nV use the PA03 design chain gain.}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.41\linewidth}\vspace{0pt}
 \includegraphics[width=\linewidth]{figures/oxide_traps_tau.png}\\[-2pt]
@@ -105,7 +105,7 @@ trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 
   trap upper limits of the same order. PA03 is representative of the production amplifiers.
 \item \textbf{The LSM images are worse than their traces predict} (1.0--2.0$\times$ the white-noise expectation): at
   180\,K the blank images carry $\sim$1\,e/pixel, and charge arriving while a pixel is skipped broadens the zero-electron peak.
-\item \textbf{Candidate problem channels, diagnosed by cause:} ACM109 ch1, telegraph noise and a 334\,kHz 1/f corner, so
+\item \textbf{Channels to follow up, diagnosed by cause} (all 12 LSM amplifiers work (every one resolves single electrons, 0.16--0.23\,e at 1000 skips); these are noise features to follow up, not failures): ACM109 ch1, telegraph noise and a 334\,kHz 1/f corner, so
   a likely trappy transistor (one trace; to be confirmed); ACM110 ch3, a 30.6\,kHz interference comb (setup); ACM110 ch1,
   more 1/f noise; PA03 101 ch2, extra charge in images (glow) and telegraph episodes in 1 of 93 valid traces.
 \item \textbf{Readout timing:} 5--10\,\textmu s CDS windows are optimal at fixed readout time (20--30\,\textmu s costs
