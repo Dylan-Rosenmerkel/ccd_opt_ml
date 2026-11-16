@@ -58,6 +58,7 @@ def main():
     data, out = Path(args.data), Path(args.out)
     d = ds.load(data, Path(args.plan))
     scan = d.board.eq(101) & d.session.isin(["G", "H"])
+    scan &= d["ok"].astype(bool)                       # valid operating points only (image fit ok; broken readout out)
     rows, curves = [], {}
     for ch in range(4):
         g = d[scan & d.channel.eq(ch)].reset_index(drop=True)

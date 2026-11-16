@@ -772,3 +772,22 @@ Figure: `results/lsm_hightemp/static_fit/static_fit.png`.
 `skip_averaging.py`) had not filtered them; rerun on the 93 packets valid on all four channels: per-skip noise and
 slow-noise medians move < 3 %, ch2 N_t 1.78 → 1.87, ch2 transistor 1/f at 500 skips 0.114 → 0.117 e; ch2's
 highest-kurtosis traces (N3_094, N3_116, N3_026) are all valid packets, so its telegraph episodes stand.
+
+## 28. Buried-channel depth from one trace (`depth_from_trace.py`, 2026-11-16)
+
+The depth (§ depth) uses the slope of the reset charge against RG_high − VR, s = ½ C_eff W L. One trace gives
+Q = s (RG_high − VR − V*), so it needs V*. The scan's intercepts (valid packets) are V* = 9.38 / 9.57 / 9.44 / 9.50 V on
+ch0–3: a design constant (spread 0.2 V). Nominal sits only 2.4–2.6 V above it, so V* must be known to ~0.1 V.
+
+| | scan slope → depth | 1 nominal trace, V* from the other 3 amps | 1 nominal trace, V* = 9.47 ± 0.08 | single traces (93), median slope |
+|---|---|---|---|---|
+| ch0 | 2.23 fF/V → 0.61 µm | 0.63 µm | 0.60 (0.57–0.63) µm | 2.38 |
+| ch1 | 2.32 → 0.58 | 0.69 | 0.63 (0.60–0.66) | 2.22 |
+| ch2 | 2.53 → 0.51 | 0.56 | 0.54 (0.52–0.57) | 2.61 |
+| ch3 | 2.20 → 0.62 | 0.70 | 0.65 (0.62–0.68) | 2.19 |
+
+One trace reproduces the scan depth to ≤ 0.1 µm (≤ 0.05 µm with the shared V*), ch2 thinnest either way. The
+injection-split assumption (30–70 %) still dominates the absolute value (≈ 0.25–1.0 µm), as for the scan. The overlap
+(feedthrough ≈ 1 fC on top of 5–6 fC injection at the same edge) cannot be separated from one trace: it needs one
+extra trace with RG_low changed. Not yet applicable to the LSM traces: their reset event has a different shape and
+position (sequencer `refrence_v4_DM10.seq`, RG high 8 µs); the edge must be mapped from that sequence first.

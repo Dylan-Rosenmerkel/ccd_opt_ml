@@ -92,9 +92,12 @@ def main():
     data, out = Path(args.data), Path(args.out)
     d = ds.load(data, Path(args.plan))
     rows, wf = [], {}
+    # valid operating points only: packets whose board-101 images all fit (broken-readout settings left out)
+    valid = d[d.board.eq(101)].groupby("packet_id")["ok"].all()
+    valid = sorted(valid[valid].index)
     for board in (101, 102):
         for ch in range(4):
-            for p in sorted(d.packet_id.unique()):
+            for p in valid:
                 W = [h_waveform(f) for f in sorted(glob.glob(str(data / p / "traces" / f"theta*_acm{board}_ch{ch}.npz")))]
                 W = [w for w in W if w is not None]
                 if W:
