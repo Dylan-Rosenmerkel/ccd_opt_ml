@@ -1,0 +1,29 @@
+== ACM110 ch1 (1 traces)
+duration (ms)                                                      176.045
+skip period (us)                                                    32.600
+CDS white per skip (ADU)                                             5.770
+CDS white (nV/rtHz)                                                 20.853
+CDS lag-1 autocorr                                                  -0.160
+per-skip level scatter (ADU)                                       172.430
+reset pulse height (ADU)                                         48013.950
+settling tau after reset (us)                                        0.658
+pedestal-window slope (ADU/us)                                       3.231
+signal-window slope (ADU/us)                                        -0.659
+SW feedthrough (signal - pedestal level of the template, ADU)     -812.882
+in-window power above 3 MHz (share)                                  0.001
+static-gap noise rms (ADU)                                        4288.715
+settling tau after H transfer (us)                                 500.000
+windows / static-gap noise density 0.2-3 MHz                         0.003
+H-transfer waveform peak-to-peak (ADU)                           33338.000
+V-transfer waveform peak-to-peak (ADU)                           36608.000
+V transfers in trace                                                66.000
+ASD 200-1000 Hz (nV/rtHz)                                         4214.691
+ASD 1000-10000 Hz (nV/rtHz)                                       1453.700
+ASD 10000-100000 Hz (nV/rtHz)                                      252.396
+ASD 100000-1e+06 Hz (nV/rtHz)                                      203.015
+ASD 1e+06-7.5e+06 Hz (nV/rtHz)                                      37.450
+burst fraction (1 ms blocks > 1.5x median rms)                       0.000
+stationarity (CV of 1 ms block rms)                                  0.066
+drift of the per-skip level over the trace (ADU/ms)                -22.625
+excess kurtosis of the CDS                                          -0.022
+lines (kHz), first trace: 3405, 3549, 3558, 3611, 4908, 5123

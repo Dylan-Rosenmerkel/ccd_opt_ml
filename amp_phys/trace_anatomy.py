@@ -41,7 +41,16 @@ FS = 15e6
 G = 0.875                                   # ADU per uV at the video input (chain_calibration.py)
 
 
+CSV_BITS = ("RD", "RU", "TG", "SW", "OG", "DG", "H2", "V2")   # LSM cdaq CSV columns = flag bits 0..7 (same run lengths)
+
+
 def load(path):
+    if path.endswith(".csv"):                   # LSM ccd-cdaq trace: clk,V2,H2,TG,OG,SW,DG,RU,RD,val
+        d = pd.read_csv(path)
+        fl = np.zeros(len(d), np.int64)
+        for b, c in enumerate(CSV_BITS):
+            fl |= d[c].to_numpy().astype(np.int64) << b
+        return d["val"].to_numpy(float), fl
     if path.endswith(".npz"):
         z = np.load(path, allow_pickle=True)
         return z["values"].astype(float), z["flags"].astype(np.int64)
@@ -81,7 +90,7 @@ def exp_tau(seg):
         return np.nan
 
 
-def anatomy(v, fl):
+def anatomy(v, fl, drop=20):
     out = {"duration (ms)": len(v) / FS * 1e3}
     # ---------------- skip cycles
     e = rising(fl, 0)
@@ -94,11 +103,11 @@ def anatomy(v, fl):
     sig0 = int(np.median([s for k in e[good][:300] for s in rising(fl[k:k + P], 1)[:1]]))
     has_sig = np.array([k + sig0 + 2 < len(fl) and ((fl[k + sig0 + 2] >> 1) & 1) == 1 for k in e])
     cand = e[good & has_sig]
-    # drop the first 20 skips of EACH pixel (the first-skip transient), not of the trace
+    # drop the first `drop` (default 20) skips of EACH pixel (the first-skip transient), not of the trace
     newpix = np.r_[True, np.abs(np.diff(cand) - P) > 3]
     pix_id = np.cumsum(newpix)
     pos_in_pix = np.arange(len(cand)) - np.flatnonzero(newpix)[pix_id - 1]
-    cyc_starts = cand[pos_in_pix >= 20]
+    cyc_starts = cand[pos_in_pix >= drop]
     C = np.array([v[k:k + P] for k in cyc_starts if k + P <= len(v)])
     tmpl = np.median(C, 0)
     R = C - tmpl
@@ -204,6 +213,7 @@ def main():
     ap.add_argument("--label", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--plot", action="store_true")
+    ap.add_argument("--drop", type=int, default=20, help="skips dropped at the start of each pixel (transient)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -211,7 +221,7 @@ def main():
     for t in a.traces:
         try:
             v, fl = load(t)
-            r, extra = anatomy(v, fl)
+            r, extra = anatomy(v, fl, a.drop)
         except Exception as ex:
             print("skip", Path(t).name, ex)
             continue
