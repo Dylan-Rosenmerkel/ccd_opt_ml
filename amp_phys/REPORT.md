@@ -659,3 +659,59 @@ Without the row baseline the October correlation is 0.20–0.30 (Nov v3: 0.07–
 **To make it a ~1 min trace measurement:** record the traces of all four channels in the same acquisition (a firmware /
 script option: the streams of the other three channels are currently empty frames). Then `setup_noise_index.py`
 measures simultaneous noise as intended.
+
+## 24. A setup-noise metric from one few-second acquisition (L1 strips; `strip_noise.py`)
+
+**Why strips, not traces.** Traces stream raw samples one channel at a time, and their slow noise is ~10× the images'.
+That slow noise did not change with the cabling (`trace_spectrum.py`: σ at 500 skips 2.2–2.3 → 2.2 → 1.9 e⁻,
+October → v1 → v3). L1 strips (2 × 1000 pixels × 500 skips, ~30 s) use the image's clocking, record **all four
+channels simultaneously** and keep every skip's value. They are already taken in every packet.
+
+**What the strips show** (board 101; per-skip residuals with each pixel's mean removed; the shared part = the mean of
+the channels):
+
+| | October 6 (L1, 3000 skips) | November 10–12 (v3 strips) |
+|---|---|---|
+| shared / own noise power, 0–200 Hz | **23** | **3.9** |
+| shared / own, 200–1000 Hz | 1.3 | 0.7 |
+| shared / own, 1–5 kHz | 1.6 | 1.5 |
+| correlation between channels, per skip | 0.29–0.30 | 0.36–0.38 |
+| at 250-skip averages: correlation; slow noise above white | 0.66; 2.9–3.4× | (pixels too short to measure) |
+| shared narrow lines | 2532 Hz, 5064 Hz | 2240–2490 Hz, 5050–5240 Hz |
+
+**Readings.**
+- **The cabling change cut the shared slow (< 200 Hz) noise ~6×.** The images showed the same change: correlation
+  0.25 → 0.05, σ_0e −30 %.
+- **A ~2.5 kHz interference line and its harmonic reach every channel**, in both months. Its source is to be found
+  (a switching converter or a periodic digital process). The 500-skip pixel (16.3 ms) averages it out; other skip counts
+  may not.
+- 60 Hz hum is not the issue (no 120/180 Hz harmonics).
+
+**Recommended setup metric (no image):** one L1 strip per configuration (~30 s):
+1. the **shared/own power ratio below 200 Hz** (target → 0);
+2. the list of **shared lines**;
+3. the per-channel white noise per skip.
+
+**Caveats.**
+- The October point is a single acquisition (100 × 1000 × 3000, ch2 broken).
+- The November strips' 480-skip pixels give only ~64 Hz resolution, so the 0–200 Hz band is coarse.
+
+## 25. Reset (kTC) noise in the per-skip pedestal level: a direct route to C_sn (preliminary)
+
+**The idea.** The sense node is reset every skip, and each reset freezes kTC charge, √(kT·C_sn)/q electrons. That
+charge cancels in the CDS but appears in the per-skip level, identically in the pedestal and signal windows.
+
+**What is measured.** The per-skip level common to both windows is 161–168 ADU on the board-101 amplifiers. But it is
+145–148 ADU even on the dead board-102 channels, so most of it is an electronics level jump per skip (reset-edge pickup
+charging the frontend's coupling capacitor).
+
+**Live minus dead.** √(166² − 147²) ≈ 77 ADU ≈ 56 e⁻ → **C_sn = (q σ_e)²/(kT) ≈ 45 fF** at 130 K, and then
+A = CG·C_sn/q ≈ 0.44.
+
+**What it implies.** This disagrees with the layout inversion (80–90 fF, A ≈ 0.85). It agrees with the low-g_m branch
+of §6, in which the load resistor explains most of the white noise.
+
+**Status.**
+- The subtraction assumes board 101's electronics jitter equals board 102's.
+- 102 ch3 adds almost nothing above its dead neighbours (149 vs 145–148), consistent with its reset not producing charge.
+- **Decisive:** the DC level of the video line.
