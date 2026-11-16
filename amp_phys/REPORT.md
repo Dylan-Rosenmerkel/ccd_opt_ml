@@ -471,3 +471,48 @@ square wave at its own frequency (e.g. 20 mV, frequencies 1–20 kHz chosen not 
 lock-in demodulate the CDS at each frequency. The amplitude at f_k / the dither amplitude = A·C_k/C_sn. That gives the
 full sense-node capacitance vector in one acquisition, including DC-held lines (VDD, VR, VSUB, OG, DG, TG). It needs a
 firmware option to add a small modulation to the DAC / pot settings.
+
+## 20. H and V clock edges read directly from the raw traces (`clock_edges.py`, `v_edges.py`)
+
+**Method.** The raw trace samples carry the sequencer flags: bit 6 = horizontal transfer, bit 7 = vertical transfer.
+(The pipeline's H/V features are empty for v3: its region finder did not handle this run's trace format.)
+- Per trace: the median waveform around each transfer, and the fast jump at each edge (samples +3..+12 minus
+  −12..−3).
+- That jump is regressed, across the 80 v3 settings, on all varied rails.
+- C (fF-equivalent at the sense node) = |ADU/V| / gain × q.
+
+**The horizontal-transfer waveform** (`clock_edges.png`):
+- On board 101 it swings ±40 000 ADU (≈ ±47 mV at the input), relaxing with τ ≈ 5–9 µs after each edge.
+- The board-102 dead channels see ~6–10 % of that (pickup), so most of the response comes through the CCD amplifier.
+- 102 ch3 looks like the dead channels, consistent with the image agent (no charge reaches it).
+
+| line → sense node | result | edge(s) |
+|---|---|---|
+| **H1, H2, H3 (high and low rails)** | **0.011–0.016 fF** (z > 4 on all four amplifiers) | H-transfer edges 1, 3, 4 |
+| **V1, V2, V3** | **< 0.002–0.003 fF** (3σ, not detected) | V-transfer edges. The 2.35 µs RC slows the V edges; the gates are far from the sense node |
+| RG low rail (edge) | 0.15–0.22 fF | reset edges (agrees with §15/§19: 0.21–0.37 fF from the feedthrough feature) |
+| **Reset charge injection, per volt of (RG_high − VR)** | **2.1–2.4 fF-equivalent**: equal and opposite coefficients for RG_H (+17 500 to +20 200 ADU/V) and VR (−16 000 to −18 700 ADU/V) | reset edges 0/6, plus their relaxation at 2/5 |
+| SW low | < 0.008 fF at the H edges (SW does not switch there; its 0.08–0.13 fF is from the skip cycle) | – |
+
+**New quantity: the buried-channel depth from the reset charge injection.**
+- When the reset FET turns off, its channel charge Q = C_eff·W·L·(V_G − V_ch − V_T) is shared, roughly half onto the
+  sense node. So the measured 2.1–2.4 fF per volt ≈ ½ C_eff · W·L.
+- With the layout's 6 × 6 µm reset gate: **C_eff ≈ 0.12–0.13 fF/µm²**.
+- In a buried channel, 1/C_eff = t_eq/ε_ox + x_ch/ε_Si. With t_eq = 76 nm (50 nm oxide + 50 nm nitride), that gives
+  **x_ch ≈ 0.6 µm**: the depth of the buried-channel potential maximum.
+- The recipe (B, 150 keV) gives a ~0.45 µm projected range, plus diffusion.
+- Caveats: the ½ split and the 36 µm² gate are assumptions (±30 %). The depth scales accordingly.
+- It is consistent across the four CCDs (2.10–2.43 fF). ch2 is the highest, as for every RG-related quantity.
+
+**Updated sense-node mutual-capacitance table** (supersedes §19 where they overlap):
+
+| line | C to sense node | source |
+|---|---|---|
+| RG | 0.15–0.37 fF | trace edges + feedthrough feature |
+| SW | 0.08–0.13 fF | skip-cycle feedthrough |
+| H1/H2/H3 | 0.011–0.016 fF | H-transfer edges (measured) |
+| V1/V2/V3 | < 0.003 fF | V-transfer edges (upper limit) |
+| OG | ~0.2–0.6 fF | layout estimate (not varied) |
+| VDD/drain | ~2–4 fF | layout estimate (C_gd of the output FET) |
+| VSUB | ~0.01–0.03 fF | depletion estimate |
+| TG, DG | – | not varied in v3; tomography (NEXT_RUN_PLAN B8) |
