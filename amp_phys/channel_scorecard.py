@@ -51,6 +51,14 @@ def main():
     st["label"] = "ACM" + st.board.astype(str) + " ch" + st.channel.astype(str)
     A = A.join(st.set_index("label")[["ASD 200-1000 Hz (nV/rtHz)"]].rename(
         columns={"ASD 200-1000 Hz (nV/rtHz)": "static 0.2-1 kHz (uV/rtHz)"}) / 1e3, on="label")
+    sa = R / "per_channel/skip_averaging/skip_averaging.csv"            # episodic behaviour over all traces
+    if sa.exists():
+        S = pd.read_csv(sa)
+        g = S.groupby("label")
+        A = A.join(pd.DataFrame({"traces": g.size(), "kurtosis p90 (all traces)": g["kurtosis"].quantile(0.9),
+                                 "kurtosis max (all traces)": g["kurtosis"].max(),
+                                 "CDS noise p90/median (all traces)": g["sigma_1 (ADU)"].quantile(0.9) / g["sigma_1 (ADU)"].median()}),
+                   on="label")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     A.to_csv(out / "channel_scorecard.csv")
