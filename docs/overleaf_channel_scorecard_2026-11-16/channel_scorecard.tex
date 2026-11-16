@@ -1,0 +1,200 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,landscape,margin=1.6cm]{geometry}
+\usepackage[table]{xcolor}
+\usepackage{adjustbox}
+\usepackage{booktabs,graphicx,amsmath,float,caption,enumitem,hyperref}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\parindent}{0pt}\setlength{\parskip}{4pt}
+\definecolor{good}{RGB}{190,232,190}
+\definecolor{fair}{RGB}{252,226,160}
+\definecolor{poor}{RGB}{244,182,176}
+\definecolor{boxbg}{RGB}{238,242,248}
+\newcommand{\fig}[3][0.9]{\begin{figure}[H]\centering\includegraphics[width=#1\linewidth]{figures/#2}\caption{#3}\end{figure}}
+\newcommand{\what}[1]{\par\colorbox{boxbg}{\parbox{\dimexpr\linewidth-2\fboxsep}{\small #1}}\par}
+
+\title{Amplifier and setup scorecard:\\PA03 (130\,K) and the LSM production modules DM07/DM09/DM10 (180\,K)}
+\author{amp\_phys analysis}
+\date{16 November 2026}
+
+\begin{document}
+\maketitle
+
+\section*{What is compared, and how to read the colours}
+Every number here comes from the \textbf{raw readout traces} (plus, where marked, the images of the same channel), measured
+the same way for every amplifier:
+\begin{itemize}[nosep]
+\item \textbf{PA03}, board 101 (ch0--ch3, four CCDs) and board 102 (ch3 live but without charge; ch0 dead, the
+  \emph{electronics-only reference}), November v3 data, 130\,K. Trace numbers are medians over 8 traces; the
+  ``p90'' columns use all 127 traces of each channel.
+\item \textbf{LSM} production modules DM07/DM09/DM10 on ACM boards 106, 109 and 110, 180\,K, one trace and one static
+  noise record per channel, and the 500/1000-skip images processed by the LSM pipeline (gain, noise, dark charge).
+\end{itemize}
+Each graded cell is \colorbox{good}{good}, \colorbox{fair}{fair} or \colorbox{poor}{poor} against the thresholds printed
+under its table. The thresholds are physics or practice limits (e.g.\ good thermal oxide, the frontend noise floor), not
+rankings, so a whole column can be green or red. Uncoloured columns are context, not graded.
+Table~\ref{tab:card} condenses everything into one card; the following sections explain each quantity, how it is
+measured and why it matters.
+
+\input{tables/card.tex}
+
+\paragraph{The card in one paragraph.} The PA03 amplifiers are good transistors (low 1/f corner, good oxide, no
+telegraph noise except episodically on 101 ch2) on a \textbf{poor setup}: board 101 carries $\sim$35\,\textmu V/$\sqrt{\text{Hz}}$
+of slow pickup. The LSM setup is much quieter in its traces, its transistors have the same oxide quality, but its
+\textbf{images are noisier} at 180\,K and its \textbf{timing after the summing well is not settled} on several channels.
+Three LSM channels and one PA03 channel are individually bad (Section~\ref{sec:verdicts}).
+
+% ===================================================================================================================
+\clearpage
+\section{Sense node: how many microvolts one electron makes}
+\what{\textbf{Conversion gain} $CG=\text{gain}/G$: the image gain (ADU per electron, from the single-electron peaks)
+divided by the readout-chain gain $G$ (0.875\,ADU/\textmu V by design; 0.853 measured on board 102 from the dead
+channels' Johnson noise). \textbf{Sense-node capacitance} $C_\text{sn}=A\,q/CG$ with follower gain $A=0.85$ (layout).
+\textbf{Why it matters:} a smaller node gives more volts per electron, so every voltage noise source costs fewer
+electrons. Everything else being equal, the read noise in electrons scales with $C_\text{sn}$.}
+\input{tables/sense_node.tex}
+\begin{itemize}[nosep]
+\item All 17 amplifiers are the same design: 84--95\,fF. The LSM nodes are $\sim$5\,\% larger on average (lower gain),
+  with a 10\,\% spread between channels; PA03 101 ch0/ch1 have the smallest nodes.
+\item The absolute $C_\text{sn}$ scales with the assumed $A$ and $G$ (both $\pm$5\,\%); the comparison between channels does not.
+\end{itemize}
+
+% ===================================================================================================================
+\section{Read noise}
+\what{\textbf{CDS noise}: the white noise of one skip (pedestal minus signal, 10\,\textmu s windows), converted to the
+video input: $\sigma_1/G\cdot\sqrt{\tau}$ in nV/$\sqrt{\text{Hz}}$. The frontend alone (load resistor + preamp) gives
+17.0--17.1. \textbf{Per skip (e)}: the same in electrons ($\sigma_1/\text{gain}$). \textbf{Image}: the read noise the
+images reach after 500 skips (zero-electron peak width). \textbf{Image/expectation}: that, divided by white-noise averaging
+$\sigma_1/\sqrt{500}$: 1 = the skips average perfectly; above 1, slow noise or charge arriving during the skipping adds.}
+\input{tables/noise.tex}
+\begin{itemize}[nosep]
+\item Per skip, both setups are at 3.3--4.4\,e. The LSM traces are slightly quieter at the input (16.4--17.8\,nV/$\sqrt{\text{Hz}}$
+  on the good channels, against 18.7--21.1), but this relies on our chain gain for their boards.
+\item \textbf{The images invert the ranking.} PA03 reaches 0.144--0.173\,e at 500 skips (slightly \emph{better} than white
+  averaging); the LSM images reach 0.19--0.33\,e, 1.0--2.0$\times$ worse than their own traces predict. At 180\,K the blank
+  images carry $\sim$1\,e/pixel: charge arriving while a pixel is skipped broadens the zero-electron peak.
+\end{itemize}
+
+% ===================================================================================================================
+\clearpage
+\section{The output transistor: 1/f noise, oxide traps, telegraph noise}
+\what{The CDS removes slow noise only partly; what is left of the transistor's 1/f noise sits at 10--40\,kHz and does not
+average away (Figure~\ref{fig:cds}). White noise falls with a longer CDS window, 1/f does not. Forming windows of 2--9.3\,\textmu s
+\emph{in software} from the samples of each 10\,\textmu s window, and fitting $\sigma_1^2(\tau)=S_wI_w(\tau)+K\,I_f(\tau)$
+with the exact filter, gives the \textbf{white part}, the \textbf{1/f corner} $K/S_w$, the \textbf{1/f share} of the
+10\,\textmu s noise, and through the McWhorter model the \textbf{oxide trap density}
+$N_t=K_{V_g}WL\,C_\text{ox}^2/(q^2kT\lambda)$ (good thermal oxide: $10^{16}$--$10^{17}$\,eV$^{-1}$cm$^{-3}$).
+Validated against the hardware window scan (100 strips) on PA03: within 15\,\% on ch1/ch3, $\times$1.6 on ch0/ch2.
+\textbf{Kurtosis} of the skip-to-skip differences: 0 for Gaussian noise, positive for telegraph (single-trap) noise.}
+\fig[0.85]{cds_transfer.png}{Why the CDS does not remove 1/f noise (left) and why skip averaging cannot separate it from
+white noise (right).\label{fig:cds}}
+\input{tables/transistor.tex}
+\begin{itemize}[nosep]
+\item \textbf{Same oxide quality in both module sets:} $N_t=1.1$--$2.3\times10^{16}$ on every good channel.
+\item The LSM 1/f corners (61--99\,kHz) are higher than PA03's (16--39\,kHz): at 180\,K the 1/f power grows with $kT$
+  and the white part is lower. Graded the same; read the LSM column with that in mind.
+\item \textbf{Trappy transistors:} ACM109 ch1 (corner 334\,kHz, kurtosis 2.7) and ACM110 ch1 (corner 174\,kHz,
+  $N_t=2.4\times10^{16}$). PA03 101 ch2 is clean in its median trace but has the most telegraph episodes over all 127
+  traces (kurtosis p90 0.17, maximum 0.70 against $\le$0.22 on the others).
+\item ACM109 ch3: the fit fails (21\,\% residual, its window is still settling), so no trap numbers.
+\end{itemize}
+\fig[0.75]{oxide_traps_tau.png}{The hardware version of the method (PA03, 100 strips): noise against the CDS window,
+with the white + 1/f fits.}
+
+% ===================================================================================================================
+\clearpage
+\section{Timing and clocks}
+\what{\textbf{Reset settling}: the time constant of the output after the reset/OG pulse (fit to the median skip cycle):
+the output node's bandwidth. \textbf{Window slope}: the slope of the signal window in electrons per \textmu s: a window
+that is still settling (it cancels on average, but jitter and drifts do not). \textbf{CDS offset}: signal minus pedestal
+level of the empty-pixel waveform, the residual summing-well/output-gate transient. \textbf{RG, H, V}: the size of each
+clock's waveform at the output per volt of swing, in electrons: \emph{relative} numbers that include board pickup (the
+per-line mutual capacitances in fF need a voltage scan; PA03 only, Section~\ref{sec:scan}).}
+\input{tables/timing.tex}
+\begin{itemize}[nosep]
+\item The LSM outputs settle faster after reset (0.28--0.52\,\textmu s on boards 106/109) than PA03 ($\sim$1\,\textmu s).
+\item \textbf{Board 109's signal windows are not settled} ($-7$ to $-21$\,e/\textmu s), and the LSM CDS offsets are up to
+  80$\times$ PA03's ($-150$ to $-1550$\,e): the wait after the summing-well pulse (3.5\,\textmu s) is too short there.
+  PA03 drifts $+5$\,e/\textmu s on all channels: worth a longer wait too.
+\end{itemize}
+
+% ===================================================================================================================
+\clearpage
+\section{The setup}
+\what{The repeating waveform is removed from the trace (the median skip cycle); what is left is noise.
+\textbf{Slow noise 0.2--1\,kHz}: its spectral density at low frequency: pickup and wander from cabling, grounding,
+supplies. The dead channel (1.6\,\textmu V/$\sqrt{\text{Hz}}$) is the electronics floor. \textbf{Skip corr.}: the correlation
+of consecutive skips (slow noise as the skipper sees it; LSM values corrected for their 7-skip pixels).
+\textbf{Bursts}: share of 1\,ms blocks with 1.5$\times$ the median noise. \textbf{Static}: the same band in a record with
+all clocks frozen (LSM only). \textbf{Blank-image charge}: electrons per pixel in blank images (dark current + spurious
+charge; at 180\,K mostly dark current, so not graded on the same footing).}
+\input{tables/setup.tex}
+\input{tables/history.tex}
+\begin{itemize}[nosep]
+\item \textbf{PA03 board 101 is the noisy setup}: 35\,\textmu V/$\sqrt{\text{Hz}}$ on all four channels, 10\,\% bursty blocks,
+  skip correlation 0.64--0.71. The cabling change halved it (Table~\ref{tab:hist}), but it is still 3--13$\times$ the LSM.
+\item \textbf{Board 102 does not have it} (ch3 1.5, like the dead channel): the slow pickup enters on board 101's side
+  (its CCD connection, cable or ACM), not through the whole cryostat.
+\item LSM: ACM110 ch0--ch2 and ACM106 ch3 are near the electronics floor. ACM110 ch3 has a 30.6\,kHz comb with
+  harmonics (external interference, only while clocking); ACM109 ch1 has bursts.
+\end{itemize}
+\fig[0.85]{raw_psd_oct_nov.png}{PA03 101 ch1: the trace spectrum before and after the cabling change, with the dead channel.}
+\fig[0.6]{static_psd.png}{LSM: the static noise records (all clocks frozen) of all twelve channels.}
+
+% ===================================================================================================================
+\clearpage
+\section{Channel by channel}\label{sec:verdicts}
+\begin{itemize}[leftmargin=*]
+\item \textbf{PA03 101 ch0, ch1:} the best amplifiers of the study (smallest sense nodes, 0.144--0.147\,e images, low 1/f,
+  good oxide). Limited only by board 101's slow pickup.
+\item \textbf{PA03 101 ch2 (excluded since v1):} the transistor is fine on average, but it has the most telegraph episodes,
+  2.5$\times$ the charge of ch0 in blank images (output-stage glow, spurious charge at the amplifier end of its register),
+  and 0.164\,e images. Its defect shows in charge and in episodes, not in the per-skip noise.
+\item \textbf{PA03 101 ch3:} the highest per-skip noise of board 101 (4.4\,e) and the highest 1/f corner (39\,kHz); excess
+  slow noise in the images (Allan deviation).
+\item \textbf{PA03 102 ch3:} live amplifier, quiet setup, but no charge reaches it (mapping to be checked); slow settling.
+\item \textbf{ACM106:} clean setup and transistors; images 0.21--0.33\,e (ch1 worst) at 180\,K; CDS offsets up to $-285$\,e.
+\item \textbf{ACM109:} windows not settled on all four channels; \textbf{ch1 is a trappy transistor} (telegraph noise,
+  bursts, 334\,kHz corner); ch3's trap fit fails.
+\item \textbf{ACM110:} the quietest setup (ch0--ch2); \textbf{ch1 has more traps} (174\,kHz corner); \textbf{ch3 picks up
+  a 30.6\,kHz interference comb}; the largest CDS offsets ($-600$ to $-1550$\,e).
+\end{itemize}
+\fig[0.75]{anatomy_ACM109_ch1.png}{ACM109 ch1: the trappy transistor. Its whole-trace dissection.}
+\fig[0.75]{anatomy_ACM110_ch3.png}{ACM110 ch3: the interference comb (bottom left, lines at 31, 61, 92, 123\,kHz).}
+
+% ===================================================================================================================
+\clearpage
+\section{What needs a voltage scan (PA03 only so far)}\label{sec:scan}
+The LSM data has one voltage setting and no simultaneous strips; these PA03 quantities need a scan or strips:
+\begin{table}[H]\centering\small
+\begin{tabular}{lll}\toprule
+quantity & PA03 board 101 & needs\\\midrule
+per-line mutual capacitance to the sense node & RG 0.15--0.37, SW 0.08--0.13, H 0.011--0.016, V $<0.003$\,fF & clock-voltage scan\\
+follower gain $A$, $C_\text{sn}$ from the layout inversion & $A\approx0.8$--0.9, $C_\text{sn}\approx80$--90\,fF & scan + layout\\
+buried-channel depth & $\approx0.6$\,\textmu m & reset charge injection vs RG\\
+channel-potential knees & VR $-2.5$ to $-3.8$\,V & VR/VDD scan\\
+oxide traps from the window scan (own noise, shared part removed) & $N_t=1.9$--$2.8\times10^{16}$ & window scan + strips\\
+crosstalk, video-line capacitance, shared return & 2--4\,$\Omega$ ch0/ch2 -- ch1/ch3 & simultaneous strips\\
+dark-charge response to VSUB & ch0/ch2 weak (register) & VSUB scan\\\bottomrule
+\end{tabular}\end{table}
+
+\section*{Caveats}
+\begin{itemize}[nosep]
+\item LSM nV/$\sqrt{\text{Hz}}$ values assume PA03's design chain gain (no dead channel on ACM106/109/110); their electron
+  values use their own image gains and are unaffected.
+\item LSM image extension EXT$n$ is taken as channel $n-1$ (as on PA03); to be confirmed.
+\item LSM: one trace per channel; a single unusual trace can move a row. PA03: 8 traces (127 for the p90 columns).
+\item Temperatures differ (130 vs 180\,K): thermal noise, 1/f power and dark current all grow with temperature; the
+  setup numbers (room-temperature electronics and cabling) do not.
+\end{itemize}
+
+\section*{Reproduce}
+{\small\begin{verbatim}
+.venv/bin/python amp_phys/trace_anatomy.py  --traces <npz|csv> --label <name> --out <dir> [--drop 3]
+.venv/bin/python amp_phys/trap_from_trace.py --traces <npz|csv> --label <name> --out <dir> [--t 180]
+.venv/bin/python amp_phys/skip_averaging.py --traces <npz|csv> --label <name> --out <dir>
+.venv/bin/python amp_phys/static_psd.py --files <psd_*.csv> --out <dir>
+.venv/bin/python amp_phys/channel_scorecard.py --out amp_phys/results/per_channel
+.venv/bin/python amp_phys/physics_sheet.py --out amp_phys/results/per_channel
+.venv/bin/python docs/overleaf_channel_scorecard_2026-11-16/make_tables.py
+\end{verbatim}}
+\end{document}
