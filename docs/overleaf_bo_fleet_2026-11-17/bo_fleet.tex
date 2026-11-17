@@ -278,8 +278,9 @@ image). The dotted line is the 2\,\% threshold.\label{fig:curves}}
 
 % =====================================================================================================================
 \section{The live procedure}
-In a live search there is no pool of measured settings; candidates are generated. \texttt{lvl1/propose\_next.py} does one
-round at a time and writes packet plans for \texttt{daq\_scripts/run\_plan.sh}:
+In a live search there is no pool of measured settings; candidates are generated. The script
+\texttt{lvl1/propose\_next.py} does one round at a time and writes packet plans that \texttt{run\_plan.sh} (in
+\texttt{daq\_scripts/}) runs:
 \begin{center}
 \begin{tikzpicture}[node distance=0.55cm and 0.6cm, box/.style={draw,rounded corners,fill=boxbg,align=center,font=\small,minimum height=1.0cm,text width=3.2cm}, >=Stealth]
 \node[box] (a) {\textbf{1. Draw candidates}\\rule-safe settings\\(voltage rules)};
@@ -289,7 +290,7 @@ round at a time and writes packet plans for \texttt{daq\_scripts/run\_plan.sh}:
 \node[box,left=of d] (e) {\textbf{5. Image}\\the best one};
 \node[box,left=of e] (f) {\textbf{6. Status}\\stop if EI left\\< repeatability};
 \draw[->] (a)--(b); \draw[->] (b)--(c); \draw[->] (c)--(d); \draw[->] (d)--(e); \draw[->] (e)--(f);
-\draw[->] (f)--node[left,font=\scriptsize]{continue}(a);
+\draw[->] (f)--node[right,font=\scriptsize]{continue}(a);
 \end{tikzpicture}
 \end{center}
 \begin{enumerate}
