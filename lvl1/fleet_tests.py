@@ -69,6 +69,7 @@ PCT = 100.0          # log differences are reported as % (100 x log ratio)
 
 
 # =========================================================================== data
+THRESHOLDS = (0, 0.5, 1, 2, 5)   # % above the best usable setting of the pool (0 = the measured best itself)
 LAMBDA_FLOOR = 0.005     # e-/pixel: lambda labels below this are failed fits (scorecard_v2.LAMBDA_FLOOR)
 
 
@@ -487,6 +488,39 @@ def test_bo(d, args, out):
                 return int((~V[np.asarray(order[:k])]).sum())
 
             # random order
+            # how a person tunes (no ML): start at nominal and work outward, in standardised voltage space
+            if start:
+                d0 = np.linalg.norm(Z[pool] - Z[start[0]], axis=1)
+                order = list(start) + [int(p) for p in pool[np.argsort(d0)] if p not in start]
+                curves.setdefault("expert: expand out from nominal (closest first)", []).append(regret_curve(order))
+                wasted.setdefault("expert: expand out from nominal (closest first)", []).append(n_invalid_until(order))
+                revealed = list(start)
+                while len(revealed) < n:
+                    rem = np.setdiff1d(pool, revealed)
+                    rv = [r for r in revealed if V[r]]
+                    cur = min(rv, key=lambda r: J[r]) if rv else start[0]
+                    revealed.append(int(rem[np.argmin(np.linalg.norm(Z[rem] - Z[cur], axis=1))]))
+                curves.setdefault("expert: hill-climb (closest to the best so far)", []).append(regret_curve(revealed))
+                wasted.setdefault("expert: hill-climb (closest to the best so far)", []).append(n_invalid_until(revealed))
+
+            def hill_climb(first):
+                rev = [int(first)]
+                while len(rev) < n:
+                    rem = np.setdiff1d(pool, rev)
+                    rv = [r for r in rev if V[r]]
+                    cur = min(rv, key=lambda r: J[r]) if rv else rev[-1]
+                    rev.append(int(rem[np.argmin(np.linalg.norm(Z[rem] - Z[cur], axis=1))]))
+                return rev
+
+            # hill-climb from ANY starting setting (50 random starts, averaged), and from the fleet model's predicted best
+            hs = [hill_climb(x) for x in rng.choice(pool, size=min(50, n), replace=False)]
+            curves.setdefault("expert: hill-climb from a random start", []).append(np.mean([regret_curve(o) for o in hs], 0))
+            wasted.setdefault("expert: hill-climb from a random start", []).append(np.mean([n_invalid_until(o) for o in hs]))
+            mt0 = MultiTaskGP(Z[trv], J[trv], d.amp.to_numpy()[trv])
+            m0, _ = mt0.predict(Z[trv], J[trv], d.amp.to_numpy()[trv], Z[pool], [a] * n)
+            hfb = hill_climb(pool[np.argmin(m0)])
+            curves.setdefault("expert: hill-climb from the fleet model's predicted best", []).append(regret_curve(hfb))
+            wasted.setdefault("expert: hill-climb from the fleet model's predicted best", []).append(n_invalid_until(hfb))
             orders = [list(start) + list(rng.permutation(np.setdiff1d(pool, start))) for _ in range(200)]
             curves.setdefault("random order", []).append(np.mean([regret_curve(o) for o in orders], 0))
             wasted.setdefault("random order", []).append(np.mean([n_invalid_until(o) for o in orders]))
@@ -560,7 +594,7 @@ def test_bo(d, args, out):
         res["curves"][str(w)] = {k: np.mean([c[:nmin] for c in v], 0).tolist() for k, v in curves.items()}
         res["invalid_images"][str(w)] = {k: float(np.mean(v)) for k, v in wasted.items()}
         res["images_to"][str(w)] = {k: {f"{x}%": float(np.mean([next((i + 1 for i, r in enumerate(c) if r <= x), len(c))
-                                                                for c in v])) for x in (2, 5)} for k, v in curves.items()}
+                                                                for c in v])) for x in THRESHOLDS} for k, v in curves.items()}
     write(out, "bo", res, bo_md(res))
     bo_fig(res, out)
 
@@ -573,9 +607,11 @@ def bo_md(res):
          "(J = w log sigma_e + (1 - w) log lambda).", ""]
     for w, v in res["images_to"].items():
         inv = res.get("invalid_images", {}).get(w, {})
-        L += [f"## w = {w}", "", "| strategy | images to 2 % | images to 5 % | unusable images before 2 % |", "|---|---|---|---|"]
+        ths = [k for k in next(iter(v.values()))]
+        L += [f"## w = {w}", "", "| strategy | " + " | ".join(f"images to {t.replace('%', ' %')}" for t in ths)
+              + " | unusable images before 2 % |", "|---" * (len(ths) + 2) + "|"]
         for k, x in v.items():
-            L.append(f"| {k} | {x['2%']:.1f} | {x['5%']:.1f} | {inv.get(k, float('nan')):.1f} |")
+            L.append(f"| {k} | " + " | ".join(f"{x[t]:.1f}" for t in ths) + f" | {inv.get(k, float('nan')):.1f} |")
         L.append("")
     return "\n".join(L)
 
