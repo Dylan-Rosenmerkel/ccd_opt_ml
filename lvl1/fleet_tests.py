@@ -521,6 +521,7 @@ def test_bo(d, args, out):
             hfb = hill_climb(pool[np.argmin(m0)])
             curves.setdefault("expert: hill-climb from the fleet model's predicted best", []).append(regret_curve(hfb))
             wasted.setdefault("expert: hill-climb from the fleet model's predicted best", []).append(n_invalid_until(hfb))
+            amp_arr = d.amp.to_numpy()
             if args.trace_driven and PHY is not None:
                 # TRACE-DRIVEN fleet search (no image guides it): noise predicted from each candidate's TRACE (physics
                 # features + settings, trees trained on the fleet's usable rows), dark charge from the fleet's settings
@@ -544,6 +545,24 @@ def test_bo(d, args, out):
                 order = list(start) + [int(p) for p in pool[np.lexsort((Jhat, key))] if p not in start]
                 curves.setdefault("TRACE-DRIVEN: rank by trace noise + fleet dark charge, gate, image to confirm", []).append(regret_curve(order))
                 wasted.setdefault("TRACE-DRIVEN: rank by trace noise + fleet dark charge, gate, image to confirm", []).append(n_invalid_until(order))
+                # HYBRID: the trace-driven ranking's top (gated) pick is the first image, then fleet BO (settings) with
+                # the hard validity gate, updating on each image (the traces settle the noise side, the images the dark charge)
+                rev = list(start) + [order[len(start)]] if len(order) > len(start) else list(start)
+                mth = MultiTaskGP(Z[trv], J[trv], amp_arr[trv])
+                while len(rev) < n:
+                    rem = np.setdiff1d(pool, rev)
+                    rv = [r for r in rev if V[r]]
+                    Xtr = np.vstack([Z[trv], Z[rv]]) if rv else Z[trv]
+                    ytr = np.concatenate([J[trv], J[rv]])
+                    atr = np.concatenate([amp_arr[trv], [a] * len(rv)])
+                    m, s_ = mth.predict(Xtr, ytr, atr, Z[rem], [a] * len(rem))
+                    acq = ei(m, s_, J[rv].min() if rv else m.min())
+                    pu_r = p_usable(XT, V, tr, rev, rem)
+                    okg = pu_r >= max(args.gate, 0.5)
+                    acq = np.where(okg, acq, -np.inf) if okg.any() else pu_r
+                    rev.append(int(rem[np.argmax(acq)]))
+                curves.setdefault("HYBRID: trace-driven first image, then fleet BO + gate", []).append(regret_curve(rev))
+                wasted.setdefault("HYBRID: trace-driven first image, then fleet BO + gate", []).append(n_invalid_until(rev))
             orders = [list(start) + list(rng.permutation(np.setdiff1d(pool, start))) for _ in range(200)]
             curves.setdefault("random order", []).append(np.mean([regret_curve(o) for o in orders], 0))
             wasted.setdefault("random order", []).append(np.mean([n_invalid_until(o) for o in orders]))
