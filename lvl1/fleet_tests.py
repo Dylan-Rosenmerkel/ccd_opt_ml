@@ -521,6 +521,29 @@ def test_bo(d, args, out):
             hfb = hill_climb(pool[np.argmin(m0)])
             curves.setdefault("expert: hill-climb from the fleet model's predicted best", []).append(regret_curve(hfb))
             wasted.setdefault("expert: hill-climb from the fleet model's predicted best", []).append(n_invalid_until(hfb))
+            if args.trace_driven and PHY is not None:
+                # TRACE-DRIVEN fleet search (no image guides it): noise predicted from each candidate's TRACE (physics
+                # features + settings, trees trained on the fleet's usable rows), dark charge from the fleet's settings
+                # model, P(usable) from a classifier that sees the traces; candidates imaged in that order (confirmation)
+                from sklearn.ensemble import ExtraTreesRegressor, ExtraTreesClassifier
+                XT = np.hstack([Z, PHY])
+                rs = ExtraTreesRegressor(n_estimators=400, min_samples_leaf=3, max_features=0.5, random_state=0, n_jobs=-1)
+                rs.fit(XT[trv], d.log_sigma_e.to_numpy()[trv])
+                ls_hat = rs.predict(XT[pool])
+                Jl = d.log_lambda.to_numpy()
+                mtl = MultiTaskGP(Z[trv], Jl[trv], d.amp.to_numpy()[trv])
+                ll_hat, _ = mtl.predict(Z[trv], Jl[trv], d.amp.to_numpy()[trv], Z[pool], [a] * n)
+                Jhat = w * ls_hat + (1 - w) * ll_hat
+                if (~V[tr]).sum() >= 2:
+                    cv = ExtraTreesClassifier(n_estimators=300, min_samples_leaf=2, class_weight="balanced", random_state=0,
+                                              n_jobs=-1).fit(XT[tr], V[tr])
+                    pu = cv.predict_proba(XT[pool])[:, list(cv.classes_).index(True)]
+                else:
+                    pu = np.ones(n)
+                key = np.where(pu >= max(args.gate, 0.5), Jhat, np.inf)
+                order = list(start) + [int(p) for p in pool[np.lexsort((Jhat, key))] if p not in start]
+                curves.setdefault("TRACE-DRIVEN: rank by trace noise + fleet dark charge, gate, image to confirm", []).append(regret_curve(order))
+                wasted.setdefault("TRACE-DRIVEN: rank by trace noise + fleet dark charge, gate, image to confirm", []).append(n_invalid_until(order))
             orders = [list(start) + list(rng.permutation(np.setdiff1d(pool, start))) for _ in range(200)]
             curves.setdefault("random order", []).append(np.mean([regret_curve(o) for o in orders], 0))
             wasted.setdefault("random order", []).append(np.mean([n_invalid_until(o) for o in orders]))
@@ -813,6 +836,7 @@ def main():
     ap.add_argument("--select-k", type=int, default=8, help="bo: features kept by the fleet-only supervised selection")
     ap.add_argument("--include-invalid", action="store_true",
                     help="bo: keep unusable settings (fit failed, lambda < floor) as candidates; adds the validity variants")
+    ap.add_argument("--trace-driven", action="store_true", help="bo: add the trace-driven ranking strategy (no image guides it)")
     ap.add_argument("--gate", type=float, default=0.0, help="bo --include-invalid: also run a hard validity gate at this P")
     ap.add_argument("--validity-variants-only", action="store_true",
                     help="bo with --include-invalid: only the fleet-prior, physics and physics + components variants")
