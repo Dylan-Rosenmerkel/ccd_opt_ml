@@ -63,6 +63,8 @@ PA03 board 102, channels without charge & \cellcolor{good}1.5--1.6\\\bottomrule
   3--13$\times$ the LSM.
 \item The cabling change lowered it by 29\,\% at equal trace length. The images confirm the change independently: the
   noise shared between amplifiers fell from 25\,\% to 5\,\%, and the read noise of ch0/ch1 by 30\,\%.
+\item \textbf{Two board-101 items visible in one trace:} an 8\,ms baseline recovery after every horizontal transfer
+  and a 3.1\,MHz ringing, both absent on board 102. Gain and supplies are stable to 0.3\,\% per skip.
 \item \textbf{The setup in electrons} (static records, LSM): the 100\,Hz--1\,kHz band through the exact 500-skip
   filter costs 0.01--0.02\,e on ACM110 and up to 0.14\,e (67\,\% of the variance) on ACM106 ch0, which per-skip
   $\sigma_\text{CDS}$ cannot see. Clocked traces overstate slow noise (PA03: 12$\times$ its images), so PA03 needs static

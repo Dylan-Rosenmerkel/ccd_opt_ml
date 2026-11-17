@@ -158,6 +158,10 @@ scale, and its share of the 500-skip variance.}
   LSM the clocked-trace 0.2--1\,kHz level is 2--50$\times$ the static one. Clocked-trace numbers (the column
   ``slow 0.2--1\,kHz'' and Table~\ref{tab:hist}) are valid for comparisons made the same way (October vs November, board
   101 vs 102), not as absolute setup noise. PA03 needs static records for the electron number.
+\item \textbf{Two concrete board-101 setup items, from one trace:} its video chain recovers with an 8.2\,ms constant
+  after every horizontal transfer ($-$1\,800\,ADU; board 102 barely moves), and it rings at 3.1\,MHz after fast edges
+  (board 102: 0.55--0.7\,MHz). The recovery drives the within-pixel CDS drift, and the CDS leaks 0.2--0.5\,\% of the
+  baseline, which explains much of board 101's trace slow noise. Gain and supplies are stable to 0.3\,\% per skip.
 \item \textbf{PA03 board 101 is the noisy setup}: 35\,\textmu V/$\sqrt{\text{Hz}}$ on all four channels, 10\,\% bursty blocks,
   skip correlation 0.64--0.71. The cabling change lowered it by 29\,\% at equal trace length (Table~\ref{tab:hist}); it is still 3--13$\times$
   the LSM. The images tolerate it: board 101's 500-skip images reach the white-noise expectation (Table~\ref{tab:noise}).

@@ -70,6 +70,9 @@ standard CCD characterisation; \std{} items are standard and are automated here.
   transistor's 1/f noise left in a 500-skip pixel is 0.08--0.13\,e on board 101, 34--57\,\% of the image variance.
   Independent of the labelling, the 10\,\textmu s window is near-optimal and longer windows cost 9--32\,\% at fixed readout time
   (Section~\ref{sec:traps}). \novel
+\item \textbf{More from the raw trace:} board 101's video chain recovers with an 8\,ms constant after every
+  horizontal transfer and rings at 3.1\,MHz (board 102 does neither); gain and supplies are stable to 0.3\,\% per skip;
+  single-trap steps are below the noise (Section~\ref{sec:more}). \novel
 \item \textbf{Corrections made on the way} are listed in Section~\ref{sec:corrections}. The most important: the four
   channels' traces are separate acquisitions, so a correlation \emph{between} channels' traces is not setup noise. The
   setup noise itself is visible in each trace's spectrum; only splitting it into shared and own parts needs simultaneous
@@ -535,6 +538,51 @@ still missing. The DC level of the video line (the follower gain) and simultaneo
 rail) would firm up the numbers.}
 
 % =====================================================================================================================
+\section{What else the raw trace tells, and what it cannot}\label{sec:more}
+The last pass over the traces asked what information was still unused. Five more things were measured; two turned out
+not to be extractable from these traces, and that is worth knowing too.
+
+\paragraph{Board 101's video chain recovers slowly after every horizontal transfer.} The horizontal clocks swing the
+output by $\pm$60\,000\,ADU at each pixel boundary. Afterwards, board 101's pedestal level relaxes back with a time
+constant of \textbf{8.2\,ms} ($-$1\,800\,ADU), identically on all four channels; board 102 hardly relaxes at all
+(Figure~\ref{fig:recov}, left). The small CDS drift inside every pixel (+7--8\,ADU on board 101) follows the \emph{same}
+8\,ms constant (right): it is this electrical transient, not charge entering the packet. It repeats identically in every
+pixel, so the images do not see it. Two simpler explanations were tested and rejected: a gain nonlinearity (it would
+need 6\,\% per mV) and the baseline's slope entering the CDS through the window delay ($R^2=0.002$).
+\fig{baseline_recovery.png}{Left: the pedestal level against time inside a pixel (median over pixels and 8 traces);
+board 101 recovers with an 8.2\,ms constant after the horizontal transfer, board 102 barely moves. Right: the CDS drift
+inside the pixel, with the same time constant on board 101.\label{fig:recov}}
+
+\paragraph{The CDS leaks a little of the baseline.} Within a pixel, $-$0.18\,\% of a level fluctuation appears in the
+CDS on board 101 and +0.48\,\% on board 102, a rejection of 46--55\,dB. Combined with board 101's wandering baseline,
+this explains much of why its traces show far more slow noise than its images.
+
+\paragraph{Gain and supply are stable.} The large pulse of every skip has the same height to better than
+\textbf{0.3\,\%} per skip on PA03, once the sampling phase is removed: no multiplicative noise from the RG, VR or VDD
+supplies is visible. The apparent 20--25\,ns timing jitter of that pulse is the ADC's sampling phase
+($66.7\,\text{ns}/\sqrt{12}=19$\,ns): the ADC is not phase-locked to the 10\,ns sequencer clock.
+
+\paragraph{A cable resonance on board 101.} Board 101's output rings at \textbf{3.1\,MHz} after fast edges
+(160--240\,e rms); board 102's at 0.55--0.7\,MHz. The output rise time does not change with VDD across the scan, so the
+output's speed is set by the interconnect and frontend, not by the transistor.
+
+\paragraph{Telegraph noise is too small to see step by step.} One charge trapped in the gate oxide moves the output by
+$\sim$0.76\,ADU, against 5\,ADU of noise per skip, and switches in $\sim$0.2\,ms, too fast to average away. A two-level
+search finds no steps on ch2 beyond the control channel. What ch2 shows instead is a \emph{modulated} noise level: its
+per-pixel noise varies by 1.8\,\% beyond statistics (0.95--1.4\,\% on the others). On the LSM, ACM109 ch1's heavy
+tails are $\sim$1\,ms noise bursts, not a trap.
+
+\paragraph{Not extractable from these traces.}
+\begin{itemize}
+\item The transistor's $g_m$: the output transient is interconnect-limited (above).
+\item The follower nonlinearity: the leakage dominates; it needs charge at different baseline levels.
+\item The sense-node capacitance from kTC noise: the level jumps $\sim$5\,400\,ADU between pixels on board 101 (the
+  recovery above), against an expected kTC signal of $\sim$110\,ADU. It needs pedestal samples right after the reset.
+\end{itemize}
+\takeaway{Board 101's readout path has a slow (8\,ms) recovery and a 3.1\,MHz resonance that board 102 does not: two
+concrete setup items to fix, both visible in a single trace. The amplifiers' gain and supplies are stable to 0.3\,\%.}
+
+% =====================================================================================================================
 \section{Between the channels: crosstalk, video-line capacitance, shared return}\label{sec:xtalk}
 When one amplifier reads a large charge (a track), a tiny fraction appears on the others at the same instant:
 $\sim10^{-4}$, so a $10^4$\,e$^-$ track makes $\pm1$\,e$^-$ ghosts. Two mechanisms can cause it. They are separated by
@@ -646,6 +694,8 @@ shared/own slow noise from strips & \novel{} indicative & one October acquisitio
 output-stage noise = live $-$ dead in quadrature ($\approx$10\,nV/$\sqrt{\text{Hz}}$) & \novel{} open & assumes the frontend is not shunted; conflicts with the window fit\\
 oxide trap density, 1/f share, 1/f corner per amplifier & \novel{} relative indicative, absolute upper limit & dead-channel fit not done; follower gain; $C$ choice\\
 optimal CDS window (5--10\,\textmu s) & \novel{} solid & own noise only (shared noise makes long windows worse)\\
+board 101 baseline recovery (8\,ms) and 3.1\,MHz ringing & \novel{} solid & board-level; cause in the chain not located\\
+gain/supply stability $<$0.3\,\% per skip & \novel{} solid & upper limit; LSM pulses too narrow\\
 dose difference from knees & \novel{} indicative & blurred by the multi-rail design\\
 thickness, diffusion, gain, noise vs skips & \std{} solid & energy calibration for $<$7\,\%\\
 resistivity bound & \novel{} solid as a bound & assumes full depletion at nominal\\
@@ -704,7 +754,8 @@ fine VR scan & gate vs wiring capacitance per amplifier\\
 RG edge slowed by an RC & the charge split of the injection $\Rightarrow$ depth to $\sim$10\,\%\\
 pocket pumping at 6 phase times & trap emission times and energies per CCD\\
 CDS window scan at fixed voltages & video-line capacitances to $\sim$10\,\%\\
-telegraph steps of ch2 vs one trapped charge & trap location and the gate coupling, independently\\
+pedestal samples right after the reset & $C_\text{sn}$ from kTC noise, independent of the chain gain\\
+pixels with known charge at varied baselines & the follower nonlinearity\\
 grounding configurations, one image each & $\rho_\text{sim}\to0$, white noise toward the frontend floor\\\bottomrule
 \end{tabular}\end{table}
 
@@ -714,7 +765,7 @@ All in \texttt{amp\_phys/} (results in \texttt{amp\_phys/results/}). \texttt{dat
 dead-channel rule, knees, outliers); \texttt{chain\_calibration.py} (Johnson calibration, noise budget);
 \texttt{oct\_nov.py} (October/November); \texttt{clock\_edges.py}, \texttt{v\_edges.py}, \texttt{sense\_node\_coupling.py}
 (couplings); \texttt{channel\_knees.py}; \texttt{crosstalk.py}, \texttt{mutual\_capacitance.py};
-\texttt{physics\_model.py}; \texttt{oxide\_traps\_tau.py} (1/f, trap density, window optimum); \texttt{trap\_from\_trace.py} (the same from one
+\texttt{physics\_model.py}; \texttt{oxide\_traps\_tau.py} (1/f, trap density, window optimum); \texttt{trace\_physics2.py}, \texttt{telegraph.py} (Section~\ref{sec:more}); \texttt{trap\_from\_trace.py} (the same from one
 trace); \texttt{static\_fit.py}, \texttt{static\_fit\_figure.py} (static-spectrum cross-check); \texttt{trace\_anatomy.py} (whole-trace
 dissection); \texttt{raw\_psd.py} (level-0 spectra); \texttt{images/} (units, tracks, dark, defects, pocket pumping); \texttt{cms\_images.py};
 \texttt{trace\_electrons.py}, \texttt{trace\_read\_noise.py} (negative results); \texttt{common\_mode.py},
