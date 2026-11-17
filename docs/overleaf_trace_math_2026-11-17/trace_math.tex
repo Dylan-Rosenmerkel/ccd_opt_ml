@@ -1,0 +1,481 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=2.1cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,tabularx,array}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=1.4em}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\sinc}{\operatorname{sinc}}
+\newcommand{\std}{\operatorname{std}}
+\newcommand{\med}{\operatorname{median}}
+\newcommand{\caveat}[1]{\par\smallskip\noindent\colorbox{orange!10}{\parbox{\dimexpr\linewidth-2\fboxsep}{\small\textbf{Assumption / status.} #1}}\par\smallskip}
+
+\title{From the readout trace to the amplifier physics:\\ every formula, as implemented}
+\author{ccd\_opt\_ml amplifier-physics study (PA03 boards 101/102, LSM ACM106/109/110)}
+\date{17 November 2026}
+
+\begin{document}
+\maketitle
+
+\noindent This note writes down, step by step, how each physics number in the two-page summary is computed from the raw
+traces. Every equation is the one the code evaluates (script names in \code{monospace}, all in \code{amp\_phys/}).
+Where the code makes an approximation or an assumption, a shaded box says so. Image-side inputs (the image gain
+$g$ and image read noise $\sigma_e$ from the peak fits) are taken as given.
+
+\tableofcontents
+
+%=====================================================================
+\section{Constants and notation}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}llX@{}}\toprule
+symbol & value & meaning / source\\\midrule
+$f_s$ & $15\times10^6$\,s$^{-1}$ & ADC sample rate (LTC2387) \\
+$v[n]$ & ADU & raw sample $n$ of one channel \\
+$b_k[n]$ & 0/1 & sequencer flag bit $k$: 0 pedestal window, 1 signal window, 4 low during reset, 6 H transfer, 7 V transfer\\
+$\tau$ & 10\,\textmu s (150 samples) nominal & CDS integration window\\
+$\Delta t$ & 13.8\,\textmu s (207 samples) & pedestal-to-signal window centre spacing\\
+$T$ & 32.6\,\textmu s (489 samples) & skip period\\
+$G$ & 0.875\,ADU/\textmu V & chain gain at the video input: $27.34\ \text{V/V} / 31.25\ \text{\textmu V/LSB}$ (design)\\
+$g$ & ADU/e$^-$ & image gain (peak fit)\\
+$A$ & 0.85 & source-follower gain (layout-based, model)\\
+$C_{\rm ox}$ & 0.454\,fF/\textmu m$^2$ & ON stack: $\varepsilon_0/(t_{\rm ox}/3.9+t_{\rm n}/7.5)$, 50\,nm + 50\,nm\\
+$t_{\rm eq}$ & 76\,nm & oxide-equivalent thickness $50+50\cdot3.9/7.5$\\
+$WL$ & 345\,\textmu m$^2$ & output-FET gate area (layout, 330--360)\\
+$W_{\rm RG}L_{\rm RG}$ & $6\times6$\,\textmu m$^2$ & reset-FET gate (layout)\\
+$T_{\rm ccd}$ & 130\,K (PA03), 180\,K (LSM) & \\
+$\lambda_t$ & 0.1\,nm & oxide tunnelling length (McWhorter)\\
+$q,\ k_B$ & & elementary charge, Boltzmann constant\\\bottomrule
+\end{tabularx}
+\end{center}
+
+\caveat{$G=0.875$ is the design value. The earlier dead-channel Johnson calibration (0.853) is withdrawn: board-102
+ch0--2 have transistors and are not open inputs. Every conversion from ADU to volts carries this design-value
+uncertainty (the ACM input buffer gain is still ``to be checked''). Quantities in electrons ($\div g$) or in
+capacitance via $q/g$ do not depend on $G$ or $A$ at all.}
+
+%=====================================================================
+\section{From raw samples to skips (\code{trace\_anatomy.py})}
+
+\paragraph{Cycle segmentation.} Rising edges of bit 0 give the pedestal-window starts $e_j$. The period is
+$P=\med(e_{j+1}-e_j)$ samples. A cycle $j$ is a real skip if it is one period long ($|e_{j+1}-e_j-P|\le3$) and is
+followed by a signal window (bit 1 set at $e_j+s_0+2$, with $s_0$ the median signal-window offset). Consecutive cycles
+one period apart belong to the same pixel; a gap starts a new pixel. The first 20 skips of every pixel are dropped
+(first-skip transient). This leaves cycles $\mathbf{c}_j = (v[e_j],\dots,v[e_j+P-1])$.
+
+\paragraph{Template and residual.}
+\begin{equation}
+\bar{\mathbf c}[m]=\med_j\,\mathbf c_j[m],\qquad \mathbf r_j=\mathbf c_j-\bar{\mathbf c}.
+\end{equation}
+The template $\bar{\mathbf c}$ is the deterministic waveform (reset pulse, summing-well dip, window levels); the
+residual $\mathbf r_j$ is the noise.
+
+\paragraph{CDS value per skip.} With the pedestal window length $L_w$ (from the flags) and 5 samples trimmed at each
+end,
+\begin{equation}
+p_j=\frac{1}{L_w-10}\sum_{m=5}^{L_w-6}c_j[m],\qquad
+s_j=\frac{1}{L_w-10}\sum_{m=s_0+5}^{s_0+L_w-6}c_j[m],\qquad
+x_j=s_j-p_j .
+\end{equation}
+
+\paragraph{Within-pixel differences.} Every noise statistic uses consecutive skips of the same pixel, so the pixel
+charge cancels:
+\begin{equation}
+d_j=x_{j+1}-x_j\quad(\text{only for } j,j+1 \text{ in the same pixel}).
+\end{equation}
+
+%=====================================================================
+\section{Time-domain noise quantities}
+
+\subsection{Single-skip noise $\sigma_1$ and its input density}
+\begin{equation}
+\sigma_1=\frac{\std(d_j)}{\sqrt2}\ \ [\text{ADU}],\qquad
+\sigma_{1,e}=\frac{\sigma_1}{g}\ \ [e^-].
+\end{equation}
+For white noise of one-sided density $e_n$ (V/$\sqrt{\text{Hz}}$) a boxcar of length $\tau$ has variance
+$e_n^2/(2\tau)$, and the CDS difference of two independent boxcars has $e_n^2/\tau$. Hence
+\begin{equation}
+e_n=\frac{\sigma_1}{G}\sqrt{\tau}\quad[\text{\textmu V}\sqrt{\text s}]\ \to\ \text{nV}/\sqrt{\text{Hz}}\ (\times10^3).
+\label{eq:en}
+\end{equation}
+\caveat{The code uses $\tau=L_w/f_s$ in eq.~\eqref{eq:en} although the average runs over $L_w-10$ samples; the
+quoted density is therefore $\sqrt{150/140}-1\approx3.5\%$ high. Also, $\sigma_1$ contains every noise source (white,
+1/f, setup); calling $e_n$ a ``white density'' is exact only if the noise is white (Sec.~\ref{sec:H}).}
+
+These give the table rows \emph{noise 3.7--4.4\,e} ($\sigma_{1,e}$) and \emph{18.7--21.1\,nV/$\sqrt{\rm Hz}$}
+($e_n$).
+
+\subsection{Other per-skip statistics}
+\begin{align}
+\rho_1 &= \operatorname{corr}(\tilde x_j,\tilde x_{j+1}),\quad \tilde x_j = x_j-\langle x\rangle_{\text{pixel}}
+&&\text{(lag-1 autocorrelation: slow noise)}\\
+\sigma_{\rm lvl} &= \std(\ell_{j+1}-\ell_j)/\sqrt2,\quad \ell_j=\tfrac12(p_j+s_j)
+&&\text{(per-skip level scatter: reset kTC + electronics)}\\
+\kappa &= \frac{\langle (d-\bar d)^4\rangle}{\langle (d-\bar d)^2\rangle^2}-3
+&&\text{(excess kurtosis of } d_j\text{; telegraph noise} \Rightarrow \kappa>0)
+\end{align}
+(pandas' bias-corrected estimator). For a Gaussian $\kappa=0$; a two-level telegraph signal with comparable white noise
+gives $\kappa$ of order 1 and more. ACM109 ch1 has 2.7; 101 ch2 is $\approx0$ in the median trace but large in its
+episodes (90th-percentile over traces, \code{skip\_averaging.py}).
+
+\subsection{Noise after averaging $N$ skips (\code{skip\_averaging.py})}
+Per pixel the CDS series $x_j$ is cut into consecutive blocks of $N$, the block means $X_k^{(N)}$ are differenced
+within the pixel, after removing the mean within-pixel profile (a sequence-locked drift common to all pixels):
+\begin{equation}
+\sigma_N=\frac{\std\big(X^{(N)}_{k+1}-X^{(N)}_k\big)}{\sqrt2}, \qquad N=1,4,16,\dots,512.
+\end{equation}
+White noise gives $\sigma_N=\sigma_1/\sqrt N$; 1/f, telegraph and setup wander make $\sigma_N$ flatten.
+
+\subsection{Image cross-check}
+\begin{equation}
+\mathcal R_{\rm img}=\frac{\sigma_e^{\rm image}(N_{\rm img})}{\sigma_{1,e}/\sqrt{N_{\rm img}}},
+\qquad N_{\rm img}=500\ (\text{PA03}),\ 1000\ (\text{LSM}).
+\end{equation}
+$\mathcal R_{\rm img}\approx1$ means the image reaches the white-noise expectation (PA03: 0.84--0.89);
+$\mathcal R>1$ means extra slow noise or charge arriving during skipping (LSM: 1.2--2.0).
+
+%=====================================================================
+\section{Frequency-domain quantities: the setup number}
+
+\paragraph{Residual spectrum.} The residuals of all skip cycles are concatenated, $r=(\mathbf r_1,\mathbf r_2,\dots)$,
+and a Welch estimate is taken (Hann window, $2^{15}$ samples per segment):
+\begin{equation}
+\text{ASD}(f)=\frac{\sqrt{S_{rr}(f)}}{G}\ \ [\text{nV}/\sqrt{\text{Hz}}],\qquad
+\text{ASD}_{[f_1,f_2]}=\med_{f_1\le f<f_2}\text{ASD}(f).
+\end{equation}
+The \textbf{setup number} is $\text{ASD}_{[200\,\text{Hz},1\,\text{kHz}]}$ (also reported: 1--10\,kHz, 10--100\,kHz,
+0.1--1\,MHz, 1--7.5\,MHz).
+\caveat{The concatenation joins skip cycles, but drops the pixel boundaries and H/V transfers, so low-frequency
+content near $1/(\text{trace length})$ depends on the trace length. Comparing setups therefore needs equal trace
+lengths: Oct.\ 0.2\,s traces 48.8 vs Nov.\ 34.8\,\textmu V/$\sqrt{\rm Hz}$ ($-29\%$); the 1.1\,s Oct.\ traces (68.2)
+are not comparable.}
+
+\paragraph{Lines.} $E(f)=S_{rr}(f)/\widetilde S_{rr}(f)$ with $\widetilde S$ a 31-bin running median; the six largest
+$E$ above 20\,kHz are listed (e.g.\ the 30.6\,kHz comb on ACM110 ch3).
+
+\paragraph{Bursts, stationarity, drift.} The residual is cut into $\approx1$\,ms blocks $B_i$ (a whole number of
+cycles):
+\begin{equation}
+\beta_{\rm burst}=\frac{\#\{i:\std(B_i)>1.5\,\med_k\std(B_k)\}}{\#\{i\}},\qquad
+\text{CV}=\frac{\std_i\,\std(B_i)}{\operatorname{mean}_i\std(B_i)},
+\end{equation}
+and the drift is the slope of a straight line through $\ell_j$ against time (ADU/ms).
+
+\paragraph{Clocking-induced noise.} The in-window residual spectrum $P_w(f)$ (Hann, window length $L_w-10$) is
+compared with the spectrum $P_g(f)$ of the last 600 samples of the static gaps after H transfers (no clock switching):
+\begin{equation}
+\mathcal C=\sqrt{\frac{\overline{P_w}/(L_w-10)}{\overline{P_g}/600}}\Big|_{0.2\text{--}3\,\text{MHz}} ,
+\end{equation}
+which is 1 if switching adds no noise.
+
+%=====================================================================
+\section{Separating white and 1/f noise with the CDS window}\label{sec:H}
+
+\subsection{The transfer function}
+The per-skip statistic $\sigma_1^2$ is a linear filter of the input noise. For a stationary noise of one-sided PSD
+$S(f)$:
+\begin{equation}
+\sigma_1^2=\int_0^\infty S(f)\,|H(f)|^2\dd f .
+\end{equation}
+Each factor of $H$ is one operation:
+\begin{align}
+\text{boxcar of length }\tau:&\quad \sinc^2(f\tau)=\Big(\tfrac{\sin\pi f\tau}{\pi f\tau}\Big)^2\\
+\text{signal minus pedestal, centres } \Delta t \text{ apart:}&\quad |1-e^{-2\pi i f\Delta t}|^2=4\sin^2(\pi f\Delta t)\\
+\text{consecutive-skip difference}/\sqrt2:&\quad \tfrac12|1-e^{-2\pi i fT}|^2=2\sin^2(\pi fT)
+\end{align}
+\begin{equation}
+\boxed{|H(f)|^2=4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau)\,2\sin^2(\pi fT)}
+\end{equation}
+Check: for white $S_w$, the $\sin^2$ factors average to $\tfrac12$ each and $\int_0^\infty\sinc^2(f\tau)\dd f=1/(2\tau)$,
+so $\sigma_1^2=S_w/\tau$, i.e.\ eq.~\eqref{eq:en}. At low $f$, $|H|^2\propto f^4$, so the 1/f integral converges.
+
+\subsection{The model and the fit}
+With $S(f)=S_w+K/f$:
+\begin{equation}
+\sigma_1^2(\tau)=S_w\,I_w(\tau)+K\,I_f(\tau),\qquad
+I_w=\int|H|^2\dd f,\quad I_f=\int\frac{|H|^2}{f}\dd f .
+\end{equation}
+The integrals are evaluated numerically on a log grid (1\,Hz--7.5\,MHz). White noise scales as $I_w\propto1/\tau$;
+the 1/f term is nearly independent of $\tau$. Measuring $\sigma_1$ at several $\tau$ and solving the weighted linear
+least-squares problem (weights $1/\sigma_1^2$, i.e.\ relative errors) gives $(S_w,K)$. Derived:
+\begin{align}
+e_w&=\sqrt{S_w}/G &&\text{white part (nV/}\sqrt{\text{Hz}}\text{): 12.6--14.2 PA03, 7.5--9.1 LSM}\\
+f_c&=K/S_w &&\text{1/f corner (where } K/f=S_w\text{): 16--39\,kHz PA03, 61--334\,kHz LSM}\\
+\phi_{1/f}(\tau)&=\frac{K I_f}{S_w I_w+K I_f}\Big|_{\tau=10\,\mu\text{s}} &&\text{1/f share of the single-skip variance}
+\end{align}
+and the fit quality $\sqrt{\langle(\hat\sigma_1^2/\sigma_1^2-1)^2\rangle}$.
+
+\subsection{Three ways of varying the window}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lXX@{}}\toprule
+& how $\tau$ varies & $\Delta t$, $T$ in $|H|^2$\\\midrule
+software (\code{trap\_from\_trace.py}) &
+from one raw trace: the \emph{last} $\tau$ samples of each 10\,\textmu s window, $\tau=30,45,60,90,120,140$ samples
+(2--9.3\,\textmu s); pedestal $\frac1\tau\sum_{m=L_w-\tau}^{L_w-1}c_j[m]$, signal likewise from $s_0$ &
+$\Delta t=s_0/f_s=13.8$\,\textmu s fixed; $T=P/f_s$\\
+hardware (\code{oxide\_traps\_tau.py}) & 100 v2 strips, \code{delayInt} 300--3000 cycles & $\Delta t=\tau+3.8$\,\textmu s;
+$T=32.6+2(\tau-10)$\,\textmu s\\
+skip averaging (\code{oxide\_traps.py}) & $\tau$ fixed, average $N$ skips & skip-difference factor replaced by the $N$-skip average, eq.~\eqref{eq:HN}\\\bottomrule
+\end{tabularx}
+\end{center}
+\begin{equation}
+|H_N(f)|^2=4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau)\Big[\frac{\sin\pi fNT}{N\sin\pi fT}\Big]^2,\qquad
+\sigma_N^2=S_wI_w(N)+K I_f(N).\label{eq:HN}
+\end{equation}
+The $N$-averaging variant is weakly constraining: through the CDS, 1/f noise averages down almost like white noise, so
+$\sigma_N$ alone cannot separate them. The window variants are the ones used for the table.
+
+\paragraph{Own vs total noise.} With simultaneous strips (hardware variant) each channel's per-skip series is first
+cleaned of the part shared with the other channels of its board:
+\begin{equation}
+u_c=x_c-\beta_c\,\bar x_{\neg c},\qquad \bar x_{\neg c}=\frac1{n-1}\sum_{o\ne c}x_o,\qquad
+\beta_c=\frac{\langle x_c,\bar x_{\neg c}\rangle}{\langle\bar x_{\neg c},\bar x_{\neg c}\rangle}
+\end{equation}
+(pixel means removed first), and the fit is done on $u_c$ (``own'') and on $x_c$ (``total''). The software variant
+from single traces fits the total.
+\caveat{The fit attributes to $K$ everything that is $\tau$-independent: transistor 1/f, setup wander, and
+band-limited white noise (the $\approx$0.9\,\textmu s settling makes very short windows non-white). The own white part
+(9--13\,nV/$\sqrt{\rm Hz}$) sitting below the frontend's own noise is not yet explained. Until the fit is run on an open
+input, $K$, $f_c$, $\phi_{1/f}$ and $N_t$ are \textbf{upper limits} on the transistor's own 1/f. The window optimum
+(5--8\,\textmu s) uses only the fitted $\sigma_1(\tau)$ curve and is unaffected.}
+
+%=====================================================================
+\section{Oxide trap density and single-trap steps}
+
+\paragraph{Referring $K$ to the gate.} $K$ is in ADU$^2$ at the ADC. In V$^2$ at the gate (= sense node):
+\begin{equation}
+K_{V_g}=\frac{K}{(G\cdot10^6\ \text{ADU/V})^2\,A^2}.
+\end{equation}
+
+\paragraph{McWhorter number fluctuation.} Traps within a tunnelling distance $\lambda_t$ of the interface exchange
+carriers with the channel; their superposition gives
+\begin{equation}
+S_{V_g}(f)=\frac{q^2k_BT\lambda_t N_t}{WL\,C^2 f}\quad\Rightarrow\quad
+\boxed{N_t=\frac{K_{V_g}\,WL\,C^2}{q^2k_BT\lambda_t}}\ \ [\text{J}^{-1}\text{cm}^{-3}]\ \times q\ \to\ [\text{eV}^{-1}\text{cm}^{-3}],
+\end{equation}
+with $C=C_{\rm ox}=0.454$\,fF/\textmu m$^2$ (table) or the buried-channel $C_{\rm eff}=0.125$ (alternative),
+$A=0.85$ (table) or 0.44 (withdrawn kTC route), $WL=345$\,\textmu m$^2$, $T=130$\,K (PA03). Units in the code: $WL$ in
+cm$^2$, $C$ in F/cm$^2$, $\lambda_t$ in cm. Result: $N_t\le(1.1$--$2.4)\times10^{16}$\,eV$^{-1}$cm$^{-3}$ (good
+thermal oxide: $10^{16}$--$10^{17}$).
+\caveat{$N_t\propto K/(G^2A^2)\cdot C^2\cdot WL/(T\lambda_t)$: a 15\% error in $C_{\rm ox}$ is 30\% in $N_t$;
+$\lambda_t$ is a convention. The LSM values use $T=180$\,K (checked: $N_t/K$ is $180/130$ lower than for PA03).}
+
+\paragraph{Telegraph (RTS) steps} (\code{oxide\_traps.py}). Running means of $w=25$ skips,
+$\Delta_k=\bar u_{k+w}-\bar u_k$; a step is a local maximum of $|\Delta_k|>6\,\std(u)\sqrt{2/w}$. Step size of one
+trapped charge, for comparison:
+\begin{equation}
+\delta_{1q}=\frac{q}{C\,WL}\,A\,G\cdot10^6\ \ [\text{ADU}].
+\end{equation}
+
+%=====================================================================
+\section{Conversion gain and sense-node capacitance}
+
+\begin{align}
+\text{CG}_{\rm in}&=\frac{g}{G}\ \ [\text{\textmu V}/e^-] &&\text{at the video input: 1.52--1.62 (PA03), 1.44--1.58 (LSM)}\\
+C_{\rm sn}&=\frac{A\,q}{\text{CG}_{\rm in}} &&\text{84--89\,fF (PA03), 86--95\,fF (LSM)}
+\end{align}
+Worked example: $g=1.37$\,ADU/e $\Rightarrow$ CG$_{\rm in}=1.566$\,\textmu V/e,
+$C_{\rm sn}=0.85\times1.602\times10^{-19}/1.566\times10^{-6}=86.9$\,fF.
+
+\paragraph{Follower relations used to justify $A$} (\code{chain\_calibration.py}, REPORT \S6):
+\begin{equation}
+A=\frac{g_mR_L}{1+g_mR_L},\qquad C_{\rm sn}=C_{\rm fixed}+C_{gs}(1-A),\qquad C_{gs}\approx\tfrac23C_{\rm ox}WL\approx100\text{--}109\ \text{fF}.
+\end{equation}
+With $R_L=20$\,k$\Omega$ and the measured CG$_{\rm in}=Aq/C_{\rm sn}$, each assumed $C_{\rm fixed}$ fixes $A$. Device
+estimates ($g_m\approx170$--750\,\textmu S) give $A\approx0.8$--0.9, hence $C_{\rm fixed}\approx60$--80\,fF (``most of
+the node is wiring'').
+
+\paragraph{kTC route (withdrawn).} Each reset freezes charge $\sqrt{k_BTC_{\rm sn}}$, so
+$C_{\rm sn}=(q\sigma_{\rm kTC})^2/(k_BT)$ with $\sigma_{\rm kTC}$ in electrons from the per-skip level scatter
+$\sigma_{\rm lvl}$ minus the electronics part. The electronics part was taken from board-102 ch0--2 as ``dead''
+channels; they have transistors, so the subtraction (and the 45\,fF / $A=0.44$ result) is withdrawn.
+
+\caveat{$C_{\rm sn}$ is linear in $A$ and in $1/G$. The spread between amplifiers ($\pm6\%$) is robust (same $A$, $G$
+for all); the absolute value is model-dependent.}
+
+%=====================================================================
+\section{Settling and bandwidth}
+
+\paragraph{Exponential settling.} After the reset pulse (end of the bit-4-low run $r_1$) and after each H transfer,
+the template (or the static-gap segment) is fitted with
+\begin{equation}
+y(t)=a+b\,e^{-t/\tau_s},\qquad 0.05\le\tau_s\le500\ \text{\textmu s},
+\end{equation}
+on $t\in[r_1+3,\ r_1+403]$ samples (reset) or the first 400 samples of the gap. $\tau_s\approx R_{\rm out}C_{\rm line}$:
+0.9--1.1\,\textmu s (PA03), 0.3--1.0 (LSM).
+
+\paragraph{In-window slope.} A straight line through the template inside each window (trimmed by 5 samples):
+$\partial\bar c/\partial t$ in ADU/\textmu s, divided by $g$ for e/\textmu s. Non-zero means the window is not settled
+(LSM board 109 after the summing-well pulse).
+
+\paragraph{CDS offset (summing-well feedthrough).} $\overline{s}-\overline{p}$ of the template, $\div g$ in electrons.
+
+\paragraph{Rise time} (\code{src/trace\_features.py}). 10--90\% rise of the reset pulse rebuilt by equivalent-time
+sampling (samples placed at their exact time relative to the edge, 0.1-sample bins).
+
+%=====================================================================
+\section{Clock-line to sense-node capacitances}\label{sec:cpl}
+
+\paragraph{Why charge per volt is a capacitance.} A step $\Delta V_k$ on line $k$, coupled by $C_k$ to a node of total
+capacitance $C_{\rm sn}$, moves the node by $\Delta V_{\rm sn}=C_k\Delta V_k/C_{\rm sn}$. Through the conversion gain
+$q/C_{\rm sn}$ this is the same as $N=C_k\Delta V_k/q$ electrons. So
+\begin{equation}
+\boxed{C_k=q\,\frac{N}{\Delta V_k}=q\,\frac{1}{g}\Big|\frac{\partial y}{\partial V_k}\Big|}\qquad(y\ \text{in ADU}),
+\end{equation}
+independent of $C_{\rm sn}$, $A$ and $G$: only the image gain $g$ enters.
+
+\paragraph{Regression on all rails at once} (board 101 voltage scan, sessions G+H: every rail's high and low varied
+together in a Sobol design). For each amplifier and each response $y$,
+\begin{equation}
+y_i=\beta_0+\sum_k\beta_k\,(V_{k,i}-\tilde V_k)+\varepsilon_i,\qquad
+\operatorname{Var}\hat\beta=(X^\top X)^{-1}\hat\sigma^2_\varepsilon ,
+\end{equation}
+with rails that moved in lockstep ($|r|>0.999$) merged. Then $C_k=q|\hat\beta_k|/g$ and significance $z_k=\hat\beta_k/
+\operatorname{se}(\hat\beta_k)$. The responses $y$:
+\begin{itemize}
+\item \textbf{settled CDS offset} of an empty skip (\code{sense\_node\_coupling.py}): only lines whose level differs
+between the two windows (SW, OG, RG through the reset) contribute; video-cable pickup has decayed ($\sim$1\,\textmu s)
+by the window, so this is pickup-free. SW: 0.08--0.13\,fF.
+\item \textbf{edge jumps} (\code{clock\_edges.py}, \code{v\_edges.py}): the median waveform $w$ around the bit-6 (H) or
+bit-7 (V) flags, edges $e$ located from the largest $|\Delta^2w|$, and
+\begin{equation}
+J_e=\frac19\sum_{m=3}^{11}w[e+m]-\frac19\sum_{m=-12}^{-4}w[e+m]
+\end{equation}
+(the fast, capacitive part before relaxation). H$_{1,2,3}$: 0.011--0.016\,fF ($z>4$); V$_{1,2,3}$: not detected,
+$<0.003$\,fF (3$\sigma$); RG low rail at the reset edges: 0.15--0.22\,fF.
+\item \textbf{feedthrough per volt} (relative, all setups): reset-pulse height above the signal level / $(\text{RG}_H-\text{RG}_L)$,
+summing-well dip / SW swing, H/V waveform peak-to-peak / swing, each $\div g$ (e/V). These include board pickup and the
+whole transfer waveform, so they compare channels, not absolute $C_k$.
+\end{itemize}
+
+\paragraph{Reset-gate overlap.}
+\begin{equation}
+L_{\rm ov}=\frac{C_{\rm RG}}{C_{\rm ox}W_{\rm RG}}=\frac{0.21\text{--}0.37\ \text{fF}}{0.454\ \text{fF/\textmu m}^2\times6\ \text{\textmu m}}
+=0.08\text{--}0.14\ \text{\textmu m}\quad(\text{101 ch2: }1.7\times).
+\end{equation}
+\caveat{$L_{\rm ov}\propto t_{\rm eq}$ through $C_{\rm ox}$. The 0.21--0.37\,fF RG values from the feedthrough feature
+had the board-102 pickup subtracted assuming those channels were dead; the trace-edge regression (0.15--0.22) does not
+need that subtraction.}
+
+%=====================================================================
+\section{Reset charge injection and the buried-channel depth}
+
+\paragraph{Measurement.} In the rail regression of the reset-edge jumps (and their relaxation), the coefficients of
+RG$_H$ and VR come out equal and opposite (+17\,500 to +20\,200 and $-$16\,000 to $-$18\,700 ADU/V): the response depends
+on $V_G-V_R$. With Sec.~\ref{sec:cpl},
+\begin{equation}
+C_{\rm inj}=\frac{q}{g}\,\frac{\partial J}{\partial(\text{RG}_H-\text{VR})}=2.1\text{--}2.4\ \text{fF/V}.
+\end{equation}
+
+\paragraph{Channel charge of the reset FET.} When the reset FET turns off, its inversion charge
+\begin{equation}
+Q_{\rm ch}=C_{\rm eff}\,W_{\rm RG}L_{\rm RG}\,(V_G-V_{\rm ch}-V_T)
+\end{equation}
+splits between source (sense node) and drain; with a fraction $\alpha\approx\tfrac12$ onto the node,
+$C_{\rm inj}=\alpha C_{\rm eff}W_{\rm RG}L_{\rm RG}$, so
+\begin{equation}
+C_{\rm eff}=\frac{C_{\rm inj}}{\alpha\,W_{\rm RG}L_{\rm RG}}=\frac{2.1\text{--}2.4}{0.5\times36}=0.117\text{--}0.133\ \text{fF/\textmu m}^2 .
+\end{equation}
+
+\paragraph{Depth.} In a buried channel the gate couples through the dielectric and the silicon above the potential
+maximum in series:
+\begin{equation}
+\frac1{C_{\rm eff}}=\frac{t_{\rm eq}}{\varepsilon_{\rm ox}}+\frac{x_{\rm ch}}{\varepsilon_{\rm Si}}
+\ \Rightarrow\
+x_{\rm ch}=\varepsilon_{\rm Si}\Big(\frac1{C_{\rm eff}}-\frac{t_{\rm eq}}{\varepsilon_{\rm ox}}\Big).
+\end{equation}
+Numbers ($\varepsilon_{\rm ox}=0.0345$, $\varepsilon_{\rm Si}=0.1036$\,fF/\textmu m): $1/C_{\rm eff}\approx8.0$\,\textmu
+m$^2$/fF, $t_{\rm eq}/\varepsilon_{\rm ox}=0.076/0.0345=2.20$, remainder $5.8\times0.1036\Rightarrow
+\boxed{x_{\rm ch}\approx0.6\ \text{\textmu m}}$ (0.3--0.9 for $\alpha$ and gate area $\pm30\%$; recipe: B 150\,keV,
+projected range 0.45\,\textmu m plus diffusion).
+\caveat{Only the combination $1/C_{\rm eff}$ is measured. $t_{\rm eq}$ and $x_{\rm ch}$ are degenerate: assuming
+$x_{\rm ch}=0.45$\,\textmu m instead gives $t_{\rm eq}\approx126$\,nm. An LCR measurement of a clock-line capacitance
+($C_{\rm line}=\varepsilon_{\rm ox}A/t_{\rm eq}$) breaks the degeneracy; an RG-edge-speed scan pins $\alpha$.}
+
+%=====================================================================
+\section{Knees and channel potentials (\code{channel\_knees.py})}
+
+\paragraph{Hinge fit.} For each rail $x$ and output $y$ (log of $\sigma_e$, $\lambda$, $g$, CIC, white noise), with all
+other rails as linear regressors $X$:
+\begin{equation}
+\ln y=X\beta+c\,\max(0,x-k)+\varepsilon,
+\end{equation}
+$k$ by grid search (33 quantiles of $x$, 10--90\%) minimising the residual sum of squares $\text{RSS}_1(k)$. Against the
+straight line ($\text{RSS}_0$):
+\begin{equation}
+F=\frac{\text{RSS}_0-\text{RSS}_1}{\text{RSS}_1/(n-p-2)}\sim F_{2,\,n-p-2},
+\end{equation}
+kept if $p<0.01$ and found on $\ge2$ CCDs; error on $k$ by bootstrap over packets (60 resamples).
+
+\paragraph{Dose shift from a knee offset.} A change $\Delta N_s$ of the buried-channel sheet dose shifts the channel
+potential by
+\begin{equation}
+\Delta V\approx q\,\Delta N_s\Big(\frac{t_{\rm eq}}{\varepsilon_{\rm ox}}+\frac{x_j}{\varepsilon_{\rm Si}}\Big)
+=\Delta N_s\times1.05\times10^{-11}\ \text{V\,cm}^2\quad(t_{\rm eq}=76\ \text{nm},\ x_j=0.45\ \text{\textmu m}).
+\end{equation}
+CCD\_B's H3-low knee sits $0.85\pm0.3$\,V below CCD\_C/D $\Rightarrow\Delta N_s\approx8\times10^{10}$\,cm$^{-2}$
+$\approx0.6\%$ of $1.3\times10^{13}$ (or the same density of fixed oxide charge).
+
+%=====================================================================
+\section{The setup: shared noise, crosstalk}
+
+\paragraph{Shared vs own} (\code{common\_mode.py}, \code{setup\_noise\_index.py}). Per channel, per-skip CDS with pixel
+means removed (optionally the pixel-averaged droop pattern too), averaged in blocks of $n$ skips ($y$), and the
+projection on the mean of the board's other channels ($\bar y_{\neg c}$) as in Sec.~\ref{sec:H}:
+\begin{align}
+\text{shared share}&=1-\frac{\operatorname{Var}(y-\beta\bar y_{\neg c})}{\operatorname{Var}y},\\
+\text{SNI}_n&=\sqrt{\frac{\operatorname{Var}y-\operatorname{Var}(y-\beta\bar y_{\neg c})}{\operatorname{Var}(y-\beta\bar y_{\neg c})}},\qquad
+X_n=\sqrt{1+\text{SNI}_n^2}=\frac{\sigma_{\rm total}}{\sigma_{\rm own}} .
+\end{align}
+SNI = 0: no setup noise; 1: the setup adds as much as the amplifier. Removing the shared part entirely would lower the
+per-skip noise by $1-1/X_1$ (v3: 9.46$\to$6.5\,ADU, $-30\%$).
+\caveat{``Shared'' is defined against the other channels of the same board. Noise that is common to all four (e.g.\ a
+shared return) is captured; noise entering one channel alone (its own cable, its own frontend) counts as ``own''.}
+
+\paragraph{Crosstalk} (\code{crosstalk.py}, images). Source pixels with $q_A>30\,e^-$, target pixels without own
+charge ($|q_B|<4\sigma_B$, $\sigma_B$ from the MAD); $q_B$ vs $q_A$ binned in 20 quantiles, Theil--Sen slope of the bin
+medians:
+\begin{equation}
+k_{A\to B}=\frac{\partial q_B}{\partial q_A}\quad(\sim10^{-4}).
+\end{equation}
+
+\paragraph{Mutual capacitance from the window dependence} (\code{mutual\_capacitance.py}). With crosstalk at several
+$\tau$,
+\begin{equation}
+k(\tau)=\frac a\tau+b,\qquad C_m^{\rm video}=\frac a{R_{\rm out}}\ (R_{\rm out}=2.5\text{--}5\ \text{k}\Omega),\qquad
+C_m^{\rm sn}=b\,C_{\rm sn} :
+\end{equation}
+a step on one video line injects a pulse of area $R_{\rm out}C_m\Delta V$ into the other, which a window of length
+$\tau$ averages to $R_{\rm out}C_m\Delta V/\tau$; the $\tau$-independent part is coupling before the followers (or a
+shared impedance, if negative).
+
+%=====================================================================
+\section{Summary: which inputs each number depends on}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}\toprule
+quantity & depends on & status\\\midrule
+$\sigma_1$ (ADU, e), $\sigma_N$, $\kappa$, $\rho_1$, $\mathcal R_{\rm img}$ & trace (+ $g$) & measured\\
+$e_n$, ASD, setup number & $G$ (design) & measured, $G$-scaled\\
+$f_c$, $\phi_{1/f}$ & window fit & upper limit (open-input test pending)\\
+$e_w$ & window fit, $G$ & model\\
+$N_t$ & $K$, $G^2A^2$, $C^2$, $WL$, $T$, $\lambda_t$ & upper limit, model\\
+CG$_{\rm in}$ & $g$, $G$ & measured, $G$-scaled\\
+$C_{\rm sn}$ & $g$, $G$, $A$ & model ($\pm6\%$ spread robust)\\
+$C_k$ (RG, SW, H, V) & regression, $g$ & measured\\
+$L_{\rm ov}$ & $C_{\rm RG}$, $C_{\rm ox}$, $W_{\rm RG}$ & model ($\propto t_{\rm eq}$)\\
+$C_{\rm eff}$, $x_{\rm ch}$ & $C_{\rm inj}$, $\alpha$, $W_{\rm RG}L_{\rm RG}$, $t_{\rm eq}$ & model ($\pm30\%$, degenerate with $t_{\rm eq}$)\\
+knee $k$, $\Delta N_s$ & hinge fit; $t_{\rm eq}$, $x_j$ & knee measured; dose model\\
+$\tau_s$, slopes, CDS offset & template & measured\\
+SNI, shared share, $k_{A\to B}$ & simultaneous channels / images & measured\\
+$C_{\rm sn}$ from kTC & ``dead'' board-102 channels & withdrawn\\\bottomrule
+\end{tabularx}
+\end{center}
+
+\end{document}
