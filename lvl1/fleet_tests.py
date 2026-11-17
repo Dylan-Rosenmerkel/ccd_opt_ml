@@ -69,6 +69,9 @@ PCT = 100.0          # log differences are reported as % (100 x log ratio)
 
 
 # =========================================================================== data
+LAMBDA_FLOOR = 0.005     # e-/pixel: lambda labels below this are failed fits (scorecard_v2.LAMBDA_FLOOR)
+
+
 def planned_id(pid, planned):
     if pid in planned:
         return pid
@@ -88,7 +91,9 @@ def load(args):
     d["session"] = [session.get(p, "?") if p else "?" for p in pid]
     d["purpose"] = [purpose.get(p, "") if p else "" for p in pid]
     istrue = lambda c: d[c].astype(str).str.lower().eq("true") if c in d else pd.Series(False, index=d.index)
-    ok = (d.board == args.board) & d.channel.isin(args.channels) & d.session.isin(args.sessions) & istrue("label.ok")
+    ok = (d.board == args.board) & d.channel.isin(args.channels) & d.session.isin(args.sessions)
+    if not getattr(args, "include_invalid", False):
+        ok &= istrue("label.ok")
     ok &= ~istrue("label.fractional_window")
     if "fake" in d:
         ok &= ~istrue("fake")
@@ -96,7 +101,23 @@ def load(args):
     for t, c in LAB.items():
         x = pd.to_numeric(d[c], errors="coerce").astype(float)
         d[f"log_{t}"] = np.log(x.where(x > 0))
-    d = d[np.isfinite(d[[f"log_{t}" for t in LAB]]).all(1)].reset_index(drop=True)
+    if getattr(args, "include_invalid", False):
+        # keep every setting: "valid" = a usable image (fit ok, finite labels, lambda above the failed-fit floor); the
+        # labels of invalid rows are set to NaN (they are a separate outcome, never a regression target)
+        fin = np.isfinite(d[[f"log_{t}" for t in LAB]]).all(1)
+        d["valid"] = istrue("label.ok") & fin & (d["log_lambda"] > np.log(LAMBDA_FLOOR))
+        for t in LAB:
+            d.loc[~d["valid"], f"log_{t}"] = np.nan
+        print(f"{(~d.valid).sum()} of {len(d)} rows are unusable settings (kept as candidates)")
+    else:
+        d = d[np.isfinite(d[[f"log_{t}" for t in LAB]]).all(1)].reset_index(drop=True)
+    # lambda below 0.005 e/pixel is a failed fit (as in scorecard_v2.LAMBDA_FLOOR): in log units such a row dominates
+    # every fit and becomes the "best setting" of a search (3 of 302 v3 rows at ~0.0007; added 2026-11-17)
+    n0 = len(d)
+    if not getattr(args, "include_invalid", False):
+        d = d[d["log_lambda"] > np.log(LAMBDA_FLOOR)].reset_index(drop=True)
+    if len(d) < n0:
+        print(f"dropped {n0 - len(d)} rows with lambda < {LAMBDA_FLOOR} (failed fits)")
     d["amp"] = d.board.astype(str) + ":" + d.channel.astype(str)
     ts = pd.to_datetime(d.date_start)
     d["hours"] = (ts - ts.min()).dt.total_seconds() / 3600
@@ -415,6 +436,19 @@ def ei(m, s, best):
     return (best - m) * norm.cdf(z) + s * norm.pdf(z)
 
 
+def p_usable(X, V, tr, revealed, rem):
+    """P(the setting gives a usable image): a tree classifier on the BO inputs, trained on the fleet's outcomes and the
+    new amplifier's images so far.  1 if no unusable example has been seen."""
+    idx = np.concatenate([tr, np.asarray(revealed, int)])
+    y = V[idx]
+    if y.all() or (~y).sum() < 2:
+        return np.ones(len(rem))
+    from sklearn.ensemble import ExtraTreesClassifier
+    c = ExtraTreesClassifier(n_estimators=150, min_samples_leaf=2, class_weight="balanced", random_state=0, n_jobs=-1)
+    c.fit(X[idx], y)
+    return c.predict_proba(X[rem])[:, list(c.classes_).index(True)]
+
+
 def test_bo(d, args, out):
     Z, names, _ = knobs(d)
     TRX, PCS = trace_matrix(d)
@@ -424,26 +458,38 @@ def test_bo(d, args, out):
     rng = np.random.default_rng(args.seed)
     blk = packet_blocks(d, args.bo_blocks)
     res = {"amps": amps, "weights": args.weights, "start": args.start, "blocks": args.bo_blocks, "curves": {}, "images_to": {}}
+    V = d["valid"].to_numpy(bool) if "valid" in d else np.ones(len(d), bool)
+    res["invalid_images"] = {}
     for w in args.weights:
         J = w * d.log_sigma_e.to_numpy() + (1 - w) * d.log_lambda.to_numpy()
-        curves = {}
+        curves, wasted = {}, {}
         for a, bb in [(a, bb) for a in amps for bb in range(args.bo_blocks)]:
             pool = np.flatnonzero((d.amp.to_numpy() == a) & (blk == bb))   # candidates: this amplifier, one block
             tr = np.flatnonzero((d.amp.to_numpy() != a) & (blk != bb))     # the fleet: other amplifiers, other times
             if len(pool) < 5:
                 continue
-            Jp = J[pool]
-            best = Jp.min()
+            if not V[pool].any():
+                continue
+            best = J[pool][V[pool]].min()                                  # the best USABLE setting of the pool
             n = len(pool)
-            start = pool[d.nominal.to_numpy()[pool]]
+            start = pool[d.nominal.to_numpy()[pool] & V[pool]]
             start = [int(start[0])] if (args.start == "nominal" and len(start)) else []
+            trv = tr[V[tr]]                                                 # fleet rows with a usable image
 
             def regret_curve(order):
-                return [(J[order[:i + 1]].min() - best) * PCT for i in range(len(order))]
+                Jo = np.where(V[order], J[order], np.inf)                   # an unusable image gains nothing
+                cm = np.minimum.accumulate(Jo)
+                return [((c - best) * PCT if np.isfinite(c) else 100.0) for c in cm]
+
+            def n_invalid_until(order, x=2.0):
+                rc = regret_curve(order)
+                k = next((i + 1 for i, r in enumerate(rc) if r <= x), len(rc))
+                return int((~V[np.asarray(order[:k])]).sum())
 
             # random order
-            rc = [regret_curve(list(start) + list(rng.permutation(np.setdiff1d(pool, start)))) for _ in range(200)]
-            curves.setdefault("random order", []).append(np.mean(rc, 0))
+            orders = [list(start) + list(rng.permutation(np.setdiff1d(pool, start))) for _ in range(200)]
+            curves.setdefault("random order", []).append(np.mean([regret_curve(o) for o in orders], 0))
+            wasted.setdefault("random order", []).append(np.mean([n_invalid_until(o) for o in orders]))
             amp_arr = d.amp.to_numpy()
             variants = {"BO, fleet as prior (multi-task GP)": Z}
             if PCS is not None:
@@ -457,36 +503,62 @@ def test_bo(d, args, out):
                 # physics feature by tree importance for this objective, keep the top k
                 from sklearn.ensemble import ExtraTreesRegressor
                 et = ExtraTreesRegressor(n_estimators=300, min_samples_leaf=3, max_features=0.3, random_state=0, n_jobs=-1)
-                et.fit(ALLF[tr], J[tr])
+                et.fit(ALLF[trv], J[trv])
                 sel = np.argsort(-et.feature_importances_)[:args.select_k]
                 variants[f"BO, fleet + top-{args.select_k} features learned on the fleet"] = np.hstack([Z, ALLF[:, sel]])
-            for name, X in variants.items():
-                mt = MultiTaskGP(X[tr], J[tr], amp_arr[tr])
-                if name.startswith("BO, fleet as prior"):
-                    m0, _ = mt.predict(X[tr], J[tr], amp_arr[tr], X[pool], [a] * n)
+            if args.include_invalid and args.validity_variants_only:
+                keep = ("BO, fleet as prior (multi-task GP)", "BO, fleet + trace PHYSICS features",
+                        "BO, fleet + physics + trace components")
+                variants = {k: v for k, v in variants.items() if k in keep}
+            runs = [(nm, X, False) for nm, X in variants.items()]
+            if args.include_invalid:
+                runs += [(nm + " + VALIDITY classifier", X, True) for nm, X in variants.items()]
+                if args.gate > 0:
+                    runs += [(nm + f" + validity GATE (P<{args.gate} never imaged)", X, "gate") for nm, X in variants.items()]
+            for name, X, use_valid in runs:
+                mt = MultiTaskGP(X[trv], J[trv], amp_arr[trv])
+                if name == "BO, fleet as prior (multi-task GP)":
+                    m0, _ = mt.predict(X[trv], J[trv], amp_arr[trv], X[pool], [a] * n)
                     order = list(start) + [p for p in pool[np.argsort(m0)] if p not in start]
                     curves.setdefault("fleet model ranking, no updates", []).append(regret_curve(order))
+                    wasted.setdefault("fleet model ranking, no updates", []).append(n_invalid_until(order))
                 revealed = list(start)
                 while len(revealed) < n:
                     rem = np.setdiff1d(pool, revealed)
-                    Xtr = np.vstack([X[tr], X[revealed]]) if revealed else X[tr]
-                    ytr = np.concatenate([J[tr], J[revealed]])
-                    atr = np.concatenate([amp_arr[tr], [a] * len(revealed)])
+                    rv = [r for r in revealed if V[r]]
+                    Xtr = np.vstack([X[trv], X[rv]]) if rv else X[trv]
+                    ytr = np.concatenate([J[trv], J[rv]])
+                    atr = np.concatenate([amp_arr[trv], [a] * len(rv)])
                     m, s = mt.predict(Xtr, ytr, atr, X[rem], [a] * len(rem))
-                    b = J[revealed].min() if revealed else m.min()
-                    revealed.append(int(rem[np.argmax(ei(m, s, b))]))
+                    b = J[rv].min() if rv else m.min()
+                    acq = ei(m, s, b)
+                    if use_valid == "gate":
+                        # hard constraint: candidates the classifier rates below the threshold are never imaged
+                        pu = p_usable(X, V, tr, revealed, rem)
+                        ok = pu >= args.gate
+                        acq = np.where(ok, acq, -np.inf) if ok.any() else pu
+                    elif use_valid:
+                        acq = acq * p_usable(X, V, tr, revealed, rem)
+                    revealed.append(int(rem[np.argmax(acq)]))
                 curves.setdefault(name, []).append(regret_curve(revealed))
+                wasted.setdefault(name, []).append(n_invalid_until(revealed))
             # BO without fleet data (the same kernel shape, only this amplifier's images)
-            hyper = fit_shared_gp(Z[tr], J[tr])        # the kernel shape from the fleet, none of its data
+            hyper = fit_shared_gp(Z[trv], J[trv])      # the kernel shape from the fleet, none of its data
             revealed = list(start) + [int(x) for x in rng.choice(np.setdiff1d(pool, start), size=2, replace=False)]
             while len(revealed) < n:
                 rem = np.setdiff1d(pool, revealed)
-                m, s = shared_predict(hyper, Z[revealed], J[revealed], Z[rem])
-                revealed.append(int(rem[np.argmax(ei(m, s, J[revealed].min()))]))
+                rv = [r for r in revealed if V[r]]
+                if len(rv) < 2:
+                    revealed.append(int(rng.choice(rem)))
+                    continue
+                m, s = shared_predict(hyper, Z[rv], J[rv], Z[rem])
+                revealed.append(int(rem[np.argmax(ei(m, s, J[rv].min()))]))
             curves.setdefault("BO, no fleet data", []).append(regret_curve(revealed))
+            wasted.setdefault("BO, no fleet data", []).append(n_invalid_until(revealed))
             print(f"  bo w={w} {a} block {bb}: pool {n}", flush=True)
         nmin = min(len(c) for v in curves.values() for c in v)
         res["curves"][str(w)] = {k: np.mean([c[:nmin] for c in v], 0).tolist() for k, v in curves.items()}
+        res["invalid_images"][str(w)] = {k: float(np.mean(v)) for k, v in wasted.items()}
         res["images_to"][str(w)] = {k: {f"{x}%": float(np.mean([next((i + 1 for i, r in enumerate(c) if r <= x), len(c))
                                                                 for c in v])) for x in (2, 5)} for k, v in curves.items()}
     write(out, "bo", res, bo_md(res))
@@ -500,9 +572,10 @@ def bo_md(res):
          "Images needed (mean over amplifiers) until the best image so far is within 2 % / 5 % of the best in the pool "
          "(J = w log sigma_e + (1 - w) log lambda).", ""]
     for w, v in res["images_to"].items():
-        L += [f"## w = {w}", "", "| strategy | images to 2 % | images to 5 % |", "|---|---|---|"]
+        inv = res.get("invalid_images", {}).get(w, {})
+        L += [f"## w = {w}", "", "| strategy | images to 2 % | images to 5 % | unusable images before 2 % |", "|---|---|---|---|"]
         for k, x in v.items():
-            L.append(f"| {k} | {x['2%']:.1f} | {x['5%']:.1f} |")
+            L.append(f"| {k} | {x['2%']:.1f} | {x['5%']:.1f} | {inv.get(k, float('nan')):.1f} |")
         L.append("")
     return "\n".join(L)
 
@@ -702,6 +775,11 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--phys", nargs="*", default=[], help="physics_features / gain_features csv files (bo)")
     ap.add_argument("--select-k", type=int, default=8, help="bo: features kept by the fleet-only supervised selection")
+    ap.add_argument("--include-invalid", action="store_true",
+                    help="bo: keep unusable settings (fit failed, lambda < floor) as candidates; adds the validity variants")
+    ap.add_argument("--gate", type=float, default=0.0, help="bo --include-invalid: also run a hard validity gate at this P")
+    ap.add_argument("--validity-variants-only", action="store_true",
+                    help="bo with --include-invalid: only the fleet-prior, physics and physics + components variants")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     out = Path(args.out)
