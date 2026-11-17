@@ -169,6 +169,27 @@ def trace_matrix(d, n_pc=10):
     return X, pcs / pcs.std(0)
 
 
+PHYS_COLS = ["sigma_500 pred (ADU)", "sigma_500 white only (ADU)", "S_w", "K", "reset jump (ADU)",
+             "H waveform p2p (ADU)", "skip pulse (ADU)", "CDS offset (ADU)"]
+
+
+def physics_matrix(d, files):
+    """The robust trace-physics features of each row's own traces (amp_phys/physics_features.py, gain_features.py):
+    white and 1/f levels, the predicted 500-skip noise, the gain signals.  Logs of the positive ones, standardised,
+    NaN -> 0.  None if no file is given."""
+    if not files:
+        return None
+    F = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    F = F.groupby(["packet_id", "board", "channel"], as_index=False).first()
+    m = d[["packet_id", "board", "channel"]].merge(F, on=["packet_id", "board", "channel"], how="left")
+    cols = [c for c in PHYS_COLS if c in m]
+    X = np.column_stack([np.log(np.abs(m[c].to_numpy(float)).clip(1e-9)) if c != "CDS offset (ADU)" else m[c].to_numpy(float)
+                         for c in cols])
+    mu, sd = np.nanmean(X, 0), np.nanstd(X, 0)
+    print(f"physics features: {cols}, rows with features {np.isfinite(X).all(1).mean():.0%}")
+    return np.nan_to_num((X - mu) / np.where(sd > 0, sd, 1.0))
+
+
 def packet_blocks(d, n):
     """Each row's block: the packets in time order cut into n contiguous blocks.  A left-out amplifier is always scored
     on one block while the fleet trains on the OTHER blocks: the amplifiers of one packet share its moment (drift, a
@@ -396,7 +417,9 @@ def ei(m, s, best):
 
 def test_bo(d, args, out):
     Z, names, _ = knobs(d)
-    _, PCS = trace_matrix(d)
+    TRX, PCS = trace_matrix(d)
+    PHY = physics_matrix(d, args.phys)
+    ALLF = np.hstack([m for m in (TRX, PHY) if m is not None]) if (TRX is not None or PHY is not None) else None
     amps = sorted(d.amp.unique())
     rng = np.random.default_rng(args.seed)
     blk = packet_blocks(d, args.bo_blocks)
@@ -425,6 +448,18 @@ def test_bo(d, args, out):
             variants = {"BO, fleet as prior (multi-task GP)": Z}
             if PCS is not None:
                 variants["BO, fleet + traces of every candidate"] = np.hstack([Z, PCS])
+            if PHY is not None:
+                variants["BO, fleet + trace PHYSICS features"] = np.hstack([Z, PHY])
+                if PCS is not None:
+                    variants["BO, fleet + physics + trace components"] = np.hstack([Z, PHY, PCS])
+            if ALLF is not None and args.select_k > 0:
+                # supervised selection on the FLEET rows only (the test amplifier never informs it): rank every trace and
+                # physics feature by tree importance for this objective, keep the top k
+                from sklearn.ensemble import ExtraTreesRegressor
+                et = ExtraTreesRegressor(n_estimators=300, min_samples_leaf=3, max_features=0.3, random_state=0, n_jobs=-1)
+                et.fit(ALLF[tr], J[tr])
+                sel = np.argsort(-et.feature_importances_)[:args.select_k]
+                variants[f"BO, fleet + top-{args.select_k} features learned on the fleet"] = np.hstack([Z, ALLF[:, sel]])
             for name, X in variants.items():
                 mt = MultiTaskGP(X[tr], J[tr], amp_arr[tr])
                 if name.startswith("BO, fleet as prior"):
@@ -665,6 +700,8 @@ def main():
     ap.add_argument("--weights", type=float, nargs="+", default=[1.0, 0.5, 0.0])
     ap.add_argument("--start", choices=["nominal", "none"], default="nominal")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--phys", nargs="*", default=[], help="physics_features / gain_features csv files (bo)")
+    ap.add_argument("--select-k", type=int, default=8, help="bo: features kept by the fleet-only supervised selection")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     out = Path(args.out)

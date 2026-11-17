@@ -40,14 +40,16 @@ def image_integrals(N, tau, dt, T):
 
 def one(path):
     v, fl = load(path)
-    s, P, s0, n = sigmas(v, fl, 20)
+    s, P, s0, n, win = sigmas(v, fl, 20)
     dt, T = s0 / FS, P / FS
-    X = np.array([integrals(tau / FS, dt, T) for tau in TAUS])
-    y = np.array([s[tau] for tau in TAUS]) ** 2
+    X = np.array([integrals(tau / FS, dt, T) for tau in s])
+    y = np.array([s[tau] for tau in s]) ** 2
     w = 1 / y
     (Sw, K), *_ = np.linalg.lstsq(X * w[:, None], y * w, rcond=None)
-    Iw, If = image_integrals(500, 10e-6, dt, T)
-    out = {f"sigma_1 tau={tau / 15:.1f}us": s[tau] for tau in TAUS}
+    Iw, If = image_integrals(500, win / FS, dt, T)                 # the packet's own window
+    out = {f"sigma_1 at {i}/{len(s)} of the window": s[tau] for i, tau in enumerate(s, 1)} if len(s) != len(TAUS) \
+        else {f"sigma_1 tau={tau / 15:.1f}us": s[tau] for tau in TAUS}
+    out["window (us)"] = win / FS * 1e6
     out.update({"S_w": Sw, "K": K, "sigma_500 pred (ADU)": np.sqrt(max(Sw * Iw + max(K, 0) * If, 0)),
                 "sigma_500 white only (ADU)": np.sqrt(max(Sw, 0) * Iw)})
     return out

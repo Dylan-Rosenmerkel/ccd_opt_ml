@@ -49,7 +49,9 @@ def sigmas(v, fl, drop):
     up, dn = np.flatnonzero(np.diff(b0) == 1) + 1, np.flatnonzero(np.diff(b0) == -1) + 1
     dn = dn[dn > up[0]]
     win = int(np.median((dn[:len(up)] - up[:len(dn)])[:400]))       # window length from the flags
-    assert win >= max(TAUS), f"window {win} samples shorter than the longest software window"
+    taus = [t for t in TAUS if t <= win - 5] if win < max(TAUS) + 5 else list(TAUS)
+    if len(taus) < 3:                                                # windows shorter than ~3 us: scaled software windows
+        taus = sorted({max(6, int(win * f)) for f in (0.25, 0.4, 0.55, 0.7, 0.85, 0.95)})
     s0 = int(np.median([s for k in e[:300] for s in rising(fl[k:k + P], 1)[:1]]))
     has = np.array([k + s0 + 2 < len(fl) and ((fl[k + s0 + 2] >> 1) & 1) == 1 for k in e], bool)
     c = e[has]
@@ -62,12 +64,12 @@ def sigmas(v, fl, drop):
     same &= np.diff(pid) == 0
     cs = np.cumsum(np.r_[0, v])
     out = {}
-    for tau in TAUS:
+    for tau in taus:
         ped = (cs[c + win] - cs[c + win - tau]) / tau
         sig = (cs[c + s0 + win] - cs[c + s0 + win - tau]) / tau
         d = np.diff(sig - ped)[same]
         out[tau] = np.std(d) / np.sqrt(2)
-    return out, P, s0, int(same.sum())
+    return out, P, s0, int(same.sum()), win
 
 
 def main():
@@ -89,14 +91,14 @@ def main():
     rows = []
     for t in a.traces:
         v, fl = load(t)
-        s, P, s0, n = sigmas(v, fl, a.drop)
+        s, P, s0, n, win = sigmas(v, fl, a.drop)
         dt, T = s0 / FS, P / FS
-        X = np.array([integrals(tau / FS, dt, T) for tau in TAUS])
-        y = np.array([s[tau] for tau in TAUS]) ** 2
+        X = np.array([integrals(tau / FS, dt, T) for tau in s])
+        y = np.array([s[tau] for tau in s]) ** 2
         w = 1 / y
         (Sw, K), *_ = np.linalg.lstsq(X * w[:, None], y * w, rcond=None)
         r = {"label": a.label, "file": Path(t).name, "pairs": n,
-             **{f"sigma_1 tau={tau / 15:.1f}us (ADU)": s[tau] for tau in TAUS},
+             **{f"sigma_1 tau={tau / 15:.1f}us (ADU)": s[tau] for tau in s},
              "white ASD (nV/rtHz)": np.sqrt(max(Sw, 0)) / a.gain_adu_per_uv * 1e3,
              "1/f K (ADU^2)": K, "1/f corner (kHz)": K / Sw / 1e3 if Sw > 0 else np.nan,
              "1/f share at 10 us": K * integrals(10e-6, dt, T)[1] / (Sw * integrals(10e-6, dt, T)[0] + K * integrals(10e-6, dt, T)[1]),
