@@ -42,7 +42,7 @@ cannot (a defective transistor), and two test stands could not be compared on a 
   fitting the exact CDS filter separates the two. This gives the 1/f corner and, through the McWhorter model, an
   \emph{upper limit} on the gate-oxide trap density. On PA03 it agrees with a hardware window scan over 100 strips
   (within 15\,\% on two amplifiers, a factor 1.6 on the other two).
-\item \textbf{Defect and timing flags.} Telegraph (single-trap) noise from the kurtosis of the noise; an unsettled
+\item \textbf{Defect and timing flags.} Heavy tails, noise bursts and noise-level modulation from the noise distribution; an unsettled
   signal window from the slope inside it and the offset between the two CDS windows.
 \end{enumerate}
 
@@ -110,9 +110,9 @@ trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 
   trap upper limits of the same order. PA03 is representative of the production amplifiers.
 \item \textbf{The LSM images are worse than their traces predict} (1.0--2.0$\times$ the white-noise expectation): at
   180\,K the blank images carry $\sim$1\,e/pixel, and charge arriving while a pixel is skipped broadens the zero-electron peak.
-\item \textbf{Channels to follow up, diagnosed by cause} (all 12 LSM amplifiers work (every one resolves single electrons, 0.16--0.23\,e at 1000 skips); these are noise features to follow up, not failures): ACM109 ch1, telegraph noise and a 334\,kHz 1/f corner, so
-  a likely trappy transistor (one trace; to be confirmed); ACM110 ch3, a 30.6\,kHz interference comb (setup); ACM110 ch1,
-  more 1/f noise; PA03 101 ch2, extra charge in images (glow) and telegraph episodes in 1 of 93 valid traces.
+\item \textbf{Channels to follow up, diagnosed by cause} (all 12 LSM amplifiers work (every one resolves single electrons, 0.16--0.23\,e at 1000 skips); these are noise features to follow up, not failures): ACM109 ch1, heavy tails and a 334\,kHz trace 1/f corner,
+  from intermittent $\sim$1\,ms noise bursts (one trace; no single-trap steps resolved); ACM110 ch3, a 30.6\,kHz interference comb (setup); ACM110 ch1,
+  more 1/f noise; PA03 101 ch2, extra charge in images (glow) and a modulated noise level (heavy tails).
 \item \textbf{Readout timing:} 5--10\,\textmu s CDS windows are optimal at fixed readout time (20--30\,\textmu s costs
   9--32\,\%). The wait after the summing-well pulse is too short on LSM board 109 (signal window still drifting
   7--21\,e/\textmu s) and the LSM CDS offsets reach $-1550$\,e against $\sim-20$\,e on PA03.
@@ -122,7 +122,7 @@ trap density, upper limit ($10^{16}$/eV/cm$^3$) & $\le$1.1--1.8 & $\le$1.8--2.3 
 \begin{itemize}
 \item \textbf{Setup debugging in minutes:} change a ground or a cable, take one trace or static record, read the number.
 \item \textbf{Run monitoring:} one static record per channel per run; a jump flags a new noise source before it shows in images.
-\item \textbf{Amplifier screening of production modules} from data already taken: 1/f corner, telegraph flag and timing per
+\item \textbf{Amplifier screening of production modules} from data already taken: 1/f level, burst and modulation flags and timing per
   channel, separating a defective transistor (replace) from a noisy environment (fix).
 \item \textbf{Comparing test stands} on one scale, and \textbf{choosing readout timing} (window length, settling waits).
 \item \textbf{Physics features for the voltage-optimisation ML}, separating ``noisy settings'' from ``noisy day''.

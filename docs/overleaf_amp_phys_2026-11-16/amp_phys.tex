@@ -458,8 +458,10 @@ $N_t$, $A=0.85$, $C=C_\text{eff}$ (buried channel) & $1.4\times10^{15}$ & $1.4\t
   No output transistor has a damaged or contaminated gate oxide.
 \item \textbf{ch2 is worse, for a physical reason.} It has $\sim$1.5$\times$ the trap density and twice the 1/f corner.
   That fits its heavy-tailed (telegraph-like) noise, its higher noise floor and its least stable noise: the amplifier
-  excluded since v1 has a gate oxide with more traps. A single large trap is suggested by the kurtosis but its two-level
-  steps have not yet been seen in the raw traces. \novel
+  excluded since v1 has a gate oxide with more traps. A direct search for two-level steps finds none: one trapped
+  charge moves the output by only $\sim$0.76\,ADU (5\,ADU noise per skip, dwell $\sim$0.2\,ms), too small to resolve. What
+  is seen is a modulated noise level (per-pixel noise varying 1.8\,\% beyond statistics, against 0.95--1.4\,\% on the
+  others), the signature of a slow fluctuator changing the noise rather than single steps. \novel
 \item \textbf{A large part of each amplifier's single-skip noise does not shrink with the window.} In the fit it is
   55--80\,\% of the variance, with an own white noise of only 9--13\,nV/$\sqrt{\text{Hz}}$. That white level is below
   the dead-channel frontend (17.0), which is the open inconsistency of Section~\ref{sec:noise}: either the live follower
@@ -480,7 +482,7 @@ for 0.1\,s. Their spectrum can be fitted directly, with no CDS model, as $S(f)=(
 frontend's anti-alias roll-off (fitted corner 470--690\,kHz) and $S_0$ the floor behind it (Figure~\ref{fig:sfit}).
 \fig{static_fit.png}{Left: a static record (ACM109 ch0) with its direct fit, split into the 1/f part and the
 band-limited white part. Right: the 1/f level $K$ of each LSM channel from the readout-trace windows against $K$ from its
-static spectrum. The two flagged channels have telegraph noise or an interference comb in their readout trace that the
+static spectrum. The two flagged channels have noise bursts or an interference comb in their readout trace that the
 static record did not catch.\label{fig:sfit}}
 \begin{itemize}
 \item \textbf{The 1/f level $K$ is robust:} the two methods agree to $1.01\pm0.13$ on the 9 clean channels. Since
@@ -490,7 +492,7 @@ static record did not catch.\label{fig:sfit}}
   the static one. Adding the measured roll-off $L(f)$ to the window fit does not close the gap (it widens it to 1.4$\times$),
   so band-limited white noise being counted as 1/f is not the main effect; clocking-related white noise is a candidate.
   The corner frequency is therefore not used as a health number.
-\item \textbf{The static record is blind to episodes:} ACM109 ch1 (telegraph noise) and ACM110 ch3 (a 30.6\,kHz comb)
+\item \textbf{The static record is blind to episodes:} ACM109 ch1 ($\sim$1\,ms noise bursts) and ACM110 ch3 (a 30.6\,kHz comb)
   look normal when static. A trace taken during readout is needed to catch them.
 \item \textbf{The 1/f level is nearly the same on all twelve LSM channels} (21--28\,nV/$\sqrt{\text{Hz}}$ at 10\,kHz),
   across three boards and three modules. That points to the transistor design, but 1/f noise on a shared bias rail
@@ -618,7 +620,7 @@ Each amplifier's quantities are compared with the others in units of their combi
 (excess kurtosis $z=+4.5$, jump share, steeper 1/f); 102 ch3 differs in many electronics quantities, most of which its
 dead neighbours share (board-102 electronics).\label{fig:out}}
 \begin{itemize}
-\item \textbf{101 ch2}, excluded since v1: a charge trap in its output transistor (telegraph noise), 2$\times$ the noise
+\item \textbf{101 ch2}, excluded since v1: heavy-tailed noise from a modulated noise level (single trap steps not resolvable), 2$\times$ the noise
   floor, the largest RG overlap and glow at the amplifier end of its register. Everything points to its output stage.
 \item \textbf{101 ch3:} excess slow noise (Allan deviation $z=+4.3$).
 \item \textbf{102 ch3:} settles like a working amplifier but sees no charge (images and H transfers). The channel mapping

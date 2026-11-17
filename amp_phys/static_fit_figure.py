@@ -59,7 +59,7 @@ def main():
     t = pd.read_csv(R / "traps/trap_from_trace.csv").groupby("label").median(numeric_only=True)
     Ks = s["white (nV/rtHz)"] ** 2 * s["1/f corner (kHz)"] * 1e3 / 1e6
     Kw = t["white ASD (nV/rtHz)"] ** 2 * t["1/f corner (kHz)"] * 1e3 / 1e6
-    flagged = {"ACM109 ch1": "telegraph", "ACM110 ch3": "interference", "ACM109 ch3": "fit failed"}
+    flagged = {"ACM109 ch1": "noise bursts", "ACM110 ch3": "interference", "ACM109 ch3": "fit failed"}
     lim = [3, 12]
     bx.plot(lim, lim, color=GREY, lw=1, ls="--")
     bx.text(11.3, 10.6, "equal", color=GREY, fontsize=8)

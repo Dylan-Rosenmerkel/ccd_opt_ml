@@ -37,13 +37,13 @@ measured and why it matters.
 
 \input{tables/card.tex}
 
-\paragraph{The card in one paragraph.} The PA03 amplifiers have low 1/f corners and no telegraph noise (except episodically on 101 ch2).
+\paragraph{The card in one paragraph.} The PA03 amplifiers have low 1/f corners; 101 ch2's noise is mildly heavy-tailed (its noise level is modulated).
 Board 101 carries the most slow pickup measured ($\sim$35\,\textmu V/$\sqrt{\text{Hz}}$), but its 500-skip images still reach
 the white-noise expectation, so the CDS and skip averaging reject most of it. The LSM setup is much quieter in its
 traces and its transistors have similar 1/f noise, but its
 \textbf{images are noisier} at 180\,K and its \textbf{timing after the summing well is not settled} on several channels.
 Most channels are good or fair in most categories; all 12 LSM amplifiers work (every one resolves single electrons, 0.16--0.23\,e at 1000 skips); the channels with a
-noise feature to follow up are ACM109 ch1 (likely trappy transistor, one trace), ACM110 ch3 (interference), and on PA03 the setup of board 101 and 101 ch2's extra charge and telegraph
+noise feature to follow up are ACM109 ch1 (intermittent $\sim$1\,ms noise bursts, one trace), ACM110 ch3 (interference), and on PA03 the setup of board 101 and 101 ch2's extra charge and telegraph
 episodes (Section~\ref{sec:verdicts}).
 
 % ===================================================================================================================
@@ -102,9 +102,13 @@ white noise (right).\label{fig:cds}}
 \item \textbf{Similar in both module sets:} $N_t\le1.1$--$2.3\times10^{16}$ (upper limits) on every good channel.
 \item The LSM 1/f corners (61--99\,kHz) are higher than PA03's (16--39\,kHz): at 180\,K the 1/f power grows with $kT$
   and the white part is lower. Graded the same; read the LSM column with that in mind.
-\item \textbf{Likely trappy transistors} (LSM: one trace each, to be confirmed): ACM109 ch1 (corner 334\,kHz, kurtosis 2.7) and ACM110 ch1 (corner 174\,kHz,
-  $N_t=2.4\times10^{16}$). PA03 101 ch2 is clean in its median trace but has the most telegraph episodes over all 93 valid
-  traces (kurtosis p90 0.17, maximum 0.70 against $\le$0.22 on the others).
+\item \textbf{What the heavy tails are.} Single-trap (telegraph) steps were searched for directly (two-level fits to the
+  smoothed CDS): none is resolved. One trapped charge would move the output by only $\sim$0.76\,ADU against 5\,ADU per skip,
+  and the fitted dwell times ($\sim$0.2\,ms) are too short to average it out. ACM109 ch1's kurtosis (2.7) comes from
+  $\sim$1\,ms \emph{noise bursts} (pairs of pixels swinging by $\pm$20--30\,ADU), not a trap; its static spectrum is
+  normal, so its high trace corner (334\,kHz) is the bursts. PA03 101 ch2's tails (kurtosis p90 0.17, maximum 0.70) come
+  from a \emph{modulated noise level}: its per-pixel noise varies by 1.8\,\% beyond statistics (others 0.95--1.4\,\%), as a
+  slowly switching fluctuator modulating the transistor noise would do. ACM110 ch1 has a higher 1/f level (174\,kHz corner).
 \item ACM109 ch3: the fit fails (21\,\% residual, its window is still settling), so no trap numbers.
 \end{itemize}
 \fig[0.75]{oxide_traps_tau.png}{The hardware version of the method (PA03, 100 strips): noise against the CDS window,
@@ -171,19 +175,19 @@ scale, and its share of the 500-skip variance.}
 \begin{itemize}[leftmargin=*]
 \item \textbf{PA03 101 ch0, ch1:} the best amplifiers of the study (smallest sense nodes, 0.144--0.147\,e images, low 1/f,
   low trap upper limits); their images are at the white-noise expectation despite board 101's pickup.
-\item \textbf{PA03 101 ch2 (excluded since v1):} the transistor is fine on average, but it has the most telegraph episodes,
+\item \textbf{PA03 101 ch2 (excluded since v1):} the transistor is fine on average, but it has the most modulated noise level,
   2.5$\times$ the charge of ch0 in blank images (output-stage glow, spurious charge at the amplifier end of its register),
   and 0.164\,e images. Its defect shows in charge and in episodes, not in the per-skip noise.
 \item \textbf{PA03 101 ch3:} the highest per-skip noise of board 101 (4.4\,e) and the highest 1/f corner (39\,kHz); excess
   slow noise in the images (Allan deviation).
 \item \textbf{PA03 102 ch3:} live amplifier, quiet setup, but no charge reaches it (mapping to be checked); slow settling.
 \item \textbf{ACM106:} clean setup and transistors; images 0.21--0.33\,e (ch1 worst) at 180\,K; CDS offsets up to $-285$\,e.
-\item \textbf{ACM109:} windows not settled on all four channels; \textbf{ch1 is likely a trappy transistor} (one trace: telegraph noise,
-  bursts, 334\,kHz corner); ch3's trap fit fails.
+\item \textbf{ACM109:} windows not settled on all four channels; \textbf{ch1 has intermittent $\sim$1\,ms noise bursts} (one trace;
+  its static spectrum is normal); ch3's trap fit fails.
 \item \textbf{ACM110:} the quietest setup (ch0--ch2); \textbf{ch1 has more 1/f noise} (174\,kHz corner); \textbf{ch3 picks up
   a 30.6\,kHz interference comb}; the largest CDS offsets ($-600$ to $-1550$\,e).
 \end{itemize}
-\fig[0.75]{anatomy_ACM109_ch1.png}{ACM109 ch1: the likely trappy transistor. Its whole-trace dissection.}
+\fig[0.75]{anatomy_ACM109_ch1.png}{ACM109 ch1: the channel with noise bursts. Its whole-trace dissection.}
 \fig[0.75]{anatomy_ACM110_ch3.png}{ACM110 ch3: the interference comb (bottom left, lines at 31, 61, 92, 123\,kHz).}
 
 % ===================================================================================================================

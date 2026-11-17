@@ -820,3 +820,25 @@ integrated through the exact CDS + N-skip filter gives the setup's share of an N
   board 101 (99 % excess) and 1.6 e on board 102, ~12× what board 101's images show (0.144 e at 500 skips). On the LSM
   the clocked-trace 0.2–1 kHz level is 2–50× the static one. Clocked-trace setup numbers (§ cabling, §26) hold for
   like-for-like comparisons only; PA03 needs static records for the electron number.
+
+## 30. The remaining trace physics (2026-11-16): g_m, telegraph steps, gain stability, baseline recovery, nonlinearity
+
+- **g_m from the output transient: not obtainable.** Rise time does not depend on VDD (−0.1 to +0.8 %/V over the scan),
+  so the output edge is interconnect/frontend-limited, not C_load/g_m. Board 101 rings at 3.1 MHz (160–240 e rms; board
+  102: 0.55–0.7 MHz): a cable/LC resonance of board 101's readout path.
+- **Telegraph steps: not resolvable** (`telegraph.py`). One trapped charge moves the output by ≈ 0.76 ADU (q/(C_ox WL)·A·G)
+  against 5 ADU per skip; two-level fits to the smoothed CDS are no better on ch2 (separation 0.14–0.35 σ) than on ch1
+  (0.27–0.36 σ). ACM109 ch1's kurtosis 2.7 is ~1 ms **noise bursts** (pairs of pixels swinging ±20–30 ADU), not a trap
+  (its static spectrum is normal) → "likely trappy" withdrawn. 101 ch2's heavy tails are a **modulated noise level**:
+  per-pixel noise varies 1.84 % beyond statistics (median of 20 valid traces; 101 ch0/1/3 1.12/0.95/1.44 %, 102 ch0/3
+  0.95/1.24 %).
+- **Gain/supply stability** (`trace_physics2.py`): with the ADC sampling phase removed (pulse timing jitter 20–25 ns ≈
+  67 ns/√12: the ADC is not phase-locked to the 10 ns sequencer clock), the per-skip pulse amplitude jitter is at the
+  additive noise on PA03: multiplicative noise < 0.3 % per skip. Not measurable on the LSM (3–5-sample pulses).
+- **Baseline recovery after each H transfer:** board 101 τ = 8.2 ± 0.3 ms, −1.8 kADU, identical on all four channels;
+  board 102 none (τ ≥ 130 ms). The within-pixel CDS drift (+7–8 ADU on 101, −3 ADU on 102) has the same 8 ms constant: an
+  electrical transient of board 101's video chain, identical in every pixel (cancels in images), not charge. The
+  baseline-slope hypothesis (CDS = level slope × window delay) is rejected (R² 0.002).
+- **Baseline leakage into the CDS:** −0.18 % (board 101), +0.48 % (board 102) of a within-pixel level fluctuation
+  appears in the CDS (≈ 46–55 dB rejection); with board 101's level wander this explains much of its trace slow noise.
+- **Follower nonlinearity: not separable** — the leakage would imply 6 %/mV, impossible; needs charge at varied baselines.
