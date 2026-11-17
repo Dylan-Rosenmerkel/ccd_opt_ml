@@ -297,6 +297,23 @@ for every label, the settings alone for gain on a new amplifier. The pure trace-
 stable.}
 
 
+\subsection{Training on v1 + v2 + v3 together}\label{sec:pooled}
+The same scorecard was rerun with the v1 and v2 sessions (A--F, earlier nights, before and after the cabling change)
+added to the training set: 578 rows from 197 packets instead of 299 from 103. Session G (cross-validated) and the sealed
+session H give the same picture:
+\begin{itemize}
+\item \textbf{Trace-only change models improve}: $\sigma_e$ on trained amplifiers $\rho$ 0.49 $\to$ 0.56 (G) and
+  0.49 $\to$ 0.61 (H); the trace ensemble 0.52 $\to$ 0.58 (G), 0.52 $\to$ 0.70 (H); $\lambda$ trace change 0.69 $\to$ 0.88 (H).
+\item \textbf{The best models (settings + trace) do not change} ($\rho$ 0.63 $\to$ 0.68 G, 0.79 $\to$ 0.81 H).
+\item \textbf{Absolute $\lambda$ and gain get worse}: settings + amplifier GP gain 0.8 $\to$ 2.1\,\% (G), 0.6 $\to$ 2.1\,\% (H);
+  trace trees $\lambda$ on a new amplifier 39.9 $\to$ 59.9\,\% (G). The night's conditions (cabling, exposure, gain of
+  that night) do not cancel in an absolute prediction.
+\item \textbf{Some trace-feature models collapse across nights}: hand-picked bands + GP $\rho$ 0.49 $\to$ 0.16; difference
+  curves PCA 0.46 $\to$ 0.31. Their features shift between nights (the setup changed; amp\_phys report).
+\end{itemize}
+\takeaway{Pool the nights for change models; train absolute $\lambda$ and gain within one period, or give the models the
+night's conditions (a static noise record, the temperature) as inputs.}
+
 % =====================================================================================================================
 \section{Choosing a setting}
 For each setting, the score is the board's mean over the three amplifiers of $w\,\Delta\log\sigma_e + (1-w)\,\Delta\log
@@ -321,9 +338,12 @@ it.
 \item On a \textbf{new amplifier}, the settings carry $\lambda$ and gain ($\rho$ 0.87--0.94); for $\sigma_e$ every
   model is limited ($\rho\approx0.6$--0.7) because a large part of the noise change happens in the image (charge), not in
   the amplifier the trace sees, and because the readout chain's own noise dominates each skip (amp\_phys report).
+\item Adding the earlier nights (v1, v2) helps the trace-only change models and hurts absolute $\lambda$ and gain
+  (Section~\ref{sec:pooled}).
 \item The physics model is a robust $\sigma_e$ reference (stable G $\to$ H) but needs its correction trees for changes.
 \item Next: the amplifier-physics datasheet (folder \texttt{amp\_phys}) explains the amplifier differences the models
-  have to learn (101 ch2: a telegraph-noise trap; ch0/ch2: weak VSUB response on the register side).
+  have to learn (101 ch2: a modulated noise level and extra charge in its images, no resolvable single-trap steps;
+  ch0/ch2: weak VSUB response on the register side).
 \end{enumerate}
 
 
