@@ -1,0 +1,9 @@
+amp,rows,label ok,signal-window settling (ADU),ratio to board-101 median,row-start/inner first-skip ratio,median lambda,working (rule)
+101 ch0,127,102,159.6,0.98,0.62,0.2037,True
+101 ch1,127,100,167.8,1.03,0.63,0.2875,True
+101 ch2,127,100,150.5,0.92,0.62,0.5057,True
+101 ch3,127,100,179.7,1.1,0.64,0.461,True
+102 ch0,127,9,83.9,0.51,6.34,0.0046,False
+102 ch1,127,92,81.5,0.5,9.04,0.0009,False
+102 ch2,127,98,83.8,0.51,-10.78,1.1807,False
+102 ch3,127,117,202.4,1.24,-1.01,1.3462,True

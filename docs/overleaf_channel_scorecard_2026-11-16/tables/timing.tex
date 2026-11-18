@@ -1,0 +1,29 @@
+\begin{table}[H]\centering\small
+\caption{Timing and clocks: settling, in-window slope, the CDS offset, and clock feedthrough per volt of swing.}\label{tab:tim}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{llrrrrrr}\toprule
+setup & channel & reset settling (\textmu s) & window slope (e/\textmu s) & CDS offset (e) & RG (ke/V) & H (ke/V) & V (ke/V)\\\midrule
+PA03, 130 K & 101 ch0 & \cellcolor{good}1.11 & \cellcolor{good}4.8 & \cellcolor{good}$-$20 & 6.4 & 25.0 & 48.2\\
+ & 101 ch1 & \cellcolor{good}0.93 & \cellcolor{good}5.1 & \cellcolor{good}$-$20 & 6.0 & 25.3 & 51.4\\
+ & 101 ch2 & \cellcolor{good}0.93 & \cellcolor{good}4.9 & \cellcolor{good}$-$21 & 7.1 & 25.8 & 52.4\\
+ & 101 ch3 & \cellcolor{good}1.16 & \cellcolor{good}5.9 & \cellcolor{good}$-$24 & 6.0 & 25.7 & 49.3\\
+ & 102 ch3 & \cellcolor{fair}1.85 & \cellcolor{fair}8.3 & \cellcolor{good}$-$32 & 4.9 & 10.9 & 8.0\\
+ & 102 ch0 \textit{(no charge)} & \cellcolor{fair}1.55 & -- & -- & -- & -- & --\\
+ & 102 ch1 \textit{(no charge)} & -- & -- & -- & -- & -- & --\\
+ & 102 ch2 \textit{(no charge)} & -- & -- & -- & -- & -- & --\\
+\midrule
+LSM, 180 K & ACM\,106 ch0 & \cellcolor{good}0.52 & \cellcolor{good}$-$0.6 & \cellcolor{good}$-$5 & 6.5 & 12.1 & 15.3\\
+ & ACM\,106 ch1 & \cellcolor{good}0.28 & \cellcolor{good}$-$2.0 & \cellcolor{fair}$-$154 & 9.5 & 23.7 & 26.9\\
+ & ACM\,106 ch2 & \cellcolor{good}0.31 & \cellcolor{good}3.2 & \cellcolor{fair}$-$178 & 8.9 & 19.8 & 25.1\\
+ & ACM\,106 ch3 & \cellcolor{good}0.43 & \cellcolor{good}0.1 & \cellcolor{fair}$-$285 & 6.5 & 10.9 & 15.0\\
+ & ACM\,109 ch0 & \cellcolor{good}0.47 & \cellcolor{fair}$-$10.1 & \cellcolor{good}$-$60 & 7.3 & 16.8 & 19.6\\
+ & ACM\,109 ch1 & \cellcolor{good}0.32 & \cellcolor{poor}$-$19.5 & \cellcolor{fair}$-$348 & 11.1 & 30.6 & 35.9\\
+ & ACM\,109 ch2 & \cellcolor{good}0.34 & \cellcolor{poor}$-$20.7 & \cellcolor{fair}$-$408 & 12.4 & 35.8 & 40.6\\
+ & ACM\,109 ch3 & \cellcolor{good}0.37 & \cellcolor{fair}$-$7.5 & \cellcolor{poor}$-$597 & 9.0 & 22.0 & 26.0\\
+ & ACM\,110 ch0 & \cellcolor{good}1.04 & \cellcolor{good}$-$0.4 & \cellcolor{fair}$-$206 & 7.7 & 9.7 & 13.2\\
+ & ACM\,110 ch1 & \cellcolor{good}0.66 & \cellcolor{good}$-$0.5 & \cellcolor{poor}$-$610 & 6.0 & 8.3 & 12.5\\
+ & ACM\,110 ch2 & \cellcolor{good}0.82 & \cellcolor{good}$-$0.1 & \cellcolor{poor}$-$983 & 9.2 & 12.0 & 18.2\\
+ & ACM\,110 ch3 & \cellcolor{good}0.94 & \cellcolor{good}$-$0.2 & \cellcolor{poor}$-$1548 & 5.8 & 7.0 & 10.8\\
+\bottomrule\end{tabular}\end{adjustbox}
+\par\smallskip\footnotesize Grades --- settling: \colorbox{good}{$x\le1.2$} \colorbox{fair}{$x\le2$}; slope: \colorbox{good}{$|x|\le6$} \colorbox{fair}{$|x|\le15$}; offset: \colorbox{good}{$|x|\le100$} \colorbox{fair}{$|x|\le500$}; otherwise \colorbox{poor}{poor}. RG, H and V: relative only, not graded (they include board pickup and the whole transfer waveform).
+\end{table}
