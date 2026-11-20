@@ -21,7 +21,7 @@
 
 \title{The models, in full:\\ trace physics features, the noise forest, the usability classifier,\\ the fleet Gaussian process and the Bayesian optimisation}
 \author{ccd\_opt\_ml level-1 study (PA03 board 101, v3 night)}
-\date{20 November 2026; forest on every input type added the same day}
+\date{20 November 2026; forest on every input type and the fleet-GP training written out, the same day}
 \sloppy
 
 \begin{document}
@@ -471,21 +471,90 @@ A constant offset $c_a$ does not move the minimum, so if the shapes agree the fl
 amplifier that has never been imaged; the first image then fixes its level.
 
 \subsection{Training: two stages}
-\begin{enumerate}
-\item \textbf{Shared GP} (\code{fit\_shared\_gp}, lines 235--244). Ignore the amplifier labels and fit one GP to the fleet's
-  usable rows, centred, $y-\bar y$:
-  $k=s^2M_{5/2}(\text{ARD})+n^2\delta$ with initial values $s^2=\mathrm{var}(y)$, $\ell_j=2$, $n^2=0.1\,\mathrm{var}(y)$ and
-  box bounds $s^2\in[10^{-5},10^2]$, $\ell_j\in[0.05,10^3]$, $n^2\in[10^{-6},10]$. Maximise eq.~\eqref{eq:lml} with
-  L-BFGS-B \cite{byrd1995} from the initial point and one random restart. No priors beyond the bounds.
-\item \textbf{Grid for $\rho$ and $c^2$} (lines 258--270). Keep $s^2,\ell,n^2$ fixed and $\mu=\bar y_{\rm fleet}$. Evaluate the exact
-  log marginal likelihood of eq.~\eqref{eq:lml} with the covariance~\eqref{eq:mtk} (constant dropped) on
-  $\rho\in\{0,0.5,0.75,0.9,0.97,1\}$ and $c^2=\kappa s^2$, $\kappa\in\{0,0.1,0.3,1,3,10\}$; keep the best pair.
-\end{enumerate}
+The fleet model has $p+5$ hyperparameters: $s^2$, the $p$ length scales $\ell_1,\dots,\ell_p$, $n^2$, $\rho$ and $c^2$ ($p=18$ knobs on v3).
+They are fitted on the fleet's usable rows only,
+\[
+\mathcal D=\{(x_i,\,a_i,\,y_i)\}_{i=1}^{n},\qquad x_i\in\mathbb R^p\ \text{(standardised knobs)},\quad a_i\ \text{(amplifier)},\quad y_i=J_i,
+\]
+in two steps: first the shape of the response ($s^2,\ell,n^2$), then how that variance is split between amplifiers ($\rho,c^2$).
+
+\paragraph{Stage 1: one GP for the whole fleet} (\code{fit\_shared\_gp}, \code{fleet\_tests.py}:235--244).
+The amplifier labels are ignored, i.e.\ every row is treated as coming from one amplifier (the special case $\rho=1$, $c^2=0$ of
+eq.~\eqref{eq:mtk}). With the centred labels $\tilde y_i=y_i-\bar y$, $\bar y=\frac1n\sum_iy_i$, the model is
+\begin{equation}
+\tilde{\mathbf y}\sim\mathcal N\big(\mathbf 0,\ K_1(\eta)\big),\qquad
+\big[K_1(\eta)\big]_{ij}=s^2\,M\!\left(\sqrt{\textstyle\sum_{k=1}^{p}(x_{ik}-x_{jk})^2/\ell_k^2}\right)+n^2\,\delta_{ij},
+\qquad \eta=(s^2,\ell_1,\dots,\ell_p,n^2).
+\end{equation}
+The hyperparameters maximise the log marginal likelihood
+\begin{equation}
+\hat\eta=\arg\max_{\eta\in\mathcal B}\ \mathcal L_1(\eta),\qquad
+\mathcal L_1(\eta)=-\tfrac12\,\tilde{\mathbf y}^\top K_1(\eta)^{-1}\tilde{\mathbf y}-\tfrac12\ln\big|K_1(\eta)\big|-\tfrac n2\ln2\pi ,
+\label{eq:stage1}
+\end{equation}
+over the box
+\begin{equation}
+\mathcal B:\quad 10^{-5}\le s^2\le10^{2},\qquad 0.05\le\ell_k\le10^{3},\qquad 10^{-6}\le n^2\le10 .
+\end{equation}
+\begin{itemize}
+\item \textbf{Parametrisation.} scikit-learn optimises $\vartheta=\ln\eta$ (so the bounds are on $\ln s^2,\ln\ell_k,\ln n^2$)
+  \cite{pedregosa2011}.
+\item \textbf{Gradient.} With $K_1=LL^\top$ and $\boldsymbol\alpha=K_1^{-1}\tilde{\mathbf y}$,
+  $\dfrac{\partial\mathcal L_1}{\partial\vartheta_m}=\tfrac12\operatorname{tr}\!\Big[\big(\boldsymbol\alpha\boldsymbol\alpha^\top-K_1^{-1}\big)\dfrac{\partial K_1}{\partial\vartheta_m}\Big]$
+  \cite[eq.~5.9]{rasmussen2006}.
+\item \textbf{Optimiser.} L-BFGS-B \cite{byrd1995} from two starting points, keeping the better optimum:
+  \begin{itemize}
+  \item the default $s^2=\mathrm{var}(y)$, $\ell_k=2$ for every knob, $n^2=0.1\,\mathrm{var}(y)$;
+  \item one random point, $\vartheta\sim\mathcal U(\ln\mathcal B)$ (\code{n\_restarts\_optimizer=1}).
+  \end{itemize}
+\item \textbf{No priors.} $\mathcal L_1$ is maximised as it is; only the box limits the values. A length scale that runs to the upper
+  bound $10^3$ (i.e.\ $10^3$ standard deviations of that knob) switches the knob off.
+\end{itemize}
+Output: $\hat s^2,\hat\ell,\hat n^2$.
+
+\paragraph{Stage 2: split the variance between amplifiers} (\code{MultiTaskGP.\_\_init\_\_} and \code{\_loglik},
+\code{fleet\_tests.py}:258--284). Now the amplifier labels are used. $\hat s^2,\hat\ell,\hat n^2$ are held fixed, the mean is fixed at
+$\mu=\bar y$, and for a candidate pair $(\rho,c^2)$ the covariance of all fleet rows is eq.~\eqref{eq:mtk}:
+\begin{equation}
+\big[K_2(\rho,c^2)\big]_{ij}=\hat s^2\,\hat M_{ij}\big[\rho+(1-\rho)\,\one[a_i=a_j]\big]+c^2\,\one[a_i=a_j]+\hat n^2\,\delta_{ij},
+\qquad \hat M_{ij}=M(x_i,x_j;\hat\ell).
+\end{equation}
+Its log marginal likelihood, computed with the Cholesky factor $K_2=L_2L_2^\top$ (the constant $-\frac n2\ln2\pi$ is the same for every
+pair and is dropped), is
+\begin{equation}
+\mathcal L_2(\rho,c^2)=-\tfrac12\,\mathbf r^\top K_2^{-1}\mathbf r-\textstyle\sum_{i=1}^{n}\ln\big[L_2\big]_{ii},
+\qquad \mathbf r=\mathbf y-\mu\one ,
+\label{eq:stage2}
+\end{equation}
+since $\tfrac12\ln|K_2|=\sum_i\ln[L_2]_{ii}$; a pair whose $K_2$ is not positive definite gets $\mathcal L_2=-\infty$. The pair is
+chosen by exhaustive search over a $6\times6$ grid, with $c^2$ measured in units of $\hat s^2$:
+\begin{equation}
+(\hat\rho,\hat c^2)=\arg\max_{\rho\in R,\ \kappa\in C}\ \mathcal L_2(\rho,\ \kappa\hat s^2),\qquad
+R=\{0,\,0.5,\,0.75,\,0.9,\,0.97,\,1\},\quad C=\{0,\,0.1,\,0.3,\,1,\,3,\,10\}.
+\end{equation}
+
+\paragraph{What the two numbers mean once fitted.} At the same setting, two different amplifiers have
+\begin{equation}
+\mathrm{Var}\,J_a(x)=\hat s^2+\hat c^2+\hat n^2,\qquad
+\mathrm{Cov}\big(J_a(x),J_b(x)\big)=\hat\rho\,\hat s^2\quad(a\ne b),\qquad
+\mathrm{corr}=\frac{\hat\rho\,\hat s^2}{\hat s^2+\hat c^2+\hat n^2},
+\end{equation}
+so $\hat\rho$ is the fraction of the shape variance $\hat s^2$ that the amplifiers share, and $\hat c^2$ adds level differences on
+top. For example, the noise objective of the table below ($\hat s^2=0.0145$, $\hat n^2=0.0066$, $\hat\rho=0.75$, $\hat c^2=0.0044$) gives a
+correlation between two amplifiers at the same setting of $0.75\cdot0.0145/0.0255=0.43$.
+
+\paragraph{Why two stages.} Stage 1 is the ordinary GP fit of Sec.~\ref{sec:gp} on all fleet rows together, which is well determined
+(about 100 rows); stage 2 then decides only two numbers on a coarse grid, which is cheap and cannot run away. The price is that
+$s^2,\ell,n^2$ are not re-optimised together with $\rho$ and $c^2$. Stage 1 assumes all amplifiers identical; when stage 2 picks
+$c^2>0$, the variance of one amplifier becomes $\hat s^2+\hat c^2$ instead of $\hat s^2$ being reduced to make room, and when it picks
+$\rho<1$, part of $\hat s^2$ moves to the amplifiers' own shapes with the length scales of the shared fit. The optimum is also only as
+fine as the grid (e.g.\ $\rho$ between 0.5 and 0.75 cannot be represented).
+
 The hyperparameters are fitted once on the fleet and \textbf{not refitted} during a search; each new image only enters the data.
 
 \caveat{An earlier description says $\rho$ and $c$ are fitted ``with the same likelihood'', which suggests a joint fit. The
-code fits the shared hyperparameters first and then grid-searches $\rho$ and $c^2$ (36 points). The shared $\ell$ is used for
-both $f$ and $g_a$.}
+code does the two stages above. The same length scales $\hat\ell$ are used for the shared shape $f$ and for each amplifier's own
+shape $g_a$.}
 
 \subsection{Prediction for the new amplifier}
 The training set is the fleet's usable rows plus the new amplifier's usable images so far, each with its amplifier label.
