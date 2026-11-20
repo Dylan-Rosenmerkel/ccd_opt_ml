@@ -18,7 +18,7 @@
 
 \title{From the readout trace to the amplifier physics:\\ every formula, as implemented}
 \author{ccd\_opt\_ml amplifier-physics study (PA03 boards 101/102, LSM ACM106/109/110)}
-\date{17 November 2026}
+\date{17 November 2026; setup section added 20 November 2026}
 
 \begin{document}
 \maketitle
@@ -108,6 +108,9 @@ e_n=\frac{\sigma_1}{G}\sqrt{\tau}\quad[\text{\textmu V}\sqrt{\text s}]\ \to\ \te
 quoted density is therefore $\sqrt{150/140}-1\approx3.5\%$ high. Also, $\sigma_1$ contains every noise source (white,
 1/f, setup); calling $e_n$ a ``white density'' is exact only if the noise is white (Sec.~\ref{sec:H}).}
 
+Why consecutive skips are differenced, how $\sigma_1$ differs from the textbook $\sigma_{\rm CDS}$ obtained
+from a PSD, and why it is blind to setup noise, is in Sec.~\ref{sec:sigma1}.
+
 These give the table rows \emph{noise 3.7--4.4\,e} ($\sigma_{1,e}$) and \emph{18.7--21.1\,nV/$\sqrt{\rm Hz}$}
 ($e_n$).
 
@@ -155,6 +158,8 @@ The \textbf{setup number} is $\text{ASD}_{[200\,\text{Hz},1\,\text{kHz}]}$ (also
 content near $1/(\text{trace length})$ depends on the trace length. Comparing setups therefore needs equal trace
 lengths: Oct.\ 0.2\,s traces 48.8 vs Nov.\ 34.8\,\textmu V/$\sqrt{\rm Hz}$ ($-29\%$); the 1.1\,s Oct.\ traces (68.2)
 are not comparable.}
+What the ASD is, why a clocked-trace ASD cannot be integrated into a $\sigma$, and what isolates a setup number from
+the amplifier: Sec.~\ref{sec:setup2}.
 
 \paragraph{Lines.} $E(f)=S_{rr}(f)/\widetilde S_{rr}(f)$ with $\widetilde S$ a 31-bin running median; the six largest
 $E$ above 20\,kHz are listed (e.g.\ the 30.6\,kHz comb on ACM110 ch3).
@@ -436,7 +441,9 @@ X_n=\sqrt{1+\text{SNI}_n^2}=\frac{\sigma_{\rm total}}{\sigma_{\rm own}} .
 SNI = 0: no setup noise; 1: the setup adds as much as the amplifier. Removing the shared part entirely would lower the
 per-skip noise by $1-1/X_1$ (v3: 9.46$\to$6.5\,ADU, $-30\%$).
 \caveat{``Shared'' is defined against the other channels of the same board. Noise that is common to all four (e.g.\ a
-shared return) is captured; noise entering one channel alone (its own cable, its own frontend) counts as ``own''.}
+shared return) is captured; noise entering one channel alone (its own cable, its own frontend) counts as ``own''. Applied to the per-channel \emph{traces}, which are separate
+acquisitions, the shared part is a sequence-locked pattern, not simultaneous noise (Sec.~\ref{sec:setup2}); the
+trace-based SNI values are withdrawn as setup numbers.}
 
 \paragraph{Crosstalk} (\code{crosstalk.py}, images). Source pixels with $q_A>30\,e^-$, target pixels without own
 charge ($|q_B|<4\sigma_B$, $\sigma_B$ from the MAD); $q_B$ vs $q_A$ binned in 20 quantiles, Theil--Sen slope of the bin
@@ -454,6 +461,237 @@ C_m^{\rm sn}=b\,C_{\rm sn} :
 a step on one video line injects a pulse of area $R_{\rm out}C_m\Delta V$ into the other, which a window of length
 $\tau$ averages to $R_{\rm out}C_m\Delta V/\tau$; the $\tau$-independent part is coupling before the followers (or a
 shared impedance, if negative).
+
+%=====================================================================
+\section{What characterises the setup, and the cabling change}\label{sec:setup2}
+
+By \emph{the setup} we mean everything between the output transistor and the number written to disk: the video line
+on the flex and cable, the frontend board (20\,k$\Omega$ load, preamplifier, AC coupling), the ADC and its clock, and
+the grounds, supplies and bias lines the channels share. A number characterises the setup only if the amplifier's own
+physics cannot produce it. This section says how each setup number is isolated from the amplifier, why the familiar
+per-skip noise $\sigma_1$ is \emph{not} one of them, and works through the one setup change in these data: the
+grounding/cabling change made between the October runs (Oct.\ 6--12) and the November runs (from Nov.\ 2).
+
+%---------------------------------------------------------------------
+\subsection{How a number is separated from the amplifier}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lXX@{}}\toprule
+handle & why the amplifier cannot produce it & used for\\\midrule
+before/after, same CCDs and voltages &
+the transistors, their traps and their sense nodes do not change when a cable is moved; anything that moves at fixed
+voltages is the setup. Amplifier-only numbers are \emph{controls} and must stay put &
+the cabling change (Sec.~\ref{sec:cabling})\\
+simultaneity &
+four output transistors on four CCDs have independent white and 1/f noise; a part that is correlated \emph{in the same
+instant} on all of them must enter through something they share (return, supply, bias, clock lines, cable) &
+$\rho_{\rm sim}$, common-mode gain, strip shared/own ratio\\
+same on a board, different between boards &
+a circuit constant of the readout path, not of a transistor (the four amplifiers of a board are on different CCDs) &
+ringing, baseline recovery, gain-scale step\\
+independent of the CCD voltages &
+a transistor-limited quantity follows its operating point (VDD, VR); one that does not is set by the interconnect &
+rise time ($-0.1$ to $+0.8$\,\%/V in VDD)\\
+spectral shape &
+transistor noise is featureless (white + 1/f); narrow lines are interference &
+the 2.5\,kHz line and its harmonic\\\bottomrule
+\end{tabularx}
+\end{center}
+\caveat{The per-channel \emph{traces} are separate acquisitions about 1\,s apart (the other three streams of each file
+are empty frames). Their cross-channel ``shared'' part is a pattern locked to the readout sequence, not simultaneous
+noise, so the simultaneity handle needs images or level-1 strips, which record the four amplifiers together. A trace on
+its own can only use the other handles.}
+
+%---------------------------------------------------------------------
+\subsection{$\sigma_1$ in detail, and why it does not see the setup}\label{sec:sigma1}
+
+\paragraph{What $\sigma_1$ is.} A skipper amplifier measures the same pixel charge $Q$ many times without destroying it.
+Skip $j$ of a pixel gives $x_j=gQ+n_j$, where $n_j$ is the noise of that one CDS measurement (pedestal window minus
+signal window). Because $Q$ is identical in every skip of the pixel, the difference of two consecutive skips contains
+\emph{no charge}:
+\begin{equation}
+d_j=x_{j+1}-x_j=n_{j+1}-n_j,\qquad
+\operatorname{Var}d_j=2\sigma_n^2\ \text{(if consecutive } n_j \text{ are independent)}
+\ \Rightarrow\ \sigma_1=\frac{\std(d_j)}{\sqrt2}.
+\end{equation}
+So $\sigma_1$ is the noise of a single CDS measurement, obtained from a raw trace with no image, no gain fit and no
+knowledge of the charge (differences across a pixel boundary are excluded, since $Q$ changes there). It is in ADU;
+$\sigma_1/g$ is electrons and $\sigma_1\sqrt\tau/G$ an input density (eq.~\eqref{eq:en}).
+
+\paragraph{The textbook route.} Usually the CDS noise is \emph{predicted} from a noise spectrum $S(f)$ taken with the
+clocks stopped (or from a device model), by integrating it through the CDS filter:
+\begin{equation}
+\sigma_{\rm CDS}^2=\int_0^\infty S(f)\,|H_{\rm CDS}(f)|^2\dd f,\qquad |H_{\rm CDS}|^2=4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau).
+\end{equation}
+
+\paragraph{How ours differs.}
+\begin{enumerate}
+\item \textbf{Measured, not integrated.} $\sigma_1$ is read off the clocked trace in the time domain. It contains every
+noise the clocking adds (clock-induced noise, bursts, sampling jitter) and needs no stationarity. The integral is used
+only to \emph{interpret} it (Sec.~\ref{sec:H}).
+\item \textbf{One extra filter factor.} The skip difference multiplies the filter by $2\sin^2(\pi fT)$ (Sec.~\ref{sec:H}).
+For white noise this averages to 1, so $\sigma_1=\sigma_{\rm CDS}$. At low frequency it does not:
+$|H_{\rm CDS}|^2\approx4(\pi f\Delta t)^2\propto f^2$, while $|H|^2\propto f^4$. At 200\,Hz the extra factor is
+$8.4\times10^{-4}$, at 1\,kHz $2.1\times10^{-2}$.
+\end{enumerate}
+
+\paragraph{Consequence: $\sigma_1$ is an amplifier number.} The share of each statistic's variance that a flat noise,
+at the same density as the white floor, contributes from a band,
+$w_{\rm band}=\int_{\rm band}|H|^2\dd f\big/\int_0^\infty|H|^2\dd f$ (computed with $\Delta t=13.8$, $\tau=10$,
+$T=32.6$\,\textmu s):
+\begin{center}\small
+\begin{tabular}{lccc}\toprule
+band & $\sigma_1$ (skip difference) & one CDS & 500-skip pixel, $|H_{500}|^2$ of eq.~\eqref{eq:HN}\\\midrule
+20--200\,Hz & $1.0\times10^{-10}$ & $2.0\times10^{-7}$ & $1.3\times10^{-6}$\\
+200\,Hz--1\,kHz & $3.2\times10^{-7}$ & $2.5\times10^{-5}$ & $5.8\times10^{-6}$\\
+1--10\,kHz & $2.3\times10^{-2}$ & $2.4\times10^{-2}$ & $7.1\times10^{-5}$\\\bottomrule
+\end{tabular}
+\end{center}
+Relative to its own white noise, a 500-skip pixel is $\sim10^4$ times more sensitive to 20--200\,Hz noise than
+$\sigma_1$. Setup noise (ground loops, supply and bias wander) lives at these low frequencies, so it shows up in
+$N$-skip images and long-$N$ strip statistics, and hardly at all in $\sigma_1$. This is why $\sigma_1$ serves as a
+\emph{control} for a setup change: across the cabling change it moved by $-3\,\%$ while the image noise fell by 30\,\%.
+\caveat{The 500-skip column uses one pixel's filter, without the pixel-to-pixel difference and row-baseline subtraction
+that the image analysis applies (these remove even slower noise). The orders of magnitude, not the exact values, are
+the point.}
+
+%---------------------------------------------------------------------
+\subsection{The ASD and why the trace one is only a relative setup number}
+
+\paragraph{Definition.} The power spectral density $S_{rr}(f)$ (one-sided, ADU$^2$/Hz, so $\int_0^\infty S_{rr}\dd f$
+is the variance of $r$) is estimated by Welch's method; the amplitude spectral density is its square root, referred to
+the video input with the chain gain:
+\begin{equation}
+\text{ASD}(f)=\frac{\sqrt{S_{rr}(f)}}{G}\qquad[\text{V}/\sqrt{\text{Hz}}].
+\end{equation}
+It says how much noise amplitude sits at each frequency. A narrow line is interference; the 200\,Hz--1\,kHz level is
+where setup wander sits.
+
+\paragraph{Why it is not integrated to a $\sigma$.} On a clocked trace, $r$ is the cycle minus the median template.
+The ADC is not phase-locked to the sequencer (Sec.~\ref{sec:circuit}), so every reset pulse ($\sim$50\,kADU) is
+sampled at a random phase and leaves a large residual, and the cycle joins add steps. Integrating that spectrum through
+the CDS filter gives $\sigma_1\approx1400$\,e on PA03 (\code{setup\_noise\_N.py}), which is meaningless. The clocked
+ASD is therefore used only \emph{like for like}: the same sequencer and the same trace length, before and after a
+change. The textbook forward integration works on \emph{static} records (all clocks frozen, LSM): there
+$\sigma^2_{N,\rm band}=\int_{\rm band}S(f)|H_N(f)|^2\dd f$ predicts the measured per-skip $\sigma$ to a median ratio of
+0.97, and gives the setup's share of a 500-skip pixel in electrons (0.012--0.14\,e on the LSM channels).
+
+%---------------------------------------------------------------------
+\subsection{The setup numbers, as computed}\label{sec:circuit}
+
+\paragraph{Simultaneous correlation and common-mode gain} (\code{oct\_nov.py}, images; the four amplifiers of a board
+in one file). Per image, each amplifier's map minus its median, then minus each row's median (``row baseline''). Robust
+width $s_c=1.4826\,\med|X_c|$. Only pixels where \emph{every} amplifier is in its 0-e$^-$ peak ($|X_c|<2.5s_c$) are
+kept, so no charge enters. Then
+\begin{align}
+\rho_{\rm sim,c}&=\tfrac13\sum_{o\ne c}\operatorname{corr}(X_c,X_o),\\
+\text{CMS gain}_c&=1-\frac{\sigma\big(X_c-\beta_c\bar X_{\neg c}\big)}{\sigma(X_c)},\quad
+\beta_c=\frac{\langle X_c,\bar X_{\neg c}\rangle}{\langle\bar X_{\neg c},\bar X_{\neg c}\rangle}
+\ \text{fitted on alternate pixels, applied to the others,}
+\end{align}
+with $\sigma$ the MAD width and $\sigma_{0e,c}=s_c/g_c$ in electrons.
+\emph{Splitting a pixel's noise.} If each amplifier sees $X_c=s+n_c$, with a common part $s$ and independent own
+noise $n_c$ of similar size on every channel, then $\rho_{\rm sim}=\operatorname{Var}s/\operatorname{Var}X$, so
+\begin{equation}
+\sigma_{\rm common}=\sqrt{\rho_{\rm sim}}\;\sigma_{0e},\qquad \sigma_{\rm own}=\sqrt{1-\rho_{\rm sim}}\;\sigma_{0e}.
+\end{equation}
+
+\paragraph{Shared/own power ratio from a level-1 strip.} A strip records all four amplifiers together and keeps every
+skip. Per channel the per-skip CDS minus its pixel mean is $r_c[j]$; the shared series is the channel mean
+$\bar r[j]=\frac14\sum_c r_c[j]$ and the own series $r_c-\bar r$. Welch spectra of both give
+\begin{equation}
+R_{\rm band}=\frac{\int_{\rm band}S_{\bar r\bar r}\dd f}{\big\langle\int_{\rm band}S_{(r_c-\bar r)(r_c-\bar r)}\dd f\big\rangle_c},
+\end{equation}
+reported for 0--200\,Hz, 0.2--1\,kHz and 1--5\,kHz, together with the narrow lines present on every channel.
+\caveat{The band ratios were computed in an analysis recorded in REPORT \S24; \code{strip\_noise.py} computes the
+time-domain counterpart (correlation $\rho_N$ and shared fraction of $N$-skip block differences).}
+
+\paragraph{Readout-chain scale.} With the image gains of two periods,
+$r_c=g_c^{\rm after}/g_c^{\rm before}$. A step equal on all four amplifiers (four CCDs, four transistors) is in the
+chain they share, not in the sense nodes.
+
+\paragraph{Circuit constants of the readout path} (\code{trace\_physics2.py}, \code{src/trace\_features.py}).
+\begin{itemize}
+\item \textbf{Baseline recovery.} The median, over pixels, of the pedestal level against time within a pixel, fitted
+with $\ell(t)=a+b\,e^{-t/\tau_{\rm rec}}$: the video chain's AC coupling recharging after each H transfer.
+Board 101: $\tau_{\rm rec}=8.2\pm0.3$\,ms, $b=-1.8$\,kADU, identical on all four channels; board 102: none
+($\tau\ge130$\,ms). The within-pixel CDS drift has the same 8\,ms constant.
+\item \textbf{Baseline leakage into the CDS.} The per-skip CDS regressed on the per-skip level within a pixel gives the
+fraction $\varepsilon$ of a level fluctuation that survives the CDS; rejection $=20\log_{10}(1/|\varepsilon|)$:
+$\varepsilon=-0.18\,\%$ (101, 55\,dB), $+0.48\,\%$ (102, 46\,dB).
+\item \textbf{Sampling-phase jitter.} The half-height crossing time of each reset pulse (linear interpolation), its
+consecutive differences $/\sqrt2$: 20--25\,ns. A sampling clock that is not locked to the sequencer gives a uniformly
+random phase, $1/(f_s\sqrt{12})=19.2$\,ns. So the ADC runs asynchronously to the 10\,ns sequencer clock: a firmware
+property of the setup.
+\item \textbf{Ringing.} The strongest frequency in the residual of the reset-edge fit, over the 25 samples after the
+peak (zero-padded spectrum, peak refined by a parabola): 3.1\,MHz on board 101 (160--240\,e rms), 0.55--0.7\,MHz on
+board 102. It is the same on a board's four amplifiers, differs between boards, and the rise time does not follow VDD,
+so it is an LC resonance of the readout path, not the transistor.
+\end{itemize}
+\caveat{25 samples span 1.67\,\textmu s, less than one period at 0.55--0.7\,MHz: board 102's ringing is ``much slower
+than board 101'', not a precise frequency.}
+
+%---------------------------------------------------------------------
+\subsection{Worked example: the cabling change}\label{sec:cabling}
+
+\paragraph{The data.} Board 101, 500-skip unbinned images at the October nominal voltages (VSUB 45.1\,V, VR
+$-3.0$\,V, VDD $-19.0$\,V, H1 high 9.5\,V, V1 high 9.9\,V, H delay 1800): 12 October images, 19 from Nov.\ 10--12
+(medians below; $\rho_{\rm sim}$ and CMS gain with the row baseline removed). Traces of equal length (0.2\,s, three in October). One October level-1 strip
+($100\times1000\times3000$) and the November v3 strips.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}Xccl@{}}\toprule
+quantity & October & November & role\\\midrule
+\multicolumn{4}{@{}l}{\emph{setup numbers}}\\
+$\rho_{\rm sim}$, ch0--3 & 0.28 / 0.26 / 0.19 / 0.22 & 0.07 / 0.07 / 0.05 / 0.02 & simultaneity\\
+CMS gain, ch0--3 & 8.0 / 6.3 / 4.8 / 6.2\,\% & 0.1 / 0.0 / 0.2 / 0.2\,\% & simultaneity\\
+strip shared/own, 0--200\,Hz & 23 & 3.9 & simultaneity\\
+strip shared/own, 0.2--1 / 1--5\,kHz & 1.3 / 1.6 & 0.7 / 1.5 & simultaneity\\
+trace ASD 0.2--1\,kHz & 48.8\,\textmu V/$\sqrt{\rm Hz}$ & 34.8 ($-29\,\%$) & before/after\\
+trace ASD 1--10 / 10--100\,kHz & 5.2 / ref. & 3.7 ($-28\,\%$) / $-15\,\%$ & before/after\\
+gain scale $r_c$, ch0--3 & 1 (ref.) & 1.056 / 1.061 / 1.067 / 1.064 & same on a board\\
+shared narrow lines & 2532, 5064\,Hz & 2240--2490, 5050--5240\,Hz & spectral shape\\\midrule
+\multicolumn{4}{@{}l}{\emph{result}}\\
+image $\sigma_{0e}$, ch0 / ch1 & 0.207 / 0.210\,e & 0.145 / 0.148\,e ($-30\,\%$) & \\\midrule
+\multicolumn{4}{@{}l}{\emph{controls (amplifier numbers)}}\\
+$\sigma_1$ (per skip) & ref. & $-3\,\%$ & \\
+white density ch0/1/3 (nV/$\sqrt{\rm Hz}$) & 20.2--20.7 / 20.8--21.2 / 23.7--23.8 & 19.8 / 20.2 / 21.9 & \\\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Step 1: the amplifiers did not change.} $\sigma_1$ moved by $-3\,\%$ and the white density by 2--8\,\%.
+Both are dominated by the transistor and the frontend's white noise (Sec.~\ref{sec:sigma1}), so the amplifiers are the
+same before and after.
+
+\paragraph{Step 2: the pixel noise did change.} At the same voltages, ch0 went from 0.207 to 0.145\,e
+($\sigma^2$: 0.0428 $\to$ 0.0210\,e$^2$, half the variance gone).
+
+\paragraph{Step 3: how much of it was shared.} With the split above, ch0 in October:
+$\sigma_{\rm common}=\sqrt{0.279}\times0.207=0.109$\,e and $\sigma_{\rm own}=\sqrt{0.721}\times0.207=0.176$\,e.
+November: $\sqrt{0.070}\times0.145=0.038$\,e and $\sqrt{0.930}\times0.145=0.140$\,e. The common variance fell
+$\times8.1$ (ch1: 0.107 $\to$ 0.039\,e, $\times7.4$). The strips say the same thing in frequency: below 200\,Hz the
+shared power fell from 23 to 3.9 times the own power, about $\times6$; above 1\,kHz it did not change.
+
+\paragraph{Step 4: the ``own'' part fell too.} $\sigma_{\rm own}$ went from 0.176 to 0.140\,e ($-20\,\%$; ch1 $-21\,\%$)
+while the amplifier controls moved by only a few per cent. A correlation counts noise picked up by one channel's own
+cable as ``own''; the before/after handle shows that this part was also setup. The change therefore removed both the
+common slow noise (eight times less variance) and some per-channel pickup.
+
+\paragraph{Step 5: what is left.} In November the common part is 0.04\,e and subtracting it gains nothing (CMS gain
+$\approx0$). The 2.5\,kHz line and its harmonic are on every channel in both months, so the cabling did not touch
+their source (a switching converter or a periodic digital process). The 500-skip pixel (16.3\,ms) averages them out;
+other skip counts may not.
+
+\paragraph{The recommended setup numbers.} From one image: $\rho_{\rm sim}$ (target 0) and the CMS gain. From one
+$\sim$30\,s strip: the shared/own ratio below 200\,Hz (target 0) and the list of shared lines. Always quote $\sigma_1$
+and the white density alongside, as the controls showing the amplifiers did not change.
+\caveat{(i) The October image gains are 6\,\% lower ($r_c$); $\sigma_{0e}$ uses each period's gain, so the 30\,\% is in
+electrons. The step is equal on all four channels, consistent with a chain change made at the same time; the trace
+densities use the design $G$ in both months, so the 2--8\,\% control figure carries that uncertainty. (ii) The split
+assumes the common part couples equally into all four channels. (iii) The October strip is one acquisition with
+3000-skip pixels (November 480), so 23 vs 3.9 is indicative. (iv) October images had 10--100\,s exposures (November
+0--1\,s); at 40--75\,e/pix/day this is $\le0.1$\,e/pix and the 0-e$^-$ selection excludes it. (v) ch2 (own telegraph
+problem) and ch3 also improved but scatter more and are not used in the example.}
 
 %=====================================================================
 \section{Summary: which inputs each number depends on}
@@ -474,6 +712,9 @@ $C_{\rm eff}$, $x_{\rm ch}$ & $C_{\rm inj}$, $\alpha$, $W_{\rm RG}L_{\rm RG}$, $
 knee $k$, $\Delta N_s$ & hinge fit; $t_{\rm eq}$, $x_j$ & knee measured; dose model\\
 $\tau_s$, slopes, CDS offset & template & measured\\
 SNI, shared share, $k_{A\to B}$ & simultaneous channels / images & measured\\
+$\rho_{\rm sim}$, CMS gain, strip shared/own ratio & simultaneous images / strips & measured (setup)\\
+clocked-trace ASD bands & trace, $G$ & relative only (equal length, same sequencer)\\
+$\tau_{\rm rec}$, leakage $\varepsilon$, phase jitter, ringing & trace & measured (setup constants)\\
 $C_{\rm sn}$ from kTC & ``dead'' board-102 channels & withdrawn\\\bottomrule
 \end{tabularx}
 \end{center}
