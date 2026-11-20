@@ -21,7 +21,7 @@
 
 \title{The models, in full:\\ trace physics features, the noise forest, the usability classifier,\\ the fleet Gaussian process and the Bayesian optimisation}
 \author{ccd\_opt\_ml level-1 study (PA03 board 101, v3 night)}
-\date{20 November 2026; forest on every input type and the fleet-GP training written out, the same day}
+\date{20 November 2026; forest on every input type, fleet-GP training and the search loop written out, the same day}
 \sloppy
 
 \begin{document}
@@ -616,29 +616,90 @@ $I(x)=\max\big(0,b-J(x)\big)$. Under the GP, $J(x)\sim\mathcal N(m,s^2)$, so wit
 where the model is unsure (explore). No exploration offset $\xi$ is used. If no usable image exists yet, $b=\min_x m(x)$ over
 the candidates. $s$ is the latent standard deviation (without $n^2$).
 
-\subsection{The loop (replay, \code{fleet\_tests.py}:601--618)}
-\begin{enumerate}
-\item Start: the first usable nominal image of the pool (if the nominal setting is known), or nothing.
-\item Fit the fleet GP once on the fleet's usable rows (Sec.~\ref{sec:fleet}).
-\item Repeat until the pool is exhausted:
-  \begin{enumerate}
-  \item GP data = fleet rows + the new amplifier's usable images; predict $m,s$ for every untested candidate;
-  \item $\EI$ by eq.~\eqref{eq:ei};
-  \item refit the usability classifier on the fleet + the images taken so far; apply the hard gate, eq.~\eqref{eq:gate};
-  \item image $\arg\max_x\alpha(x)$; reveal $J$ and $u$.
-  \end{enumerate}
-\end{enumerate}
+\subsection{The replay: what is searched and what is known}\label{sec:replay}
+The v3 night is replayed as if the voltages of one amplifier were being tuned live (\code{fleet\_tests.test\_bo}, lines 453--641).
+Every image $i$ of the night has a setting $x_i$ (the 18 standardised knobs, Sec.~\ref{sec:knobs}), an amplifier $a_i$, a time
+block $\beta_i$, a usability label $u_i\in\{0,1\}$ (Sec.~\ref{sec:gate}) and, if usable, an objective value $J_i$
+(Sec.~\ref{sec:objective}). Packets in time order are cut into two contiguous blocks, $\beta\in\{1,2\}$ (lines 215--221).
 
-\subsection{The replay test}
-\begin{itemize}
-\item Each amplifier in turn is the new one. Packets in time order are cut into two contiguous blocks; the candidate pool is
-  the new amplifier's settings in one block (63--64 rows, unusable ones included), the fleet is the other two amplifiers in
-  the \emph{other} block. 3 amplifiers $\times$ 2 blocks = 6 searches.
-\item ``Imaging'' reveals the stored result. After $k$ images the gap is
-  $100\big(\min_{i\le k,\,u_i=1}J_i-\min_{\text{pool},\,u=1}J\big)$; ``images to 2\,\%'' is the first $k$ with gap $\le2$, averaged
-  over the 6 searches. Wasted images: unusable images before that point.
-\item The replay has no stopping rule; it runs through the pool.
-\end{itemize}
+One search is defined by a \emph{new} amplifier $a^\star$ and a block $\beta^\star$ (lines 467--469):
+\begin{align}
+\text{candidate pool}\quad &\mathcal P=\{i:\ a_i=a^\star,\ \beta_i=\beta^\star\}, && |\mathcal P|=63\text{--}64\ \text{(unusable ones included)},\\
+\text{fleet}\quad &\mathcal F=\{i:\ a_i\ne a^\star,\ \beta_i\ne\beta^\star\}, && \text{usable part }\mathcal F_u=\{i\in\mathcal F:u_i=1\}.
+\end{align}
+The fleet is the other two amplifiers in the \emph{other} half of the night, so the new amplifier never shares a moment (drift,
+setup state) with its training data. $3$ amplifiers $\times$ $2$ blocks $=6$ searches.
+
+Before the search the code knows: every $x_i$ of the pool (the settings that could be chosen), and $(x_i,a_i,u_i,J_i)$ of the
+fleet. It does \emph{not} know $u_i$ or $J_i$ of any pool image until that image is ``taken''; taking an image means looking up
+its stored $u_i$ and $J_i$.
+
+\subsection{The loop, step by step}\label{sec:loop}
+The state of the search after $k$ images is the ordered list of images taken, $\mathcal R_k=(r_1,\dots,r_k)\subset\mathcal P$, and
+its usable part $\mathcal R_k^u=\{r\in\mathcal R_k:u_r=1\}$.
+
+\paragraph{Step 0: start} (lines 476--477). If the nominal setting is known, the first image is the earliest usable nominal image of
+the pool, $\mathcal R_1=(r_1)$; otherwise the search starts empty, $\mathcal R_0=()$.
+
+\paragraph{Step 1: fit the fleet model once} (line 595). Fit $\hat s^2,\hat\ell,\hat n^2,\hat\rho,\hat c^2$ on $\mathcal F_u$ by the two
+stages of Sec.~\ref{sec:fleet}, and fix the mean $\mu=\frac1{|\mathcal F_u|}\sum_{i\in\mathcal F_u}J_i$. These are \emph{not}
+refitted during the search.
+
+\paragraph{Step 2: repeat while $k<|\mathcal P|$} (lines 601--618). With the untested candidates
+$\mathcal C_k=\mathcal P\setminus\mathcal R_k$:
+\begin{enumerate}[label=(\alph*),leftmargin=2em]
+\item \textbf{Training data of the GP.} The fleet's usable images plus the new amplifier's usable images so far, each with its
+  amplifier label:
+  \begin{equation}
+  \mathcal D_k=\{(x_i,a_i,J_i):i\in\mathcal F_u\}\ \cup\ \{(x_r,a^\star,J_r):r\in\mathcal R^u_k\}.
+  \end{equation}
+  Unusable images of the new amplifier carry no $J$ and are left out.
+\item \textbf{Prediction for every candidate} $c\in\mathcal C_k$, by eq.~\eqref{eq:gppost} with the fleet covariance~\eqref{eq:mtk}
+  and amplifier label $a^\star$:
+  \begin{equation}
+  m_k(c)=\mu+\mathbf k_c^\top\big(K+\hat n^2I\big)^{-1}(\mathbf J-\mu\one),\qquad
+  s_k(c)=\sqrt{\hat s^2+\hat c^2-\mathbf k_c^\top\big(K+\hat n^2I\big)^{-1}\mathbf k_c},
+  \end{equation}
+  where $K$ is the covariance~\eqref{eq:mtk} of the points of $\mathcal D_k$ without the $\hat n^2$ term, $\mathbf J$ their
+  objective values, and $\mathbf k_c$ has entries $\hat\rho\hat s^2M(x_c,x_i)$ for fleet points and $\hat s^2M(x_c,x_r)+\hat c^2$ for the
+  new amplifier's own points.
+\item \textbf{Incumbent} (line 609): the best usable value found so far, or, before any usable image, the best prediction,
+  \begin{equation}
+  b_k=\begin{cases}\min_{r\in\mathcal R_k^u}J_r & \mathcal R_k^u\neq\emptyset\\[2pt] \min_{c\in\mathcal C_k}m_k(c) & \text{otherwise.}\end{cases}
+  \end{equation}
+\item \textbf{Expected improvement} of each candidate, eq.~\eqref{eq:ei}:
+  \begin{equation}
+  \EI_k(c)=\big(b_k-m_k(c)\big)\,\Phi\big(z_k(c)\big)+s_k(c)\,\varphi\big(z_k(c)\big),\qquad z_k(c)=\frac{b_k-m_k(c)}{s_k(c)} .
+  \end{equation}
+\item \textbf{Usability probability} (\code{p\_usable}, lines 440--450). An ERT classifier (150 trees, Sec.~\ref{sec:gate}) is
+  refitted from scratch on all fleet images, usable or not, and every image taken so far:
+  \begin{equation}
+  \mathcal U_k=\{(x_i,u_i):i\in\mathcal F\}\ \cup\ \{(x_r,u_r):r\in\mathcal R_k\},\qquad P_k(c)=P(u=1\mid x_c)\ \text{for }c\in\mathcal C_k ;
+  \end{equation}
+  if $\mathcal U_k$ holds fewer than two unusable images, $P_k\equiv1$. Unlike the GP, the classifier learns from the new
+  amplifier's \emph{failed} images too.
+\item \textbf{Gate and choice} (lines 613--615, 618):
+  \begin{equation}
+  \alpha_k(c)=\begin{cases}\EI_k(c)&P_k(c)\ge0.5\\-\infty&P_k(c)<0.5\end{cases},\qquad
+  r_{k+1}=\begin{cases}\arg\max_{c\in\mathcal C_k}\alpha_k(c) & \text{some }P_k(c)\ge0.5\\[2pt]
+  \arg\max_{c\in\mathcal C_k}P_k(c) & \text{none passes.}\end{cases}
+  \end{equation}
+\item \textbf{Take the image}: append $r_{k+1}$ to $\mathcal R$, reveal $u_{r_{k+1}}$ and, if usable, $J_{r_{k+1}}$; set $k\leftarrow k+1$.
+\end{enumerate}
+The loop runs through the whole pool (there is no stopping rule in the replay), so the full sequence $r_1,r_2,\dots$ is recorded and
+scored afterwards. The soft variant replaces (f) by $r_{k+1}=\arg\max_c\EI_k(c)\,P_k(c)$.
+
+\subsection{Scoring a search}
+With $J^\star=\min_{i\in\mathcal P,\,u_i=1}J_i$ the best usable value in the pool (known to the scorer, not to the search), the gap after
+$k$ images is
+\begin{equation}
+\Delta_k=100\Big(\min_{r\in\mathcal R^u_k}J_r-J^\star\Big)\ \%,\qquad \Delta_k=100\ \text{if }\mathcal R^u_k=\emptyset
+\end{equation}
+(\code{regret\_curve}, lines 480--483; an unusable image counts as $J=+\infty$, i.e.\ it never improves the best). Then
+\begin{equation}
+k_{2\%}=\min\{k:\Delta_k\le2\},\qquad \text{wasted}=\big|\{r\in\mathcal R_{k_{2\%}}:u_r=0\}\big|,
+\end{equation}
+counting the start image as image 1. The tables report the mean of $k_{2\%}$ and of the wasted count over the 6 searches.
 
 \subsection{Strategies compared}\label{sec:strategies}
 \begin{itemize}
