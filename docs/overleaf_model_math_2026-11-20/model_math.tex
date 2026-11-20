@@ -1,0 +1,858 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=2.1cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,tabularx,array}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,citecolor=blue!50!black]{hyperref}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=1.4em}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\sinc}{\operatorname{sinc}}
+\newcommand{\std}{\operatorname{std}}
+\newcommand{\med}{\operatorname{median}}
+\newcommand{\EI}{\operatorname{EI}}
+\newcommand{\one}{\mathbf 1}
+\newcommand{\caveat}[1]{\par\smallskip\noindent\colorbox{orange!10}{\parbox{\dimexpr\linewidth-2\fboxsep}{\small\textbf{Assumption / status.} #1}}\par\smallskip}
+\newcommand{\keybox}[1]{\par\smallskip\noindent\colorbox{blue!6}{\parbox{\dimexpr\linewidth-2\fboxsep}{\small #1}}\par\smallskip}
+
+\title{The models, in full:\\ trace physics features, the noise forest, the usability classifier,\\ the fleet Gaussian process and the Bayesian optimisation}
+\author{ccd\_opt\_ml level-1 study (PA03 board 101, v3 night)}
+\date{20 November 2026}
+\sloppy
+
+\begin{document}
+\maketitle
+
+\noindent This note writes down the mathematics of the models that are used to choose the CCD voltages, exactly as the
+code evaluates them, and how each one is trained. The chain is:
+\begin{center}\small
+trace $\rightarrow$ physics features (Sec.~\ref{sec:features}) $\rightarrow$ noise forest (Sec.~\ref{sec:noise})
+\quad and \quad
+settings + trace $\rightarrow$ usability classifier (Sec.~\ref{sec:gate})\\[2pt]
+images of other amplifiers $\rightarrow$ fleet Gaussian process (Secs.~\ref{sec:gp}--\ref{sec:fleet})
+$\rightarrow$ expected improvement with a hard usability gate (Sec.~\ref{sec:bo})
+\end{center}
+Appendix~\ref{app:other} describes every other model that was tried on the same data, and which was best for each task.
+Script names are in \code{monospace}, with line numbers at the commit of this note (branch
+\code{v3-analysis-amp-physics}). Standard methods are cited; where no reference is given the step is our own. Shaded boxes
+mark assumptions, approximations and places where an earlier document and the code disagree. The trace-to-physics step
+is derived in more detail in the companion note \emph{From the readout trace to the amplifier physics}
+(\code{docs/overleaf\_trace\_math\_2026-11-17}).
+
+\tableofcontents
+
+%=====================================================================================================================
+\section{Data, labels and notation}\label{sec:data}
+
+\paragraph{Data.} The v3 night on PA03 board 101, amplifiers (channels) 0, 1 and 3: 381 images (packets $\times$
+amplifiers) over two sessions. \textbf{Session G}: 80 Sobol-drawn voltage settings, 14 nominal packets, 4 replicates.
+\textbf{Session H}: 24 new settings and 5 nominal packets, scored after the scorecard's model choice was frozen
+(\code{v3\_report.tex}:56--63; \code{lvl1/freeze\_choice\_v3.py}). Each packet takes, at one setting, three or four
+0.2\,s raw traces per amplifier and one skipper image of 500 non-destructive reads per pixel \cite{tiffenberg2017}.
+
+\paragraph{Labels} (from the WADERs peak fit of each image, \code{src/process\_packet.py}):
+$\sigma_e$ the read noise in electrons after 500 skips, $\lambda$ the charge per pixel (dark current + clock-induced charge)
+in e$^-$/pixel, $g$ the gain in ADU/e$^-$. Every model works in natural logarithms,
+\begin{equation}
+y_\sigma=\ln\sigma_e,\qquad y_\lambda=\ln\lambda,\qquad y_g=\ln g .
+\end{equation}
+An error $\hat y-y$ in log units, multiplied by 100, is quoted as ``\%'' throughout (for small errors it is the relative error).
+
+\paragraph{Settings.} $\theta\in\mathbb R^{p}$ the voltages of one packet (the \code{theta.*} columns): the
+high and low rails of SW, RG, V1--3, H1--3, plus VSUB, VDD and VR (two pins per rail where the board has two).
+Different models use different encodings of $\theta$; each section says which.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}\toprule
+symbol & meaning\\\midrule
+$a$ & amplifier (here 101:0, 101:1, 101:3)\\
+$x$ & a setting, as a standardised vector (the knobs $z$ of Sec.~\ref{sec:knobs})\\
+$\phi$ & the trace physics features of one packet and amplifier (Sec.~\ref{sec:features})\\
+$J$ & the objective, $J=w\,y_\sigma+(1-w)\,y_\lambda$ with $w\in\{1,\tfrac12,0\}$ (Sec.~\ref{sec:objective})\\
+$f_s$ & ADC sample rate, $15\times10^6$\,s$^{-1}$\\
+$\mathcal N(\mu,\sigma^2)$, $\Phi$, $\varphi$ & normal distribution, its cumulative distribution and density\\\bottomrule
+\end{tabularx}
+\end{center}
+
+%=====================================================================================================================
+\section{Trace physics features}\label{sec:features}
+
+A trace is one channel's raw ADC samples $v[n]$ (ADU) with the sequencer flag bits $b_k[n]$, about 188\,ms at $f_s$.
+The features are computed by \code{amp\_phys/trap\_from\_trace.py} and \code{amp\_phys/physics\_features.py}
+(single-skip noise and the window fit) and \code{amp\_phys/gain\_features.py} (deterministic signal sizes).
+
+\subsection{Skips and software CDS}
+\begin{itemize}
+\item Pedestal-window starts $e_k$: rising edges of flag bit 0. Skip period $P=\med_k(e_{k+1}-e_k)$ samples,
+  $T=P/f_s$ (\code{trap\_from\_trace.py}:46--47).
+\item Window length $w_0$: median length of the bit-0-high runs. Window spacing $s_0$: median offset from a pedestal start
+  to the next rising edge of bit 1 (signal window); $\Delta t=s_0/f_s$ (lines 51--53).
+\item Consecutive skips $P\pm3$ samples apart belong to one pixel; the first 20 skips of each pixel are dropped
+  (lines 56--62; \code{physics\_features.py}:43).
+\end{itemize}
+For each kept skip $k$ and each software window length $\tau\in\{30,45,60,90,120,140\}$ samples
+($2.0, 3.0, 4.0, 6.0, 8.0, 9.3$\,\textmu s), the CDS value averages the \emph{last} $\tau$ samples of each hardware window
+(lines 65--69):
+\begin{equation}
+x_k(\tau)=\frac1\tau\sum_{j\in W^{\rm sig}_k(\tau)}v_j\;-\;\frac1\tau\sum_{j\in W^{\rm ped}_k(\tau)}v_j,
+\end{equation}
+with $W^{\rm ped}_k(\tau)=\{e_k+w_0-\tau,\dots,e_k+w_0-1\}$ and $W^{\rm sig}_k(\tau)=W^{\rm ped}_k(\tau)+s_0$.
+
+\subsection{Single-skip noise $\sigma_1(\tau)$}
+The charge in a pixel is the same for every skip, so the difference of consecutive skips of one pixel contains no signal:
+$x_k=gQ+n_k\Rightarrow x_{k+1}-x_k=n_{k+1}-n_k$. Hence
+\begin{equation}
+\sigma_1(\tau)=\frac{1}{\sqrt2}\,\std_k\big(x_{k+1}(\tau)-x_k(\tau)\big)\qquad\text{[ADU]},
+\end{equation}
+over same-pixel pairs only (\code{trap\_from\_trace.py}:69).
+
+\subsection{The window fit: white level $S_w$ and 1/f level $K$}\label{sec:windowfit}
+For a stationary noise with one-sided power spectral density $S(f)$ (ADU$^2$/Hz), the variance of the skip-difference
+estimator is $\sigma_1^2(\tau)=\int_0^\infty S(f)\,|H_\tau(f)|^2\dd f$ with the transfer function of two box windows
+$\Delta t$ apart (CDS \cite{hopkinson1982}) times the skip difference divided by $\sqrt2$:
+\begin{equation}
+|H_\tau(f)|^2=\underbrace{4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau)}_{\text{CDS}}\;\cdot\;\underbrace{2\sin^2(\pi fT)}_{\text{skip difference}/\sqrt2},
+\qquad \sinc(u)=\frac{\sin\pi u}{\pi u}
+\end{equation}
+(\code{trap\_from\_trace.py}:37--42; no front-end roll-off, \code{FILT["fc"]}\,=\,None). The noise model is white plus 1/f,
+\begin{equation}
+S(f)=S_w+\frac{K}{f}\quad\Longrightarrow\quad
+\sigma_1^2(\tau)=S_w\,I_w(\tau)+K\,I_f(\tau),\qquad I_w=\int|H_\tau|^2\dd f,\quad I_f=\int\frac{|H_\tau|^2}{f}\dd f,
+\label{eq:windowfit}
+\end{equation}
+with the integrals as Riemann sums on 200\,000 log-spaced frequencies from 1\,Hz to 7.5\,MHz. $I_w\propto1/\tau$ while $I_f$
+barely depends on $\tau$, so the six window lengths separate the two levels. $(S_w,K)$ is the weighted linear
+least-squares solution that minimises the \emph{relative} residuals,
+\begin{equation}
+(S_w,K)=\arg\min\sum_{i=1}^{6}\left[\frac{S_wI_w(\tau_i)+KI_f(\tau_i)-\sigma_1^2(\tau_i)}{\sigma_1^2(\tau_i)}\right]^2
+\end{equation}
+(\code{np.linalg.lstsq} with weights $1/y_i$). Units: $S_w$ in ADU$^2$/Hz, $K$ in ADU$^2$.
+
+\caveat{The fit is unconstrained: $S_w$ can come out negative (min $-0.021$ in the v3 table); the noise model drops those
+rows. $K$ absorbs everything that does not average down with $\tau$: transistor 1/f, setup pickup and slow wander.}
+
+\subsection{Predicted noise of a 500-skip pixel, $\sigma_{500}$}
+The image averages $N=500$ skips. Its filter replaces the skip difference by the $N$-skip average:
+\begin{equation}
+|H^{(N)}(f)|^2=4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau_{\rm img})\left[\frac{\sin(N\pi fT)}{N\sin(\pi fT)}\right]^2,
+\qquad N=500,\ \tau_{\rm img}=10\,\text{\textmu s},
+\end{equation}
+on 300\,000 log-spaced frequencies from 0.1\,Hz (\code{physics\_features.py}:32--38). With the fitted levels,
+\begin{equation}
+\sigma_{500}=\sqrt{\max\!\big(S_w I_w^{(N)}+\max(K,0)\,I_f^{(N)},\,0\big)}\quad\text{[ADU]},
+\label{eq:s500}
+\end{equation}
+and a white-only version $\sigma_{500}^{\rm white}=\sqrt{S_wI_w^{(N)}}$ (lines 49--52). $\sigma_{500}$ is the
+noise a 500-skip pixel \emph{would} have in ADU; it is not divided by the gain here.
+
+\caveat{The v3 feature table (\code{amp\_phys/results/per\_channel/physics\_features\_v3.csv}) was made at commit
+\code{a532e6b} with $\tau_{\rm img}$ fixed at 10\,\textmu s. The current code uses the packet's own window; on v3 the timing
+is nominal, so the two agree.}
+
+\subsection{Deterministic signal sizes (\code{gain\_features.py})}\label{sec:gainfeat}
+These are not noise; they are the sizes of clocked signals, each a known charge times the conversion gain. They are used
+by the usability classifier and the trace-driven search (Sec.~\ref{sec:gate}), not by the 8.6\,\% noise forest.
+\begin{itemize}
+\item \textbf{Reset jump}: in the median horizontal-transfer waveform $\bar w$ (300 samples before to 1700 after each bit-6 edge,
+  baseline-subtracted), the edge found about 278 samples before the H flag; jump $=\overline{\bar w}_{e+3..e+11}-\overline{\bar w}_{e-12..e-4}$
+  (\code{clock\_edges.py}:71--72).
+\item \textbf{H waveform peak-to-peak}: $\max\bar w-\min\bar w$.
+\item \textbf{CDS offset}: on the median skip cycle $\bar c$, $\med\bar c[s_0+5..s_0+144]-\med\bar c[5..144]$: the CDS of an
+  empty pixel, i.e.\ the summing-well feedthrough.
+\item \textbf{Skip pulse}: the largest $|\bar c-\text{baseline}|$ outside the two windows.
+\end{itemize}
+
+\subsection{From traces to one feature row}
+Every trace of a packet and amplifier is processed separately; each output column is then the \textbf{median over that
+packet's traces} (3, sometimes 4), column by column (\code{physics\_features.py}:66--79; same in \code{gain\_features.py}).
+So $\sigma_{500}$ of a packet is the median of the per-trace $\sigma_{500}$, not recomputed from median levels.
+No drift correction, no standardisation at this stage; traces that fail are skipped.
+
+%=====================================================================================================================
+\section{Extremely randomised trees}\label{sec:ert}
+
+Three of the main models are forests of extremely randomised trees (ERT) \cite{geurts2006}, as implemented in scikit-learn
+\cite{pedregosa2011}. The method is written down once here.
+
+\paragraph{One tree.} A regression tree partitions input space into boxes (leaves) by axis-aligned cuts and predicts the
+mean training label of the box \cite{breiman1984}. It is grown from the root by recursively splitting a node holding the
+training rows $\mathcal S$:
+\begin{enumerate}
+\item draw $m$ features at random without replacement (\code{max\_features});
+\item for each drawn feature $j$, draw \emph{one} cut point uniformly, $t_j\sim\mathcal U\big[\min_{\mathcal S}x_j,\max_{\mathcal S}x_j\big]$;
+\item keep the candidate split $(j,t_j)$ with the largest impurity decrease
+\begin{equation}
+\Delta(j,t)=|\mathcal S|\,\mathrm{Var}(\mathcal S)-|\mathcal S_L|\,\mathrm{Var}(\mathcal S_L)-|\mathcal S_R|\,\mathrm{Var}(\mathcal S_R),
+\qquad \mathcal S_L=\{i\in\mathcal S:x_{ij}\le t\};
+\end{equation}
+\item stop when a child would hold fewer than \code{min\_samples\_leaf} rows (or the node is pure).
+\end{enumerate}
+The difference from a random forest \cite{breiman2001} is step 2 (random cut instead of the best cut) and that each tree
+sees \emph{all} training rows (\code{bootstrap=False}). The random cut makes the trees more different from each other,
+which lowers the variance of their average.
+
+\paragraph{The forest.} $B$ trees $T_b$ grown with different random draws; the prediction is the average,
+\begin{equation}
+\hat y(x)=\frac1B\sum_{b=1}^{B}T_b(x).
+\end{equation}
+
+\paragraph{Classification.} For a label $u\in\{0,1\}$ the impurity is the Gini index $\mathrm{Gini}(\mathcal S)=2\hat p(1-\hat p)$ with
+$\hat p$ the (weighted) fraction of $u=1$. With \code{class\_weight="balanced"} each row of class $c$ carries the weight
+$n/(2n_c)$, so both classes weigh the same in total \cite{pedregosa2011}. The forest's probability is the average over trees of
+the weighted class fraction in the leaf:
+\begin{equation}
+P(u=1\mid x)=\frac1B\sum_b \frac{\sum_{i\in\ell_b(x)}\omega_i u_i}{\sum_{i\in\ell_b(x)}\omega_i},
+\end{equation}
+with $\ell_b(x)$ the leaf of tree $b$ containing $x$. It equals the fraction of trees ``voting usable'' only when every
+leaf is pure.
+
+%=====================================================================================================================
+\section{The noise model: trace physics + voltages, 8.6\,\% on a new amplifier}\label{sec:noise}
+
+Code: \code{amp\_phys/test1\_physics\_model.py} (``test 1''), results \code{amp\_phys/results/test1/test1.md}.
+
+\subsection{Task and split}
+Predict $y_\sigma=\ln\sigma_e$ of an image on an amplifier \emph{never seen in training}, from the voltages and that packet's
+traces, before the image is taken.
+\begin{itemize}
+\item Rows: board 101, channels 0, 1, 3, sessions G and H, image fit usable (\code{label.ok}), CDS window not
+  fractional, $S_w>0$ and $\sigma_{500}$ finite (lines 32--49): 302 rows, 235 in G and 67 in H.
+\item For each held-out amplifier $a\in\{0,1,3\}$: \textbf{train} on session G of the other two amplifiers, \textbf{test} on
+  session H of amplifier $a$ (lines 112--120). Every test row is thus a new amplifier \emph{and} a later session.
+\item No hyperparameter is tuned inside the test.
+\end{itemize}
+
+\subsection{Inputs}
+\begin{itemize}
+\item \textbf{Trace physics values} $\phi$ (9 numbers, all logged; \code{phys\_cols}, lines 56--61):
+\begin{equation}
+\phi=\big(\ln\sigma_{500},\ \ln S_w,\ \ln K,\ \ln\sigma_1(\tau_1),\dots,\ln\sigma_1(\tau_6)\big).
+\end{equation}
+\item \textbf{Voltages} $\theta$: the 31 \code{theta.*} columns that vary (s.d.\ $>10^{-6}$), raw volts, NaN$\to0$, not scaled
+  (trees do not need scaling). Many are tied in groups, so they are not independent.
+\item \textbf{One derived feature}, the physics prediction of $\ln\sigma_e$ without its offset:
+  $\psi=\ln\sigma_{500}-\widehat{\ln g}(\theta)$, with $\widehat{\ln g}$ from the gain sub-forest below.
+\end{itemize}
+Total: $9+31+1=41$ inputs.
+
+\subsection{The gain sub-forest}
+The trace gives $\sigma_{500}$ in ADU; the label is in electrons, so a gain is needed. It is predicted from the voltages:
+an ERT $\widehat{\ln g}(\theta)$ trained on the same G rows with target $\ln g$ (lines 72--73). On the training rows the
+derived feature uses the in-sample prediction, on the test rows the out-of-sample one.
+
+\subsection{The model}
+\begin{equation}
+\widehat{\ln\sigma_e}=\frac1{400}\sum_{b=1}^{400}T_b\big(\phi,\theta,\psi\big),
+\end{equation}
+an ERT regressor (Sec.~\ref{sec:ert}) with exactly these settings (line 53):
+\begin{center}\code{ExtraTreesRegressor(n\_estimators=400, min\_samples\_leaf=3, max\_features=0.5, random\_state=0)}\end{center}
+i.e.\ $B=400$ trees, $m=\lfloor0.5\cdot41\rfloor=20$ candidate features per split, at least 3 rows per leaf, squared-error
+impurity, no depth limit, all rows to every tree. \textbf{Training} is the tree growing of Sec.~\ref{sec:ert} on the
+$\approx155$ G rows of the two training amplifiers; there is no gradient descent and no validation-based early stopping.
+
+\subsection{The three comparison models}
+\begin{enumerate}
+\item \textbf{Voltages only}: the same ERT on $\theta$ alone.
+\item \textbf{Physics formula, gain from voltages} (``no ML'' on the noise side; lines 71--75):
+\begin{equation}
+\widehat{\ln\sigma_e}=\ln\sigma_{500}-\widehat{\ln g}(\theta)+c,\qquad
+c=\med_{\rm train}\big[y_\sigma-\ln\sigma_{500}+\widehat{\ln g}(\theta)\big],
+\end{equation}
+i.e.\ $\hat\sigma_e=e^c\,\sigma_{500}/\hat g$. One number, $c$, is learned; in the three folds $e^c=0.995,\ 0.955,\ 0.944$.
+\item \textbf{Trace physics values only}: the ERT on $\phi$ alone (9 inputs).
+\end{enumerate}
+
+\subsection{Score}
+With $e_i=\widehat{\ln\sigma_{e,i}}-\ln\sigma_{e,i}$ pooled over the three held-out amplifiers (67 H rows),
+\begin{equation}
+\text{typical error}=100\sqrt{\tfrac1n\textstyle\sum_i e_i^2}\ \%\qquad\text{(RMS of the log error; lines 85--100).}
+\end{equation}
+
+\begin{center}\small
+\begin{tabular}{lcccc}\toprule
+model (new amplifier, sealed H) & typical error & median $|e|$ & change $\rho$ & change size error\\\midrule
+voltages only & 18.2\,\% & 14.7\,\% & 0.65 & 12.3\,\%\\
+physics formula, gain from voltages & 11.9\,\% & 7.4\,\% & 0.63 & 10.3\,\%\\
+trace physics values only & 9.6\,\% & 5.5\,\% & 0.54 & 10.0\,\%\\
+\textbf{trace physics values + voltages} & \textbf{8.6\,\%} & 5.7\,\% & 0.69 & 9.6\,\%\\\midrule
+same, amplifier seen in training & 6.5\,\% & 2.3\,\% & 0.81 & 8.2\,\%\\\bottomrule
+\end{tabular}
+\end{center}
+``Change'' columns: for every pair of H rows of one amplifier, Spearman's $\rho$ \cite{spearman1904} between the predicted and true
+$\Delta\ln\sigma_e$, and the RMS of their difference, averaged over the amplifiers. Per held-out amplifier the best model
+gives 8.6, 9.5 and 7.5\,\% (ch0, ch1, ch3).
+
+\paragraph{Why it works.} Most of the variation of $\sigma_e$ between amplifiers is the amplifier's own noise, which the
+voltages cannot know but the trace measures directly ($\sigma_{500}$ is a physical prediction of the same quantity). The
+forest learns the remaining correction (gain, and what the 0.2\,s trace misses) from the voltages and the shape of
+$\sigma_1(\tau)$.
+
+\caveat{\textbf{Status of the 8.6\,\%.} (i) Test 1 was written on 17 November, after session H had been opened for the
+scorecard (its docstring quotes the H scorecard). H is never used for fitting, but the design (inputs, ERT, its settings)
+was chosen with H results known, so H is less strictly sealed for this model than for the scorecard's frozen models.
+(ii) No uncertainty is computed in the repo. A packet bootstrap \cite{efron1979} over the 23 H packets, done for this note and
+not stored in the repo, gives a 95\,\% interval of 6.2--11.2\,\% for the best model and 7.4--12.0\,\% for physics values only:
+the two overlap heavily. Changing the forest seed moves the best model between 8.4 and 8.7\,\%. (iii) One board, one night,
+three amplifiers. (iv) The gain feature uses in-sample predictions on the training rows, which are slightly better than the
+test-row predictions.}
+
+\caveat{\textbf{The forest inside the search is a different forest.} The trace-driven ranking and the hybrid
+(Sec.~\ref{sec:strategies}) use an ERT with the same settings but on different inputs: the 18 standardised knobs and the 8
+\code{PHYS\_COLS} of \code{fleet\_tests.py}:194--195 ($\sigma_{500}$, $\sigma_{500}^{\rm white}$, $S_w$, $K$, reset jump,
+H peak-to-peak, skip pulse, CDS offset), with no $\sigma_1(\tau)$ and no gain sub-forest. Its error on a new amplifier has not been
+scored separately; the 8.6\,\% belongs to the test-1 model.}
+
+%=====================================================================================================================
+\section{The usability classifier and the gate}\label{sec:gate}
+
+About 22\,\% of the v3 settings (82 of 381 images) gave an image that could not be used. The search must avoid spending
+images on them.
+
+\subsection{What ``usable'' means}
+\begin{equation}
+u=\one\big[\code{label.ok}\big]\cdot\one\big[\ln\sigma_e,\ln\lambda,\ln g\ \text{finite}\big]\cdot\one\big[\lambda>0.005\ \text{e}^-/\text{pixel}\big]
+\end{equation}
+(\code{fleet\_tests.py}:108--109). \code{label.ok} is false when the WADERs fit raised any flag
+(\code{process\_packet.py}:534--565): not fitted (flooded or unresolved peaks); a value $\le0$, an undefined error, or an error
+larger than half the value for $g$, $\sigma_e$ or $\lambda$; $\chi^2/\text{ndf}>3$. The $\lambda$ floor removes fits that
+converged on a dark charge 400$\times$ below normal. On v3: 70 of the 82 unusable images have ``$\lambda$ not constrained'',
+9 have $\chi^2/\text{ndf}>3$, 3 pass the flags but have $\lambda<0.005$.
+
+\caveat{Earlier text described unusable settings as ``electron peaks merge, most columns turn hot''. That is the physical
+picture; the coded criterion is the fit flags above.}
+
+\subsection{Inputs}\label{sec:knobs}
+\paragraph{Knobs $z$} (\code{fleet\_tests.knobs}, lines 151--175): every varied \code{theta.*}; columns that are identical or
+correlated with $|r|>0.999$ merge into one knob; timing knobs on a $\log_2$ scale; each knob z-scored over all loaded rows,
+$z_j=(\theta_j-\bar\theta_j)/s_j$. On v3 this gives 18 knobs: SW\_L, RG\_H, RG\_L, V1--V3 high/low, H1--H3 high/low, VSUB, VDD, VR.
+
+\paragraph{Trace features $\chi$} (\code{physics\_matrix}, lines 197--212): the 8 \code{PHYS\_COLS} ($\sigma_{500}$,
+$\sigma_{500}^{\rm white}$, $S_w$, $K$, reset jump, H peak-to-peak, skip pulse, CDS offset); $\ln|\cdot|$ of each except the CDS
+offset (kept linear, it changes sign), standardised over all rows, missing $\to0$.
+
+\subsection{The model and its training}
+An ERT classifier (Sec.~\ref{sec:ert}) for $u$:
+\begin{center}\code{ExtraTreesClassifier(n\_estimators=B, min\_samples\_leaf=2, class\_weight="balanced", random\_state=0)}\end{center}
+with the default $m=\lfloor\sqrt{p}\rfloor$ features per split and Gini impurity. Where it is used:
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.3cm}c>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}\toprule
+use & $B$ & inputs & training rows\\\midrule
+replay gate, \code{p\_usable} (\code{fleet\_tests.py}:440--450) & 150 & those of the BO variant ($z$; or $[z,\chi]$ in the hybrid) & fleet (other amplifiers, other block; usable \emph{and} unusable) + every image taken so far on the new amplifier; \textbf{refitted after every image}\\
+trace-driven ranking (lines 538--543) & 300 & $[z,\chi]$ & fleet only, once\\
+live \code{propose\_next.py} & 300 & screen: 15 group deltas; image: + 8 trace features & every row of every amplifier\\\bottomrule
+\end{tabularx}
+\end{center}
+If fewer than two unusable examples are available, $P\equiv1$.
+
+\subsection{The hard gate}
+With $P(x)=P(u=1\mid x)$ and a threshold $\gamma=0.5$, a candidate is allowed only if $P(x)\ge\gamma$:
+\begin{equation}
+\alpha(x)=\begin{cases}\EI(x) & P(x)\ge\gamma\\ -\infty & \text{otherwise}\end{cases}
+\qquad\text{and if no candidate passes, image }\arg\max_xP(x)
+\label{eq:gate}
+\end{equation}
+(\code{fleet\_tests.py}:613--615). The \emph{soft} alternative multiplies, $\alpha=\EI\cdot P$ (line 617). This is the
+probability-of-feasibility weighting of constrained Bayesian optimisation \cite{schonlau1998,gardner2014,gelbart2014}.
+The hard gate exists because broken settings often have unusual traces, which a Gaussian process sees as uncertain and
+therefore as promising (large EI); a product can still let such a candidate win.
+
+\subsection{How well it separates}
+No script in the repo produces the gate's quoted scores; the obvious protocol was rebuilt for this note (train on G, test once
+on H, 300 trees, the test amplifier left out, pooled; H has 20 unusable and 67 usable rows):
+\begin{center}\small
+\begin{tabular}{lccc}\toprule
+inputs & AUC \cite{hanley1982} & unusable caught ($P<0.5$) & usable wrongly blocked\\\midrule
+voltages only ($z$) & 0.990 & 11 of 20 & 0 of 67\\
+voltages + trace ($[z,\chi]$) & 0.985 & 18 of 20 & 0 of 67\\\bottomrule
+\end{tabular}
+\end{center}
+This reproduces the quoted ``18/20 with the trace, about 10/20 from voltages'' and ``0 usable blocked''. The quoted AUC of
+0.99 is the voltages-only model's; with the trace it is 0.985. Both rank almost perfectly; the trace moves more of the unusable
+settings below the 0.5 threshold.
+
+\paragraph{Soft against hard in the replay} (images to 2\,\%, wasted images in brackets; nominal start;
+\code{amp\_phys/results/fleet\_bo/fleet\_tests\_v3\_gate\_bo.md}):
+\begin{center}\small
+\begin{tabular}{lccc}\toprule
+fleet BO variant & $w=1$ & $w=\frac12$ & $w=0$\\\midrule
+voltages, soft & 2.5 (0) & 3.2 (0) & 3.0 (0)\\
+voltages, hard gate & 3.7 (0) & 2.5 (0) & 2.7 (0)\\
+voltages + trace, soft & 2.2 (0) & 2.5 (0) & 5.0 (2.2)\\
+voltages + trace, hard gate & 2.2 (0) & 2.5 (0) & 3.3 (0.3)\\\bottomrule
+\end{tabular}
+\end{center}
+The hard gate matters when the GP sees the traces; with voltages only the soft form already wasted no image.
+
+%=====================================================================================================================
+\section{Gaussian-process regression}\label{sec:gp}
+
+\subsection{Model}
+A Gaussian process \cite{rasmussen2006} puts a prior on functions: any finite set of values $f(x_1),\dots,f(x_n)$ is jointly
+normal with mean 0 and covariance $K_{ij}=k(x_i,x_j)$. Observations are $y_i=\mu+f(x_i)+\varepsilon_i$,
+$\varepsilon_i\sim\mathcal N(0,n^2)$. The kernel here is a scaled Matérn-5/2 with one length scale per input
+(automatic relevance determination) \cite{rasmussen2006,stein1999}:
+\begin{equation}
+k(x,x')=s^2M(r),\qquad M(r)=\Big(1+\sqrt5\,r+\tfrac53r^2\Big)e^{-\sqrt5 r},\qquad r^2=\sum_{j}\frac{(x_j-x'_j)^2}{\ell_j^2}.
+\end{equation}
+$s^2$ is the variance of the response, $\ell_j$ how far knob $j$ must move to change it ($\ell_j\to\infty$ switches the knob
+off), $n^2$ the image-to-image scatter at a fixed setting. Matérn-5/2 functions are twice differentiable: smooth, but less
+rigid than a squared exponential.
+
+\subsection{Prediction}
+Given training inputs $X$ and labels $y$, with $K=k(X,X)$, $k_*=k(X,x_*)$ and $K_y=K+n^2I$, the posterior at a new
+setting $x_*$ is normal with
+\begin{equation}
+m(x_*)=\mu+k_*^\top K_y^{-1}(y-\mu\one),\qquad
+v(x_*)=k(x_*,x_*)-k_*^\top K_y^{-1}k_* .
+\label{eq:gppost}
+\end{equation}
+$m$ is a weighted sum of the measured values, weighted by similarity; $v$ starts at $s^2$ and shrinks near measured settings.
+The code solves with a Cholesky factor $K_y=LL^\top$ (plus $10^{-9}I$ for stability) and returns the latent standard deviation
+$s(x_*)=\sqrt{v}$, without $n^2$.
+
+\subsection{Training}
+The hyperparameters $\eta=(s^2,\ell_1,\dots,\ell_p,n^2)$ are chosen by maximising the log marginal likelihood (type-II
+maximum likelihood) \cite{rasmussen2006}:
+\begin{equation}
+\ln p(y\mid X,\eta)=-\tfrac12(y-\mu)^\top K_y^{-1}(y-\mu)-\tfrac12\ln|K_y|-\tfrac n2\ln2\pi,
+\qquad \tfrac12\ln|K_y|=\textstyle\sum_i\ln L_{ii}.
+\label{eq:lml}
+\end{equation}
+The first term rewards fitting the data, the second penalises a flexible (large-volume) prior; together they choose the
+length scales without a validation set. Training fits about 20 numbers, not weights.
+
+%=====================================================================================================================
+\section{The fleet model: a multi-task Gaussian process}\label{sec:fleet}
+
+Code: class \code{MultiTaskGP}, \code{lvl1/fleet\_tests.py}:252--292.
+
+\subsection{Objective}\label{sec:objective}
+\begin{equation}
+J=w\,\ln\sigma_e+(1-w)\ln\lambda,\qquad w\in\{1\ (\text{noise only}),\ \tfrac12\ (\text{noise + dark charge}),\ 0\ (\text{dark charge only})\}.
+\end{equation}
+Lower is better. Only usable images enter the GP. In the replay the labels are optionally drift-corrected (\code{--drift},
+lines 136--148): for each amplifier,
+\begin{equation}
+\tilde y_i=y_i-\mathrm{interp}_t\big(\text{the amplifier's nominal packets except }i\big)(t_i)+\overline{y_{\rm nom}},
+\end{equation}
+which removes the drift during the night and keeps the level. This uses the new amplifier's own nominal packets, so the
+replay also reports runs without it.
+
+\subsection{Model}
+For amplifier $a$ at setting $x$ (knobs $z$ of Sec.~\ref{sec:knobs}),
+\begin{equation}
+J_a(x)=\mu+f(x)+c_a+g_a(x)+\varepsilon,
+\qquad
+\begin{aligned}
+f&\sim\mathcal{GP}\big(0,\ \rho\,s^2M\big)&&\text{shared shape (the fleet)}\\
+g_a&\sim\mathcal{GP}\big(0,\ (1-\rho)\,s^2M\big)&&\text{amplifier's own shape, independent per }a\\
+c_a&\sim\mathcal N(0,c^2)&&\text{amplifier's own level}\\
+\varepsilon&\sim\mathcal N(0,n^2)&&\text{image-to-image scatter}
+\end{aligned}
+\end{equation}
+all independent. Its covariance between two observations is
+\begin{equation}
+\mathrm{Cov}\big(J_a(x),J_{a'}(x')\big)=s^2M(x,x')\big[\rho+(1-\rho)\,\one[a=a']\big]+c^2\,\one[a=a']+n^2\,\one[\text{same image}].
+\label{eq:mtk}
+\end{equation}
+This is an intrinsic-coregionalisation multi-task GP \cite{bonilla2007} with task correlation $\rho$ for the shape plus a
+per-task offset; its use for transferring an optimisation between related tasks follows \cite{swersky2013}. The two new
+numbers mean:
+\begin{itemize}
+\item $\rho\in[0,1]$: how alike two amplifiers' responses are in shape. $\rho=1$: one shared response plus an offset.
+  $\rho=0$: unrelated.
+\item $c^2$: how much their overall levels differ.
+\end{itemize}
+A constant offset $c_a$ does not move the minimum, so if the shapes agree the fleet already ranks the settings of an
+amplifier that has never been imaged; the first image then fixes its level.
+
+\subsection{Training: two stages}
+\begin{enumerate}
+\item \textbf{Shared GP} (\code{fit\_shared\_gp}, lines 235--244). Ignore the amplifier labels and fit one GP to the fleet's
+  usable rows, centred, $y-\bar y$:
+  $k=s^2M_{5/2}(\text{ARD})+n^2\delta$ with initial values $s^2=\mathrm{var}(y)$, $\ell_j=2$, $n^2=0.1\,\mathrm{var}(y)$ and
+  box bounds $s^2\in[10^{-5},10^2]$, $\ell_j\in[0.05,10^3]$, $n^2\in[10^{-6},10]$. Maximise eq.~\eqref{eq:lml} with
+  L-BFGS-B \cite{byrd1995} from the initial point and one random restart. No priors beyond the bounds.
+\item \textbf{Grid for $\rho$ and $c^2$} (lines 258--270). Keep $s^2,\ell,n^2$ fixed and $\mu=\bar y_{\rm fleet}$. Evaluate the exact
+  log marginal likelihood of eq.~\eqref{eq:lml} with the covariance~\eqref{eq:mtk} (constant dropped) on
+  $\rho\in\{0,0.5,0.75,0.9,0.97,1\}$ and $c^2=\kappa s^2$, $\kappa\in\{0,0.1,0.3,1,3,10\}$; keep the best pair.
+\end{enumerate}
+The hyperparameters are fitted once on the fleet and \textbf{not refitted} during a search; each new image only enters the data.
+
+\caveat{An earlier description says $\rho$ and $c$ are fitted ``with the same likelihood'', which suggests a joint fit. The
+code fits the shared hyperparameters first and then grid-searches $\rho$ and $c^2$ (36 points). The shared $\ell$ is used for
+both $f$ and $g_a$.}
+
+\subsection{Prediction for the new amplifier}
+The training set is the fleet's usable rows plus the new amplifier's usable images so far, each with its amplifier label.
+Equation~\eqref{eq:gppost} with the covariance~\eqref{eq:mtk} gives (lines 286--292)
+\begin{equation}
+m(x_*,a)=\mu+k_*^\top(K+n^2I)^{-1}(y-\mu\one),\qquad
+v(x_*,a)=s^2+c^2-k_*^\top(K+n^2I)^{-1}k_*,
+\end{equation}
+where $k_*$ has entries $\rho s^2M(x_*,x_i)$ for fleet rows and $s^2M(x_*,x_i)+c^2$ for the new amplifier's own rows.
+\begin{itemize}
+\item \textbf{No image yet}: $m=\mu+\rho s^2M_*^\top(K+n^2I)^{-1}(y-\mu)$, the fleet's shape shrunk by $\rho$;
+  the variance keeps the unknown level $c^2$ and the unknown own shape $(1-\rho)s^2$.
+\item \textbf{After $k$ images}: the own rows are correlated with each other through $c^2$, so the first image mostly
+  determines $c_a$; further images teach $g_a$ near where they were taken.
+\end{itemize}
+
+\caveat{An earlier description gives the predictive variance as $s^2-k_*^\top K^{-1}k_*$; in the multi-task case the code
+correctly adds $c^2$.}
+
+\paragraph{Fitted values} (v3, amplifier 101:3 left out, fleet from the other block; refitted for this note with the repo
+code):
+\begin{center}\small
+\begin{tabular}{lcccc}\toprule
+objective & $s^2$ & $n^2$ & $\rho$ & $c^2$\\\midrule
+noise only ($w=1$) & 0.0145 & 0.0066 & 0.75 & 0.0044\\
+noise + dark charge ($w=\frac12$) & 0.237 & 0.037 & 0.50 & 0\\
+dark charge only ($w=0$) & 0.650 & 0.107 & 0.50 & 0\\\bottomrule
+\end{tabular}
+\end{center}
+Most length scales go to the upper bound, i.e.\ those knobs are switched off; for dark charge only VSUB, H2\_H, VDD, RG\_H
+(and VR at $w=0$) stay active. For the dark-charge objectives $c^2=0$ on this split: the levels do not differ beyond
+what the shape term explains.
+
+\subsection{Assumptions}
+\begin{enumerate}
+\item The response is a smooth (Matérn-5/2), stationary function of the standardised knobs, with one length scale per knob
+  shared by all amplifiers.
+\item Amplifiers differ by a constant level $c_a$ and an independent own shape $g_a$ with the same smoothness; $\rho$ and $c^2$
+  are the same for every pair of amplifiers.
+\item The scatter is Gaussian in log space and the same for every amplifier and setting (homoscedastic), $n^2$.
+\item The fleet and the new amplifier are exchangeable: the new amplifier is ``another draw'' from the same population.
+  On v3 the fleet is two sibling amplifiers of one board and one night, which favours the test.
+\item Unusable settings carry no information about $J$ (they are excluded, and handled by the classifier).
+\item The hyperparameters learned on the fleet hold for the new amplifier.
+\end{enumerate}
+
+%=====================================================================================================================
+\section{Bayesian optimisation}\label{sec:bo}
+
+\subsection{Expected improvement}
+Let $b$ be the best (lowest) usable $J$ imaged so far on the new amplifier. Imaging $x$ improves on it by
+$I(x)=\max\big(0,b-J(x)\big)$. Under the GP, $J(x)\sim\mathcal N(m,s^2)$, so with $z=(b-m)/s$
+\begin{equation}
+\EI(x)=\mathbb E[I(x)]=\int_{-\infty}^{b}(b-j)\,\frac1s\varphi\!\Big(\frac{j-m}{s}\Big)\dd j
+=(b-m)\,\Phi(z)+s\,\varphi(z)
+\label{eq:ei}
+\end{equation}
+\cite{jones1998} (\code{fleet\_tests.py}:435--437). The first term is large where the guess is good (exploit), the second
+where the model is unsure (explore). No exploration offset $\xi$ is used. If no usable image exists yet, $b=\min_x m(x)$ over
+the candidates. $s$ is the latent standard deviation (without $n^2$).
+
+\subsection{The loop (replay, \code{fleet\_tests.py}:601--618)}
+\begin{enumerate}
+\item Start: the first usable nominal image of the pool (if the nominal setting is known), or nothing.
+\item Fit the fleet GP once on the fleet's usable rows (Sec.~\ref{sec:fleet}).
+\item Repeat until the pool is exhausted:
+  \begin{enumerate}
+  \item GP data = fleet rows + the new amplifier's usable images; predict $m,s$ for every untested candidate;
+  \item $\EI$ by eq.~\eqref{eq:ei};
+  \item refit the usability classifier on the fleet + the images taken so far; apply the hard gate, eq.~\eqref{eq:gate};
+  \item image $\arg\max_x\alpha(x)$; reveal $J$ and $u$.
+  \end{enumerate}
+\end{enumerate}
+
+\subsection{The replay test}
+\begin{itemize}
+\item Each amplifier in turn is the new one. Packets in time order are cut into two contiguous blocks; the candidate pool is
+  the new amplifier's settings in one block (63--64 rows, unusable ones included), the fleet is the other two amplifiers in
+  the \emph{other} block. 3 amplifiers $\times$ 2 blocks = 6 searches.
+\item ``Imaging'' reveals the stored result. After $k$ images the gap is
+  $100\big(\min_{i\le k,\,u_i=1}J_i-\min_{\text{pool},\,u=1}J\big)$; ``images to 2\,\%'' is the first $k$ with gap $\le2$, averaged
+  over the 6 searches. Wasted images: unusable images before that point.
+\item The replay has no stopping rule; it runs through the pool.
+\end{itemize}
+
+\subsection{Strategies compared}\label{sec:strategies}
+\begin{itemize}
+\item \textbf{Person, hill-climb}: from the nominal (or a random start; mean over $\le50$ starts) image the untested setting
+  nearest in standardised knobs to the best usable so far.
+\item \textbf{Random order}: 200 random orders.
+\item \textbf{Fleet ranking, no updates}: candidates in order of the zero-image $m$.
+\item \textbf{Trace-driven} (lines 525--547): $\hat J=w\,\widehat{\ln\sigma_e}+(1-w)\widehat{\ln\lambda}$, with
+  $\widehat{\ln\sigma_e}$ from an ERT (400 trees, leaf $\ge3$, $m=0.5p$) on $[z,\chi]$ trained on the fleet's usable rows, and
+  $\widehat{\ln\lambda}$ from the zero-image fleet GP. Candidates with $P\ge0.5$ (300-tree classifier on $[z,\chi]$) are imaged in
+  order of $\hat J$, the rest after them; images never change the order.
+\item \textbf{Fleet BO + hard gate}: the loop above with $x=z$ and the gate on $z$.
+\item \textbf{Hybrid} (lines 550--565): first image = the trace-driven top pick; then fleet BO on $z$ with the hard gate of the
+  trace-aware classifier on $[z,\chi]$.
+\item \textbf{BO without the fleet}: the same hyperparameters, but only the new amplifier's own data (after two usable random images).
+\end{itemize}
+
+\subsection{Results}
+\begin{center}\small
+\begin{tabular}{lccc}\toprule
+images to 2\,\% (wasted) & noise only & noise + dark charge & dark charge only\\\midrule
+\multicolumn{4}{l}{\textit{Nominal setting known}}\\
+Person: hill-climb from nominal & \textbf{1.5} (0) & 26.8 (4.3) & 26.0 (4.5)\\
+Random order & 5.0 (0.9) & 31.0 (4.7) & 38.0 (5.7)\\
+Fleet ranking, no updates & 3.7 (0.2) & 9.2 (1.0) & 9.2 (1.0)\\
+Trace-driven & 1.7 (0) & 8.3 (0) & 8.2 (0)\\
+Fleet BO + hard gate & 3.7 (0) & \textbf{2.5} (0) & \textbf{2.7} (0)\\
+Hybrid & 3.0 (0) & 2.8 (0) & \textbf{2.7} (0)\\
+BO without the fleet & 5.8 (1.0) & 4.8 (0.7) & 4.8 (0.7)\\\midrule
+\multicolumn{4}{l}{\textit{Nothing known about the new amplifier}}\\
+Person: hill-climb from a random start & 11.5 (4.4) & 24.0 (3.1) & 26.8 (3.4)\\
+Random order & 6.5 (1.5) & 31.0 (4.8) & 38.5 (5.7)\\
+Fleet ranking, no updates & 4.3 (0.5) & 8.3 (1.0) & 8.3 (1.0)\\
+Trace-driven & \textbf{1.3} (0) & 7.7 (0) & 7.3 (0)\\
+Fleet BO + hard gate & 3.5 (0.2) & \textbf{1.7} (0) & \textbf{1.8} (0)\\
+Hybrid & 2.8 (0) & 2.2 (0) & \textbf{1.8} (0)\\
+BO without the fleet & 8.2 (2.2) & 3.2 (0.3) & 4.0 (0.5)\\\bottomrule
+\end{tabular}
+\end{center}
+(\code{amp\_phys/results/fleet\_bo/fleet\_tests\_v3\_hybrid\_\{nominal,none\}\_w*\_bo.md}.) With 6 searches, differences below about
+one image are not meaningful; ``BO without the fleet'' at $w=1$ is 5.8 in one file and 7.2 in another, only because the
+random stream differs.
+
+\paragraph{Reading.} Noise: the trace measures it, so ranking by the trace (or stepping out from a good nominal) wins.
+Dark charge: the trace cannot see it, but the fleet knows the best dark charge is at low VSUB, far from nominal, so fleet BO
+with the gate wins (1.7--2.7 images against 24--38 by hand). The hybrid is never worse than 3 images. With the gate no
+image was wasted on a broken setting.
+
+\subsection{The live procedure (\code{lvl1/propose\_next.py})}
+In a live search the candidates are generated, not looked up. One round:
+\begin{enumerate}
+\item \textbf{Screen} (lines 173--214): draw 600 settings by scrambled Sobol sampling \cite{sobol1967,owen1998} over the 15 voltage
+  groups, each within its allowed box on a 0.05\,V grid; redraw any that break the hardware windows and relational rules
+  (\code{configs/limits.toml}, \code{src/ccd\_limits.py}), the 0.5\,V margins and 1.5\,V minimum swings, the ramp rule
+  (VSUB in steps $\le5$\,V) or the reset-safety check. Score each by $\EI\cdot P$ with the hard gate. Keep up to 12 that are
+  at least 0.75 apart in standardised space and write them as trace-only packets.
+\item \textbf{Image} (lines 217--265): after the traces, re-score the screened settings with the trace-aware classifier, taking
+  for each setting the \emph{lowest} $P$ over the board's amplifiers; image the best one.
+\item \textbf{Status} (lines 268--288): ``left'' $=100\max_x\EI(x)\one[P(x)\ge\gamma]$ over fresh draws; stop if it is below
+  \code{--stop} (default 1\,\%).
+\end{enumerate}
+Here the inputs are 15 group deltas from nominal (a swing group as high $-$ low minus its nominal), z-scored; the timing is
+pinned to nominal; the GP is refitted on every usable row (fleet and this board) at each call; there is no drift correction.
+For a whole board the objective is the mean over its amplifiers, $\bar m=\frac1A\sum_am_a$, with
+$\bar s=\sqrt{\sum_as_a^2}/A$.
+
+\caveat{(i) $\bar s$ treats the amplifiers' errors as independent and ignores their shared $f$, so it underestimates the
+uncertainty of the board mean. (ii) Earlier text says the search stops ``when the expected gain is below the repeatability'';
+the code compares with a fixed 1\,\% (the repeatabilities 1.7\,\% for $\sigma_e$ and 4\,\% for $\lambda$ are only printed).
+(iii) The live code uses 15 knobs, the replay 18. (iv) The dry-run numbers quoted elsewhere (stop at 0.25\,\%; 8 screened settings
+with $P=0.89$--$0.97$) are not stored in the repo.}
+
+%=====================================================================================================================
+\section{What is established and what is not}
+\begin{itemize}
+\item \textbf{Established on v3}: the trace halves the noise error on a new amplifier (18.2 $\to$ 8.6\,\%); the gate with the
+  trace catches 18 of 20 unusable settings and blocks no usable one; fleet BO with the gate reaches 2\,\% of the best in about
+  two images for dark-charge objectives.
+\item \textbf{Limits}: one board, one night, three sibling amplifiers; the fleet and the new amplifier share the module and the
+  night. On v2 + v3 together one objective took 16--18 images, because trace features shift between nights. The next test is a
+  live run on a CCD the fleet has never seen.
+\end{itemize}
+
+%=====================================================================================================================
+\appendix
+\section{The other models}\label{app:other}
+
+Two pieces of code produced the v3 numbers: the \textbf{scorecard} (\code{lvl1/scorecard\_v2.py}, with the model registry in
+\code{lvl1/scorecard.py} and \code{lvl1/train\_lvl1.py}; results \code{processed\_v3n/lvl1\_results/scorecard\_\{G,H\}}) and the
+\textbf{physics tests} (\code{amp\_phys/test1\_physics\_model.py}, \code{test2\_gain\_lambda.py}). Section~\ref{sec:noise} is test 1.
+
+\subsection{Protocol of the scorecard}
+\begin{itemize}
+\item Rows: board 101 ch0/1/3, label usable, trace usable, window not fractional, $\lambda>0.005$.
+\item Model choice on session G by cross-validation: 5 contiguous time blocks; for ``new amplifier'', leave one amplifier out
+  $\times$ block. The top 3 per target and cell were \textbf{frozen} (16 November, 07:06,
+  \code{lvl1/frozen\_choice\_v3.json}), together with the physics, settings and baseline models; then H was scored once.
+\item Columns with $>20$\,\% missing or zero spread are dropped, gaps get the training median; each learner standardises its
+  inputs on the training rows. \textbf{Trace models never see the voltages} (\code{no\_settings}).
+\item Absolute error: RMS of the log error, as in Sec.~\ref{sec:noise}. Change models: size error $=100\,\mathrm{RMS}(\widehat{\Delta y}-\Delta y)$
+  and Spearman $\rho$ over all scored pairs. Better/worse/same: a packet bootstrap with Poisson(1) weights per packet
+  \cite{efron1979,hanley2006}, 1000 draws, on the difference of RMS to a reference model.
+\end{itemize}
+
+\subsection{Learners}
+\paragraph{Gaussian process} (\code{src/ml/models.py}:114--159): $k=c\,M_{5/2}(\text{ARD})+\sigma_n^2\delta$,
+$c\in[10^{-3},10^3]$, $\ell\in[10^{-2},10^3]$, $\sigma_n^2\in[10^{-6},10]$, \code{normalize\_y}, L-BFGS-B on eq.~\eqref{eq:lml}
+for at most 150 iterations, no restarts, at most 400 training points (800 for change models).
+
+\paragraph{Gradient-boosted trees} (``trees'' in the scorecard; \code{models.py}:80--111). An additive model built stagewise
+\cite{friedman2001},
+\begin{equation}
+F_0=\bar y,\qquad F_t(x)=F_{t-1}(x)+\nu\,h_t(x),\qquad h_t=\arg\min_h\sum_i\big(r_i^{(t)}-h(x_i)\big)^2,\quad r_i^{(t)}=y_i-F_{t-1}(x_i),
+\end{equation}
+each $h_t$ a tree on histogram-binned inputs (scikit-learn \code{HistGradientBoostingRegressor} \cite{pedregosa2011,ke2017})
+with at most 15 leaves and 10 rows per leaf; $\nu=0.05$, 300 stages. Two extra models with the pinball (quantile) loss
+\cite{koenker1978} at 0.16 and 0.84 give the error bar $\hat s=|q_{84}-q_{16}|/2$.
+
+\paragraph{Neural-network ensemble} (\code{models.py}:289--329). Linear($p$,64)--SiLU--Linear(64,64)--SiLU \cite{elfwing2018} with two
+heads $(\mu,\ln\sigma^2)$, trained on the Gaussian negative log-likelihood $\tfrac12[\ln\sigma^2+(y-\mu)^2/\sigma^2]$
+\cite{nix1994}; 5 networks \cite{lakshminarayanan2017}, AdamW \cite{loshchilov2019} (learning rate $3\times10^{-3}$, weight decay $10^{-3}$),
+batch 64, up to 600 epochs, early stopping on 15\,\% of packets (patience 60), then refit on all rows. Prediction: mean of means;
+variance = mean variance + variance of means.
+
+\paragraph{1-D CNN on the trace curves} (\code{models.py}:332--396). Input: the trace curves (waveform shapes, Allan deviation,
+CDS spectrum; own and reference trace) as channels, 256 points each. Conv1d($C$,16,7)--SiLU--MaxPool2 $\to$ Conv1d(16,32,7)--SiLU--MaxPool2
+$\to$ Conv1d(32,32,5)--SiLU--AdaptiveAvgPool(8), concatenated with scalar features, Linear(256+$p$,64)--SiLU, heads $(\mu,\ln\sigma^2)$;
+3 networks, learning rate $2\times10^{-3}$, batch 256, 400 epochs, patience 50.
+
+\paragraph{Pretrained CNN} (\code{src/ml/deep.py}:68--229). The convolution stack plus Linear(256,16) is first trained without labels
+for 40 epochs on: masked reconstruction (25\,\% of 32-sample blocks, or one whole curve), plus $0.3\times$ InfoNCE
+\cite{oord2018} (temperature 0.2) between two augmented views ($\pm5$\,\% scale, noise 0.05, shift $\pm2$); then fine-tuned with
+the labels (learning rate $5\times10^{-4}$).
+
+\paragraph{Deep-kernel GP} (\code{deep.py}:232--350) \cite{wilson2016}: $k(i,j)=s^2M_{5/2}(|z_i-z_j|/\ell)+\sigma_n^2\delta_{ij}$ on
+$z=$ (standardised frozen pretrained encoding, scalar features); Adam on the exact negative log marginal likelihood, 250 steps.
+
+\paragraph{SAAS GP} (for $\lambda$ inside \code{trace: physics}; \code{src/ml/bogp.py}:73--77). A GP whose inverse squared length
+scales have half-Cauchy priors that shrink most inputs off, $\tau\sim\mathcal{HC}(0.1)$, $\ell_j^{-2}\sim\mathcal{HC}(\tau)$
+\cite{eriksson2021}; sampled by NUTS \cite{hoffman2014} (96 warm-up, 48 samples, thinning 8).
+
+\subsection{Absolute models}
+\begin{itemize}
+\item \textbf{mean}, \textbf{amplifier mean}: the training mean (per amplifier).
+\item \textbf{settings: gp / trees}: $\theta\to y$. \textbf{settings + amplifier}: $[\theta,\text{one-hot}(a)]\to y$ (seen amplifiers only).
+\item \textbf{trace: gp / trees / nn}: own- and reference-trace features $\to y$ (feature tiers: gp the physics tier P, trees
+  all, nn P+A).
+\item \textbf{trace: physics} (\code{physics\_white}; \code{src/ml/structured.py}:655--704):
+\begin{equation}
+\widehat{\ln\sigma_e}=\tfrac12\ln\frac{w^2}{N}-\widehat{\ln g}(x)+\hat r(x),\qquad \hat s^2=s_g^2+s_r^2,
+\end{equation}
+$w$ the trace's fitted white noise per skip, $N$ the number of skips; $\widehat{\ln g}$ an ARD Matérn-5/2 GP on $\ln g$;
+$\hat r$ a GP on the residual $r=\ln\sigma_e-(\tfrac12\ln w^2/N-\ln g)$, with rows of robust $|z|>4$ down-weighted by an
+extra variance $(r-\med r)^2$; the labels' own variances on the diagonal. $\lambda$ from the SAAS GP. Inputs include the
+\emph{packet state}, the mean over the packet's amplifiers of the reference-trace features minus each amplifier's average.
+\item \textbf{trace: cnn / pretrained cnn / deep kernel}: as above, on the curves.
+\item \textbf{Test 2} (\code{test2\_gain\_lambda.py}). Gain, reset formula: $\ln g=\ln|J_{\rm reset}|-\ln(RG_H-VR-V^*)+c$ by least squares
+  ($V^*\approx9.3$\,V); gain, SW formula: $\ln|\text{CDS offset}|-\ln(\text{SW swing})+c$; ERT on the gain signals with and
+  without $\theta$. $\lambda$: physics form $\lambda=e^{a+b\tilde V_{\rm SUB}}+e^{c+\mathbf d\cdot[\tilde H_{\rm sw},\tilde V_{\rm sw},\widetilde{SW}_{\rm sw},\widetilde{\rm OD}]}$
+  (least squares in log space); ERT on dark and CIC separately; ERT on $\theta$ + swings + physics + gain signals (``settings + trace + setup'').
+\end{itemize}
+
+\subsection{Change models}
+Pairs $A\to B$ of one amplifier, target $\Delta y=y_B-y_A$; random-pair labels drift-corrected against the nominal packets;
+training uses both orders $(A,B)$ and $(B,A)$ with $\Delta\to-\Delta$. $F$ = trace features (logged where positive), $C$ = curves.
+\begin{itemize}
+\item \textbf{settings change: gp / trees}: $\Delta\theta\to\Delta y$.
+\item \textbf{trace change: trees}: $F_B-F_A\to\Delta y$.
+\item \textbf{combined trees} $[A,B,B-A]$: GBT $h$ on $[F_A,F_B,F_B-F_A]$, antisymmetrised,
+  $\widehat\Delta=\tfrac12\big(h(A,B)-h(B,A)\big)$; \textbf{settings + trace combined}: the same with $[\theta_A,\theta_B,\Delta\theta]$ added.
+\item \textbf{residual trees}: $b=\text{GBT}(\Delta\theta)$ out-of-fold, then an antisymmetrised GBT on $[\Delta\theta,F_A,F_B,\Delta F]$
+  fitted to $\Delta y-b$.
+\item \textbf{physics difference}: $\widehat{\Delta\ln\sigma_e}=\Delta\ln w-\widehat{\Delta\ln g}$, $\widehat{\Delta\ln g}=\text{GBT}(\Delta F)$;
+  \textbf{+ correction}: a GBT on [base, $\Delta F$] fitted to the residual.
+\item \textbf{shared-encoder net}: $\widehat\Delta=g(F_B)-g(F_A)$, $g$ = MLP($p$,32,32,3); loss Huber \cite{huber1964} on the
+  scaled change plus a sign term $\overline{\omega\,\mathrm{softplus}(-\mathrm{sign}(\Delta)\,3\widehat\Delta)}$; 5 networks.
+\item \textbf{difference curves PCA + trees}: $D=C_B-C_A$, 10 principal components \cite{pearson1901} fitted on $\{D,-D\}$, then GBT;
+  \textbf{hand-picked bands + gp}: for each target the 6 curves whose standardised difference correlates most with $\Delta y$, averaged
+  over 9 points around each peak, plus $\Delta\ln w$, into a GP.
+\item \textbf{direction classifiers}: a gradient-boosted classifier for $\one[\Delta>0]$, weighted by $1-e^{-\Delta^2/2s^2}$
+  ($s$ = label noise of a change), output $P-\frac12$ antisymmetrised; scored only on direction and $\rho$.
+\item \textbf{absolute, differenced}: $\hat m(B)-\hat m(A)$.
+\item \textbf{ensembles}: the mean of four members. Trace: trace change trees, combined trees, physics difference + correction,
+  absolute trace physics differenced. Settings + trace: settings + trace combined trees, residual trees, physics difference +
+  correction, absolute trace physics differenced (for $\lambda$ and $g$ the $\sigma_e$-only member is absent).
+\end{itemize}
+
+\subsection{Results on sealed session H}
+\paragraph{Absolute, new amplifier} (typical error, \%):
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lXX@{}}\toprule
+target & physics tests (G $\to$ H, ERT) & scorecard (frozen)\\\midrule
+$\sigma_e$ & voltages 18.2 $\to$ physics formula 11.9 $\to$ physics values 9.6 $\to$ \textbf{physics + voltages 8.6} &
+  trace trees 12.7, trace physics 13.5, trace nn 14.2, settings gp 18.8, settings trees 18.1\\
+$\lambda$ & voltages 69.0 $\to$ \textbf{settings + trace + setup 48.8} (physics form 71.5, dark + CIC 83.2) &
+  trace trees 49.5, trace physics 50.9, trace nn 51.1, settings gp 71.7, settings trees 66.4\\
+$g$ & voltages 3.61, physics values 3.53, \textbf{physics + voltages 3.42} (reset formula 8.7, SW formula 69.4) &
+  settings trees 3.6, settings gp 3.9, trace physics 4.3\\\bottomrule
+\end{tabularx}
+\end{center}
+Not frozen (G cross-validation only, new amplifier, $\sigma_e$ / $\lambda$): cnn 20.4 / 59.9, pretrained cnn 18.7 / 63.2,
+deep kernel 23.1 / 84.0, trace gp 17.9 / 66.3: the flexible models overfit the $\approx$155 training rows.
+
+\paragraph{Absolute, amplifier seen in training} (scorecard H): $\sigma_e$: trace physics \textbf{7.6}, settings + amplifier trees 7.7,
+trace trees 8.0 (test 1's physics + voltages forest: 6.5). $\lambda$: settings + amplifier trees \textbf{10.5}, settings + amplifier gp
+14.6, trace physics 24.2. $g$: settings + amplifier gp \textbf{0.6}, settings + amplifier trees 0.9, trace physics 1.1.
+
+\paragraph{Change, new amplifier, random pairs} (scorecard H; $\rho$ / size error \%):
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lccX@{}}\toprule
+target & no change & settings change trees & best, then runners-up\\\midrule
+$\sigma_e$ & -- / 14.0 & 0.64 / 12.9 & \textbf{ensemble settings + trace 0.73 / 11.2}; physics difference + correction 0.65 / 11.5; trace ensemble 0.63 / 11.5\\
+$\lambda$ & -- / 63.5 & 0.89 / 38.9 & \textbf{settings + trace combined trees 0.94 / 29.9}; residual trees 0.91 / 33.5; ensemble 0.91 / 34.3\\
+$g$ & -- / 3.4 & \textbf{0.87 / 1.8} & settings + trace ensemble 0.87 / 2.1; combined trees 0.86 / 1.9\\\bottomrule
+\end{tabularx}
+\end{center}
+Not frozen ($\sigma_e$, G only): shared-encoder net $\rho=0.36$, hand-picked bands + gp 0.55.
+
+\paragraph{Change, amplifier seen}: $\sigma_e$ ensemble settings + trace $\rho=0.82$ / 10.0; $\lambda$ settings + trace combined trees
+0.98 / 15.3; $g$ settings + amplifier gp differenced 0.97 / 0.8.
+
+\paragraph{Summary of the appendix.} Tree models on physics values plus voltages are the most reliable everywhere; the
+networks and the deep-kernel GP overfit. Changes are easier than absolute values (the amplifier's own level cancels), which is
+what an optimiser needs.
+
+\caveat{Differences between the v3 report's model list and the code: the report says the trace-physics $\lambda$ and gain come from
+a ``hierarchical'' fit, the code uses a plain ARD GP (\code{kind="none"}); it says the settings-change models also see the
+starting voltages, the code uses $\Delta\theta$ only; the CNNs see all trace curves, not only the noise spectrum; the
+pretraining traces are those of the processed directory itself (``pretrained on v2'' could not be checked). The physics tests'
+change $\rho$ (all H pairs per amplifier, no drift correction) is not comparable with the scorecard's random-pair $\rho$.}
+
+%=====================================================================================================================
+\section{Code map}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}\toprule
+step & code\\\midrule
+$\sigma_1(\tau)$, window fit & \code{amp\_phys/trap\_from\_trace.py} (\code{sigmas}, \code{integrals})\\
+$\sigma_{500}$, per-packet medians & \code{amp\_phys/physics\_features.py};\newline table \code{amp\_phys/results/per\_channel/physics\_features\_v3.csv}\\
+signal sizes & \code{amp\_phys/gain\_features.py}, \code{amp\_phys/clock\_edges.py}\\
+8.6\,\% noise forest & \code{amp\_phys/test1\_physics\_model.py}; \code{amp\_phys/results/test1/test1.md}\\
+labels, usability flags & \code{src/process\_packet.py} (\code{labels\_from\_run\_waders})\\
+knobs, classifier, fleet GP, EI, replay & \code{lvl1/fleet\_tests.py}; \code{amp\_phys/results/fleet\_bo/}\\
+live search & \code{lvl1/propose\_next.py}; rules \code{configs/limits.toml}, \code{src/ccd\_limits.py}\\
+other models & \code{lvl1/scorecard\_v2.py}, \code{lvl1/scorecard.py}, \code{lvl1/train\_lvl1.py}, \code{src/ml/};\newline \code{amp\_phys/test2\_gain\_lambda.py}\\\bottomrule
+\end{tabularx}
+\end{center}
+
+%=====================================================================================================================
+\begin{thebibliography}{99}\small
+\bibitem{bonilla2007} E.~V.~Bonilla, K.~M.~A.~Chai, C.~K.~I.~Williams, ``Multi-task Gaussian process prediction'', \emph{Advances in Neural Information Processing Systems} 20 (2008).
+\bibitem{breiman1984} L.~Breiman, J.~H.~Friedman, R.~A.~Olshen, C.~J.~Stone, \emph{Classification and Regression Trees} (Wadsworth, 1984).
+\bibitem{breiman2001} L.~Breiman, ``Random forests'', \emph{Machine Learning} 45, 5--32 (2001).
+\bibitem{byrd1995} R.~H.~Byrd, P.~Lu, J.~Nocedal, C.~Zhu, ``A limited memory algorithm for bound constrained optimization'', \emph{SIAM J.\ Sci.\ Comput.} 16, 1190--1208 (1995).
+\bibitem{efron1979} B.~Efron, ``Bootstrap methods: another look at the jackknife'', \emph{Ann.\ Stat.} 7, 1--26 (1979).
+\bibitem{elfwing2018} S.~Elfwing, E.~Uchibe, K.~Doya, ``Sigmoid-weighted linear units for neural network function approximation in reinforcement learning'', \emph{Neural Networks} 107, 3--11 (2018).
+\bibitem{eriksson2021} D.~Eriksson, M.~Jankowiak, ``High-dimensional Bayesian optimization with sparse axis-aligned subspaces'', \emph{Proc.\ UAI}, PMLR 161, 493--503 (2021).
+\bibitem{friedman2001} J.~H.~Friedman, ``Greedy function approximation: a gradient boosting machine'', \emph{Ann.\ Stat.} 29, 1189--1232 (2001).
+\bibitem{gardner2014} J.~R.~Gardner, M.~J.~Kusner, Z.~Xu, K.~Q.~Weinberger, J.~P.~Cunningham, ``Bayesian optimization with inequality constraints'', \emph{Proc.\ ICML}, PMLR 32, 937--945 (2014).
+\bibitem{gelbart2014} M.~A.~Gelbart, J.~Snoek, R.~P.~Adams, ``Bayesian optimization with unknown constraints'', \emph{Proc.\ UAI} (2014).
+\bibitem{geurts2006} P.~Geurts, D.~Ernst, L.~Wehenkel, ``Extremely randomized trees'', \emph{Machine Learning} 63, 3--42 (2006).
+\bibitem{hanley1982} J.~A.~Hanley, B.~J.~McNeil, ``The meaning and use of the area under a receiver operating characteristic (ROC) curve'', \emph{Radiology} 143, 29--36 (1982).
+\bibitem{hanley2006} J.~A.~Hanley, B.~J.~MacGibbon, ``Creating non-parametric bootstrap samples using Poisson frequencies'', \emph{Comput.\ Methods Programs Biomed.} 83, 57--62 (2006).
+\bibitem{hoffman2014} M.~D.~Hoffman, A.~Gelman, ``The No-U-Turn sampler'', \emph{J.\ Mach.\ Learn.\ Res.} 15, 1593--1623 (2014).
+\bibitem{hopkinson1982} G.~R.~Hopkinson, D.~H.~Lumb, ``Noise reduction techniques for CCD image sensors'', \emph{J.\ Phys.\ E} 15, 1214--1222 (1982).
+\bibitem{huber1964} P.~J.~Huber, ``Robust estimation of a location parameter'', \emph{Ann.\ Math.\ Stat.} 35, 73--101 (1964).
+\bibitem{jones1998} D.~R.~Jones, M.~Schonlau, W.~J.~Welch, ``Efficient global optimization of expensive black-box functions'', \emph{J.\ Global Optim.} 13, 455--492 (1998).
+\bibitem{ke2017} G.~Ke \emph{et al.}, ``LightGBM: a highly efficient gradient boosting decision tree'', \emph{Advances in Neural Information Processing Systems} 30 (2017).
+\bibitem{koenker1978} R.~Koenker, G.~Bassett, ``Regression quantiles'', \emph{Econometrica} 46, 33--50 (1978).
+\bibitem{lakshminarayanan2017} B.~Lakshminarayanan, A.~Pritzel, C.~Blundell, ``Simple and scalable predictive uncertainty estimation using deep ensembles'', \emph{Advances in Neural Information Processing Systems} 30 (2017).
+\bibitem{loshchilov2019} I.~Loshchilov, F.~Hutter, ``Decoupled weight decay regularization'', \emph{Proc.\ ICLR} (2019).
+\bibitem{nix1994} D.~A.~Nix, A.~S.~Weigend, ``Estimating the mean and variance of the target probability distribution'', \emph{Proc.\ IEEE Int.\ Conf.\ Neural Networks} (1994).
+\bibitem{oord2018} A.~van den Oord, Y.~Li, O.~Vinyals, ``Representation learning with contrastive predictive coding'', arXiv:1807.03748 (2018).
+\bibitem{owen1998} A.~B.~Owen, ``Scrambling Sobol' and Niederreiter--Xing points'', \emph{J.\ Complexity} 14, 466--489 (1998).
+\bibitem{pearson1901} K.~Pearson, ``On lines and planes of closest fit to systems of points in space'', \emph{Phil.\ Mag.} 2, 559--572 (1901).
+\bibitem{pedregosa2011} F.~Pedregosa \emph{et al.}, ``Scikit-learn: machine learning in Python'', \emph{J.\ Mach.\ Learn.\ Res.} 12, 2825--2830 (2011).
+\bibitem{rasmussen2006} C.~E.~Rasmussen, C.~K.~I.~Williams, \emph{Gaussian Processes for Machine Learning} (MIT Press, 2006).
+\bibitem{schonlau1998} M.~Schonlau, W.~J.~Welch, D.~R.~Jones, ``Global versus local search in constrained optimization of computer models'', in \emph{New Developments and Applications in Experimental Design}, IMS Lecture Notes 34, 11--25 (1998).
+\bibitem{sobol1967} I.~M.~Sobol', ``On the distribution of points in a cube and the approximate evaluation of integrals'', \emph{USSR Comput.\ Math.\ Math.\ Phys.} 7(4), 86--112 (1967).
+\bibitem{spearman1904} C.~Spearman, ``The proof and measurement of association between two things'', \emph{Am.\ J.\ Psychol.} 15, 72--101 (1904).
+\bibitem{stein1999} M.~L.~Stein, \emph{Interpolation of Spatial Data: Some Theory for Kriging} (Springer, 1999).
+\bibitem{swersky2013} K.~Swersky, J.~Snoek, R.~P.~Adams, ``Multi-task Bayesian optimization'', \emph{Advances in Neural Information Processing Systems} 26 (2013).
+\bibitem{tiffenberg2017} J.~Tiffenberg \emph{et al.}, ``Single-electron and single-photon sensitivity with a silicon Skipper CCD'', \emph{Phys.\ Rev.\ Lett.} 119, 131802 (2017).
+\bibitem{wilson2016} A.~G.~Wilson, Z.~Hu, R.~Salakhutdinov, E.~P.~Xing, ``Deep kernel learning'', \emph{Proc.\ AISTATS}, PMLR 51, 370--378 (2016).
+\end{thebibliography}
+
+\end{document}
