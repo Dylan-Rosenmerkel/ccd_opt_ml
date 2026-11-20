@@ -21,7 +21,7 @@
 
 \title{The models, in full:\\ trace physics features, the noise forest, the usability classifier,\\ the fleet Gaussian process and the Bayesian optimisation}
 \author{ccd\_opt\_ml level-1 study (PA03 board 101, v3 night)}
-\date{20 November 2026}
+\date{20 November 2026; forest on every input type added the same day}
 \sloppy
 
 \begin{document}
@@ -791,6 +791,56 @@ Not frozen ($\sigma_e$, G only): shared-encoder net $\rho=0.36$, hand-picked ban
 \paragraph{Change, amplifier seen}: $\sigma_e$ ensemble settings + trace $\rho=0.82$ / 10.0; $\lambda$ settings + trace combined trees
 0.98 / 15.3; $g$ settings + amplifier gp differenced 0.97 / 0.8.
 
+
+\subsection{The extremely randomised trees on every input type}\label{app:ertinputs}
+The forest of Sec.~\ref{sec:noise} (400 trees, $\ge3$ rows per leaf, half the features per split), trained on session G and
+scored once on session H with every combination of input types (\code{amp\_phys/ert\_inputs.py}, results
+\code{amp\_phys/results/ert\_inputs/}). The inputs:
+\begin{itemize}
+\item \textbf{voltages}: the 31 varied \code{theta.*} columns;
+\item \textbf{physics values}: the 9 of Sec.~\ref{sec:noise}, $\ln\sigma_{500},\ln S_w,\ln K,\ln\sigma_1(\tau_{1..6})$;
+\item \textbf{signal sizes}: the 4 of Sec.~\ref{sec:gainfeat}, $\ln|\cdot|$ of reset jump, H peak-to-peak and skip pulse, and the CDS offset;
+\item \textbf{141 trace features}: the general features of each packet's own traces (\code{trace.*}), columns with $>20$\,\% missing
+  or no spread dropped, gaps filled with the training median.
+\end{itemize}
+``New'': the amplifier is left out of training; ``seen'': all three are in training, with no amplifier identity as input.
+Rows as in test 1 plus $\lambda>0.005$ (67 H rows for every target). Typical error (RMS of the log error, \%) with a 95\,\%
+packet bootstrap interval (Poisson(1) weight per H packet, 1000 draws \cite{efron1979,hanley2006}); best per column in bold.
+\begin{center}\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcccccc@{}}\toprule
+ & \multicolumn{2}{c}{$\sigma_e$} & \multicolumn{2}{c}{$\lambda$} & \multicolumn{2}{c}{gain}\\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+inputs & new & seen & new & seen & new & seen\\\midrule
+voltages (31) & 18.4 {\scriptsize[16.1, 21.2]} & 13.6 {\scriptsize[10.9, 17.3]} & 66.8 {\scriptsize[58.1, 75.1]} & 46.9 {\scriptsize[41.1, 53.0]} & 3.6 {\scriptsize[3.4, 3.9]} & 2.5 {\scriptsize[2.4, 2.7]}\\
+physics values (9) & 9.1 {\scriptsize[7.4, 11.7]} & 7.0 {\scriptsize[4.9, 9.9]} & 50.8 {\scriptsize[43.7, 59.9]} & 31.2 {\scriptsize[23.1, 41.4]} & 4.1 {\scriptsize[3.7, 4.6]} & 2.7 {\scriptsize[2.2, 3.2]}\\
+signal sizes (4) & 14.8 {\scriptsize[12.3, 18.0]} & 9.7 {\scriptsize[6.9, 13.4]} & 52.1 {\scriptsize[42.9, 62.5]} & 39.4 {\scriptsize[28.3, 51.7]} & 3.9 {\scriptsize[3.6, 4.2]} & 2.5 {\scriptsize[2.0, 3.0]}\\
+141 trace features & 16.2 {\scriptsize[14.8, 17.8]} & 7.0 {\scriptsize[4.1, 10.8]} & 49.2 {\scriptsize[42.3, 58.1]} & 28.0 {\scriptsize[17.6, 38.2]} & 4.8 {\scriptsize[4.6, 5.1]} & 1.5 {\scriptsize[1.1, 1.8]}\\
+\textbf{physics + sizes (13)} & 9.1 {\scriptsize[7.3, 11.8]} & 6.7 {\scriptsize[4.5, 9.7]} & 49.7 {\scriptsize[42.9, 58.3]} & 28.0 {\scriptsize[20.7, 36.5]} & 4.1 {\scriptsize[3.7, 4.5]} & 2.6 {\scriptsize[2.1, 3.1]}\\
+physics + 141 & 12.7 {\scriptsize[11.4, 14.5]} & 6.4 {\scriptsize[4.0, 9.6]} & 45.5 {\scriptsize[36.5, 55.7]} & 26.3 {\scriptsize[14.8, 37.9]} & 4.8 {\scriptsize[4.5, 5.0]} & 1.5 {\scriptsize[1.1, 1.8]}\\
+physics + voltages & \textbf{9.0} {\scriptsize[6.8, 11.9]} & 6.5 {\scriptsize[3.9, 9.9]} & 46.0 {\scriptsize[41.6, 51.5]} & 20.0 {\scriptsize[14.7, 25.7]} & 3.8 {\scriptsize[3.5, 4.2]} & 1.7 {\scriptsize[1.3, 2.0]}\\
+signal sizes + voltages & 16.1 {\scriptsize[13.7, 19.5]} & 9.6 {\scriptsize[6.0, 14.6]} & 50.6 {\scriptsize[43.6, 58.3]} & 23.4 {\scriptsize[17.8, 30.0]} & \textbf{3.5} {\scriptsize[3.1, 3.8]} & 1.8 {\scriptsize[1.4, 2.1]}\\
+141 + voltages & 16.6 {\scriptsize[15.1, 18.4]} & 6.8 {\scriptsize[3.6, 11.0]} & 48.6 {\scriptsize[44.4, 54.1]} & \textbf{17.7} {\scriptsize[10.4, 25.1]} & 4.4 {\scriptsize[4.1, 4.7]} & \textbf{1.0} {\scriptsize[0.8, 1.2]}\\
+\textbf{physics + sizes + voltages} & 9.2 {\scriptsize[7.0, 12.2]} & 6.4 {\scriptsize[3.8, 9.9]} & 44.5 {\scriptsize[40.2, 49.9]} & 18.8 {\scriptsize[13.2, 24.7]} & 3.7 {\scriptsize[3.4, 4.1]} & 1.6 {\scriptsize[1.2, 2.0]}\\
+everything & 12.7 {\scriptsize[11.1, 14.9]} & \textbf{6.1} {\scriptsize[3.5, 9.5]} & \textbf{41.1} {\scriptsize[35.5, 47.7]} & 17.8 {\scriptsize[9.9, 25.4]} & 4.3 {\scriptsize[4.0, 4.5]} & 1.1 {\scriptsize[0.8, 1.3]}\\
+\bottomrule
+\end{tabular}
+\end{center}
+\paragraph{Reading.}
+\begin{itemize}
+\item \textbf{Noise, new amplifier}: the physics values carry it (9.1\,\%); signal sizes add nothing to them
+  (physics + signal sizes 9.1, + voltages 9.2). The 141 general features are poor alone (16.2) and make the physics values worse
+  (12.7): with $\approx155$ training rows they offer cuts that only describe the two training amplifiers.
+  Physics + voltages is 9.0 here against 8.6 in test 1, which also has the derived input
+  $\ln\sigma_{500}-\widehat{\ln g}(\theta)$ and keeps the three G rows with $\lambda<0.005$; the difference lies well inside the interval.
+\item \textbf{Noise, seen amplifier}: every trace set gives 6--7\,\%: the features also identify the amplifier.
+\item \textbf{Dark charge}: the only target where more inputs keep helping, 66.8 $\to$ 41.1\,\% (new) and 46.9 $\to$ 17.7\,\% (seen).
+  Physics + signal sizes + voltages reaches 44.5 / 18.8 with 44 inputs instead of 185.
+\item \textbf{Gain, new amplifier}: no trace input beats the voltages (3.5--3.6\,\%); seen amplifiers reach 1.0\,\% with the 141 features,
+  again by identifying the amplifier.
+\item Differences below about 2 points for $\sigma_e$ and 5--10 points for $\lambda$ are within the intervals.
+\end{itemize}
+
 \paragraph{Summary of the appendix.} Tree models on physics values plus voltages are the most reliable everywhere; the
 networks and the deep-kernel GP overfit. Changes are easier than absolute values (the amplifier's own level cancels), which is
 what an optimiser needs.
@@ -810,6 +860,7 @@ $\sigma_1(\tau)$, window fit & \code{amp\_phys/trap\_from\_trace.py} (\code{sigm
 $\sigma_{500}$, per-packet medians & \code{amp\_phys/physics\_features.py};\newline table \code{amp\_phys/results/per\_channel/physics\_features\_v3.csv}\\
 signal sizes & \code{amp\_phys/gain\_features.py}, \code{amp\_phys/clock\_edges.py}\\
 8.6\,\% noise forest & \code{amp\_phys/test1\_physics\_model.py}; \code{amp\_phys/results/test1/test1.md}\\
+forest on every input type & \code{amp\_phys/ert\_inputs.py}; \code{amp\_phys/results/ert\_inputs/ert\_inputs.csv}\\
 labels, usability flags & \code{src/process\_packet.py} (\code{labels\_from\_run\_waders})\\
 knobs, classifier, fleet GP, EI, replay & \code{lvl1/fleet\_tests.py}; \code{amp\_phys/results/fleet\_bo/}\\
 live search & \code{lvl1/propose\_next.py}; rules \code{configs/limits.toml}, \code{src/ccd\_limits.py}\\
