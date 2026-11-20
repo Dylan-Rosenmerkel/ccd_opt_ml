@@ -26,7 +26,9 @@
 \noindent This note writes down, step by step, how each physics number in the two-page summary is computed from the raw
 traces. Every equation is the one the code evaluates (script names in \code{monospace}, all in \code{amp\_phys/}).
 Where the code makes an approximation or an assumption, a shaded box says so. Image-side inputs (the image gain
-$g$ and image read noise $\sigma_e$ from the peak fits) are taken as given.
+$g$ and image read noise $\sigma_e$ from the peak fits) are taken as given. Standard results are cited to the
+literature; design and process values come from the internal documents listed at the end
+\cite{recipe,acmguide,feschem,micrograph}. Where no reference is given, the step is our own derivation or method.
 
 \tableofcontents
 
@@ -36,26 +38,27 @@ $g$ and image read noise $\sigma_e$ from the peak fits) are taken as given.
 \begin{center}\small
 \begin{tabularx}{\linewidth}{@{}llX@{}}\toprule
 symbol & value & meaning / source\\\midrule
-$f_s$ & $15\times10^6$\,s$^{-1}$ & ADC sample rate (LTC2387) \\
+$f_s$ & $15\times10^6$\,s$^{-1}$ & ADC sample rate (LTC2387-18 \cite{ltc2387}) \\
 $v[n]$ & ADU & raw sample $n$ of one channel \\
 $b_k[n]$ & 0/1 & sequencer flag bit $k$: 0 pedestal window, 1 signal window, 4 low during reset, 6 H transfer, 7 V transfer\\
 $\tau$ & 10\,\textmu s (150 samples) nominal & CDS integration window\\
 $\Delta t$ & 13.8\,\textmu s (207 samples) & pedestal-to-signal window centre spacing\\
 $T$ & 32.6\,\textmu s (489 samples) & skip period\\
-$G$ & 0.875\,ADU/\textmu V & chain gain at the video input: $27.34\ \text{V/V} / 31.25\ \text{\textmu V/LSB}$ (design)\\
+$G$ & 0.875\,ADU/\textmu V & chain gain at the video input: $27.34\ \text{V/V} / 31.25\ \text{\textmu V/LSB}$ (design \cite{feschem,acmguide})\\
 $g$ & ADU/e$^-$ & image gain (peak fit)\\
 $A$ & 0.85 & source-follower gain (layout-based, model)\\
-$C_{\rm ox}$ & 0.454\,fF/\textmu m$^2$ & ON stack: $\varepsilon_0/(t_{\rm ox}/3.9+t_{\rm n}/7.5)$, 50\,nm + 50\,nm\\
+$C_{\rm ox}$ & 0.454\,fF/\textmu m$^2$ & ON stack: $\varepsilon_0/(t_{\rm ox}/3.9+t_{\rm n}/7.5)$, 50\,nm + 50\,nm \cite{recipe}; permittivities \cite{sze}\\
 $t_{\rm eq}$ & 76\,nm & oxide-equivalent thickness $50+50\cdot3.9/7.5$\\
-$WL$ & 345\,\textmu m$^2$ & output-FET gate area (layout, 330--360)\\
-$W_{\rm RG}L_{\rm RG}$ & $6\times6$\,\textmu m$^2$ & reset-FET gate (layout)\\
+$WL$ & 345\,\textmu m$^2$ & output-FET gate area (layout \cite{micrograph}, 330--360)\\
+$W_{\rm RG}L_{\rm RG}$ & $6\times6$\,\textmu m$^2$ & reset-FET gate (layout \cite{micrograph})\\
 $T_{\rm ccd}$ & 130\,K (PA03), 180\,K (LSM) & \\
-$\lambda_t$ & 0.1\,nm & oxide tunnelling length (McWhorter)\\
+$\lambda_t$ & 0.1\,nm & oxide tunnelling length \cite{ghibaudo2022}\\
 $q,\ k_B$ & & elementary charge, Boltzmann constant\\\bottomrule
 \end{tabularx}
 \end{center}
 
-\caveat{$G=0.875$ is the design value. The earlier dead-channel Johnson calibration (0.853) is withdrawn: board-102
+\caveat{$G=0.875$ is the design value. The earlier dead-channel Johnson calibration (0.853, thermal noise $4k_BTR$ of the 20\,k$\Omega$ load
+\cite{johnson1928,nyquist1928}) is withdrawn: board-102
 ch0--2 have transistors and are not open inputs. Every conversion from ADU to volts carries this design-value
 uncertainty (the ACM input buffer gain is still ``to be checked''). Quantities in electrons ($\div g$) or in
 capacitance via $q/g$ do not depend on $G$ or $A$ at all.}
@@ -84,8 +87,9 @@ s_j=\frac{1}{L_w-10}\sum_{m=s_0+5}^{s_0+L_w-6}c_j[m],\qquad
 x_j=s_j-p_j .
 \end{equation}
 
-\paragraph{Within-pixel differences.} Every noise statistic uses consecutive skips of the same pixel, so the pixel
-charge cancels:
+\paragraph{Within-pixel differences.} A skipper CCD reads the same pixel charge many times non-destructively
+\cite{janesick1990,chandler1990,tiffenberg2017,moroni2012}. Every noise statistic uses consecutive skips of the same
+pixel, so the pixel charge cancels:
 \begin{equation}
 d_j=x_{j+1}-x_j\quad(\text{only for } j,j+1 \text{ in the same pixel}).
 \end{equation}
@@ -98,7 +102,8 @@ d_j=x_{j+1}-x_j\quad(\text{only for } j,j+1 \text{ in the same pixel}).
 \sigma_1=\frac{\std(d_j)}{\sqrt2}\ \ [\text{ADU}],\qquad
 \sigma_{1,e}=\frac{\sigma_1}{g}\ \ [e^-].
 \end{equation}
-For white noise of one-sided density $e_n$ (V/$\sqrt{\text{Hz}}$) a boxcar of length $\tau$ has variance
+For white noise of one-sided density $e_n$ (V/$\sqrt{\text{Hz}}$) a boxcar of length $\tau$ (the dual-slope / CDS
+filter \cite{hopkinson1982}) has variance
 $e_n^2/(2\tau)$, and the CDS difference of two independent boxcars has $e_n^2/\tau$. Hence
 \begin{equation}
 e_n=\frac{\sigma_1}{G}\sqrt{\tau}\quad[\text{\textmu V}\sqrt{\text s}]\ \to\ \text{nV}/\sqrt{\text{Hz}}\ (\times10^3).
@@ -124,7 +129,7 @@ These give the table rows \emph{noise 3.7--4.4\,e} ($\sigma_{1,e}$) and \emph{18
 &&\text{(excess kurtosis of } d_j\text{; telegraph noise} \Rightarrow \kappa>0)
 \end{align}
 (pandas' bias-corrected estimator). For a Gaussian $\kappa=0$; a two-level telegraph signal with comparable white noise
-gives $\kappa$ of order 1 and more. ACM109 ch1 has 2.7; 101 ch2 is $\approx0$ in the median trace but large in its
+gives $\kappa$ of order 1 and more (random telegraph signals \cite{kirton1989}). ACM109 ch1 has 2.7; 101 ch2 is $\approx0$ in the median trace but large in its
 episodes (90th-percentile over traces, \code{skip\_averaging.py}).
 
 \subsection{Noise after averaging $N$ skips (\code{skip\_averaging.py})}
@@ -133,7 +138,7 @@ within the pixel, after removing the mean within-pixel profile (a sequence-locke
 \begin{equation}
 \sigma_N=\frac{\std\big(X^{(N)}_{k+1}-X^{(N)}_k\big)}{\sqrt2}, \qquad N=1,4,16,\dots,512.
 \end{equation}
-White noise gives $\sigma_N=\sigma_1/\sqrt N$; 1/f, telegraph and setup wander make $\sigma_N$ flatten.
+White noise gives $\sigma_N=\sigma_1/\sqrt N$ \cite{tiffenberg2017}; 1/f, telegraph and setup wander make $\sigma_N$ flatten.
 
 \subsection{Image cross-check}
 \begin{equation}
@@ -147,7 +152,7 @@ $\mathcal R>1$ means extra slow noise or charge arriving during skipping (LSM: 1
 \section{Frequency-domain quantities: the setup number}
 
 \paragraph{Residual spectrum.} The residuals of all skip cycles are concatenated, $r=(\mathbf r_1,\mathbf r_2,\dots)$,
-and a Welch estimate is taken (Hann window, $2^{15}$ samples per segment):
+and a Welch estimate \cite{welch1967} is taken (Hann window, $2^{15}$ samples per segment):
 \begin{equation}
 \text{ASD}(f)=\frac{\sqrt{S_{rr}(f)}}{G}\ \ [\text{nV}/\sqrt{\text{Hz}}],\qquad
 \text{ASD}_{[f_1,f_2]}=\med_{f_1\le f<f_2}\text{ASD}(f).
@@ -183,7 +188,8 @@ which is 1 if switching adds no noise.
 \section{Separating white and 1/f noise with the CDS window}\label{sec:H}
 
 \subsection{The transfer function}
-The per-skip statistic $\sigma_1^2$ is a linear filter of the input noise. For a stationary noise of one-sided PSD
+The per-skip statistic $\sigma_1^2$ is a linear filter of the input noise; the CDS factors below are the standard
+ones \cite{hopkinson1982,janesick2001}, the skip-difference factor is ours. For a stationary noise of one-sided PSD
 $S(f)$:
 \begin{equation}
 \sigma_1^2=\int_0^\infty S(f)\,|H(f)|^2\dd f .
@@ -258,20 +264,46 @@ input, $K$, $f_c$, $\phi_{1/f}$ and $N_t$ are \textbf{upper limits} on the trans
 K_{V_g}=\frac{K}{(G\cdot10^6\ \text{ADU/V})^2\,A^2}.
 \end{equation}
 
-\paragraph{McWhorter number fluctuation.} Traps within a tunnelling distance $\lambda_t$ of the interface exchange
-carriers with the channel; their superposition gives
+\paragraph{McWhorter number fluctuation.} In the carrier-number-fluctuation model \cite{mcwhorter1957}, applied to
+MOS transistors by Christensson et al.\ \cite{christensson1968}, channel carriers tunnel into and out of oxide traps.
+A trap at depth $x$ responds with a time constant $\tau_0e^{x/\lambda_t}$; traps spread uniformly in depth give a
+uniform spread of $\ln\tau$, whose sum of Lorentzians is a $1/f$ spectrum. Only traps within $\sim k_BT$ of the Fermi
+level switch. The classical result for the trapped-charge noise per unit gate area is \cite{ghibaudo2022}
 \begin{equation}
-S_{V_g}(f)=\frac{q^2k_BT\lambda_t N_t}{WL\,C^2 f}\quad\Rightarrow\quad
+S_{Q_t}(f)=\frac{q^2k_BT\,\lambda_t\,N_t}{f}\qquad[\text{C}^2\,\text{cm}^{-4}\,\text{Hz}^{-1}],\label{eq:SQt}
+\end{equation}
+with $N_t$ the oxide trap density per unit energy and volume and $\lambda_t\approx0.1$\,nm the tunnelling attenuation
+length in SiO$_2$ \cite{ghibaudo2022}.
+
+\paragraph{From $S_{Q_t}$ to $S_{V_g}$ to $K_{V_g}$.} A trapped charge per area $\delta Q_t$ shifts the flat-band (and so
+the effective gate) voltage by $\delta V_g=\delta Q_t/C$, with $C$ the gate capacitance per area. Over a gate of area
+$WL$ the independent traps average, so the variance of the area-mean charge is $1/(WL)$ times the per-area one:
+\begin{equation}
+S_{V_g}(f)=\frac{S_{Q_t}(f)}{C^2\,WL}=\frac{q^2k_BT\lambda_tN_t}{WL\,C^2}\cdot\frac1f
+\end{equation}
+(the gate-referred form used for MOSFET number-fluctuation noise \cite{christensson1968,ghibaudo1991}). Our window fit
+(Sec.~\ref{sec:H}) gives the measured spectrum as $S_w+K/f$; referred to the gate it is $S_w/(GA)^2+K_{V_g}/f$.
+$K_{V_g}$ is \emph{by definition} the coefficient of $1/f$ in the gate-referred spectrum, $K_{V_g}=f\,S^{1/f}_{V_g}(f)$.
+Setting the two $1/f$ coefficients equal,
+\begin{equation}
+K_{V_g}=\frac{q^2k_BT\lambda_tN_t}{WL\,C^2}\quad\Rightarrow\quad
 \boxed{N_t=\frac{K_{V_g}\,WL\,C^2}{q^2k_BT\lambda_t}}\ \ [\text{J}^{-1}\text{cm}^{-3}]\ \times q\ \to\ [\text{eV}^{-1}\text{cm}^{-3}],
 \end{equation}
-with $C=C_{\rm ox}=0.454$\,fF/\textmu m$^2$ (table) or the buried-channel $C_{\rm eff}=0.125$ (alternative),
-$A=0.85$ (table) or 0.44 (withdrawn kTC route), $WL=345$\,\textmu m$^2$, $T=130$\,K (PA03). Units in the code: $WL$ in
-cm$^2$, $C$ in F/cm$^2$, $\lambda_t$ in cm. Result: $N_t\le(1.1$--$2.4)\times10^{16}$\,eV$^{-1}$cm$^{-3}$ (good
-thermal oxide: $10^{16}$--$10^{17}$).
+the same inversion as the trap-density extraction of Jayaraman and Sodini \cite{jayaraman1989} and eq.~(23) of
+\cite{ghibaudo2022}. Inputs: $C=C_{\rm ox}=0.454$\,fF/\textmu m$^2$ (table) or the buried-channel $C_{\rm eff}=0.125$
+(alternative), $A=0.85$ (table) or 0.44 (withdrawn kTC route), $WL=345$\,\textmu m$^2$, $T=130$\,K (PA03). Units in the
+code: $WL$ in cm$^2$, $C$ in F/cm$^2$, $\lambda_t$ in cm. Result: $N_t\le(1.1$--$2.4)\times10^{16}$\,eV$^{-1}$cm$^{-3}$.
+For comparison, 1/f measurements on bulk CMOS report $N_t\approx2\times10^{16}$\,eV$^{-1}$cm$^{-3}$ for n-MOS with a
+12\,nm equivalent oxide, rising to $5$--$7\times10^{17}$ for the thinnest (1.4\,nm) oxides \cite{ioannidis2014}.
 \caveat{$N_t\propto K/(G^2A^2)\cdot C^2\cdot WL/(T\lambda_t)$: a 15\% error in $C_{\rm ox}$ is 30\% in $N_t$;
-$\lambda_t$ is a convention. The LSM values use $T=180$\,K (checked: $N_t/K$ is $180/130$ lower than for PA03).}
+$\lambda_t$ is a convention. The LSM values use $T=180$\,K (checked: $N_t/K$ is $180/130$ lower than for PA03).
+The pure number-fluctuation model is used; correlated mobility fluctuations \cite{hung1990,ghibaudo1991} would put part
+of $K$ elsewhere, so $N_t$ is again an upper limit. The classical (Boltzmann) formula is reported to overestimate $N_t$
+below 60--80\,K \cite{ghibaudo2022}; at 130--180\,K it applies. Our devices are buried \emph{p}-channel transistors on
+an oxide--nitride stack, unlike the n-MOS of \cite{ioannidis2014}, so the comparison is indicative only.}
 
-\paragraph{Telegraph (RTS) steps} (\code{oxide\_traps.py}). Running means of $w=25$ skips,
+\paragraph{Telegraph (RTS) steps} (\code{oxide\_traps.py}). A single trap switching between two states gives a
+two-level (random telegraph) signal \cite{kirton1989}. Running means of $w=25$ skips,
 $\Delta_k=\bar u_{k+w}-\bar u_k$; a step is a local maximum of $|\Delta_k|>6\,\std(u)\sqrt{2/w}$. Step size of one
 trapped charge, for comparison:
 \begin{equation}
@@ -288,7 +320,9 @@ C_{\rm sn}&=\frac{A\,q}{\text{CG}_{\rm in}} &&\text{84--89\,fF (PA03), 86--95\,f
 Worked example: $g=1.37$\,ADU/e $\Rightarrow$ CG$_{\rm in}=1.566$\,\textmu V/e,
 $C_{\rm sn}=0.85\times1.602\times10^{-19}/1.566\times10^{-6}=86.9$\,fF.
 
-\paragraph{Follower relations used to justify $A$} (\code{chain\_calibration.py}, REPORT \S6):
+\paragraph{Follower relations used to justify $A$} (\code{chain\_calibration.py}, REPORT \S6). Small-signal
+source-follower gain and the saturation gate--source capacitance are textbook results \cite{gray2009}; the bootstrapped
+node capacitance follows from the gate--source capacitance seeing only $(1-A)$ of the node swing:
 \begin{equation}
 A=\frac{g_mR_L}{1+g_mR_L},\qquad C_{\rm sn}=C_{\rm fixed}+C_{gs}(1-A),\qquad C_{gs}\approx\tfrac23C_{\rm ox}WL\approx100\text{--}109\ \text{fF}.
 \end{equation}
@@ -296,7 +330,7 @@ With $R_L=20$\,k$\Omega$ and the measured CG$_{\rm in}=Aq/C_{\rm sn}$, each assu
 estimates ($g_m\approx170$--750\,\textmu S) give $A\approx0.8$--0.9, hence $C_{\rm fixed}\approx60$--80\,fF (``most of
 the node is wiring'').
 
-\paragraph{kTC route (withdrawn).} Each reset freezes charge $\sqrt{k_BTC_{\rm sn}}$, so
+\paragraph{kTC route (withdrawn).} Each reset freezes charge $\sqrt{k_BTC_{\rm sn}}$ \cite{janesick2001}, so
 $C_{\rm sn}=(q\sigma_{\rm kTC})^2/(k_BT)$ with $\sigma_{\rm kTC}$ in electrons from the per-skip level scatter
 $\sigma_{\rm lvl}$ minus the electronics part. The electronics part was taken from board-102 ch0--2 as ``dead''
 channels; they have transistors, so the subtraction (and the 45\,fF / $A=0.44$ result) is withdrawn.
@@ -382,14 +416,16 @@ C_{\rm inj}=\frac{q}{g}\,\frac{\partial J}{\partial(\text{RG}_H-\text{VR})}=2.1\
 \begin{equation}
 Q_{\rm ch}=C_{\rm eff}\,W_{\rm RG}L_{\rm RG}\,(V_G-V_{\rm ch}-V_T)
 \end{equation}
-splits between source (sense node) and drain; with a fraction $\alpha\approx\tfrac12$ onto the node,
+splits between source (sense node) and drain \cite{sheu1984,wegmann1987}; with a fraction $\alpha\approx\tfrac12$
+onto the node (the even split of a fast turn-off; the fraction depends on the edge speed and on the impedances on the two
+sides \cite{wegmann1987}),
 $C_{\rm inj}=\alpha C_{\rm eff}W_{\rm RG}L_{\rm RG}$, so
 \begin{equation}
 C_{\rm eff}=\frac{C_{\rm inj}}{\alpha\,W_{\rm RG}L_{\rm RG}}=\frac{2.1\text{--}2.4}{0.5\times36}=0.117\text{--}0.133\ \text{fF/\textmu m}^2 .
 \end{equation}
 
 \paragraph{Depth.} In a buried channel the gate couples through the dielectric and the silicon above the potential
-maximum in series:
+maximum in series (two parallel-plate capacitors; permittivities from \cite{sze}):
 \begin{equation}
 \frac1{C_{\rm eff}}=\frac{t_{\rm eq}}{\varepsilon_{\rm ox}}+\frac{x_{\rm ch}}{\varepsilon_{\rm Si}}
 \ \Rightarrow\
@@ -397,8 +433,9 @@ x_{\rm ch}=\varepsilon_{\rm Si}\Big(\frac1{C_{\rm eff}}-\frac{t_{\rm eq}}{\varep
 \end{equation}
 Numbers ($\varepsilon_{\rm ox}=0.0345$, $\varepsilon_{\rm Si}=0.1036$\,fF/\textmu m): $1/C_{\rm eff}\approx8.0$\,\textmu
 m$^2$/fF, $t_{\rm eq}/\varepsilon_{\rm ox}=0.076/0.0345=2.20$, remainder $5.8\times0.1036\Rightarrow
-\boxed{x_{\rm ch}\approx0.6\ \text{\textmu m}}$ (0.3--0.9 for $\alpha$ and gate area $\pm30\%$; recipe: B 150\,keV,
-projected range 0.45\,\textmu m plus diffusion).
+\boxed{x_{\rm ch}\approx0.6\ \text{\textmu m}}$ (0.3--0.9 for $\alpha$ and gate area $\pm30\%$; recipe \cite{recipe}: B 150\,keV;
+the projected range of $\approx0.45$\,\textmu m is our estimate and has not yet been checked against range tables such
+as SRIM \cite{srim2010}).
 \caveat{Only the combination $1/C_{\rm eff}$ is measured. $t_{\rm eq}$ and $x_{\rm ch}$ are degenerate: assuming
 $x_{\rm ch}=0.45$\,\textmu m instead gives $t_{\rm eq}\approx126$\,nm. An LCR measurement of a clock-line capacitance
 ($C_{\rm line}=\varepsilon_{\rm ox}A/t_{\rm eq}$) breaks the degeneracy; an RG-edge-speed scan pins $\alpha$.}
@@ -416,7 +453,7 @@ straight line ($\text{RSS}_0$):
 \begin{equation}
 F=\frac{\text{RSS}_0-\text{RSS}_1}{\text{RSS}_1/(n-p-2)}\sim F_{2,\,n-p-2},
 \end{equation}
-kept if $p<0.01$ and found on $\ge2$ CCDs; error on $k$ by bootstrap over packets (60 resamples).
+kept if $p<0.01$ and found on $\ge2$ CCDs; error on $k$ by bootstrap \cite{efron1979} over packets (60 resamples).
 
 \paragraph{Dose shift from a knee offset.} A change $\Delta N_s$ of the buried-channel sheet dose shifts the channel
 potential by
@@ -446,11 +483,12 @@ acquisitions, the shared part is a sequence-locked pattern, not simultaneous noi
 trace-based SNI values are withdrawn as setup numbers.}
 
 \paragraph{Crosstalk} (\code{crosstalk.py}, images). Source pixels with $q_A>30\,e^-$, target pixels without own
-charge ($|q_B|<4\sigma_B$, $\sigma_B$ from the MAD); $q_B$ vs $q_A$ binned in 20 quantiles, Theil--Sen slope of the bin
+charge ($|q_B|<4\sigma_B$, $\sigma_B$ from the MAD); $q_B$ vs $q_A$ binned in 20 quantiles, Theil--Sen slope \cite{theil1950,sen1968} of the bin
 medians:
 \begin{equation}
 k_{A\to B}=\frac{\partial q_B}{\partial q_A}\quad(\sim10^{-4}).
 \end{equation}
+Crosstalk of this order between the output amplifiers of multi-port CCDs is well known \cite{freyhammer2001}.
 
 \paragraph{Mutual capacitance from the window dependence} (\code{mutual\_capacitance.py}). With crosstalk at several
 $\tau$,
@@ -518,7 +556,7 @@ So $\sigma_1$ is the noise of a single CDS measurement, obtained from a raw trac
 knowledge of the charge (differences across a pixel boundary are excluded, since $Q$ changes there). It is in ADU;
 $\sigma_1/g$ is electrons and $\sigma_1\sqrt\tau/G$ an input density (eq.~\eqref{eq:en}).
 
-\paragraph{The textbook route.} Usually the CDS noise is \emph{predicted} from a noise spectrum $S(f)$ taken with the
+\paragraph{The textbook route.} Usually the CDS noise is \emph{predicted} \cite{hopkinson1982,janesick2001} from a noise spectrum $S(f)$ taken with the
 clocks stopped (or from a device model), by integrating it through the CDS filter:
 \begin{equation}
 \sigma_{\rm CDS}^2=\int_0^\infty S(f)\,|H_{\rm CDS}(f)|^2\dd f,\qquad |H_{\rm CDS}|^2=4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau).
@@ -559,7 +597,7 @@ the point.}
 \subsection{The ASD and why the trace one is only a relative setup number}
 
 \paragraph{Definition.} The power spectral density $S_{rr}(f)$ (one-sided, ADU$^2$/Hz, so $\int_0^\infty S_{rr}\dd f$
-is the variance of $r$) is estimated by Welch's method; the amplitude spectral density is its square root, referred to
+is the variance of $r$) is estimated by Welch's method \cite{welch1967}; the amplitude spectral density is its square root, referred to
 the video input with the chain gain:
 \begin{equation}
 \text{ASD}(f)=\frac{\sqrt{S_{rr}(f)}}{G}\qquad[\text{V}/\sqrt{\text{Hz}}].
@@ -718,5 +756,71 @@ $\tau_{\rm rec}$, leakage $\varepsilon$, phase jitter, ringing & trace & measure
 $C_{\rm sn}$ from kTC & ``dead'' board-102 channels & withdrawn\\\bottomrule
 \end{tabularx}
 \end{center}
+
+%=====================================================================
+\begin{thebibliography}{99}\small
+\bibitem{mcwhorter1957} A.~L. McWhorter, ``1/f noise and germanium surface properties,'' in \emph{Semiconductor
+Surface Physics} (Univ.\ of Pennsylvania Press, Philadelphia, 1957), pp.~207--228.
+\bibitem{christensson1968} S.~Christensson, I.~Lundstr\"om, C.~Svensson, ``Low frequency noise in MOS transistors---I
+Theory,'' Solid-State Electron.\ \textbf{11}, 797--812 (1968), doi:10.1016/0038-1101(68)90100-7.
+\bibitem{jayaraman1989} R.~Jayaraman, C.~G. Sodini, ``A 1/f noise technique to extract the oxide trap density near the
+conduction band edge of silicon,'' IEEE Trans.\ Electron Devices \textbf{36}(9), 1773--1782 (1989).
+\bibitem{hung1990} K.~K. Hung, P.~K. Ko, C.~Hu, Y.~C. Cheng, ``A unified model for the flicker noise in
+metal-oxide-semiconductor field-effect transistors,'' IEEE Trans.\ Electron Devices \textbf{37}(3), 654--665 (1990),
+doi:10.1109/16.47770.
+\bibitem{ghibaudo1991} G.~Ghibaudo, O.~Roux, C.~Nguyen-Duc, F.~Balestra, J.~Brini, ``Improved analysis of low
+frequency noise in field-effect MOS transistors,'' phys.\ stat.\ sol.\ (a) \textbf{124}, 571--581 (1991).
+\bibitem{ghibaudo2022} G.~Ghibaudo, ``On the fluctuation-dissipation of the oxide trapped charge in a MOSFET operated
+down to deep cryogenic temperatures,'' arXiv:2204.04958.
+\bibitem{ioannidis2014} E.~G. Ioannidis, S.~Haendler, C.~G. Theodorou, S.~Lasserre, C.~A. Dimitriadis, G.~Ghibaudo,
+``Evolution of low frequency noise and noise variability through CMOS bulk technology nodes from 0.5\,\textmu m down to
+20\,nm,'' Solid-State Electron.\ \textbf{95}, 28--31 (2014).
+\bibitem{kirton1989} M.~J. Kirton, M.~J. Uren, ``Noise in solid-state microstructures: a new perspective on individual
+defects, interface states and low-frequency (1/f) noise,'' Adv.\ Phys.\ \textbf{38}(4), 367--468 (1989).
+\bibitem{janesick1990} J.~Janesick, T.~Elliott, A.~Dingizian, R.~Bredthauer, C.~Chandler, J.~Westphal, J.~Gunn, ``New
+advancements in charge-coupled device technology: sub-electron noise and 4096$\times$4096 pixel CCDs,'' Proc.\ SPIE
+\textbf{1242}, 223 (1990).
+\bibitem{chandler1990} C.~E. Chandler, R.~A. Bredthauer, J.~R. Janesick, J.~A. Westphal, ``Sub-electron noise charge
+coupled devices,'' Proc.\ SPIE \textbf{1242}, 238 (1990).
+\bibitem{tiffenberg2017} J.~Tiffenberg et al., ``Single-electron and single-photon sensitivity with a silicon Skipper
+CCD,'' Phys.\ Rev.\ Lett.\ \textbf{119}, 131802 (2017), arXiv:1706.00028.
+\bibitem{moroni2012} G.~Fern\'andez Moroni, J.~Estrada, G.~Cancelo, S.~E. Holland, E.~E. Paolini, H.~T. Diehl,
+``Sub-electron readout noise in a Skipper CCD fabricated on high resistivity silicon,'' Exp.\ Astron.\ \textbf{34},
+43--64 (2012), doi:10.1007/s10686-012-9298-x.
+\bibitem{janesick2001} J.~R. Janesick, \emph{Scientific Charge-Coupled Devices} (SPIE Press, Bellingham, 2001), PM83.
+\bibitem{hopkinson1982} G.~R. Hopkinson, D.~H. Lumb, ``Noise reduction techniques for CCD image sensors,'' J.\ Phys.\ E
+\textbf{15}, 1214--1222 (1982), doi:10.1088/0022-3735/15/11/020.
+\bibitem{welch1967} P.~D. Welch, ``The use of fast Fourier transform for the estimation of power spectra: a method based
+on time averaging over short, modified periodograms,'' IEEE Trans.\ Audio Electroacoust.\ \textbf{15}(2), 70--73
+(1967), doi:10.1109/TAU.1967.1161901.
+\bibitem{johnson1928} J.~B. Johnson, ``Thermal agitation of electricity in conductors,'' Phys.\ Rev.\ \textbf{32}, 97
+(1928).
+\bibitem{nyquist1928} H.~Nyquist, ``Thermal agitation of electric charge in conductors,'' Phys.\ Rev.\ \textbf{32}, 110
+(1928).
+\bibitem{gray2009} P.~R. Gray, P.~J. Hurst, S.~H. Lewis, R.~G. Meyer, \emph{Analysis and Design of Analog Integrated
+Circuits}, 5th ed.\ (Wiley, 2009).
+\bibitem{sheu1984} B.~J. Sheu, C.~Hu, ``Switch-induced error voltage on a switched capacitor,'' IEEE J.\ Solid-State
+Circuits \textbf{19}(4), 519--525 (1984), doi:10.1109/JSSC.1984.1052176.
+\bibitem{wegmann1987} G.~Wegmann, E.~A. Vittoz, F.~Rahali, ``Charge injection in analog MOS switches,'' IEEE J.\
+Solid-State Circuits \textbf{22}(6), 1091--1097 (1987), doi:10.1109/JSSC.1987.1052859.
+\bibitem{sze} S.~M. Sze, K.~K. Ng, \emph{Physics of Semiconductor Devices}, 3rd ed.\ (Wiley-Interscience, Hoboken,
+2007).
+\bibitem{srim2010} J.~F. Ziegler, M.~D. Ziegler, J.~P. Biersack, ``SRIM -- The stopping and range of ions in matter
+(2010),'' Nucl.\ Instrum.\ Methods B \textbf{268}, 1818 (2010).
+\bibitem{theil1950} H.~Theil, ``A rank-invariant method of linear and polynomial regression analysis, I,'' Proc.\ Royal
+Netherlands Academy of Sciences \textbf{53}, 386--392 (1950).
+\bibitem{sen1968} P.~K. Sen, ``Estimates of the regression coefficient based on Kendall's tau,'' J.\ Am.\ Stat.\ Assoc.\
+\textbf{63}, 1379--1389 (1968), doi:10.1080/01621459.1968.10480934.
+\bibitem{efron1979} B.~Efron, ``Bootstrap methods: another look at the jackknife,'' Ann.\ Statist.\ \textbf{7}(1), 1--26
+(1979), doi:10.1214/aos/1176344552.
+\bibitem{freyhammer2001} L.~M. Freyhammer, M.~I. Andersen, T.~Arentoft, C.~Sterken, P.~N\o rregaard, ``On cross-talk
+correction of images from multiple-port CCDs,'' Exp.\ Astron.\ \textbf{12}, 147--162 (2001).
+\bibitem{ltc2387} Analog Devices (Linear Technology), LTC2387-18 18-bit 15\,Msps SAR ADC, data sheet.
+\bibitem{recipe} CCD process recipe (``CCD Recipe.pdf''), internal; values in \code{amp\_phys/priors.toml}.
+\bibitem{acmguide} D.~Rosenmerkel, C.~Zhu, ACM circuitry guide v1.3, internal.
+\bibitem{feschem} DAMIC-M frontend board schematic FE\_ADA4817\_MK2 (UZH, 2024-03-06), internal.
+\bibitem{micrograph} Micrograph / layout screenshot of one output corner (2026-11-16), internal; dimensions in
+\code{amp\_phys/priors.toml}.
+\end{thebibliography}
 
 \end{document}
