@@ -315,15 +315,25 @@ N3\_120 ch2 & 2.64 & & 6.39 & 5.92\\\bottomrule
 \end{center}
 ($K$ in ADU$^2$; ranges are two runs of the same trace.) Decoys move $K$ by $-2$ to $-4\%$, the fit soaking up a little
 noise; only the real lines move it, and the fit residual falls from 2--3\% to $\sim$1\% (0.1\% on N3\_046 ch1). The two
-corrections agree within 1--9\% on five of six traces tested (29\% on the sixth). Over 2,030 board-101 traces (subtraction),
-$K_{\rm corr}/K_{\rm raw}$ has median 1.53, quartiles 1.20--1.92, 5--95\% range 1.0--3.1; by channel (ch0--3)
-2.16 / 1.47 / 1.74 / 1.16. The white part falls from $\sim$13 to $\sim$9\,nV/$\sqrt{\rm Hz}$.
+corrections agree within 1--9\% on five of six traces tested (29\% on the sixth). Over board 101, $K_{\rm corr}/K_{\rm raw}$ is distributed as:
+\begin{center}\small
+\begin{tabular}{@{}llccc@{}}\toprule
+method & traces & median & quartiles & 5--95\%\\\midrule
+explicit terms, eq.~\eqref{eq:lines} & 1,524 (ch1--3) & 1.58 & 1.43--1.85 & 1.29--2.45\\
+subtraction & 1,524 (ch1--3) & 1.42 & 1.16--1.65 & 1.00--2.23\\
+subtraction & 2,030 (ch0--3) & 1.53 & 1.20--1.92 & 1.0--3.1\\\bottomrule
+\end{tabular}
+\end{center}
+(subtraction by channel, ch0--3: 2.16 / 1.47 / 1.74 / 1.16; ch0 with explicit terms is still running). The explicit-term
+fit is the primary estimate: its residual is 1.1\%, and it also works where too few skips allow subtraction. Per
+trace the two agree to a median ratio of 1.06, but the 5--95\% range of that ratio is 0.92--2.07, so on about one
+trace in twenty they differ by up to $2\times$. The white part falls from $\sim$13 to $\sim$9\,nV/$\sqrt{\rm Hz}$.
 
 \caveat{The raw $K$ is \emph{underestimated for this $\tau$ set}, not in general: because $\sinc^2(f_l\tau)$
 oscillates, whether a line pulls $K$ down or up depends on which $\tau$ are fitted, and the raw $K$ shifts with the
 $\tau$ set. The lines are real noise in the measured CDS, so they stay in every prediction of $\sigma_1$ or image noise;
 only the transistor-physics numbers ($K$, $f_c$, $\phi_{1/f}$, $N_t$, $\sigma_{1/f}(500)$) use the corrected $K$. On
-board 101 these rise by the factor above; the rerun with the explicit-term $K$ is in progress. The hardware window scan
+board 101 these rise by the factor above; their rerun with the explicit-term $K$ is pending. The hardware window scan
 saw the same lines, which is why it agreed with the old single-trace fit. Not yet excluded: a window-placement artefact.
 The 10-skip placement pattern (Sec.~\ref{sec:place}) has its fundamental at 0.3\,cycles/skip and its third harmonic
 folding to 0.1, and a $\sim$25\,ppm clock drift would spread it over the observed range. The $\sinc$ zero at
@@ -364,20 +374,31 @@ $\lambda>0.005$), about 100 packets per channel, all 18 knobs are fitted jointly
 Write $K=K_{\rm tr}(\text{bias})+K_{\rm other}$, with $K_{\rm other}$ independent of the bias. Then
 $K_{\rm tr}\ge K_{\max}-K_{\min}$ and $K_{\rm other}\le K_{\min}$ over the settings scanned.
 \begin{itemize}
-\item \textbf{VSUB is the only knob $K$ follows}: $+0.5$ to $+1.2\%$/V, $t=3.5$--8.2, on all four board-101 channels;
-VDD, VR, RG, SW and the clocks are not significant once VSUB is in. Over the 36--70\,V scan $K$ changes by
-25--40\%.
+\item \textbf{VSUB is the only knob $K$ follows}; no other knob reaches $|t|>3$ for $K$. Slope $100\,\beta_{\rm VSUB}$
+in \%/V, all knobs fitted together:
+\begin{center}\small
+\begin{tabular}{@{}lccc@{}}\toprule
+$K$ estimate & ch1 & ch2 & ch3\\\midrule
+raw & $+1.07$ ($t=5.7$) & $+1.02$ ($t=3.5$) & $+1.40$ ($t=8.4$)\\
+lines subtracted & $+0.70$ ($t=5.2$) & $+0.53$ ($t=3.5$) & $+1.17$ ($t=8.2$)\\
+explicit terms & $+0.77$ ($t=6.8$) & $+0.44$ ($t=2.8$) & $+0.98$ ($t=8.1$)\\\bottomrule
+\end{tabular}
+\end{center}
+The line correction removes 30--50\% of the raw slope, so part of it was the lines; a slope remains with either
+correction, clear on ch1 and ch3 and marginal on ch2 (ch0 pending). With the explicit-term slopes, $K$ changes by a
+factor $e^{34\beta}\approx1.16$--1.40 over the 36--70\,V scan (our arithmetic from the slopes).
 \item $S_w$ does not follow VSUB, and the image gain is flat in VSUB ($-0.1$ to $+1.1\%$ over 36--70\,V, $t\le3.1$),
 although the same regression sees the gain follow VDD ($-1.6\%$/V) and VR (up to $-3\%$/V). So the follower gain
 $A=g_m/(g_m+g_{mb})$ does not change; the 1/f source itself does.
-\item The 120\,kHz line's frequency does not follow VSUB: theta minus ref within a packet, median $\Delta\nu=0.0005$,
-Spearman \cite{spearman1904} 0.08 with $\Delta$VSUB ($p=0.42$); its spread is drift over time.
+\item The 120\,kHz line is not the high-voltage supply. Its frequency does not follow VSUB: theta minus ref within a
+packet, median $\Delta\nu=0.0005$, Spearman \cite{spearman1904} 0.08 with $\Delta$VSUB ($p=0.42$); its spread is
+drift over time. Its amplitude does not either: $+0.01$ / $-0.01$ / $0.00\%$/V on ch1--3, $|t|\le0.3$, while the same
+fit sees it follow VDD ($-1.4\%$/V on ch1 and ch2).
 \end{itemize}
-Two explanations remain: back-gate (substrate) modulation of the output transistor, making it transistor 1/f; or noise
-of the high-voltage supply coupling through the substrate, which would then be 16--27\% of $K$. Either way at least
-$\sim$20\% of $K$ follows VSUB and is not frontend noise.
-\caveat{Pending: the line amplitude against VSUB, and the regression repeated with both corrected $K$s. A VSUB scan
-with a quiet high-voltage supply would separate the two explanations.}
+Two explanations remain: back-gate (substrate) modulation of the output transistor, making it transistor 1/f; or
+broadband noise of the high-voltage supply coupling through the substrate. With the bracket above,
+$1-K_{\min}/K_{\max}\approx14$--28\% of $K$ follows VSUB (explicit-term slopes, ch1--3) and is not frontend noise.
+\caveat{Pending: ch0. A VSUB scan with a quiet high-voltage supply would separate the two explanations.}
 
 \subsection{The white floor}\label{sec:floor}
 The 17.1\,nV/$\sqrt{\rm Hz}$ figure for the frontend is a broadband open-input \emph{calculation}: the thermal noise
@@ -403,7 +424,7 @@ an absolute density by band: the settling varies from gap to gap and swamps the 
 \caveat{Status of $K$. After the line correction the unmodelled terms are $\tau$-flat again, so the corrected $K$,
 $f_c$, $\phi_{1/f}$ and $N_t$ are \textbf{upper limits} on the transistor's own 1/f. Excluded as contents of $K$:
 band-limited white noise (roll-off test), slow setup wander below $\sim$100\,Hz (lag scan) and the lines (corrected).
-Shown to be in $K$: a VSUB-dependent part, $\gtrsim$20\%. Not yet separable: setup or frontend noise that is
+Shown to be in $K$: a VSUB-dependent part, $\approx$14--28\%. Not yet separable: setup or frontend noise that is
 1/f-shaped in 10\,kHz--1\,MHz. An open input sees a different source impedance from a live channel, both for the input
 resistor's thermal noise and for the preamplifier's current noise including its 1/f, so it would not measure what a
 live channel sees. The reference run should be a \textbf{terminated input}: a resistor of about the follower's output
@@ -448,7 +469,7 @@ the same inversion as the trap-density extraction of Jayaraman and Sodini \cite{
 (alternative), $A=0.85$ (table) or 0.44 (withdrawn kTC route), $WL=345$\,\textmu m$^2$, $T=130$\,K (PA03). Units in the
 code: $WL$ in cm$^2$, $C$ in F/cm$^2$, $\lambda_t$ in cm. Result: $N_t\le(1.1$--$2.4)\times10^{16}$\,eV$^{-1}$cm$^{-3}$
 from the raw $K$. Since $N_t\propto K$, board 101's values rise by the line-correction factor of Sec.~\ref{sec:lines}
-(median 1.53, 5--95\% range 1.0--3.1); the corrected values are pending the rerun.
+(explicit terms: median 1.58, 5--95\% range 1.29--2.45); the corrected values are pending the rerun.
 For comparison, 1/f measurements on bulk CMOS report $N_t\approx2\times10^{16}$\,eV$^{-1}$cm$^{-3}$ for n-MOS with a
 12\,nm equivalent oxide, rising to $5$--$7\times10^{17}$ for the thinnest (1.4\,nm) oxides \cite{ioannidis2014}.
 \caveat{$N_t\propto K/(G^2A^2)\cdot C^2\cdot WL/(T\lambda_t)$: a 15\% error in $C_{\rm ox}$ is 30\% in $N_t$;
