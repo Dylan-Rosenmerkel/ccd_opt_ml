@@ -636,14 +636,14 @@ text(s, 0.6, 1.35, 6.6, 5.5, [
     "Finding good CCD voltages takes many images, minutes each: by hand, ≈27 images to get close to the lowest dark charge in our test",
     "The **trace** is the amplifier's raw output at 15 MHz while the CCD is read out: 0.2 s per amplifier, no image needed",
     ("**Three questions**", {"space": 4}),
-    ("1.  Can the trace tell settings and amplifiers apart? (clustering)", {"level": None, "size": 16}),
+    ("1.  Can the trace tell settings and amplifiers apart?", {"level": None, "size": 16}),
     ("2.  What does it tell us about the amplifier itself?", {"level": None, "size": 16}),
     ("3.  Can it predict image quality and find good voltages faster? (ML)", {"level": None, "size": 16}),
 ], size=17, space=10)
 box(s, 7.6, 1.45, 5.1, 3.0, "", fill=GREY, shape=MSO_SHAPE.RECTANGLE)
 text(s, 7.8, 1.55, 4.75, 5.0, [
     ("**Headline results** (PA03 board 101)", {"level": None, "size": 17, "space": 10}),
-    ("Traces from the same setting cluster together: right in **44–46 of 47** cases", {"level": 0}),
+    ("Traces from the same setting group together: matched in **44–46 of 47** cases", {"level": 0}),
     ("Image noise on a new amplifier predicted to **8.6 %** (18.2 % from the voltages alone)", {"level": 0}),
     ("Broken settings flagged before imaging: **18 of 20**, no good setting blocked", {"level": 0}),
     ("Lowest dark charge reached in **≈2 images** instead of ≈27 by hand", {"level": 0}),
@@ -751,7 +751,7 @@ text(s, 7.1, 1.3, 5.6, 5.6, [
 # ------------------------------------------------------------------ 15: summary
 s = S[15]; clear(s); title(s, "Summary and Next Steps")
 text(s, 0.6, 1.4, 12.1, 5.5, [
-    ("**1. Telling apart:** traces from the same setting cluster (44–46 of 47); 25 of 141 trace numbers separate every pair of amplifiers", {"level": None, "space": 18}),
+    ("**1. Telling apart:** traces from the same setting group together (44–46 of 47); 25 of 141 trace numbers separate every pair of amplifiers", {"level": None, "space": 18}),
     ("**2. Amplifier physics from 0.2 s:** white and 1/f noise, oxide trap density ≈ 1–2 × 10¹⁶ eV⁻¹cm⁻³, clock couplings ≈ 3 fF-equivalent", {"level": None, "space": 18}),
     ("**3. ML:** image noise on a new amplifier 18.2 % → 8.6 %; broken settings flagged 18 of 20, no good one blocked; lowest dark charge in ≈2 images instead of ≈27 by hand", {"level": None, "space": 28}),
     ("**Limits:** one board (PA03 101), one night, sibling amplifiers", {"level": None, "space": 12}),
