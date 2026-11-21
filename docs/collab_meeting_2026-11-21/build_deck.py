@@ -328,7 +328,7 @@ cite(s, "McWhorter, in Semiconductor Surface Physics (1957); Christensson et al.
 # ------------------------------------------------------------------ 12: couplings, how
 s = S[24]; clear(s); title(s, "Clock Couplings to the Amplifier Input (1): How")
 text(s, 0.6, 1.25, 12.1, 0.5, [("Idea: when a clock line switches by ΔV, the output settles to a new level. If that charge sits on the amplifier input, it reads exactly like electrons.", {"level": None})], size=15)
-box(s, 0.6, 1.95, 2.2, 0.85, "Clock line k\n(H1–H3, SW)", fill=ORANGE)
+box(s, 0.6, 1.95, 2.2, 0.85, "Clock line k\n(H1, H2, H3)", fill=ORANGE)
 box(s, 3.7, 1.95, 2.2, 0.85, "Sense node /\namplifier input", fill=LIGHT)
 box(s, 6.8, 1.95, 2.2, 0.85, "Output transistor\nand readout", fill=LIGHT)
 box(s, 9.9, 1.95, 2.8, 0.85, "Trace (ADU)", fill=GREEN)
@@ -341,7 +341,6 @@ text(s, 0.6, 3.05, 7.1, 3.9, [
     ("**Step 4.** Convert with the image gain g:", {"level": None}),
 ], size=14, space=6)
 eq(s, "ck2", 1.0, 5.1, scale=0.9)
-text(s, 0.6, 5.75, 7.1, 0.6, [("Summing well (SW): a 0.300 µs pulse, shorter than the readout's response, so use response area ÷ pulse width instead.", {"level": None})], size=13)
 pic(s, "fig_H_state.png", 7.95, 3.0, w=4.75)
 text(s, 7.95, 5.75, 4.75, 1.3, [
     ("**Worked example, H2, ch0:** β ≈ 26 500 ADU per volt of H2 swing ÷ g = 1.41 ADU/e⁻ → ≈ 18 800 e⁻ per volt; × q → **3.01 fF** (mean of the four amplifiers 3.09 fF)", {"level": None}),
@@ -353,10 +352,9 @@ s = S[25]; clear(s); title(s, "Clock Couplings to the Amplifier Input (2): Resul
 table(s, [["line", "coupling (fF-eq.)", "4 amplifiers", "checked by"],
           ["H1", "3.41 ± 0.06", "3.33–3.47", "up = down within 1 %"],
           ["H2", "3.09 ± 0.07", "3.01–3.14", "up = down within 1 %"],
-          ["H3", "3.49 ± 0.06", "3.42–3.54", "up step; down step 3.26"],
-          ["SW", "0.54 ± 0.02", "0.53–0.55", "area ∝ swing (r = −0.97)"]],
+          ["H3", "3.49 ± 0.06", "3.42–3.54", "up step; down step 3.26"]],
       0.6, 1.35, 7.6, col_w=[1.1, 1.9, 1.7, 2.9], size=13, row_h=0.4)
-caption(s, 0.6, 3.4, 7.6, "Board 101, mean of the four amplifiers. ± = fit systematics (start time taken conservatively, window, pulse width); the amplifier range is shown separately.", size=11, h=0.45)
+caption(s, 0.6, 3.4, 7.6, "Board 101, mean of the four amplifiers. ± = fit systematics (start time taken conservatively, fit window); the amplifier range is shown separately.", size=11, h=0.45)
 pic(s, "recon_ch0.png", 0.6, 3.85, w=7.6)
 caption(s, 0.6, 6.4, 7.6, "Validation: couplings fitted on other settings predict the whole horizontal-transfer waveform (red) to 0.6 % rms; the residual (green, ×10) is only at the fast edge spikes.", size=11, h=0.6)
 text(s, 8.55, 1.35, 4.2, 5.6, [
@@ -378,11 +376,11 @@ table(s, [["board 101, Nov 10–12", "ch0", "ch1", "ch2", "ch3"],
 text(s, 1.4, 5.0, 10.5, 1.9, [
     "Every number here comes from 0.2 s traces, with no image",
     "Converting to volts (white level, N_t) uses the design readout gain G; N_t also uses the model values A and C_ox",
-    "Numbers that need an image gain (the clock couplings) are on the previous slides",
+    "Numbers that need an image gain (clock couplings, sense-node capacitance) are on the neighbouring slides",
 ], size=15)
 
 # ------------------------------------------------------------------ 15: ML intro
-s = S[27]; clear(s); title(s, "Can Traces Predict Image Noise and Other Image Quantities?")
+s = S[28]; clear(s); title(s, "Can Traces Predict Image Noise and Other Image Quantities?")
 text(s, 0.6, 1.3, 12.1, 2.4, [
     "Goal: use the traces, the quantities derived from them and the voltages to predict the image **before** it is taken",
     "We tried many machine-learning models: Gaussian processes, gradient-boosted trees, neural-network ensembles, CNNs on the trace curves, deep-kernel and sparse GPs",
@@ -398,7 +396,7 @@ box(s, 10.4, 4.9, 2.3, 1.1, "Prediction\nnoise, usable?, dark charge", fill=RGBC
 arrow(s, 3.2, 4.85, 4.0, 4.85); arrow(s, 6.6, 4.85, 7.4, 5.25); arrow(s, 3.2, 6.15, 7.4, 5.7); arrow(s, 9.6, 5.45, 10.4, 5.45)
 
 # ------------------------------------------------------------------ 16: data set
-s = S[28]; clear(s); title(s, "Data Set")
+s = S[29]; clear(s); title(s, "Data Set")
 text(s, 0.6, 1.3, 6.3, 0.5, [("**A packet** = one test of one voltage setting:", {"level": None})], size=16)
 y0 = 1.9
 for i, (t1, fill) in enumerate([("Reference traces\nat the nominal voltages", LIGHT), ("Set the new voltages", ORANGE),
@@ -423,7 +421,7 @@ text(s, 7.2, 5.35, 5.5, 1.6, [
 ], size=14)
 
 # ------------------------------------------------------------------ 17: decision tree
-s = S[29]; clear(s); title(s, "What Is a Decision Tree?")
+s = S[30]; clear(s); title(s, "What Is a Decision Tree?")
 pic(s, "tree.png", 0.6, 1.3, w=5.6)
 pic(s, "tree_one.png", 0.9, 4.6, w=4.6)
 text(s, 6.9, 1.3, 5.8, 5.7, [
@@ -441,7 +439,7 @@ text(s, 6.9, 4.3, 5.8, 1.5, [
 cite(s, "Breiman, Friedman, Olshen & Stone, Classification and Regression Trees (1984). Tree diagram: illustration with made-up numbers.")
 
 # ------------------------------------------------------------------ 18: EDT
-s = S[30]; clear(s); title(s, "Extremely Randomized Decision Trees (EDT)")
+s = S[31]; clear(s); title(s, "Extremely Randomized Decision Trees (EDT)")
 text(s, 0.6, 1.3, 6.4, 5.0, [
     ("**Grow one tree, step by step:**", {"level": None, "size": 16}),
     ("1.  Put all training images in one node", {"level": None}),
@@ -512,7 +510,7 @@ text(s, 0.6, 5.85, 12.1, 1.0, [
 ], size=17)
 
 # ------------------------------------------------------------------ 22: GP
-s = S[31]; clear(s); title(s, "Learning the Shape of the Voltage Response (Gaussian Process)")
+s = S[32]; clear(s); title(s, "Learning the Shape of the Voltage Response (Gaussian Process)")
 text(s, 0.6, 1.3, 2.3, 0.45, [("**What we minimize:**", {"level": None})], size=15)
 eq(s, "J", 2.75, 1.35, scale=0.85)
 text(s, 0.6, 1.85, 6.4, 0.85, [("A GP is a prior over smooth functions: J at any set of settings is jointly Gaussian, with a covariance set by how close the settings are (Matérn-5/2):", {"level": None})], size=14)
@@ -528,7 +526,7 @@ caption(s, 7.2, 4.85, 5.5, "Illustration in one dimension (made-up function). Th
 cite(s, "Rasmussen & Williams, Gaussian Processes for Machine Learning (MIT Press, 2006).")
 
 # ------------------------------------------------------------------ 23: multi-amplifier GP
-s = S[32]; clear(s); title(s, "Multi-Amplifier GP Model")
+s = S[33]; clear(s); title(s, "Multi-Amplifier GP Model")
 eq(s, "mt", 0.8, 1.35, scale=1.0)
 text(s, 0.6, 1.85, 6.3, 1.0, [
     ("f(x): shape shared by all amplifiers;  gₐ(x): amplifier a's own small deviation", {"level": 0}),
@@ -553,7 +551,7 @@ text(s, 7.1, 3.9, 5.6, 2.9, [
 cite(s, "Multi-task GP: Bonilla, Chai & Williams, NeurIPS (2007); transfer between related optimisations: Swersky, Snoek & Adams, NeurIPS (2013).")
 
 # ------------------------------------------------------------------ 24: BO loop
-s = S[33]; clear(s); title(s, "Bayesian Optimization (BO) Loop")
+s = S[34]; clear(s); title(s, "Bayesian Optimization (BO) Loop")
 steps = [("1. Fit the multi-amplifier GP", "other amplifiers + images so far", LIGHT),
          ("2. Score candidate settings", "m(x), s(x) → expected improvement", LIGHT),
          ("3. Take traces of the top candidates", "≈0.2 s each, no image yet", ORANGE),
@@ -574,7 +572,7 @@ pic(s, "ei.png", 7.2, 2.95, w=5.2)
 cite(s, "Expected improvement: Jones, Schonlau & Welch, J. Global Optim. 13, 455 (1998). Usability gate: constrained BO, Gelbart, Snoek & Adams, UAI (2014).")
 
 # ------------------------------------------------------------------ 25: BO tests, step by step
-s = S[34]; clear(s); title(s, "BO Tests: Replaying a Night We Already Measured")
+s = S[35]; clear(s); title(s, "BO Tests: Replaying a Night We Already Measured")
 text(s, 0.6, 1.3, 7.0, 5.0, [
     ("**1.** Pick one amplifier, e.g. ch0, and pretend we have never imaged it", {"level": None}),
     ("**2.** Its settings from one half of the night become the **menu**: 63–64 settings, including the ones that gave unusable images. The search sees their voltages, not their results", {"level": None}),
@@ -766,6 +764,27 @@ t_ = [sh for sh in s.shapes if sh.is_placeholder and sh.placeholder_format.type 
 t_.left, t_.top, t_.width, t_.height = Inches(0.6), Inches(2.8), Inches(12.1), Inches(1.4)
 tf = t_.text_frame; tf.clear(); p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
 r = p.add_run(); r.text = "Backup Slides"; r.font.size = Pt(44)
+
+# ------------------------------------------------------------------ 27 (backup): sense-node capacitance
+s = S[27]; clear(s); title(s, "Sense-Node Capacitance")
+pic(s, "gain_peaks.png", 0.6, 1.35, w=6.2)
+caption(s, 0.6, 4.95, 6.2, "Example image (board 101 ch0, 3 Nov): the peaks for 0, 1, 2, 3 electrons; their spacing is the image gain g.", size=12, h=0.6)
+text(s, 7.1, 1.3, 5.6, 2.4, [
+    ("**1.** Image gain g (ADU per electron): spacing of the electron peaks in one image", {"level": None}),
+    ("**2.** Divide by the readout gain G = 0.875 ADU/µV (design): µV per electron at the CCD output", {"level": None}),
+    ("**3.** One electron on a node of capacitance C gives q/C volts; the output transistor passes A = 0.85 of it", {"level": None}),
+], size=14, space=6)
+eq(s, "csn", 7.4, 3.45, scale=0.85)
+table(s, [["board 101 (Nov 10–12)", "ch0", "ch1", "ch2", "ch3"],
+          ["g (ADU/e⁻)", "1.41", "1.39", "1.33", "1.34"],
+          ["CG_in (µV/e⁻)", "1.62", "1.59", "1.52", "1.53"],
+          ["C_sn (fF)", "84", "85", "89", "89"]],
+      7.1, 4.1, 5.6, col_w=[2.0, 0.9, 0.9, 0.9, 0.9], size=13, row_h=0.36)
+text(s, 0.6, 5.8, 12.1, 1.2, [
+    "All 17 amplifiers measured (PA03 boards 101/102, LSM) give 84–95 fF, within ±6 % of each other; that spread does not depend on G or A",
+    "The absolute value scales with the design gain G and the model value A: a 5 % error in A is a 5 % error in C_sn",
+], size=14)
+cite(s, "Conversion gain and sense-node capacitance: Janesick, Scientific Charge-Coupled Devices (SPIE, 2001).")
 
 # ------------------------------------------------------------------ backup: prefix titles
 for k in range(17, len(S)):

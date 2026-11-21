@@ -42,3 +42,8 @@ E2 = {
 for k, s in E2.items():
     fig = plt.figure(figsize=(0.1, 0.1)); fig.text(0, 0, s, fontsize=20)
     fig.savefig(f"{OUT}/{k}.png", dpi=300, bbox_inches="tight", pad_inches=0.04, transparent=True); plt.close(fig)
+E3 = {"csn": r"$\mathrm{CG}_{in}=\frac{g}{G},\qquad C_{sn}=\frac{A\,q}{\mathrm{CG}_{in}}$"}
+if len(sys.argv) > 2 and sys.argv[2] == "only3":
+    for k, s in E3.items():
+        fig = plt.figure(figsize=(0.1, 0.1)); fig.text(0, 0, s, fontsize=20)
+        fig.savefig(f"{OUT}/{k}.png", dpi=300, bbox_inches="tight", pad_inches=0.04, transparent=True); plt.close(fig)
