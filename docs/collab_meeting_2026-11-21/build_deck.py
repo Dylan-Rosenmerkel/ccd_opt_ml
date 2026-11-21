@@ -376,7 +376,7 @@ table(s, [["board 101, Nov 10–12", "ch0", "ch1", "ch2", "ch3"],
 text(s, 1.4, 5.0, 10.5, 1.9, [
     "Every number here comes from 0.2 s traces, with no image",
     "Converting to volts (white level, N_t) uses the design readout gain G; N_t also uses the model values A and C_ox",
-    "Numbers that need an image gain (clock couplings, sense-node capacitance) are on the neighbouring slides",
+    "The clock couplings, which also need one image gain, are on the previous slides",
 ], size=15)
 
 # ------------------------------------------------------------------ 15: ML intro
@@ -757,27 +757,6 @@ t_.left, t_.top, t_.width, t_.height = Inches(0.6), Inches(2.8), Inches(12.1), I
 tf = t_.text_frame; tf.clear(); p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
 r = p.add_run(); r.text = "Backup Slides"; r.font.size = Pt(44)
 
-# ------------------------------------------------------------------ 27 (backup): sense-node capacitance
-s = S[27]; clear(s); title(s, "Sense-Node Capacitance")
-pic(s, "gain_peaks.png", 0.6, 1.35, w=6.2)
-caption(s, 0.6, 4.95, 6.2, "Example image (board 101 ch0, 3 Nov): the peaks for 0, 1, 2, 3 electrons; their spacing is the image gain g.", size=12, h=0.6)
-text(s, 7.1, 1.3, 5.6, 2.4, [
-    ("**1.** Image gain g (ADU per electron): spacing of the electron peaks in one image", {"level": None}),
-    ("**2.** Divide by the readout gain G = 0.875 ADU/µV (design): µV per electron at the CCD output", {"level": None}),
-    ("**3.** One electron on a node of capacitance C gives q/C volts; the output transistor passes A = 0.85 of it", {"level": None}),
-], size=14, space=6)
-eq(s, "csn", 7.4, 3.45, scale=0.85)
-table(s, [["board 101 (Nov 10–12)", "ch0", "ch1", "ch2", "ch3"],
-          ["g (ADU/e⁻)", "1.41", "1.39", "1.33", "1.34"],
-          ["CG_in (µV/e⁻)", "1.62", "1.59", "1.52", "1.53"],
-          ["C_sn (fF)", "84", "85", "89", "89"]],
-      7.1, 4.1, 5.6, col_w=[2.0, 0.9, 0.9, 0.9, 0.9], size=13, row_h=0.36)
-text(s, 0.6, 5.8, 12.1, 1.2, [
-    "All 17 amplifiers measured (PA03 boards 101/102, LSM) give 84–95 fF, within ±6 % of each other; that spread does not depend on G or A",
-    "The absolute value scales with the design gain G and the model value A: a 5 % error in A is a 5 % error in C_sn",
-], size=14)
-cite(s, "Conversion gain and sense-node capacitance: Janesick, Scientific Charge-Coupled Devices (SPIE, 2001).")
-
 # ------------------------------------------------------------------ backup: prefix titles
 for k in range(17, len(S)):
     for sh in S[k].shapes:
@@ -788,5 +767,8 @@ for k in range(17, len(S)):
                 for r in runs:
                     r.font.size = Pt(26)
 
+# drop the now-empty slide 27 (former sense-node capacitance backup)
+sld = prs.slides._sldIdLst[27]
+prs.part.drop_rel(sld.rId); prs.slides._sldIdLst.remove(sld)
 prs.save(OUT)
-print("saved", OUT, len(S))
+print("saved", OUT, len(prs.slides))
