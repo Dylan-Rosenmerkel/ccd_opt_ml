@@ -342,36 +342,29 @@ text(s, 0.6, 3.05, 7.1, 3.9, [
 ], size=14, space=6)
 eq(s, "ck2", 1.0, 5.1, scale=0.9)
 text(s, 0.6, 5.75, 7.1, 0.6, [("Summing well (SW): a 0.300 µs pulse, shorter than the readout's response, so use response area ÷ pulse width instead.", {"level": None})], size=13)
-box(s, 8.0, 3.1, 4.7, 2.6, "", fill=RGBColor(0xF7, 0xF7, 0xF7), shape=MSO_SHAPE.RECTANGLE)
-text(s, 8.15, 3.2, 4.4, 2.4, [
-    ("**Worked example: H2, ch0**", {"level": None, "size": 15}),
-    ("Fit: the settled level moves ≈ 27 000 ADU per volt of H2 swing", {"level": None}),
-    ("÷ g = 1.40 ADU/e⁻ → ≈ 19 300 e⁻ per volt", {"level": None}),
-    ("× q = 1.6 × 10⁻¹⁹ C → **3.09 fF**", {"level": None, "size": 16}),
-    ("Reading the output 0.2–0.8 µs after the edge, long before it settles, had given 0.01 fF", {"level": None, "size": 12}),
-], size=14, space=6)
+pic(s, "fig_H_state.png", 7.95, 3.0, w=4.75)
+text(s, 7.95, 5.75, 4.75, 1.3, [
+    ("**Worked example, H2, ch0:** ≈ 27 000 ADU per volt of H2 swing ÷ g ≈ 1.45 ADU/e⁻ → ≈ 18 600 e⁻ per volt; × q → **≈ 3.0 fF** (mean of the four amplifiers 3.09 fF)", {"level": None}),
+    ("Reading the output 0.2–0.8 µs after the edge, long before it settles, had given 0.01 fF.", {"level": None, "size": 11}),
+], size=13, space=4)
 
 # ------------------------------------------------------------------ 13: couplings, results
 s = S[13]; clear(s); title(s, "Clock Couplings to the Amplifier Input (2): Results")
 table(s, [["line", "coupling (fF-equivalent)", "checked by"],
           ["H1", "3.41 ± 0.08", "up = down within 1 %"],
           ["H2", "3.09 ± 0.09", "up = down within 1 %"],
-          ["H3", "3.49 ± 0.08 (up step)", "down step 3.26 (starts right after the reset)"],
+          ["H3", "3.49 ± 0.08 (up step)", "down step 3.26 (right after the reset)"],
           ["SW (summing well)", "0.54 ± 0.02", "area ∝ swing (r = −0.97)"]],
-      0.6, 1.4, 7.6, col_w=[2.0, 2.4, 3.2], size=14, row_h=0.45)
-caption(s, 0.6, 3.75, 7.6, "Board 101; the four amplifiers agree within ≈1.5 %. Uncertainty: spread between amplifiers and fit systematics (start time, window, pulse width).", size=12, h=0.55)
-text(s, 0.6, 4.4, 7.6, 2.6, [
-    ("**Validation:** the fitted couplings predict each amplifier's full horizontal-transfer waveform to 0.6 % rms of the swing; the settled step grows in proportion to the swing (r = 0.92–0.95)", {"level": 0}),
-    ("**Effective couplings, not layout capacitances:** the step holds through the state and follows VDD like the image gain, so it enters at the amplifier input; a single-CCD board (PQ04) is 20–40× weaker, so the size comes from the 4-CCD module's routing", {"level": 0}),
+      0.6, 1.35, 7.6, col_w=[2.0, 2.4, 3.2], size=13, row_h=0.4)
+caption(s, 0.6, 3.4, 7.6, "Board 101, mean of the four amplifiers (they agree within ≈1.5 %); ± = amplifier spread and fit systematics.", size=11, h=0.4)
+pic(s, "recon_ch0.png", 0.6, 3.85, w=7.6)
+caption(s, 0.6, 6.4, 7.6, "Validation: couplings fitted on other settings predict the whole horizontal-transfer waveform (red) to 0.6 % rms; the residual (green, ×10) is only at the fast edge spikes.", size=11, h=0.6)
+text(s, 8.55, 1.35, 4.2, 5.6, [
+    ("**Effective couplings:** the step holds through the 18 µs state and follows VDD like the image gain, so it enters at the amplifier input; a single-CCD board (PQ04) is 20–40× weaker, so the size comes from the 4-CCD module's routing", {"level": 0}),
     ("**Not in the images:** the H clocks do not switch during the skips", {"level": 0}),
-], size=13, space=6)
-text(s, 8.6, 1.4, 4.1, 5.5, [
-    ("**Not presented**", {"level": None, "size": 16}),
-    ("**RG:** the response after the reset is a turn-off kick that drains back to VR, not stored charge; RG timing was not varied", {"level": 0}),
-    ("**V1–V3:** steps of 10–21 kADU, but they do not follow the swing of the switching phase", {"level": 0}),
-    ("**On hold:** reset-gate overlap limit and buried-channel depth (both relied on RG)", {"level": 0}),
-    ("**Would confirm:** a trace with the amplifier powered off; independent H1/H2/H3 swings", {"level": 0}),
-], size=14, space=8)
+    ("**Not presented:** RG (a turn-off kick that drains back to VR, not stored charge) and V1–V3 (steps do not follow the swing)", {"level": 0}),
+    ("**On hold:** reset-gate overlap limit, buried-channel depth", {"level": 0}),
+], size=13, space=8)
 
 # ------------------------------------------------------------------ 14: amplifier quantities (trace only, board 101)
 s = S[14]; clear(s); title(s, "Amplifier Quantities from the Trace Alone")
