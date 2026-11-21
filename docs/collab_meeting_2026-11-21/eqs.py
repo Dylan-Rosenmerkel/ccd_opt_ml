@@ -24,9 +24,21 @@ E = {
  "ei": r"$\mathrm{EI}(x)=(b-m)\,\Phi(z)+s\,\varphi(z),\qquad z=\frac{b-m}{s}$",
  "gap": r"$\Delta_k=100\,\left(\min_{r\leq k}J_r-J^{\star}\right)\ \%$",
 }
-for k, s in E.items():
+for k, s in ({} if len(sys.argv) > 2 else E).items():
     fig = plt.figure(figsize=(0.1, 0.1))
     fig.text(0, 0, s, fontsize=20)
     fig.savefig(f"{OUT}/{k}.png", dpi=300, bbox_inches="tight", pad_inches=0.04, transparent=True)
     plt.close(fig)
 print(len(E))
+E2 = {
+ "reg": r"$y=\beta_0+\sum_k \beta_k\,V_k$",
+ "ck2": r"$C_k=q\,\frac{\beta_k}{g}$",
+ "lov": r"$L_{ov}\leq\frac{C_{RG}}{C_{ox}\,W_{RG}}$",
+ "cox": r"$C_{ox}=\frac{\varepsilon_0}{t_{ox}/3.9+t_{n}/7.5}$",
+ "iwif": r"$I_w(\tau)=\int_0^\infty |H|^2\,df,\qquad I_f(\tau)=\int_0^\infty \frac{|H|^2}{f}\,df$",
+ "s1int": r"$\sigma_1^2=\int_0^\infty S(f)\,|H(f)|^2\,df$",
+ "Sf": r"$S(f)=S_w+\frac{K}{f}$",
+}
+for k, s in E2.items():
+    fig = plt.figure(figsize=(0.1, 0.1)); fig.text(0, 0, s, fontsize=20)
+    fig.savefig(f"{OUT}/{k}.png", dpi=300, bbox_inches="tight", pad_inches=0.04, transparent=True); plt.close(fig)
