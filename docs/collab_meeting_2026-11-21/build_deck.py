@@ -607,11 +607,10 @@ table(s, [["method", "what it does", "images", "wasted"],
           ["BO, new amplifier only", "the GP learns only from this amplifier's own images", "4.0", "0.5"],
           ["**BO, multi-amplifier + EDT gate**", "the GP also learns from the other amplifiers; the EDT blocks likely-unusable settings", "**1.8**", "**0**"]],
       0.6, 1.4, 7.4, col_w=[2.2, 3.4, 0.9, 0.9], size=13, row_h=0.62)
-text(s, 0.6, 4.75, 7.4, 2.2, [
-    ("**images:** number of images until the lowest dark charge found is within 2 % of the lowest in the menu", {"level": 0}),
-    ("**wasted:** images at settings that turned out unusable", {"level": 0}),
-    ("Average of the 6 searches, starting with nothing known about the new amplifier", {"level": 0}),
-], size=14)
+text(s, 0.6, 4.7, 7.4, 2.3, [
+    ("**Test:** replay of the v3 night. Each amplifier in turn is “new”: its 63–64 measured settings (broken ones included) are the menu, and the model learns only from the other two amplifiers in the other half of the night. 6 searches, averaged", {"level": 0}),
+    ("**images:** until the lowest dark charge found is within 2 % of the best in the menu; **wasted:** images at unusable settings", {"level": 0}),
+], size=13, space=6)
 pic(s, "results.png", 8.3, 1.4, w=4.4)
 text(s, 8.3, 4.15, 4.4, 2.8, [
     ("**Using the other amplifiers cuts the search from ≈27 images by hand to ≈2, and no image is wasted**", {"level": None, "space": 10}),
@@ -725,7 +724,7 @@ cite(s, "Rasmussen & Williams (2006); multi-task GP: Bonilla et al., NeurIPS (20
 
 # ------------------------------------------------------------------ 13: BO loop + test
 s = S[13]; clear(s); title(s, "Searching for the Best Voltages (Bayesian Optimization)")
-steps = [("1. Fit the multi-amplifier GP", LIGHT), ("2. Pick candidates: good predicted value or high uncertainty", LIGHT),
+steps = [("1. Fit the multi-amplifier GP", LIGHT), ("2. Score every candidate by expected improvement (EI)", LIGHT),
          ("3. Take traces; EDT gate: skip if P(usable) < 0.5", ORANGE), ("4. Take one image at the best candidate", GREEN),
          ("5. Add the result; repeat", GREY)]
 for i, (a, fill) in enumerate(steps):
@@ -736,15 +735,9 @@ G = RGBColor(0x80, 0x80, 0x80)
 for (x, y, w, h) in [(6.55, 1.7, 0.08, 4.1), (6.2, 5.75, 0.43, 0.08)]:
     r = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h)); r.fill.solid(); r.fill.fore_color.rgb = G; r.line.fill.background()
 fb = s.shapes.add_shape(MSO_SHAPE.LEFT_ARROW, Inches(6.22), Inches(1.55), Inches(0.45), Inches(0.36)); fb.fill.solid(); fb.fill.fore_color.rgb = G; fb.line.fill.background()
-text(s, 7.1, 1.3, 5.6, 5.6, [
-    ("**How we tested it: replaying a night we already measured**", {"level": None, "size": 16, "space": 8}),
-    ("1.  Pretend one amplifier is new. Its settings from one half of the night are the menu (63–64, broken ones included)", {"level": None}),
-    ("2.  The model learns only from the other two amplifiers, in the other half", {"level": None}),
-    ("3.  “Taking an image” = revealing the stored result", {"level": None}),
-    ("4.  Count images until the lowest dark charge found is within 2 % of the best in the menu", {"level": None}),
-    ("5.  3 amplifiers × 2 halves = 6 searches, averaged", {"level": None}),
-    ("Compared with: random order, and by hand (always image the untested setting closest to the best so far)", {"level": None, "size": 13}),
-], size=14, space=6)
+eq(s, "ei", 7.1, 1.4, scale=0.82)
+text(s, 7.0, 1.9, 5.7, 0.95, [("Expected improvement over b, the best J imaged so far. First term: the predicted value m is good (exploit); second: the uncertainty s is large (explore).", {"level": None})], size=13)
+pic(s, "ei.png", 7.25, 2.95, w=5.2)
 
 # ------------------------------------------------------------------ 15: summary
 s = S[15]; clear(s); title(s, "Summary and Next Steps")
