@@ -344,23 +344,23 @@ eq(s, "ck2", 1.0, 5.1, scale=0.9)
 text(s, 0.6, 5.75, 7.1, 0.6, [("Summing well (SW): a 0.300 µs pulse, shorter than the readout's response, so use response area ÷ pulse width instead.", {"level": None})], size=13)
 pic(s, "fig_H_state.png", 7.95, 3.0, w=4.75)
 text(s, 7.95, 5.75, 4.75, 1.3, [
-    ("**Worked example, H2, ch0:** ≈ 27 000 ADU per volt of H2 swing ÷ g ≈ 1.45 ADU/e⁻ → ≈ 18 600 e⁻ per volt; × q → **≈ 3.0 fF** (mean of the four amplifiers 3.09 fF)", {"level": None}),
+    ("**Worked example, H2, ch0:** β ≈ 26 500 ADU per volt of H2 swing ÷ g = 1.41 ADU/e⁻ → ≈ 18 800 e⁻ per volt; × q → **3.01 fF** (mean of the four amplifiers 3.09 fF)", {"level": None}),
     ("Reading the output 0.2–0.8 µs after the edge, long before it settles, had given 0.01 fF.", {"level": None, "size": 11}),
 ], size=13, space=4)
 
 # ------------------------------------------------------------------ 13: couplings, results
 s = S[13]; clear(s); title(s, "Clock Couplings to the Amplifier Input (2): Results")
-table(s, [["line", "coupling (fF-equivalent)", "checked by"],
-          ["H1", "3.41 ± 0.08", "up = down within 1 %"],
-          ["H2", "3.09 ± 0.09", "up = down within 1 %"],
-          ["H3", "3.49 ± 0.08 (up step)", "down step 3.26 (right after the reset)"],
-          ["SW (summing well)", "0.54 ± 0.02", "area ∝ swing (r = −0.97)"]],
-      0.6, 1.35, 7.6, col_w=[2.0, 2.4, 3.2], size=13, row_h=0.4)
-caption(s, 0.6, 3.4, 7.6, "Board 101, mean of the four amplifiers (they agree within ≈1.5 %); ± = amplifier spread and fit systematics.", size=11, h=0.4)
+table(s, [["line", "coupling (fF-eq.)", "4 amplifiers", "checked by"],
+          ["H1", "3.41 ± 0.06", "3.33–3.47", "up = down within 1 %"],
+          ["H2", "3.09 ± 0.07", "3.01–3.14", "up = down within 1 %"],
+          ["H3", "3.49 ± 0.06", "3.42–3.54", "up step; down step 3.26"],
+          ["SW", "0.54 ± 0.02", "0.53–0.55", "area ∝ swing (r = −0.97)"]],
+      0.6, 1.35, 7.6, col_w=[1.1, 1.9, 1.7, 2.9], size=13, row_h=0.4)
+caption(s, 0.6, 3.4, 7.6, "Board 101, mean of the four amplifiers. ± = fit systematics (start time taken conservatively, window, pulse width); the amplifier range is shown separately.", size=11, h=0.45)
 pic(s, "recon_ch0.png", 0.6, 3.85, w=7.6)
 caption(s, 0.6, 6.4, 7.6, "Validation: couplings fitted on other settings predict the whole horizontal-transfer waveform (red) to 0.6 % rms; the residual (green, ×10) is only at the fast edge spikes.", size=11, h=0.6)
 text(s, 8.55, 1.35, 4.2, 5.6, [
-    ("**Effective couplings:** the step holds through the 18 µs state and follows VDD like the image gain, so it enters at the amplifier input; a single-CCD board (PQ04) is 20–40× weaker, so the size comes from the 4-CCD module's routing", {"level": 0}),
+    ("**Effective couplings:** the step holds through the 18 µs state and follows VDD like the image gain, so it enters at the amplifier input; a single-CCD board (PQ04) is ≈18× weaker, so the size comes from the 4-CCD module's routing", {"level": 0}),
     ("**Not in the images:** the H clocks do not switch during the skips", {"level": 0}),
     ("**Not presented:** RG (a turn-off kick that drains back to VR, not stored charge) and V1–V3 (steps do not follow the swing)", {"level": 0}),
     ("**On hold:** reset-gate overlap limit, buried-channel depth", {"level": 0}),

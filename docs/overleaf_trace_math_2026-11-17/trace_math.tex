@@ -594,13 +594,16 @@ H1$\downarrow$, H3$\uparrow$, H2$\downarrow$, H1$\uparrow$, then a quiet state; 
 at $-16.9$\,\textmu s). In each state the output relaxes to a new level with $\tau=8.2$\,\textmu s (the H line; the chain
 settles in $\approx0.56$\,\textmu s); the settled step, fitted by linear least squares and regressed on that phase's swing over
 $\approx$100 settings, divided by $g$ and times $q$, gives the coupling. Short pulses (SW, 0.300\,\textmu s = 30 sequencer
-ticks) use response area $\div$ width. Board 101, fF-equivalent, $\pm$ (channel spread) $\pm$ (systematics):
+ticks) use response area $\div$ width. Board 101, fF-equivalent, $\pm$ (channel spread) $\pm$ (systematics; the start-time term is set conservatively at
+$\pm0.05$\,\textmu s, 5--8$\times$ its repeat scatter):
 H1 $3.41\pm0.05\pm0.06$, H2 $3.09\pm0.05\pm0.07$, H3 $3.49\pm0.05\pm0.06$ (up step; the down step, right after the reset,
 gives 3.26), SW $0.54\pm0.01\pm0.02$. Checks: up = down within 1\,\% (H1, H2); the fitted couplings reproduce the full
 H-transfer waveform to 0.6\,\% rms of the swing; step $\propto$ swing ($r=0.92$--0.95; SW $r=-0.97$). RG (a turn-off kick
 that drains back to VR, not stored charge) and V (steps that do not follow the switched phase's swing) are not quoted.
 These are \emph{effective} couplings at the follower input, not layout capacitances: the step holds through the state and
-follows VDD like the image gain; PQ04 (single CCD) is 20--40$\times$ weaker, so the size comes from the module's routing.
+follows VDD like the image gain ($-1.1$ to $-1.5\pm0.3$\,\%/V against $-1.5$ to $-1.7$\,\%/V for the gain, all voltages
+regressed jointly); PQ04 (single CCD, same amplifier design) is $\approx18\times$ weaker per volt (fF conversion indicative)
+and has a different $\tau$ (6.2--6.3\,\textmu s), so the size comes from the module's routing and $\tau$ is the H line's.
 An amplifier-off trace would confirm the entry point.}
 
 \paragraph{Why charge per volt is a capacitance.} A step $\Delta V_k$ on line $k$, coupled by $C_k$ to a node of total
