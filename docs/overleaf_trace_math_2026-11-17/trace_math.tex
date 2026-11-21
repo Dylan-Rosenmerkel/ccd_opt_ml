@@ -587,6 +587,19 @@ sampling (samples placed at their exact time relative to the edge, 0.1-sample bi
 %=====================================================================
 \section{Clock-line to sense-node capacitances}\label{sec:cpl}
 
+\caveat{\textbf{Superseded values (REPORT \S32, 21 November).} The method below measured a fast jump or a pulse peak that the
+readout chain never reaches, so its values (H 0.011--0.016\,fF, SW 0.08--0.13\,fF, RG 0.12--0.22\,fF) are far too small.
+The H lines are slow: after an H edge the output drifts to a new level with $\tau=9.6$--9.8\,\textmu s (same on all four
+channels; the chain settles in 0.39--0.56\,\textmu s), so the coupling is the fitted final level per volt of the single phase
+that switches in that state (from the sequencer file). Short pulses (SW) use response area $\div$ pulse width, which does
+not depend on the chain bandwidth. New values, board 101, the four amplifiers within $\approx$4\%: H2 4.7--5.0\,fF (equal
+up and down; solid); H1 3.8--3.95 down, 0.16--0.20 up (asymmetric, unexplained; provisional); H3 2.6--2.8 (up; provisional);
+SW 0.56 (assumes the 0.30\,\textmu s width; provisional); V steps of 7--17\,kADU not attributed to a rail. These are
+\emph{effective} couplings at the follower input, not layout capacitances: the step holds for the whole 18\,\textmu s state
+and follows VDD like the image gain; PQ04 (single CCD, same amplifier) is 20--40$\times$ weaker, so the strength comes from
+the 4-CCD module's routing. No amplifier-off trace confirms this yet. The v3 scan gave the three H phases identical
+swings, so a rail regression cannot separate them.}
+
 \paragraph{Why charge per volt is a capacitance.} A step $\Delta V_k$ on line $k$, coupled by $C_k$ to a node of total
 capacitance $C_{\rm sn}$, moves the node by $\Delta V_{\rm sn}=C_k\Delta V_k/C_{\rm sn}$. Through the conversion gain
 $q/C_{\rm sn}$ this is the same as $N=C_k\Delta V_k/q$ electrons. So
@@ -619,7 +632,8 @@ summing-well dip / SW swing, H/V waveform peak-to-peak / swing, each $\div g$ (e
 whole transfer waveform, so they compare channels, not absolute $C_k$.
 \end{itemize}
 
-\paragraph{Reset gate to sense node: coupling, and what it says about the overlap.}
+\paragraph{Reset gate to sense node: coupling, and what it says about the overlap.} \emph{(On hold: the RG
+numbers below come from the fast-jump method, superseded above and in Sec.~\ref{sec:cpl}'s status box.)}
 What the trace measures is the \emph{total} capacitance $C_{\rm RG}$ between the reset-gate line and the sense node
 (the coefficients above, through $C_k=q\,N/\Delta V_k$). That total is the sum of several paths in parallel:
 \begin{itemize}
@@ -655,6 +669,12 @@ overlap, fringing and wiring; (iii) a cross-section (SEM/TEM) or process simulat
 
 %=====================================================================
 \section{Reset charge injection and the buried-channel depth}
+
+\caveat{\textbf{On hold (REPORT \S32).} The reset response used here is a turn-off transient: during the 0.47\,\textmu s
+reset state the node sits at VR, and the +50\,kADU pulse appears after the switch releases and decays in 1--3\,\textmu s.
+The step that actually remains on the node is only +230 to +360\,ADU, equal and opposite on RG$_H$ and VR, i.e.\
+0.02--0.03\,fF-equivalent per volt. The slope $C_{\rm inj}=2.1$--2.4\,fF/V below, and the depth built on it, therefore do
+not measure charge left on the node. An RG edge-speed or pulse-width scan is needed before the depth can be redone.}
 
 \paragraph{Measurement.} In the rail regression of the reset-edge jumps (and their relaxation), the coefficients of
 RG$_H$ and VR come out equal and opposite (+17\,500 to +20\,200 and $-$16\,000 to $-$18\,700 ADU/V): the response depends
@@ -997,10 +1017,10 @@ $e_w$ & window fit, $G$ & model\\
 $N_t$ & $K$, $G^2A^2$, $C^2$, $WL$, $T$, $\lambda_t$ & upper limit, model; rerun pending\\
 CG$_{\rm in}$ & $g$, $G$ & measured, $G$-scaled\\
 $C_{\rm sn}$ & $g$, $G$, $A$ & model ($\pm6\%$ spread robust)\\
-$C_k$ (RG, SW, H, V) & regression, $g$ & measured\\
-$C_{\rm RG}$ (total RG--node) & regression, $g$ & measured (pickup caveat)\\
-$L_{\rm ov}$ & $C_{\rm RG}$, $C_{\rm ox}$, $W_{\rm RG}$ & upper bound if no pickup; not verified\\
-$C_{\rm eff}$, $x_{\rm ch}$ & $C_{\rm inj}$, $\alpha$, $W_{\rm RG}L_{\rm RG}$, $t_{\rm eq}$ & model ($\pm30\%$, degenerate with $t_{\rm eq}$)\\
+$C_k$ (H, SW, V) & settled level per volt, $g$ & H2 solid, rest provisional (REPORT \S32)\\
+$C_{\rm RG}$ (total RG--node) & fast jump & superseded (transient)\\
+$L_{\rm ov}$ & $C_{\rm RG}$, $C_{\rm ox}$, $W_{\rm RG}$ & on hold\\
+$C_{\rm eff}$, $x_{\rm ch}$ & $C_{\rm inj}$, $\alpha$, $W_{\rm RG}L_{\rm RG}$, $t_{\rm eq}$ & on hold ($C_{\rm inj}$ is a transient)\\
 knee $k$, $\Delta N_s$ & hinge fit; $t_{\rm eq}$, $x_j$ & knee measured; dose model\\
 $\tau_s$, slopes, CDS offset & template & measured\\
 SNI, shared share, $k_{A\to B}$ & simultaneous channels / images & measured\\

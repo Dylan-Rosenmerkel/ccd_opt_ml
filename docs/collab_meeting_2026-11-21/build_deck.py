@@ -326,55 +326,57 @@ text(s, 7.6, 3.6, 5.1, 3.3, [
 cite(s, "McWhorter, in Semiconductor Surface Physics (1957); Christensson et al., Solid-State Electron. 11, 797 (1968); Ioannidis et al., Solid-State Electron. 95, 28 (2014); permittivities 3.9 and 7.5: Sze & Ng (2007).")
 
 # ------------------------------------------------------------------ 12: mutual capacitance, how
-s = S[12]; clear(s); title(s, "Mutual Capacitances to the Sense Node (1): How")
-text(s, 0.6, 1.25, 12.1, 0.5, [("Idea: a voltage step ΔV on a clock line pushes a charge C_k ΔV onto the sense node. The amplifier cannot tell it from electrons.", {"level": None})], size=15)
-box(s, 0.6, 1.95, 2.2, 0.85, "Clock line k\n(RG, SW, H, V)", fill=ORANGE)
-box(s, 3.7, 1.95, 2.2, 0.85, "Sense node", fill=LIGHT)
+s = S[12]; clear(s); title(s, "Clock Couplings to the Amplifier Input (1): How")
+text(s, 0.6, 1.25, 12.1, 0.5, [("Idea: when a clock line switches by ΔV, the output settles to a new level. If that charge sits on the amplifier input, it reads exactly like electrons.", {"level": None})], size=15)
+box(s, 0.6, 1.95, 2.2, 0.85, "Clock line k\n(H1–H3, SW, RG, V)", fill=ORANGE)
+box(s, 3.7, 1.95, 2.2, 0.85, "Sense node /\namplifier input", fill=LIGHT)
 box(s, 6.8, 1.95, 2.2, 0.85, "Output transistor\nand readout", fill=LIGHT)
 box(s, 9.9, 1.95, 2.8, 0.85, "Trace (ADU)", fill=GREEN)
 arrow(s, 2.8, 2.37, 3.7, 2.37); arrow(s, 5.9, 2.37, 6.8, 2.37); arrow(s, 9.0, 2.37, 9.9, 2.37)
 text(s, 2.8, 1.95, 0.9, 0.35, [("C_k", {"level": None, "bold": True})], size=13, align=PP_ALIGN.CENTER)
-text(s, 0.6, 3.05, 7.0, 3.9, [
-    ("**Step 1.** Take traces at ≈100 voltage settings in which every clock level is varied (the v3 scan)", {"level": None}),
-    ("**Step 2.** In each trace, measure the jump y (ADU) at the moment line k switches", {"level": None}),
-    ("**Step 3.** Fit all settings at once: how many ADU does each line's voltage move y?", {"level": None}),
-], size=15, space=8)
-eq(s, "reg", 1.0, 4.65, scale=0.8)
-text(s, 0.6, 5.25, 7.0, 0.5, [("**Step 4.** Convert ADU per volt to electrons per volt with the image gain g (ADU per electron), times the electron charge q:", {"level": None})], size=15)
-eq(s, "ck2", 1.0, 6.2, scale=0.9)
-box(s, 8.0, 3.1, 4.7, 3.6, "", fill=RGBColor(0xF7, 0xF7, 0xF7), shape=MSO_SHAPE.RECTANGLE)
-text(s, 8.15, 3.2, 4.4, 3.4, [
-    ("**Worked example: RG low rail, ch0**", {"level": None, "size": 15}),
-    ("Fit: β = 1046 ADU per volt", {"level": None}),
-    ("Image gain: g = 1.40 ADU per electron", {"level": None}),
-    ("→ 1046 / 1.40 = 747 electrons per volt", {"level": None}),
-    ("→ C = 747 × 1.6 × 10⁻¹⁹ C per V", {"level": None}),
-    ("**= 0.12 fF**", {"level": None, "size": 16}),
-    ("Only g is needed: no assumption about the transistor or the readout gain", {"level": None, "size": 12}),
+text(s, 0.6, 3.05, 7.1, 3.9, [
+    ("**Step 1.** From the sequencer file, find the states in which only one line switches (e.g. only H2)", {"level": None}),
+    ("**Step 2.** Measure where the output ends up, not its first jump:", {"level": None}),
+    ("H lines: the output drifts to a new level with τ ≈ 9.7 µs (the H line itself is slow); fit an exponential and take its final level", {"level": 0, "size": 14}),
+    ("Short pulses (SW): area of the response ÷ pulse width, which does not depend on how fast the readout is", {"level": 0, "size": 14}),
+    ("**Step 3.** Convert the level change to electrons with the image gain g, and divide by the line's swing:", {"level": None}),
+], size=15, space=6)
+eq(s, "ck2", 1.0, 5.6, scale=0.9)
+text(s, 2.3, 5.65, 5.4, 0.6, [("β_k: level change per volt of swing (ADU/V)", {"level": None})], size=13)
+box(s, 8.0, 3.1, 4.7, 3.7, "", fill=RGBColor(0xF7, 0xF7, 0xF7), shape=MSO_SHAPE.RECTANGLE)
+text(s, 8.15, 3.2, 4.4, 3.5, [
+    ("**Worked example: H2, ch0 (approximate)**", {"level": None, "size": 15}),
+    ("H2 swings 2.3 V (6.7 → 9.0 V)", {"level": None}),
+    ("Output settles ≈ 97 000 ADU higher", {"level": None}),
+    ("÷ g = 1.4 ADU/e⁻ → ≈ 69 000 e⁻", {"level": None}),
+    ("÷ 2.3 V → ≈ 30 000 e⁻ per volt", {"level": None}),
+    ("× q = 1.6 × 10⁻¹⁹ C → **≈ 4.8 fF**", {"level": None, "size": 16}),
+    ("The old method read the output 0.2–0.8 µs after the edge, long before it settles, and got 0.01 fF", {"level": None, "size": 12}),
 ], size=14, space=6)
 
 # ------------------------------------------------------------------ 13: mutual capacitance, results
-s = S[13]; clear(s); title(s, "Mutual Capacitances to the Sense Node (2): Results and Uses")
-table(s, [["clock line → sense node", "ch0", "ch1", "ch2", "ch3"],
-          ["RG low rail (fF)", "0.120", "0.182", "0.183", "0.164"],
-          ["SW, summing well (fF)", "0.08–0.13 (all four)", "", "", ""],
-          ["H1–H3 (fF)", "0.011–0.016 (all four)", "", "", ""],
-          ["V1–V3 (fF)", "< 0.003, not seen", "", "", ""]],
-      0.6, 1.4, 6.8, col_w=[2.6, 1.05, 1.05, 1.05, 1.05], size=13, row_h=0.38)
-for r in (2, 3, 4):
-    t = s.shapes[-1].table; t.cell(r, 1).merge(t.cell(r, 4))
-text(s, 0.6, 3.5, 6.8, 0.4, [("**Reset-gate overlap, upper limit**", {"level": None})], size=16)
-text(s, 0.6, 3.95, 6.8, 1.1, [("The reset gate's edge sits over the sense-node implant; that strip of length L_ov is a small capacitor. It cannot be larger than the whole RG coupling:", {"level": None})], size=14)
-eq(s, "lov", 1.0, 5.0, scale=0.95)
-text(s, 3.0, 5.05, 4.4, 0.6, [("W_RG = 6 µm (layout)", {"level": None})], size=13)
-text(s, 0.6, 5.65, 6.8, 1.3, [("**L_ov ≤ 0.044, 0.067, 0.067, 0.060 µm** (ch0–ch3). An upper limit only if no cable pickup is mixed into the RG number; not checked independently.", {"level": None})], size=14)
-text(s, 7.8, 1.4, 4.9, 5.5, [
-    ("**Uses**", {"level": None, "size": 16}),
-    ("**Clock feedthrough:** a swing ΔV on line k shifts the CDS by C_k ΔV / q electrons, so it predicts the offset when a swing is changed [Janesick]", {"level": 0}),
-    ("**Sense-node budget:** the clock couplings are < 1 % of the ≈85–95 fF sense node; most of it is wiring and the transistor [Janesick]", {"level": 0}),
-    ("**Reset charge injection:** the charge the reset transistor dumps on the node, Q = α C W L (V_G − V_ch − V_T), gives the buried-channel depth, ≈0.6 µm [Sheu & Hu; Wegmann et al.]", {"level": 0}),
-], size=14, space=8)
-cite(s, "Board 101, v3 scan. RG: jump at the reset edge (measured within ≈1 µs, may contain cable pickup). Janesick, Scientific CCDs (SPIE 2001); Sheu & Hu, IEEE JSSC 19, 519 (1984); Wegmann et al., IEEE JSSC 22, 1091 (1987).")
+s = S[13]; clear(s); title(s, "Clock Couplings to the Amplifier Input (2): Results")
+table(s, [["line", "coupling (fF-equivalent)", "status"],
+          ["H2", "4.7–5.0 (up and down equal)", "**solid**"],
+          ["H1", "3.8–3.95 down, 0.16–0.20 up", "provisional: asymmetric"],
+          ["H3", "2.6–2.8 (up)", "provisional"],
+          ["SW (summing well)", "0.56", "provisional: assumes 0.30 µs width"],
+          ["RG: charge left on the node", "0.02–0.03 per volt of (RG high − VR)", "revised"],
+          ["V1–V3", "steps of 7–17 kADU, not attributed", "provisional"]],
+      0.6, 1.4, 7.6, col_w=[2.3, 3.0, 2.3], size=13, row_h=0.42)
+caption(s, 0.6, 4.4, 7.6, "Board 101, all four amplifiers within ≈4 % of each other. Earlier values (0.01–0.2 fF) measured fast jumps or pulse peaks and are superseded.", size=12, h=0.55)
+text(s, 0.6, 5.05, 7.6, 1.9, [
+    ("**Effective couplings, not layout capacitances:** the step holds for the whole 18 µs state and follows VDD like the image gain, so it enters at the amplifier input; PQ04 (single CCD, same amplifier) is 20–40× weaker, so the strength comes from the 4-CCD module's routing", {"level": 0}),
+    ("**Not in the images:** the H clocks do not switch during the skips; they drive the transient at the start of each pixel", {"level": 0}),
+], size=13, space=6)
+text(s, 8.6, 1.4, 4.1, 5.5, [
+    ("**On hold**", {"level": None, "size": 16}),
+    ("**Reset-gate overlap limit** and **buried-channel depth**: both used the RG response, which turned out to be a turn-off transient after the reset switch opens, not charge on the node", {"level": 0}),
+    ("**What would settle the rest**", {"level": None, "size": 16}),
+    ("A trace with the amplifier powered off", {"level": 0}),
+    ("A short scan with independent H1, H2, H3 swings", {"level": 0}),
+    ("An RG edge-speed or pulse-width scan", {"level": 0}),
+], size=14, space=6)
 
 # ------------------------------------------------------------------ 14: amplifier quantities (trace only, board 101)
 s = S[14]; clear(s); title(s, "Amplifier Quantities from the Trace Alone")
@@ -388,7 +390,7 @@ table(s, [["board 101, Nov 10–12", "ch0", "ch1", "ch2", "ch3"],
 text(s, 1.4, 5.0, 10.5, 1.9, [
     "Every number here comes from 0.2 s traces, with no image",
     "Converting to volts (white level, N_t) uses the design readout gain G; N_t also uses the model values A and C_ox",
-    "Numbers that need an image gain (capacitances, overlap) are on the previous slides",
+    "Numbers that need an image gain (the clock couplings) are on the previous slides",
 ], size=15)
 
 # ------------------------------------------------------------------ 15: ML intro
