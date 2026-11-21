@@ -754,6 +754,21 @@ t_.left, t_.top, t_.width, t_.height = Inches(0.6), Inches(2.8), Inches(12.1), I
 tf = t_.text_frame; tf.clear(); p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
 r = p.add_run(); r.text = "Backup Slides"; r.font.size = Pt(44)
 
+# ------------------------------------------------------------------ 27 (backup): predicted 500-skip noise
+s = S[27]; clear(s); title(s, "Predicted 500-Skip Noise σ₅₀₀ (a Trace Physics Input)")
+text(s, 0.6, 1.3, 6.6, 0.75, [("**1.** From the trace: fit the white level S_w and the 1/f level K from σ₁ at six window lengths", {"level": None})], size=14)
+text(s, 0.6, 2.05, 6.6, 0.75, [("**2.** Filter of a 500-skip image pixel: one CDS (window average, pedestal − signal), then the average of N = 500 skips, T = 32.6 µs apart:", {"level": None})], size=14)
+eq(s, "H500", 0.75, 2.85, scale=0.64)
+text(s, 0.6, 3.35, 6.6, 0.45, [("**3.** Pass the fitted noise spectrum through that filter:", {"level": None})], size=14)
+eq(s, "s500", 0.75, 3.8, scale=0.62)
+text(s, 0.6, 4.4, 6.6, 2.5, [
+    ("Both parts fall almost as 1/√N: the CDS removes the slowest 1/f noise, so what is left averages down nearly like white noise. Here the 1/f part raises σ₅₀₀ by ≈1.4× over white alone", {"level": 0}),
+    ("In ADU; the model converts it to electrons with a gain predicted from the voltages", {"level": 0}),
+    ("Assumes white + 1/f only: interference lines and drifts slower than a pixel are not included, so the EDT learns the remaining correction", {"level": 0}),
+], size=13, space=6)
+pic(s, "sigma500.png", 7.4, 1.35, w=5.3)
+caption(s, 7.4, 4.95, 5.3, "Board 101 ch1 (Nov 10–12): from one trace, σ₅₀₀ = 0.22 ADU predicted; the 500-skip images give 0.20 ADU (σe = 0.147 e⁻ × g = 1.39 ADU/e⁻).", size=12, h=0.8)
+
 # ------------------------------------------------------------------ backup: prefix titles
 for k in range(17, len(S)):
     for sh in S[k].shapes:
@@ -764,8 +779,5 @@ for k in range(17, len(S)):
                 for r in runs:
                     r.font.size = Pt(26)
 
-# drop the now-empty slide 27 (former sense-node capacitance backup)
-sld = prs.slides._sldIdLst[27]
-prs.part.drop_rel(sld.rId); prs.slides._sldIdLst.remove(sld)
 prs.save(OUT)
 print("saved", OUT, len(prs.slides))

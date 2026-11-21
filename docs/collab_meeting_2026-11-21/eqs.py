@@ -47,3 +47,9 @@ if len(sys.argv) > 2 and sys.argv[2] == "only3":
     for k, s in E3.items():
         fig = plt.figure(figsize=(0.1, 0.1)); fig.text(0, 0, s, fontsize=20)
         fig.savefig(f"{OUT}/{k}.png", dpi=300, bbox_inches="tight", pad_inches=0.04, transparent=True); plt.close(fig)
+E4 = {"H500": r"$|H_{500}(f)|^2=4\sin^2(\pi f\Delta t)\;\mathrm{sinc}^2(f\tau)\;\left[\frac{\sin(\pi f N T)}{N\,\sin(\pi f T)}\right]^2,\quad N=500$",
+      "s500": r"$\sigma_{500}^2=\int_0^\infty\left(S_w+\frac{K}{f}\right)|H_{500}(f)|^2\,df=S_w\,I_w(500)+K\,I_f(500)$"}
+if len(sys.argv) > 2 and sys.argv[2] == "only4":
+    for k, s in E4.items():
+        fig = plt.figure(figsize=(0.1, 0.1)); fig.text(0, 0, s, fontsize=20)
+        fig.savefig(f"{OUT}/{k}.png", dpi=300, bbox_inches="tight", pad_inches=0.04, transparent=True); plt.close(fig)
