@@ -666,13 +666,12 @@ table(s, [["quantity", "how", "board 101, ch0–ch3"],
           ["white noise level", "noise vs window length", "12.7–14.2 nV/√Hz"],
           ["1/f noise → oxide trap density", "McWhorter model", "1.1–2.3 × 10¹⁶ eV⁻¹cm⁻³\n(bulk CMOS ≈ 2 × 10¹⁶)"],
           ["H clock coupling to the amplifier input", "settled level per volt of swing", "3.1–3.5 fF-equiv.\n(single-CCD board ≈ 18× less)"],
-          ["sense-node capacitance", "one electron gives q/C volts; C = A·q / (µV per electron)", "84–89 fF\n(all 17 amplifiers within ±6 %)"],
           ["reset settling time", "reset pulse shape", "0.9–1.2 µs"]],
       0.6, 1.4, 7.4, col_w=[2.6, 2.3, 2.5], size=13, row_h=0.62)
 pic(s, "sigtau.png", 8.3, 1.4, w=4.4)
 caption(s, 8.3, 4.35, 4.4, "Example: white and 1/f noise separated by changing the length of the measurement window.", size=12, h=0.6)
 text(s, 0.6, 5.55, 12.1, 1.3, [
-    "All from 0.2 s traces; the coupling and the sense-node capacitance also need one image gain (and A = 0.85, a model value). Methods and caveats are in the backup slides",
+    "All from 0.2 s traces; converting the H coupling to fF also needs one image gain. Methods and caveats are in the backup slides",
     "The H coupling is an effective value set by the 4-CCD module's routing; it does not reach the images",
 ], size=15)
 
