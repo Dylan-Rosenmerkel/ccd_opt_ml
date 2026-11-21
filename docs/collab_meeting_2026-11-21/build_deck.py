@@ -211,19 +211,19 @@ def two_fig_slide(s, ttl, bullets, left, right, cap):
 
 
 # ------------------------------------------------------------------ 3-5
-two_fig_slide(S[3], "Trace Breakdown: Vertical Clocks", [
+two_fig_slide(S[17], "Trace Breakdown: Vertical Clocks", [
     "V1–V3 and the transfer gate (TG) move every row one step toward the serial register; one transfer takes 360 µs",
     "The clock edges couple into the output: a waveform of ≈40 000 ADU peak-to-peak, repeated at every transfer",
     "Features: peak-to-peak, lowest and highest point, change from the first to the last transfer"],
     "v_zoom.png", "v_setting.png",
     "Right: lowering the V low rails by 0.5 V (TG by 0.4 V) deepens only this waveform, peak-to-peak 41 → 46 kADU. Bands start at the spike that begins each transfer. Board 101, ch0, 12 Oct.")
-two_fig_slide(S[4], "Trace Breakdown: Horizontal Clocks", [
+two_fig_slide(S[18], "Trace Breakdown: Horizontal Clocks", [
     "H1–H3 move the charge along the serial register to the sense node: one transfer per pixel, 126 µs each",
     "The largest waveform in the trace (≈130 000 ADU peak-to-peak); it sets how the output looks before the first skip",
     "Features: peak-to-peak, lowest and highest point, scatter between transfers, change from first to last transfer"],
     "h_zoom.png", "h_setting.png",
     "Right: lowering the H low rails by 0.5 V changes only the horizontal waveform, peak-to-peak 126 → 144 kADU. Bands start at the spike that begins each transfer. 12 Oct.")
-two_fig_slide(S[5], "Trace Breakdown: Skips Region", [
+two_fig_slide(S[19], "Trace Breakdown: Skips Region", [
     "After the horizontal transfer the pixel's charge is measured 500 times (skips), 32.6 µs per skip",
     "The baseline drifts by ≈3 000 ADU across a pixel, but each skip subtracts its own pedestal, so the CDS stays flat",
     "Features: CDS noise, drift along the pixel, first-skip transient, baseline recovery, pixel charge level"],
@@ -231,7 +231,7 @@ two_fig_slide(S[5], "Trace Breakdown: Skips Region", [
     "Board 101, ch0, nominal voltages, 3 Nov. Left: each spike is one skip cycle. Right: the same pixel, one point per skip.")
 
 # ------------------------------------------------------------------ 6: one skip and its noise
-s = S[6]; clear(s); title(s, "Trace Breakdown: One Skip and Its Noise")
+s = S[20]; clear(s); title(s, "Trace Breakdown: One Skip and Its Noise")
 pic(s, "two_skips.png", 0.6, 1.3, w=5.9)
 text(s, 0.6, 4.35, 5.9, 0.95, [
     "Pedestal (10 µs) → charge onto the sense node → signal (10 µs) → reset",
@@ -246,7 +246,7 @@ text(s, 7.0, 6.05, 5.7, 0.95, [("Dashed: pure white noise, σ₁/√N. The 500-s
 cite(s, "Allan, Proc. IEEE 54, 221 (1966). Board 101 ch0, 210 traces (2–3 Nov). The readout level drifts slowly during each pixel; a straight line is removed from each pixel first, since a drift would make this statistic grow with N.")
 
 # ------------------------------------------------------------------ 7: settings apart (one PCA panel)
-s = S[7]; clear(s); title(s, "Telling Settings Apart")
+s = S[4]; clear(s); title(s, "Telling Settings Apart")
 text(s, 0.6, 1.4, 5.4, 4.8, [
     "Describe each trace by 85 numbers (noise, waveform shapes, timing, levels)",
     "**PCA** finds the two combinations of those numbers in which the traces differ most (PC1, PC2); each trace is one dot",
@@ -258,7 +258,7 @@ pic(s, "pca_ch0.png", 6.3, 1.4, w=6.4)
 caption(s, 6.3, 6.25, 6.4, "Board 101 ch0, 12 Oct: four voltage changes, each traced 3 times.", size=12)
 
 # ------------------------------------------------------------------ 8: amplifiers apart
-s = S[8]; clear(s); title(s, "Telling Amplifiers Apart")
+s = S[5]; clear(s); title(s, "Telling Amplifiers Apart")
 pic(s, "amps.png", 0.6, 1.3, w=12.1)
 text(s, 0.6, 5.7, 12.1, 1.35, [
     "Same voltages, each amplifier traced 5 times in a row (8 Oct): the repeats agree, the amplifiers differ (ch1's reset pulse decays ≈150 ns faster)",
@@ -266,7 +266,7 @@ text(s, 0.6, 5.7, 12.1, 1.35, [
 ], size=15)
 
 # ------------------------------------------------------------------ 9: oxide 1, the noise model
-s = S[9]; clear(s); title(s, "Amplifier Oxide Quality (1): A Model of the Noise")
+s = S[21]; clear(s); title(s, "Amplifier Oxide Quality (1): A Model of the Noise")
 text(s, 0.6, 1.3, 6.2, 0.4, [("**What the trace gives:** σ₁, the noise of one skip", {"level": None})], size=16)
 eq(s, "s1int", 0.8, 1.8, scale=0.8)
 text(s, 0.6, 2.55, 6.2, 0.6, [("S(f): noise spectrum at the amplifier output. |H(f)|²: how much of each frequency survives our measurement.", {"level": None})], size=13)
@@ -283,7 +283,7 @@ caption(s, 7.0, 4.95, 5.7, "Only noise between ≈10 kHz and ≈500 kHz reaches 
 cite(s, "Window average and pedestal − signal: Hopkinson & Lumb, J. Phys. E 15, 1214 (1982), Table 1 'differential averager'. The skip-difference factor is ours.")
 
 # ------------------------------------------------------------------ 10: oxide 2, measuring K
-s = S[10]; clear(s); title(s, "Amplifier Oxide Quality (2): Measuring the 1/f Level K")
+s = S[22]; clear(s); title(s, "Amplifier Oxide Quality (2): Measuring the 1/f Level K")
 text(s, 0.6, 1.3, 6.3, 2.0, [
     ("**1.** From one trace, compute σ₁ using only the last τ samples of each 10 µs window: τ = 2, 3, 4, 6, 8, 9.3 µs", {"level": None}),
     ("**2.** For each τ, compute how much white and how much 1/f noise passes the filter:", {"level": None}),
@@ -301,7 +301,7 @@ caption(s, 7.1, 5.2, 5.6, "One trace of board 101 ch1 (Nov 10–12): six measure
 cite(s, "Medians over 8 traces per amplifier. Board 101 also carries narrow interference lines (~120 kHz, 1.19 MHz) that bias this K low; under study.")
 
 # ------------------------------------------------------------------ 11: oxide 3, K -> N_t
-s = S[11]; clear(s); title(s, "Amplifier Oxide Quality (3): From K to the Oxide Trap Density")
+s = S[23]; clear(s); title(s, "Amplifier Oxide Quality (3): From K to the Oxide Trap Density")
 text(s, 0.6, 1.3, 6.5, 0.4, [("**1. Convert K from ADC counts to volts at the transistor gate**", {"level": None})], size=15)
 eq(s, "kvg", 0.9, 1.75, scale=0.95)
 text(s, 0.6, 2.3, 6.5, 1.6, [
@@ -326,7 +326,7 @@ text(s, 7.6, 3.6, 5.1, 3.3, [
 cite(s, "McWhorter, in Semiconductor Surface Physics (1957); Christensson et al., Solid-State Electron. 11, 797 (1968); Ioannidis et al., Solid-State Electron. 95, 28 (2014); permittivities 3.9 and 7.5: Sze & Ng (2007).")
 
 # ------------------------------------------------------------------ 12: couplings, how
-s = S[12]; clear(s); title(s, "Clock Couplings to the Amplifier Input (1): How")
+s = S[24]; clear(s); title(s, "Clock Couplings to the Amplifier Input (1): How")
 text(s, 0.6, 1.25, 12.1, 0.5, [("Idea: when a clock line switches by ΔV, the output settles to a new level. If that charge sits on the amplifier input, it reads exactly like electrons.", {"level": None})], size=15)
 box(s, 0.6, 1.95, 2.2, 0.85, "Clock line k\n(H1–H3, SW)", fill=ORANGE)
 box(s, 3.7, 1.95, 2.2, 0.85, "Sense node /\namplifier input", fill=LIGHT)
@@ -349,7 +349,7 @@ text(s, 7.95, 5.75, 4.75, 1.3, [
 ], size=13, space=4)
 
 # ------------------------------------------------------------------ 13: couplings, results
-s = S[13]; clear(s); title(s, "Clock Couplings to the Amplifier Input (2): Results")
+s = S[25]; clear(s); title(s, "Clock Couplings to the Amplifier Input (2): Results")
 table(s, [["line", "coupling (fF-eq.)", "4 amplifiers", "checked by"],
           ["H1", "3.41 ± 0.06", "3.33–3.47", "up = down within 1 %"],
           ["H2", "3.09 ± 0.07", "3.01–3.14", "up = down within 1 %"],
@@ -367,7 +367,7 @@ text(s, 8.55, 1.35, 4.2, 5.6, [
 ], size=13, space=8)
 
 # ------------------------------------------------------------------ 14: amplifier quantities (trace only, board 101)
-s = S[14]; clear(s); title(s, "Amplifier Quantities from the Trace Alone")
+s = S[26]; clear(s); title(s, "Amplifier Quantities from the Trace Alone")
 table(s, [["board 101, Nov 10–12", "ch0", "ch1", "ch2", "ch3"],
           ["single-skip noise σ₁ at τ = 9.3 µs (ADU)", "5.2", "5.4", "5.7", "5.8"],
           ["white noise level (nV/√Hz)", "14.2", "12.7", "14.0", "13.0"],
@@ -382,7 +382,7 @@ text(s, 1.4, 5.0, 10.5, 1.9, [
 ], size=15)
 
 # ------------------------------------------------------------------ 15: ML intro
-s = S[15]; clear(s); title(s, "Can Traces Predict Image Noise and Other Image Quantities?")
+s = S[27]; clear(s); title(s, "Can Traces Predict Image Noise and Other Image Quantities?")
 text(s, 0.6, 1.3, 12.1, 2.4, [
     "Goal: use the traces, the quantities derived from them and the voltages to predict the image **before** it is taken",
     "We tried many machine-learning models: Gaussian processes, gradient-boosted trees, neural-network ensembles, CNNs on the trace curves, deep-kernel and sparse GPs",
@@ -398,7 +398,7 @@ box(s, 10.4, 4.9, 2.3, 1.1, "Prediction\nnoise, usable?, dark charge", fill=RGBC
 arrow(s, 3.2, 4.85, 4.0, 4.85); arrow(s, 6.6, 4.85, 7.4, 5.25); arrow(s, 3.2, 6.15, 7.4, 5.7); arrow(s, 9.6, 5.45, 10.4, 5.45)
 
 # ------------------------------------------------------------------ 16: data set
-s = S[16]; clear(s); title(s, "Data Set")
+s = S[28]; clear(s); title(s, "Data Set")
 text(s, 0.6, 1.3, 6.3, 0.5, [("**A packet** = one test of one voltage setting:", {"level": None})], size=16)
 y0 = 1.9
 for i, (t1, fill) in enumerate([("Reference traces\nat the nominal voltages", LIGHT), ("Set the new voltages", ORANGE),
@@ -423,7 +423,7 @@ text(s, 7.2, 5.35, 5.5, 1.6, [
 ], size=14)
 
 # ------------------------------------------------------------------ 17: decision tree
-s = S[17]; clear(s); title(s, "What Is a Decision Tree?")
+s = S[29]; clear(s); title(s, "What Is a Decision Tree?")
 pic(s, "tree.png", 0.6, 1.3, w=5.6)
 pic(s, "tree_one.png", 0.9, 4.6, w=4.6)
 text(s, 6.9, 1.3, 5.8, 5.7, [
@@ -441,7 +441,7 @@ text(s, 6.9, 4.3, 5.8, 1.5, [
 cite(s, "Breiman, Friedman, Olshen & Stone, Classification and Regression Trees (1984). Tree diagram: illustration with made-up numbers.")
 
 # ------------------------------------------------------------------ 18: EDT
-s = S[18]; clear(s); title(s, "Extremely Randomized Decision Trees (EDT)")
+s = S[30]; clear(s); title(s, "Extremely Randomized Decision Trees (EDT)")
 text(s, 0.6, 1.3, 6.4, 5.0, [
     ("**Grow one tree, step by step:**", {"level": None, "size": 16}),
     ("1.  Put all training images in one node", {"level": None}),
@@ -462,7 +462,7 @@ text(s, 7.2, 4.4, 5.5, 2.5, [
 cite(s, "Geurts, Ernst & Wehenkel, Machine Learning 63, 3 (2006); Breiman, Machine Learning 45, 5 (2001); scikit-learn ExtraTreesRegressor. Right: illustration on made-up data.")
 
 # ------------------------------------------------------------------ 19: noise prediction
-s = S[19]; clear(s); title(s, "EDT on Our Data: Predicting Image Noise")
+s = S[9]; clear(s); title(s, "EDT on Our Data: Predicting Image Noise")
 text(s, 0.6, 1.3, 7.0, 3.2, [
     "**Target:** ln σe, the read noise of a 500-skip image",
     "**Inputs (41):**",
@@ -482,7 +482,7 @@ caption(s, 7.9, 5.25, 4.8, "Pooled over 67 sealed test images on three held-out 
 cite(s, "Interval: bootstrap over the 23 session-H packets (Efron 1979). One board, one night, three amplifiers.")
 
 # ------------------------------------------------------------------ 20: usability
-s = S[20]; clear(s); title(s, "EDT on Our Data: Usable or Not?")
+s = S[10]; clear(s); title(s, "EDT on Our Data: Usable or Not?")
 pic(s, "usable.png", 0.6, 1.3, w=7.4)
 caption(s, 0.6, 4.8, 7.4, "Left: usable, nominal setting (3 Nov, ch0): clear 0, 1, 2 e⁻ peaks. Right: unusable (2 Nov, ch2), horizontal clock delays halved (1800 → 900 cycles): the fit fails (χ²/ndf = 11). At that setting ch0, ch1 and ch3 were still usable.", size=11, h=0.55)
 text(s, 8.3, 1.3, 4.4, 3.6, [
@@ -499,7 +499,7 @@ text(s, 8.3, 5.3, 4.4, 1.6, [("The trace catches most broken settings before an 
 cite(s, "AUC (area under the ROC curve): the chance that a randomly chosen usable image gets a higher P(usable) than a randomly chosen unusable one. 1 = perfect, 0.5 = guessing. Trained on session G, tested once on H, test amplifier left out.")
 
 # ------------------------------------------------------------------ 21: why not directly
-s = S[21]; clear(s); title(s, "Can ML Find Good Settings Faster? Not Directly")
+s = S[11]; clear(s); title(s, "Can ML Find Good Settings Faster? Not Directly")
 pic(s, "dc_amp.png", 0.6, 1.4, w=6.2)
 text(s, 7.1, 1.3, 5.6, 4.3, [
     "We tried to predict an image's **dark charge (DC)** from its traces. Three problems:",
@@ -512,7 +512,7 @@ text(s, 0.6, 5.85, 12.1, 1.0, [
 ], size=17)
 
 # ------------------------------------------------------------------ 22: GP
-s = S[22]; clear(s); title(s, "Learning the Shape of the Voltage Response (Gaussian Process)")
+s = S[31]; clear(s); title(s, "Learning the Shape of the Voltage Response (Gaussian Process)")
 text(s, 0.6, 1.3, 2.3, 0.45, [("**What we minimize:**", {"level": None})], size=15)
 eq(s, "J", 2.75, 1.35, scale=0.85)
 text(s, 0.6, 1.85, 6.4, 0.85, [("A GP is a prior over smooth functions: J at any set of settings is jointly Gaussian, with a covariance set by how close the settings are (Matérn-5/2):", {"level": None})], size=14)
@@ -528,7 +528,7 @@ caption(s, 7.2, 4.85, 5.5, "Illustration in one dimension (made-up function). Th
 cite(s, "Rasmussen & Williams, Gaussian Processes for Machine Learning (MIT Press, 2006).")
 
 # ------------------------------------------------------------------ 23: multi-amplifier GP
-s = S[23]; clear(s); title(s, "Multi-Amplifier GP Model")
+s = S[32]; clear(s); title(s, "Multi-Amplifier GP Model")
 eq(s, "mt", 0.8, 1.35, scale=1.0)
 text(s, 0.6, 1.85, 6.3, 1.0, [
     ("f(x): shape shared by all amplifiers;  gₐ(x): amplifier a's own small deviation", {"level": 0}),
@@ -553,7 +553,7 @@ text(s, 7.1, 3.9, 5.6, 2.9, [
 cite(s, "Multi-task GP: Bonilla, Chai & Williams, NeurIPS (2007); transfer between related optimisations: Swersky, Snoek & Adams, NeurIPS (2013).")
 
 # ------------------------------------------------------------------ 24: BO loop
-s = S[24]; clear(s); title(s, "Bayesian Optimization (BO) Loop")
+s = S[33]; clear(s); title(s, "Bayesian Optimization (BO) Loop")
 steps = [("1. Fit the multi-amplifier GP", "other amplifiers + images so far", LIGHT),
          ("2. Score candidate settings", "m(x), s(x) → expected improvement", LIGHT),
          ("3. Take traces of the top candidates", "≈0.2 s each, no image yet", ORANGE),
@@ -574,7 +574,7 @@ pic(s, "ei.png", 7.2, 2.95, w=5.2)
 cite(s, "Expected improvement: Jones, Schonlau & Welch, J. Global Optim. 13, 455 (1998). Usability gate: constrained BO, Gelbart, Snoek & Adams, UAI (2014).")
 
 # ------------------------------------------------------------------ 25: BO tests, step by step
-s = S[25]; clear(s); title(s, "BO Tests: Replaying a Night We Already Measured")
+s = S[34]; clear(s); title(s, "BO Tests: Replaying a Night We Already Measured")
 text(s, 0.6, 1.3, 7.0, 5.0, [
     ("**1.** Pick one amplifier, e.g. ch0, and pretend we have never imaged it", {"level": None}),
     ("**2.** Its settings from one half of the night become the **menu**: 63–64 settings, including the ones that gave unusable images. The search sees their voltages, not their results", {"level": None}),
@@ -602,7 +602,7 @@ for r, amp in enumerate(["ch0 (new)", "ch1", "ch3"]):
 text(s, gx - 1.4, gy + 3 * ch + 0.25, 4.9, 1.6, [("One of the 6 searches. The new amplifier never shares a moment of the night with what the model learned from.", {"level": None})], size=14)
 
 # ------------------------------------------------------------------ 26: BO results (dark charge only, plain)
-s = S[26]; clear(s); title(s, "BO Results: Finding the Lowest Dark Charge")
+s = S[14]; clear(s); title(s, "BO Results: Finding the Lowest Dark Charge")
 table(s, [["method", "what it does", "images", "wasted"],
           ["random order", "image the menu in a random order", "38.5", "5.7"],
           ["by hand", "always image the untested setting closest to the best so far", "26.8", "3.4"],
@@ -617,8 +617,165 @@ text(s, 0.6, 4.75, 7.4, 2.2, [
 pic(s, "results.png", 8.3, 1.4, w=4.4)
 text(s, 8.3, 4.15, 4.4, 2.8, [
     ("**Using the other amplifiers cuts the search from ≈27 images by hand to ≈2, and no image is wasted**", {"level": None, "space": 10}),
-    ("Limits: one board, one night, sibling amplifiers. Next: a live run on a CCD the model has never seen.", {"level": None, "size": 14}),
 ], size=15)
 
+# ===================================================== main talk: new and merged slides (run after slides_v4_old.py)
+GREY = RGBColor(0xF2, 0xF2, 0xF2)
+
+# ------------------------------------------------------------------ 0: title
+s = S[0]
+for sh in s.shapes:
+    if sh.is_placeholder and sh.placeholder_format.type in (1, 3):
+        tf = sh.text_frame; tf.clear(); r = tf.paragraphs[0].add_run(); r.text = "Low-Level Analysis: Reading CCD Amplifiers from the Raw Trace"
+        r.font.size = Pt(36)
+        sh.left, sh.width = Inches(0.8), Inches(11.7)
+
+# ------------------------------------------------------------------ 1: motivation + headline results
+s = S[1]; clear(s); title(s, "Why Look at the Raw Trace?")
+text(s, 0.6, 1.35, 6.6, 5.5, [
+    "Finding good CCD voltages takes many images, minutes each: by hand, ≈27 images to get close to the lowest dark charge in our test",
+    "The **trace** is the amplifier's raw output at 15 MHz while the CCD is read out: 0.2 s per amplifier, no image needed",
+    ("**Three questions**", {"space": 4}),
+    ("1.  Can the trace tell settings and amplifiers apart? (clustering)", {"level": None, "size": 16}),
+    ("2.  What does it tell us about the amplifier itself?", {"level": None, "size": 16}),
+    ("3.  Can it predict image quality and find good voltages faster? (ML)", {"level": None, "size": 16}),
+], size=17, space=10)
+box(s, 7.6, 1.45, 5.1, 3.0, "", fill=GREY, shape=MSO_SHAPE.RECTANGLE)
+text(s, 7.8, 1.55, 4.75, 5.0, [
+    ("**Headline results** (PA03 board 101)", {"level": None, "size": 17, "space": 10}),
+    ("Traces from the same setting cluster together: right in **44–46 of 47** cases", {"level": 0}),
+    ("Image noise on a new amplifier predicted to **8.6 %** (18.2 % from the voltages alone)", {"level": 0}),
+    ("Broken settings flagged before imaging: **18 of 20**, no good setting blocked", {"level": 0}),
+    ("Lowest dark charge reached in **≈2 images** instead of ≈27 by hand", {"level": 0}),
+], size=15, space=10)
+
+# ------------------------------------------------------------------ 3: one skip (simple)
+s = S[3]; clear(s); title(s, "The Measurement: One Skip")
+pic(s, "two_skips.png", 0.6, 1.4, w=6.3)
+caption(s, 0.6, 4.6, 6.3, "Two of the 500 skips of one pixel in the raw trace (board 101, ch0).", size=12)
+text(s, 7.2, 1.35, 5.5, 3.6, [
+    "Each pixel is measured **500 times** (skips) without destroying the charge",
+    "One skip: pedestal (10 µs) → charge moved onto the sense node → signal (10 µs)",
+    "**CDS** = mean(pedestal) − mean(signal): one measurement of the charge",
+    "Averaging 500 skips gives sub-electron noise",
+], size=16, space=8)
+text(s, 7.2, 4.9, 5.5, 0.5, [("**Single-skip noise σ₁:**", {"level": None})], size=16)
+eq(s, "sigma1", 7.4, 5.35, scale=0.85)
+text(s, 7.2, 5.9, 5.5, 1.1, [("j: every neighbouring pair of skips in a pixel, pooled over all pixels; the charge cancels in each difference. ÷√2: each difference holds two skips' noise. Board 101: σ₁ ≈ 3.7 e⁻ per skip.", {"level": None})], size=13)
+
+# ------------------------------------------------------------------ 6: amplifier highlights
+s = S[6]; clear(s); title(s, "What the Trace Tells Us About the Amplifier")
+table(s, [["quantity", "how", "board 101, ch0–ch3"],
+          ["white noise level", "noise vs window length", "12.7–14.2 nV/√Hz"],
+          ["1/f noise → oxide trap density", "McWhorter model", "1.1–2.3 × 10¹⁶ eV⁻¹cm⁻³\n(bulk CMOS ≈ 2 × 10¹⁶)"],
+          ["H clock coupling to the amplifier input", "settled level per volt of swing", "3.1–3.5 fF-equiv.\n(single-CCD board ≈ 18× less)"],
+          ["summing-well coupling", "response area per volt", "0.54 fF-equiv."],
+          ["reset settling time", "reset pulse shape", "0.9–1.2 µs"]],
+      0.6, 1.4, 7.4, col_w=[2.6, 2.3, 2.5], size=13, row_h=0.62)
+pic(s, "sigtau.png", 8.3, 1.4, w=4.4)
+caption(s, 8.3, 4.35, 4.4, "Example: white and 1/f noise separated by changing the length of the measurement window.", size=12, h=0.6)
+text(s, 0.6, 5.55, 12.1, 1.3, [
+    "All from 0.2 s traces; the couplings also need one image gain. Methods and caveats are in the backup slides",
+    "The couplings are effective values set by the 4-CCD module's routing; they do not reach the images",
+], size=15)
+
+# ------------------------------------------------------------------ 7: data set + what we predict
+s = S[7]; clear(s); title(s, "Data Set and What We Predict")
+text(s, 0.6, 1.3, 6.0, 0.45, [("**A packet** = one test of one voltage setting:", {"level": None})], size=16)
+y0 = 1.85
+for i, (t1, fill) in enumerate([("Reference traces at the nominal voltages", LIGHT), ("Set the new voltages", ORANGE),
+                                ("Traces at the new setting (all amplifiers)", LIGHT), ("One 500-skip dark image", GREEN),
+                                ("Image fit → noise σe, dark charge λ, usable?", GREY)]):
+    box(s, 0.9, y0 + i * 0.9, 5.4, 0.62, t1, fill=fill, size=14)
+    if i < 4:
+        arrow(s, 3.6, y0 + i * 0.9 + 0.62, 3.6, y0 + (i + 1) * 0.9)
+text(s, 7.0, 1.3, 5.7, 2.5, [
+    "**v3 night (Nov 10–12):** board 101, amplifiers ch0, ch1, ch3",
+    "18 voltages varied together, spread evenly over the allowed range (Sobol sampling)",
+    "127 packets × 3 amplifiers = **381 images**; 82 unusable",
+], size=15)
+table(s, [["", "packets", "use"], ["session G", "98", "training"], ["session H", "29", "sealed test, scored once"]],
+      7.0, 3.75, 5.7, col_w=[1.6, 1.3, 2.8], size=13, row_h=0.4)
+text(s, 7.0, 5.15, 5.7, 1.8, [
+    "**We predict:** image noise, whether the image is usable, and dark charge",
+    "Tried GPs, boosted trees, neural networks and CNNs; this talk uses **extremely randomized trees** and a **Gaussian process**",
+], size=15)
+
+# ------------------------------------------------------------------ 8: trees
+s = S[8]; clear(s); title(s, "Extremely Randomized Decision Trees (EDT)")
+pic(s, "tree.png", 0.6, 1.35, w=5.9)
+caption(s, 0.6, 4.75, 5.9, "A decision tree (illustration, made-up numbers).", size=12)
+pic(s, "tree_forest.png", 7.0, 1.35, w=5.7)
+text(s, 0.6, 5.2, 12.1, 1.8, [
+    "A **decision tree** asks yes/no questions about the inputs and predicts the average of the training images in the leaf it ends in",
+    "One tree is jumpy. **EDT** grows 400 trees; at each split it tries a few randomly chosen inputs, each with a random cut value, and keeps the best. The trees differ, and their **average** is smooth and stable",
+    "Works with ≈150 training images; no tuning needed",
+], size=15, space=6)
+cite(s, "Geurts, Ernst & Wehenkel, Machine Learning 63, 3 (2006). Details in backup.")
+
+# ------------------------------------------------------------------ 12: multi-amplifier GP
+s = S[12]; clear(s); title(s, "Learning the Voltage Response from Other Amplifiers")
+pic(s, "gp.png", 0.6, 1.3, w=4.6)
+pic(s, "multi.png", 5.5, 1.35, w=7.2)
+text(s, 0.6, 4.25, 12.1, 2.7, [
+    "**Gaussian process (GP):** a smooth guess of J = ln(dark charge) over the 18 voltages, with an uncertainty that shrinks near measured images (left)",
+    "**Multi-amplifier model:** J for amplifier a = shared shape f(voltages) + the amplifier's own level cₐ (+ a small own deviation)",
+    "The amplifiers already measured give the **shape** (where the minimum is); one image of the new amplifier gives its **level** (right)",
+    "Assumption: the response has a similar shape on every amplifier",
+], size=15, space=6)
+cite(s, "Rasmussen & Williams (2006); multi-task GP: Bonilla et al., NeurIPS (2007); Swersky et al., NeurIPS (2013). Illustrations in one dimension, made-up response.")
+
+# ------------------------------------------------------------------ 13: BO loop + test
+s = S[13]; clear(s); title(s, "Searching for the Best Voltages (Bayesian Optimization)")
+steps = [("1. Fit the multi-amplifier GP", LIGHT), ("2. Pick candidates: good predicted value or high uncertainty", LIGHT),
+         ("3. Take traces; EDT gate: skip if P(usable) < 0.5", ORANGE), ("4. Take one image at the best candidate", GREEN),
+         ("5. Add the result; repeat", GREY)]
+for i, (a, fill) in enumerate(steps):
+    box(s, 0.6, 1.4 + i * 0.95, 5.6, 0.68, a, fill=fill, size=14, bold=True)
+    if i < 4:
+        arrow(s, 3.4, 1.4 + i * 0.95 + 0.68, 3.4, 1.4 + (i + 1) * 0.95)
+G = RGBColor(0x80, 0x80, 0x80)
+for (x, y, w, h) in [(6.55, 1.7, 0.08, 4.1), (6.2, 5.75, 0.43, 0.08)]:
+    r = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h)); r.fill.solid(); r.fill.fore_color.rgb = G; r.line.fill.background()
+fb = s.shapes.add_shape(MSO_SHAPE.LEFT_ARROW, Inches(6.22), Inches(1.55), Inches(0.45), Inches(0.36)); fb.fill.solid(); fb.fill.fore_color.rgb = G; fb.line.fill.background()
+text(s, 7.1, 1.3, 5.6, 5.6, [
+    ("**How we tested it: replaying a night we already measured**", {"level": None, "size": 16, "space": 8}),
+    ("1.  Pretend one amplifier is new. Its settings from one half of the night are the menu (63–64, broken ones included)", {"level": None}),
+    ("2.  The model learns only from the other two amplifiers, in the other half", {"level": None}),
+    ("3.  “Taking an image” = revealing the stored result", {"level": None}),
+    ("4.  Count images until the lowest dark charge found is within 2 % of the best in the menu", {"level": None}),
+    ("5.  3 amplifiers × 2 halves = 6 searches, averaged", {"level": None}),
+    ("Compared with: random order, and by hand (always image the untested setting closest to the best so far)", {"level": None, "size": 13}),
+], size=14, space=6)
+
+# ------------------------------------------------------------------ 15: summary
+s = S[15]; clear(s); title(s, "Summary and Next Steps")
+text(s, 0.6, 1.4, 12.1, 5.5, [
+    ("**1. Telling apart:** traces from the same setting cluster (44–46 of 47); 25 of 141 trace numbers separate every pair of amplifiers", {"level": None, "space": 18}),
+    ("**2. Amplifier physics from 0.2 s:** white and 1/f noise, oxide trap density ≈ 1–2 × 10¹⁶ eV⁻¹cm⁻³, clock couplings ≈ 3 fF-equivalent", {"level": None, "space": 18}),
+    ("**3. ML:** image noise on a new amplifier 18.2 % → 8.6 %; broken settings flagged 18 of 20, no good one blocked; lowest dark charge in ≈2 images instead of ≈27 by hand", {"level": None, "space": 28}),
+    ("**Limits:** one board (PA03 101), one night, sibling amplifiers", {"level": None, "space": 12}),
+    ("**Next:** a live search on a CCD the model has never seen; short scans to pin down the RG and V couplings", {"level": None}),
+], size=20)
+
+text(s, 0.6, 6.0, 12.1, 0.7, [("Thank you. Questions?", {"level": None, "bold": True})], size=26, align=PP_ALIGN.CENTER)
+
+# ------------------------------------------------------------------ 16: backup divider
+s = S[16]; clear(s)
+t_ = [sh for sh in s.shapes if sh.is_placeholder and sh.placeholder_format.type in (1, 3)][0]
+t_.left, t_.top, t_.width, t_.height = Inches(0.6), Inches(2.8), Inches(12.1), Inches(1.4)
+tf = t_.text_frame; tf.clear(); p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+r = p.add_run(); r.text = "Backup Slides"; r.font.size = Pt(44)
+
+# ------------------------------------------------------------------ backup: prefix titles
+for k in range(17, len(S)):
+    for sh in S[k].shapes:
+        if sh.is_placeholder and sh.placeholder_format.type in (1, 3):
+            runs = [r for p in sh.text_frame.paragraphs for r in p.runs]
+            if runs and not runs[0].text.startswith("Backup"):
+                runs[0].text = "Backup: " + runs[0].text
+                for r in runs:
+                    r.font.size = Pt(26)
+
 prs.save(OUT)
-print("saved", OUT)
+print("saved", OUT, len(S))
