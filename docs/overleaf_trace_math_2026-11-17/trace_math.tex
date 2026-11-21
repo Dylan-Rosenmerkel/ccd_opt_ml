@@ -619,14 +619,39 @@ summing-well dip / SW swing, H/V waveform peak-to-peak / swing, each $\div g$ (e
 whole transfer waveform, so they compare channels, not absolute $C_k$.
 \end{itemize}
 
-\paragraph{Reset-gate overlap.}
+\paragraph{Reset gate to sense node: coupling, and what it says about the overlap.}
+What the trace measures is the \emph{total} capacitance $C_{\rm RG}$ between the reset-gate line and the sense node
+(the coefficients above, through $C_k=q\,N/\Delta V_k$). That total is the sum of several paths in parallel:
+\begin{itemize}
+\item the \emph{overlap strip}, where the RG electrode lies over the edge of the sense-node implant (the implant
+spreads a little under the gate by lateral diffusion and alignment), a parallel-plate capacitor of area
+$W_{\rm RG}L_{\rm ov}$ through the gate dielectric;
+\item \emph{fringing} fields from the gate's edge and sidewall to the implant next to it;
+\item \emph{wiring}: the RG line routed near the sense node, the output gate or the sense line;
+\item \emph{pickup} on the board and cable at the same edge, which can have either sign.
+\end{itemize}
+The trace sees only the sum, so it cannot say how much of $C_{\rm RG}$ is overlap. Measured values:
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}\toprule
+method & $C_{\rm RG}$ & status\\\midrule
+feedthrough feature minus board-102 pickup & 0.21--0.37\,fF (101 ch2 0.37, $\approx1.7\times$ the others) &
+subtraction withdrawn (board 102 not dead)\\
+rail regression, RG low at the reset edges & 0.15--0.22\,fF & no subtraction; edge window may contain cable pickup\\\bottomrule
+\end{tabularx}
+\end{center}
+Because parallel capacitances only add, the overlap part cannot exceed the total, which gives a bound:
 \begin{equation}
-L_{\rm ov}=\frac{C_{\rm RG}}{C_{\rm ox}W_{\rm RG}}=\frac{0.21\text{--}0.37\ \text{fF}}{0.454\ \text{fF/\textmu m}^2\times6\ \text{\textmu m}}
-=0.08\text{--}0.14\ \text{\textmu m}\quad(\text{101 ch2: }1.7\times).
+L_{\rm ov}\ \le\ \frac{C_{\rm RG}}{C_{\rm ox}W_{\rm RG}}
+=\frac{0.15\text{--}0.22\ \text{fF}}{0.454\ \text{fF/\textmu m}^2\times6\ \text{\textmu m}}\approx0.06\text{--}0.08\ \text{\textmu m}.
 \end{equation}
-\caveat{$L_{\rm ov}\propto t_{\rm eq}$ through $C_{\rm ox}$. The 0.21--0.37\,fF RG values from the feedthrough feature
-had the board-102 pickup subtracted assuming those channels were dead; the trace-edge regression (0.15--0.22) does not
-need that subtraction.}
+\caveat{The bound holds only if the measured $C_{\rm RG}$ contains no pickup. Pickup can add or subtract (the ch0--ch2
+cross-coupling is negative), so this is not guaranteed. $L_{\rm ov}$ also scales with $t_{\rm eq}$ through $C_{\rm ox}$
+and uses the layout width $W_{\rm RG}=6$\,\textmu m. \textbf{Not verified}: nothing here measures the overlap itself.
+The earlier value $L_{\rm ov}=0.08$--0.14\,\textmu m treated all of the withdrawn 0.21--0.37\,fF as overlap and is
+superseded. ch2's higher coupling is a channel-to-channel difference from one method, not confirmed. Verification
+would need (i) the settled node shift from a step of RG low alone, with the reset FET off and the cable pickup decayed
+(total coupling without injection or pickup); (ii) a parasitic extraction or field solution of the layout to split
+overlap, fringing and wiring; (iii) a cross-section (SEM/TEM) or process simulation of the sense-node implant edge.}
 
 %=====================================================================
 \section{Reset charge injection and the buried-channel depth}
@@ -973,7 +998,8 @@ $N_t$ & $K$, $G^2A^2$, $C^2$, $WL$, $T$, $\lambda_t$ & upper limit, model; rerun
 CG$_{\rm in}$ & $g$, $G$ & measured, $G$-scaled\\
 $C_{\rm sn}$ & $g$, $G$, $A$ & model ($\pm6\%$ spread robust)\\
 $C_k$ (RG, SW, H, V) & regression, $g$ & measured\\
-$L_{\rm ov}$ & $C_{\rm RG}$, $C_{\rm ox}$, $W_{\rm RG}$ & model ($\propto t_{\rm eq}$)\\
+$C_{\rm RG}$ (total RG--node) & regression, $g$ & measured (pickup caveat)\\
+$L_{\rm ov}$ & $C_{\rm RG}$, $C_{\rm ox}$, $W_{\rm RG}$ & upper bound if no pickup; not verified\\
 $C_{\rm eff}$, $x_{\rm ch}$ & $C_{\rm inj}$, $\alpha$, $W_{\rm RG}L_{\rm RG}$, $t_{\rm eq}$ & model ($\pm30\%$, degenerate with $t_{\rm eq}$)\\
 knee $k$, $\Delta N_s$ & hinge fit; $t_{\rm eq}$, $x_j$ & knee measured; dose model\\
 $\tau_s$, slopes, CDS offset & template & measured\\
