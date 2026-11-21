@@ -216,13 +216,13 @@ two_fig_slide(S[3], "Trace Breakdown: Vertical Clocks", [
     "The clock edges couple into the output: a waveform of ≈40 000 ADU peak-to-peak, repeated at every transfer",
     "Features: peak-to-peak, lowest and highest point, change from the first to the last transfer"],
     "v_zoom.png", "v_setting.png",
-    "Right: lowering the V low rails by 0.5 V (TG by 0.4 V) deepens only this waveform, peak-to-peak 40.7 → 46.3 kADU. Board 101, ch0, 12 Oct.")
+    "Right: lowering the V low rails by 0.5 V (TG by 0.4 V) deepens only this waveform, peak-to-peak 41 → 46 kADU. Bands start at the spike that begins each transfer. Board 101, ch0, 12 Oct.")
 two_fig_slide(S[4], "Trace Breakdown: Horizontal Clocks", [
     "H1–H3 move the charge along the serial register to the sense node: one transfer per pixel, 126 µs each",
     "The largest waveform in the trace (≈130 000 ADU peak-to-peak); it sets how the output looks before the first skip",
     "Features: peak-to-peak, lowest and highest point, scatter between transfers, change from first to last transfer"],
     "h_zoom.png", "h_setting.png",
-    "Right: lowering the H low rails by 0.5 V changes only the horizontal waveform, peak-to-peak 126 → 144 kADU. Board 101, ch0, 12 Oct.")
+    "Right: lowering the H low rails by 0.5 V changes only the horizontal waveform, peak-to-peak 126 → 144 kADU. Bands start at the spike that begins each transfer. 12 Oct.")
 two_fig_slide(S[5], "Trace Breakdown: Skips Region", [
     "After the horizontal transfer the pixel's charge is measured 500 times (skips), 32.6 µs per skip",
     "The baseline drifts by ≈3 000 ADU across a pixel, but each skip subtracts its own pedestal, so the CDS stays flat",
@@ -238,12 +238,12 @@ text(s, 0.6, 4.35, 5.9, 0.95, [
     "CDS = mean(pedestal) − mean(signal): one measurement",
 ], size=14)
 eq(s, "sigma1", 0.8, 5.45, scale=0.95)
-text(s, 0.6, 6.05, 5.9, 0.9, [("**Single-skip noise σ₁:** compare consecutive skips of one pixel; the charge cancels, the noise does not. This trace: σ₁ = 4.9 ADU.", {"level": None})], size=14)
+text(s, 0.6, 6.05, 5.9, 0.9, [("**Single-skip noise σ₁:** compare consecutive skips of one pixel; the charge cancels, the noise does not. Board 101 ch0: σ₁ ≈ 5.1 ADU.", {"level": None})], size=14)
 pic(s, "allan.png", 7.0, 1.25, w=5.4)
 text(s, 7.0, 4.85, 5.7, 0.95, [("**Allan deviation:** split the pixel's skips into blocks of N, average each block (ȳ₁, ȳ₂, …), and compare neighbouring blocks:", {"level": None})], size=13)
 eq(s, "allan", 7.3, 5.55, scale=0.8)
-text(s, 7.0, 6.05, 5.7, 0.95, [("Dashed line: pure white noise, σ₁/√N. Averaging helps up to ≈60 skips; beyond that slow noise (1/f) stops it.", {"level": None})], size=13)
-cite(s, "Allan deviation: D. W. Allan, Proc. IEEE 54, 221 (1966). A slow drift that is the same in every pixel (readout electronics; it cancels in images) is subtracted first.")
+text(s, 7.0, 6.05, 5.7, 0.95, [("Dashed: pure white noise, σ₁/√N. The 500-skip images (star) sit on that line: averaging keeps working all the way to 500 skips.", {"level": None})], size=13)
+cite(s, "Allan, Proc. IEEE 54, 221 (1966). Board 101 ch0, 210 traces (2–3 Nov). The readout level drifts slowly during each pixel; a straight line is removed from each pixel first, since a drift would make this statistic grow with N.")
 
 # ------------------------------------------------------------------ 7: settings apart (one PCA panel)
 s = S[7]; clear(s); title(s, "Telling Settings Apart")
@@ -494,7 +494,7 @@ cite(s, "Interval: bootstrap over the 23 session-H packets (Efron 1979). One boa
 # ------------------------------------------------------------------ 20: usability
 s = S[20]; clear(s); title(s, "EDT on Our Data: Usable or Not?")
 pic(s, "usable.png", 0.6, 1.3, w=7.4)
-caption(s, 0.6, 4.8, 7.4, "Left: a usable image, clear 0, 1, 2 e⁻ peaks. Right: an unusable one, the peaks are not resolved (examples from 2–3 Nov).", size=12, h=0.5)
+caption(s, 0.6, 4.8, 7.4, "Left: usable, nominal setting (3 Nov, ch0): clear 0, 1, 2 e⁻ peaks. Right: unusable (2 Nov, ch2), horizontal clock delays halved (1800 → 900 cycles): the fit fails (χ²/ndf = 11). At that setting ch0, ch1 and ch3 were still usable.", size=11, h=0.55)
 text(s, 8.3, 1.3, 4.4, 3.6, [
     "**82 of 381** v3 images (22 %) could not be used: the fit failed or raised a flag (dark charge not constrained, bad χ²)",
     "**Usable** = fit converged, no flags, λ > 0.005 e⁻/pixel",
@@ -506,7 +506,7 @@ table(s, [["sealed test (H)", "AUC", "unusable caught", "usable blocked"],
           ["voltages + trace", "0.985", "**18 of 20**", "0 of 67"]],
       0.6, 5.4, 7.4, col_w=[2.3, 1.2, 2.0, 1.9], size=14, row_h=0.42)
 text(s, 8.3, 5.3, 4.4, 1.6, [("The trace catches most broken settings before an image is spent on them, and blocks none of the good ones.", {"level": None})], size=15)
-cite(s, "Trained on session G, tested once on H, test amplifier left out. AUC: probability that a usable image is ranked above an unusable one.")
+cite(s, "AUC (area under the ROC curve): the chance that a randomly chosen usable image gets a higher P(usable) than a randomly chosen unusable one. 1 = perfect, 0.5 = guessing. Trained on session G, tested once on H, test amplifier left out.")
 
 # ------------------------------------------------------------------ 21: why not directly
 s = S[21]; clear(s); title(s, "Can ML Find Good Settings Faster? Not Directly")

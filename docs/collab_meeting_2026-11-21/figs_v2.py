@@ -35,8 +35,18 @@ def cycles(fl, bit, period):
     return st[np.r_[np.diff(st), 0] == period]          # transfers followed by another one exactly one period later
 
 
+def spike_starts(v, st, look):
+    """True start of each transfer: the short spike (largest |2nd difference|) in the `look` samples before the flag rises."""
+    out = []
+    for s0 in st:
+        seg = v[max(s0 - look, 1):s0 + 1]
+        d2 = np.abs(np.diff(seg, 2))
+        out.append(max(s0 - look, 1) + 1 + int(np.argmax(d2)))
+    return np.array(out)
+
+
 def mean_cycle(v, fl, bit, period):
-    st = cycles(fl, bit, period)
+    st = spike_starts(v, cycles(fl, bit, period), period // 3)
     W = np.array([v[s:s + period] for s in st]); W = W - W[:, :5].mean(1, keepdims=True)
     return np.median(W, 0)
 
@@ -44,10 +54,11 @@ def mean_cycle(v, fl, bit, period):
 if want("clocks"):
     m0, v0, f0 = oct12("20261012_185604"); mV, vV, fV = oct12("20261012_204040"); mH, vH, fH = oct12("20261012_205952")
     for bit, per, n, col, name, lab in [(7, 5404, 3, "C0", "v", "Vertical"), (6, 1894, 6, "C1", "h", "Horizontal")]:
-        allst = starts(f0, bit) if False else starts(bit, f0)
+        allst = starts(bit, f0)
         allst = allst[allst >= cycles(f0, bit, per)[0]][:n + 1]     # consecutive transfers, whatever their spacing
+        allst = spike_starts(v0, allst, per // 3)                  # move each boundary to the spike that starts the transfer
         st = allst[:n]; ends = allst[1:n + 1]
-        a, b = st[0] - per // 6, ends[-1] + per // 6
+        a, b = max(st[0] - per // 12, 0), ends[-1] + per // 12
         scale = 1e3 if bit == 7 else 1e6
         t = (np.arange(a, b) - a) / FS * scale
         fig, ax = plt.subplots(figsize=(7, 4))
@@ -94,22 +105,33 @@ if want("drift"):
     fig.tight_layout(); fig.savefig(f"{OUT}/skips_drift.png"); plt.close(fig)
 
 if want("allan"):
-    C = np.asarray(z["cds"], float)[[1, 2, 3, 4, 6, 7, 8, 9], 20:]
-    C = C - C.mean(1, keepdims=True)
-    C = C - C.mean(0, keepdims=True)        # remove the slow drift that is identical in every pixel (electronics; cancels in images)
-    s1 = np.std(np.diff(C, axis=1)) / np.sqrt(2)
-    Ns = np.array([1, 2, 4, 8, 16, 30, 60, 120, 240]); al = []
+    X = []
+    for f in sorted(glob.glob(os.path.join(ROOT, "processed/L1_*/traces/ref*_acm101_ch0.npz"))):
+        zz = np.load(f)
+        if "cds" in zz.files and zz["cds"].shape == (10, 500):
+            X.append(np.asarray(zz["cds"], float)[[1, 2, 3, 4, 6, 7, 8, 9], 20:])
+    X = np.array(X); n = X.shape[2]; k = np.arange(n)
+    A = X.reshape(-1, n); p = np.polyfit(k, A.T, 1)
+    D = A - (np.outer(p[0], k) + p[1][:, None])                 # remove a straight-line drift from each pixel
+    s1 = np.std(np.diff(A, axis=1)) / np.sqrt(2)
+    Ns = np.array([1, 2, 4, 8, 16, 30, 60, 120]); al = []
     for N in Ns:
-        nb = C.shape[1] // N
-        Y = C[:, :nb * N].reshape(C.shape[0], nb, N).mean(2)
+        nb = n // N; Y = D[:, :nb * N].reshape(D.shape[0], nb, N).mean(2)
         al.append(np.sqrt(0.5 * np.mean(np.diff(Y, axis=1) ** 2)))
+    img = []
+    for dd in sorted(glob.glob(os.path.join(ROOT, "processed/L1_*"))):
+        L = json.load(open(dd + "/labels.json"))
+        img += [l["sigma_e"] * l["gain_adu_per_e"] for im in L["images"] if im["board"] == 101 for l in im["labels"] if l["channel"] == 0 and not l["flags"]]
+    im500 = float(np.median(img))
     fig, ax = plt.subplots(figsize=(6.5, 4.3))
-    ax.loglog(Ns, al, "o-", color="C0", label="measured (this trace)")
-    ax.loglog(Ns, s1 / np.sqrt(Ns), "--", color="gray", label=f"pure white noise: {s1:.1f} ADU / √N")
+    NN = np.array([1, 500])
+    ax.loglog(NN, s1 / np.sqrt(NN), "--", color="gray", label=f"pure white noise: σ₁/√N, σ₁ = {s1:.1f} ADU")
+    ax.loglog(Ns, al, "o-", color="C0", label=f"measured in the trace ({X.shape[0]} traces)")
+    ax.loglog([500], [im500], "*", color="C3", ms=16, label=f"measured in the 500-skip images: {im500:.2f} ADU")
     ax.set_xlabel("N, number of skips averaged"); ax.set_ylabel("noise of the N-skip average (ADU)")
-    ax.set_title("Does averaging skips keep reducing the noise?")
-    ax.legend(); fig.tight_layout(); fig.savefig(f"{OUT}/allan.png"); plt.close(fig)
-    print("sigma1 %.2f ADU; Allan N=30 %.2f (white %.2f); N=240 %.2f (white %.2f)" % (s1, al[5], s1 / np.sqrt(30), al[-1], s1 / np.sqrt(240)))
+    ax.set_title("Averaging more skips keeps reducing the noise")
+    ax.legend(fontsize=10); fig.tight_layout(); fig.savefig(f"{OUT}/allan.png"); plt.close(fig)
+    print("traces", X.shape, "sigma1 %.2f; allan" % s1, np.round(al, 3), "image500 %.3f white500 %.3f" % (im500, s1 / np.sqrt(500)))
 
 if want("pca"):
     im = Image.open(os.path.join(OUT, "oct12_feature_space.png")); W, H = im.size
