@@ -587,18 +587,21 @@ sampling (samples placed at their exact time relative to the edge, 0.1-sample bi
 %=====================================================================
 \section{Clock-line to sense-node capacitances}\label{sec:cpl}
 
-\caveat{\textbf{Superseded values (REPORT \S32, 21 November).} The method below measured a fast jump or a pulse peak that the
-readout chain never reaches, so its values (H 0.011--0.016\,fF, SW 0.08--0.13\,fF, RG 0.12--0.22\,fF) are far too small.
-The H lines are slow: after an H edge the output drifts to a new level with $\tau=9.6$--9.8\,\textmu s (same on all four
-channels; the chain settles in 0.39--0.56\,\textmu s), so the coupling is the fitted final level per volt of the single phase
-that switches in that state (from the sequencer file). Short pulses (SW) use response area $\div$ pulse width, which does
-not depend on the chain bandwidth. New values, board 101, the four amplifiers within $\approx$4\%: H2 4.7--5.0\,fF (equal
-up and down; solid); H1 3.8--3.95 down, 0.16--0.20 up (asymmetric, unexplained; provisional); H3 2.6--2.8 (up; provisional);
-SW 0.56 (assumes the 0.30\,\textmu s width; provisional); V steps of 7--17\,kADU not attributed to a rail. These are
-\emph{effective} couplings at the follower input, not layout capacitances: the step holds for the whole 18\,\textmu s state
-and follows VDD like the image gain; PQ04 (single CCD, same amplifier) is 20--40$\times$ weaker, so the strength comes from
-the 4-CCD module's routing. No amplifier-off trace confirms this yet. The v3 scan gave the three H phases identical
-swings, so a rail regression cannot separate them.}
+\caveat{\textbf{Superseded values (REPORT \S32, 21 November, final).} The method below measured a fast jump or a pulse peak
+that the readout chain never reaches, so its values (H 0.011--0.016\,fF, SW 0.08--0.13\,fF, RG 0.12--0.22\,fF) are far too
+small. Each 18\,\textmu s state of a horizontal transfer switches exactly one phase (H3$\downarrow$, H2$\uparrow$,
+H1$\downarrow$, H3$\uparrow$, H2$\downarrow$, H1$\uparrow$, then a quiet state; the transfer starts with its own reset
+at $-16.9$\,\textmu s). In each state the output relaxes to a new level with $\tau=8.2$\,\textmu s (the H line; the chain
+settles in $\approx0.56$\,\textmu s); the settled step, fitted by linear least squares and regressed on that phase's swing over
+$\approx$100 settings, divided by $g$ and times $q$, gives the coupling. Short pulses (SW, 0.300\,\textmu s = 30 sequencer
+ticks) use response area $\div$ width. Board 101, fF-equivalent, $\pm$ (channel spread) $\pm$ (systematics):
+H1 $3.41\pm0.05\pm0.06$, H2 $3.09\pm0.05\pm0.07$, H3 $3.49\pm0.05\pm0.06$ (up step; the down step, right after the reset,
+gives 3.26), SW $0.54\pm0.01\pm0.02$. Checks: up = down within 1\,\% (H1, H2); the fitted couplings reproduce the full
+H-transfer waveform to 0.6\,\% rms of the swing; step $\propto$ swing ($r=0.92$--0.95; SW $r=-0.97$). RG (a turn-off kick
+that drains back to VR, not stored charge) and V (steps that do not follow the switched phase's swing) are not quoted.
+These are \emph{effective} couplings at the follower input, not layout capacitances: the step holds through the state and
+follows VDD like the image gain; PQ04 (single CCD) is 20--40$\times$ weaker, so the size comes from the module's routing.
+An amplifier-off trace would confirm the entry point.}
 
 \paragraph{Why charge per volt is a capacitance.} A step $\Delta V_k$ on line $k$, coupled by $C_k$ to a node of total
 capacitance $C_{\rm sn}$, moves the node by $\Delta V_{\rm sn}=C_k\Delta V_k/C_{\rm sn}$. Through the conversion gain
@@ -1017,7 +1020,7 @@ $e_w$ & window fit, $G$ & model\\
 $N_t$ & $K$, $G^2A^2$, $C^2$, $WL$, $T$, $\lambda_t$ & upper limit, model; rerun pending\\
 CG$_{\rm in}$ & $g$, $G$ & measured, $G$-scaled\\
 $C_{\rm sn}$ & $g$, $G$, $A$ & model ($\pm6\%$ spread robust)\\
-$C_k$ (H, SW, V) & settled level per volt, $g$ & H2 solid, rest provisional (REPORT \S32)\\
+$C_k$ (H1--H3, SW) & settled level per volt, $g$ & measured, validated (REPORT \S32); RG, V not quoted\\
 $C_{\rm RG}$ (total RG--node) & fast jump & superseded (transient)\\
 $L_{\rm ov}$ & $C_{\rm RG}$, $C_{\rm ox}$, $W_{\rm RG}$ & on hold\\
 $C_{\rm eff}$, $x_{\rm ch}$ & $C_{\rm inj}$, $\alpha$, $W_{\rm RG}L_{\rm RG}$, $t_{\rm eq}$ & on hold ($C_{\rm inj}$ is a transient)\\

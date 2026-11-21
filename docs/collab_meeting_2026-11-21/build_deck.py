@@ -325,58 +325,53 @@ text(s, 7.6, 3.6, 5.1, 3.3, [
 ], size=13)
 cite(s, "McWhorter, in Semiconductor Surface Physics (1957); Christensson et al., Solid-State Electron. 11, 797 (1968); Ioannidis et al., Solid-State Electron. 95, 28 (2014); permittivities 3.9 and 7.5: Sze & Ng (2007).")
 
-# ------------------------------------------------------------------ 12: mutual capacitance, how
+# ------------------------------------------------------------------ 12: couplings, how
 s = S[12]; clear(s); title(s, "Clock Couplings to the Amplifier Input (1): How")
 text(s, 0.6, 1.25, 12.1, 0.5, [("Idea: when a clock line switches by ΔV, the output settles to a new level. If that charge sits on the amplifier input, it reads exactly like electrons.", {"level": None})], size=15)
-box(s, 0.6, 1.95, 2.2, 0.85, "Clock line k\n(H1–H3, SW, RG, V)", fill=ORANGE)
+box(s, 0.6, 1.95, 2.2, 0.85, "Clock line k\n(H1–H3, SW)", fill=ORANGE)
 box(s, 3.7, 1.95, 2.2, 0.85, "Sense node /\namplifier input", fill=LIGHT)
 box(s, 6.8, 1.95, 2.2, 0.85, "Output transistor\nand readout", fill=LIGHT)
 box(s, 9.9, 1.95, 2.8, 0.85, "Trace (ADU)", fill=GREEN)
 arrow(s, 2.8, 2.37, 3.7, 2.37); arrow(s, 5.9, 2.37, 6.8, 2.37); arrow(s, 9.0, 2.37, 9.9, 2.37)
 text(s, 2.8, 1.95, 0.9, 0.35, [("C_k", {"level": None, "bold": True})], size=13, align=PP_ALIGN.CENTER)
 text(s, 0.6, 3.05, 7.1, 3.9, [
-    ("**Step 1.** From the sequencer file, find the states in which only one line switches (e.g. only H2)", {"level": None}),
-    ("**Step 2.** Measure where the output ends up, not its first jump:", {"level": None}),
-    ("H lines: the output drifts to a new level with τ ≈ 9.7 µs (the H line itself is slow); fit an exponential and take its final level", {"level": 0, "size": 14}),
-    ("Short pulses (SW): area of the response ÷ pulse width, which does not depend on how fast the readout is", {"level": 0, "size": 14}),
-    ("**Step 3.** Convert the level change to electrons with the image gain g, and divide by the line's swing:", {"level": None}),
-], size=15, space=6)
-eq(s, "ck2", 1.0, 5.6, scale=0.9)
-text(s, 2.3, 5.65, 5.4, 0.6, [("β_k: level change per volt of swing (ADU/V)", {"level": None})], size=13)
-box(s, 8.0, 3.1, 4.7, 3.7, "", fill=RGBColor(0xF7, 0xF7, 0xF7), shape=MSO_SHAPE.RECTANGLE)
-text(s, 8.15, 3.2, 4.4, 3.5, [
-    ("**Worked example: H2, ch0 (approximate)**", {"level": None, "size": 15}),
-    ("H2 swings 2.3 V (6.7 → 9.0 V)", {"level": None}),
-    ("Output settles ≈ 97 000 ADU higher", {"level": None}),
-    ("÷ g = 1.4 ADU/e⁻ → ≈ 69 000 e⁻", {"level": None}),
-    ("÷ 2.3 V → ≈ 30 000 e⁻ per volt", {"level": None}),
-    ("× q = 1.6 × 10⁻¹⁹ C → **≈ 4.8 fF**", {"level": None, "size": 16}),
-    ("The old method read the output 0.2–0.8 µs after the edge, long before it settles, and got 0.01 fF", {"level": None, "size": 12}),
+    ("**Step 1.** The sequencer file shows that each 18 µs state of a horizontal transfer switches exactly one phase: H3↓, H2↑, H1↓, H3↑, H2↓, H1↑, then a quiet state", {"level": None}),
+    ("**Step 2.** In each state the output drifts to a new level (τ = 8.2 µs, the H line itself); fit that settled level, not the first jump", {"level": None}),
+    ("**Step 3.** Across ≈100 voltage settings, fit the settled step against that phase's swing → ADU per volt (β_k)", {"level": None}),
+    ("**Step 4.** Convert with the image gain g:", {"level": None}),
+], size=14, space=6)
+eq(s, "ck2", 1.0, 5.1, scale=0.9)
+text(s, 0.6, 5.75, 7.1, 0.6, [("Summing well (SW): a 0.300 µs pulse, shorter than the readout's response, so use response area ÷ pulse width instead.", {"level": None})], size=13)
+box(s, 8.0, 3.1, 4.7, 2.6, "", fill=RGBColor(0xF7, 0xF7, 0xF7), shape=MSO_SHAPE.RECTANGLE)
+text(s, 8.15, 3.2, 4.4, 2.4, [
+    ("**Worked example: H2, ch0**", {"level": None, "size": 15}),
+    ("Fit: the settled level moves ≈ 27 000 ADU per volt of H2 swing", {"level": None}),
+    ("÷ g = 1.40 ADU/e⁻ → ≈ 19 300 e⁻ per volt", {"level": None}),
+    ("× q = 1.6 × 10⁻¹⁹ C → **3.09 fF**", {"level": None, "size": 16}),
+    ("Reading the output 0.2–0.8 µs after the edge, long before it settles, had given 0.01 fF", {"level": None, "size": 12}),
 ], size=14, space=6)
 
-# ------------------------------------------------------------------ 13: mutual capacitance, results
+# ------------------------------------------------------------------ 13: couplings, results
 s = S[13]; clear(s); title(s, "Clock Couplings to the Amplifier Input (2): Results")
-table(s, [["line", "coupling (fF-equivalent)", "status"],
-          ["H2", "4.7–5.0 (up and down equal)", "**solid**"],
-          ["H1", "3.8–3.95 down, 0.16–0.20 up", "provisional: asymmetric"],
-          ["H3", "2.6–2.8 (up)", "provisional"],
-          ["SW (summing well)", "0.56", "provisional: assumes 0.30 µs width"],
-          ["RG: charge left on the node", "0.02–0.03 per volt of (RG high − VR)", "revised"],
-          ["V1–V3", "steps of 7–17 kADU, not attributed", "provisional"]],
-      0.6, 1.4, 7.6, col_w=[2.3, 3.0, 2.3], size=13, row_h=0.42)
-caption(s, 0.6, 4.4, 7.6, "Board 101, all four amplifiers within ≈4 % of each other. Earlier values (0.01–0.2 fF) measured fast jumps or pulse peaks and are superseded.", size=12, h=0.55)
-text(s, 0.6, 5.05, 7.6, 1.9, [
-    ("**Effective couplings, not layout capacitances:** the step holds for the whole 18 µs state and follows VDD like the image gain, so it enters at the amplifier input; PQ04 (single CCD, same amplifier) is 20–40× weaker, so the strength comes from the 4-CCD module's routing", {"level": 0}),
-    ("**Not in the images:** the H clocks do not switch during the skips; they drive the transient at the start of each pixel", {"level": 0}),
+table(s, [["line", "coupling (fF-equivalent)", "checked by"],
+          ["H1", "3.41 ± 0.08", "up = down within 1 %"],
+          ["H2", "3.09 ± 0.09", "up = down within 1 %"],
+          ["H3", "3.49 ± 0.08 (up step)", "down step 3.26 (starts right after the reset)"],
+          ["SW (summing well)", "0.54 ± 0.02", "area ∝ swing (r = −0.97)"]],
+      0.6, 1.4, 7.6, col_w=[2.0, 2.4, 3.2], size=14, row_h=0.45)
+caption(s, 0.6, 3.75, 7.6, "Board 101; the four amplifiers agree within ≈1.5 %. Uncertainty: spread between amplifiers and fit systematics (start time, window, pulse width).", size=12, h=0.55)
+text(s, 0.6, 4.4, 7.6, 2.6, [
+    ("**Validation:** the fitted couplings predict each amplifier's full horizontal-transfer waveform to 0.6 % rms of the swing; the settled step grows in proportion to the swing (r = 0.92–0.95)", {"level": 0}),
+    ("**Effective couplings, not layout capacitances:** the step holds through the state and follows VDD like the image gain, so it enters at the amplifier input; a single-CCD board (PQ04) is 20–40× weaker, so the size comes from the 4-CCD module's routing", {"level": 0}),
+    ("**Not in the images:** the H clocks do not switch during the skips", {"level": 0}),
 ], size=13, space=6)
 text(s, 8.6, 1.4, 4.1, 5.5, [
-    ("**On hold**", {"level": None, "size": 16}),
-    ("**Reset-gate overlap limit** and **buried-channel depth**: both used the RG response, which turned out to be a turn-off transient after the reset switch opens, not charge on the node", {"level": 0}),
-    ("**What would settle the rest**", {"level": None, "size": 16}),
-    ("A trace with the amplifier powered off", {"level": 0}),
-    ("A short scan with independent H1, H2, H3 swings", {"level": 0}),
-    ("An RG edge-speed or pulse-width scan", {"level": 0}),
-], size=14, space=6)
+    ("**Not presented**", {"level": None, "size": 16}),
+    ("**RG:** the response after the reset is a turn-off kick that drains back to VR, not stored charge; RG timing was not varied", {"level": 0}),
+    ("**V1–V3:** steps of 10–21 kADU, but they do not follow the swing of the switching phase", {"level": 0}),
+    ("**On hold:** reset-gate overlap limit and buried-channel depth (both relied on RG)", {"level": 0}),
+    ("**Would confirm:** a trace with the amplifier powered off; independent H1/H2/H3 swings", {"level": 0}),
+], size=14, space=8)
 
 # ------------------------------------------------------------------ 14: amplifier quantities (trace only, board 101)
 s = S[14]; clear(s); title(s, "Amplifier Quantities from the Trace Alone")
