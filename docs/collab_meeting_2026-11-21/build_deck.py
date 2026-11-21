@@ -662,18 +662,15 @@ text(s, 7.2, 5.9, 5.5, 1.1, [("j: every neighbouring pair of skips in a pixel, p
 
 # ------------------------------------------------------------------ 6: amplifier highlights
 s = S[6]; clear(s); title(s, "What the Trace Tells Us About the Amplifier")
-table(s, [["quantity", "how", "board 101, ch0–ch3"],
-          ["white noise level", "noise vs window length", "12.7–14.2 nV/√Hz"],
-          ["1/f noise → oxide trap density", "McWhorter model", "1.1–2.3 × 10¹⁶ eV⁻¹cm⁻³\n(bulk CMOS ≈ 2 × 10¹⁶)"],
-          ["H clock coupling to the amplifier input", "settled level per volt of swing", "3.1–3.5 fF-equiv.\n(single-CCD board ≈ 18× less)"],
-          ["reset settling time", "reset pulse shape", "0.9–1.2 µs"]],
-      0.6, 1.4, 7.4, col_w=[2.6, 2.3, 2.5], size=13, row_h=0.62)
-pic(s, "sigtau.png", 8.3, 1.4, w=4.4)
-caption(s, 8.3, 4.35, 4.4, "Example: white and 1/f noise separated by changing the length of the measurement window.", size=12, h=0.6)
-text(s, 0.6, 5.55, 12.1, 1.3, [
-    "All from 0.2 s traces; converting the H coupling to fF also needs one image gain. Methods and caveats are in the backup slides",
-    "The H coupling is an effective value set by the 4-CCD module's routing; it does not reach the images",
-], size=15)
+table(s, [["from 0.2 s of trace", "board 101, ch0–ch3"],
+          ["white noise level", "12.7–14.2 nV/√Hz"],
+          ["1/f noise → oxide trap density", "1.1–2.3 × 10¹⁶ eV⁻¹cm⁻³\n(bulk CMOS ≈ 2 × 10¹⁶)"],
+          ["H clock coupling to the amplifier input", "3.1–3.5 fF-equivalent\n(single-CCD board ≈ 18× less)"],
+          ["reset settling time", "0.9–1.2 µs"]],
+      0.6, 1.5, 7.3, col_w=[3.9, 3.4], size=15, row_h=0.75)
+pic(s, "sigtau.png", 8.3, 1.45, w=4.4)
+caption(s, 8.3, 4.4, 4.4, "Example: white and 1/f noise separated by changing the length of the measurement window.", size=12, h=0.6)
+caption(s, 0.6, 5.5, 7.3, "Methods and caveats are in the backup slides.", size=13)
 
 # ------------------------------------------------------------------ 7: data set + what we predict
 s = S[7]; clear(s); title(s, "Data Set and What We Predict")
