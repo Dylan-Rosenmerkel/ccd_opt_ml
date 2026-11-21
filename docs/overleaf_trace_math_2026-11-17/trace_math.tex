@@ -212,6 +212,55 @@ Each factor of $H$ is one operation:
 Check: for white $S_w$, the $\sin^2$ factors average to $\tfrac12$ each and $\int_0^\infty\sinc^2(f\tau)\dd f=1/(2\tau)$,
 so $\sigma_1^2=S_w/\tau$, i.e.\ eq.~\eqref{eq:en}. At low $f$, $|H|^2\propto f^4$, so the 1/f integral converges.
 
+\subsection{Why the spectrum is modelled as $S_w+K/f$}\label{sec:form}
+The fit below assumes that, in the band the CDS is sensitive to (roughly 10\,kHz--1\,MHz), the noise spectrum is the
+sum of a flat part and a part falling as $1/f$. This is a model, not a measurement. Where each part comes from:
+
+\paragraph{The flat (white) part, $S_w$.} Thermal noise is flat in frequency up to far above our band. It enters from
+the resistors in the readout ($4k_BTR$ \cite{johnson1928,nyquist1928}), from the channel of the output transistor
+(for a MOSFET in saturation, a voltage noise $\approx4k_BT\gamma_{\rm th}/g_m$ at the gate, with $\gamma_{\rm th}\approx2/3$
+\cite{gray2009}), and from the preamplifier's own voltage noise. All of these add to one constant $S_w$.
+
+\paragraph{The $1/f$ part, $K/f$, in three steps.}
+\begin{enumerate}
+\item \emph{One trap.} A single trap in the gate oxide captures and releases a channel carrier at random, so the
+output jumps between two levels (a random telegraph signal). Its spectrum is a Lorentzian, flat below and falling as
+$1/f^2$ above a corner set by the trap's time constant $\tau$ \cite{machlup1954,kirton1989}:
+\begin{equation}
+S_{\rm trap}(f)\propto\frac{\tau}{1+(2\pi f\tau)^2}.
+\end{equation}
+\item \emph{Why the traps have very different $\tau$.} A carrier reaches a trap at depth $x$ in the oxide by
+tunnelling, so $\tau=\tau_0\,e^{x/\lambda_t}$ \cite{mcwhorter1957,christensson1968}, with $\lambda_t\approx0.1$\,nm
+\cite{ghibaudo2022}.
+If traps are spread uniformly in depth, $\mathrm dx=\lambda_t\,\mathrm d\tau/\tau$, so the number of traps per unit
+$\tau$ is proportional to $1/\tau$: equally many traps in every decade of $\tau$.
+\item \emph{Adding them up.} Summing the Lorentzians with that density, between the fastest and slowest traps
+$\tau_1$ and $\tau_2$,
+\begin{equation}
+S(f)\propto\int_{\tau_1}^{\tau_2}\frac{\tau}{1+(2\pi f\tau)^2}\,\frac{\mathrm d\tau}{\tau}
+=\frac{\arctan(2\pi f\tau_2)-\arctan(2\pi f\tau_1)}{2\pi f}\ \approx\ \frac{1}{4f}
+\quad\text{for}\ \frac1{2\pi\tau_2}\ll f\ll\frac1{2\pi\tau_1}.
+\end{equation}
+Many traps, each with its own corner, add up to an exact $1/f$ between the slowest and the fastest corner. This is
+McWhorter's model \cite{mcwhorter1957}, applied to MOS transistors by Christensson et al.\ \cite{christensson1968};
+Dutta and Horn \cite{dutta1981} give the general form of the argument (any process with a $1/\tau$ spread of time
+constants). Sec.~\ref{sec:Nt} uses the same model to turn $K$ into a trap density.
+\end{enumerate}
+
+\paragraph{What is assumed beyond that.}
+\begin{itemize}
+\item \emph{Exponent exactly 1.} If the traps are not uniform in depth, the density is not exactly $\propto1/\tau$ and
+the spectrum becomes $K/f^{\gamma}$ with $\gamma\ne1$; Jayaraman and Sodini \cite{jayaraman1989} find $\gamma$
+varying with gate voltage, and fit level and exponent together. Here $\gamma$ is fixed at 1 and has not been fitted.
+\item \emph{Nothing else in the band.} Narrow lines (Sec.~\ref{sec:lines}), the frontend roll-off, single slow traps
+(one Lorentzian, not a sum) and bursts are not in the model.
+\end{itemize}
+\caveat{How far the form is tested. On the LSM, static records (clocks frozen) show the spectrum directly from 2\,kHz
+to 4\,MHz. Fitting the same form there gives the same $K$ as the window method (ratio $1.01\pm0.13$, 9 channels), but
+not the same white level (ratio 1.28) or corner, so only $K$ is confirmed. PA03 has no static records: there the form
+is assumed, not tested. Six window lengths fix only two or three numbers, so a good window fit shows the form is
+consistent with the data, not that it is the only one.}
+
 \subsection{The model and the fit}
 With $S(f)=S_w+K/f$:
 \begin{equation}
@@ -432,7 +481,7 @@ impedance (a few k$\Omega$) at the preamplifier input. The window optimum (5--8\
 $\sigma_1(\tau)$ curve and is unaffected.}
 
 %=====================================================================
-\section{Oxide trap density and single-trap steps}
+\section{Oxide trap density and single-trap steps}\label{sec:Nt}
 
 \paragraph{Referring $K$ to the gate.} $K$ is in ADU$^2$ at the ADC. In V$^2$ at the gate (= sense node):
 \begin{equation}
@@ -954,6 +1003,10 @@ down to deep cryogenic temperatures,'' arXiv:2204.04958.
 \bibitem{ioannidis2014} E.~G. Ioannidis, S.~Haendler, C.~G. Theodorou, S.~Lasserre, C.~A. Dimitriadis, G.~Ghibaudo,
 ``Evolution of low frequency noise and noise variability through CMOS bulk technology nodes from 0.5\,\textmu m down to
 20\,nm,'' Solid-State Electron.\ \textbf{95}, 28--31 (2014).
+\bibitem{machlup1954} S.~Machlup, ``Noise in semiconductors: spectrum of a two-parameter random signal,'' J.\ Appl.\
+Phys.\ \textbf{25}, 341 (1954), doi:10.1063/1.1721637.
+\bibitem{dutta1981} P.~Dutta, P.~M. Horn, ``Low-frequency fluctuations in solids: 1/f noise,'' Rev.\ Mod.\ Phys.\
+\textbf{53}(3), 497--516 (1981), doi:10.1103/RevModPhys.53.497.
 \bibitem{kirton1989} M.~J. Kirton, M.~J. Uren, ``Noise in solid-state microstructures: a new perspective on individual
 defects, interface states and low-frequency (1/f) noise,'' Adv.\ Phys.\ \textbf{38}(4), 367--468 (1989).
 \bibitem{janesick1990} J.~Janesick, T.~Elliott, A.~Dingizian, R.~Bredthauer, C.~Chandler, J.~Westphal, J.~Gunn, ``New
