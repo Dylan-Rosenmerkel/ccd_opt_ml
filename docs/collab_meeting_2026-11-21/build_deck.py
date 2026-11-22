@@ -769,6 +769,28 @@ text(s, 0.6, 4.4, 6.6, 2.5, [
 pic(s, "sigma500.png", 7.4, 1.35, w=5.3)
 caption(s, 7.4, 4.95, 5.3, "Board 101 ch1 (Nov 10–12): from one trace, σ₅₀₀ = 0.22 ADU predicted; the 500-skip images give 0.20 ADU (σe = 0.147 e⁻ × g = 1.39 ADU/e⁻).", size=12, h=0.8)
 
+# ------------------------------------------------------------------ 36 (backup): BO results, every objective
+s = S[36]; clear(s); title(s, "BO Results for Every Objective")
+text(s, 0.6, 1.2, 12.1, 0.5, [("Images until within 2 % of the best usable setting (unusable images among them in brackets). Nothing known about the new amplifier; mean of 6 replay searches", {"level": None})], size=13)
+table(s, [["method", "what it does", "noise", "noise + dark charge", "dark charge"],
+          ["random order", "image the menu in a random order", "6.5 (1.5)", "31.0 (4.8)", "38.5 (5.7)"],
+          ["by hand", "always image the untested setting closest to the best so far", "11.5 (4.4)", "24.0 (3.1)", "26.8 (3.4)"],
+          ["BO, new amplifier only", "GP learns only from this amplifier's own images", "8.2 (2.2)", "3.2 (0.3)", "4.0 (0.5)"],
+          ["multi-amplifier ranking", "image in the order the multi-amplifier model predicts; no updates", "4.3 (0.5)", "8.3 (1.0)", "8.3 (1.0)"],
+          ["trace ranking", "take traces of every candidate; rank by EDT-predicted noise; image to confirm", "**1.3** (0)", "7.7 (0)", "7.3 (0)"],
+          ["multi-amplifier BO + EDT gate", "the search on the main slides", "3.5 (0.2)", "**1.7** (0)", "**1.8** (0)"],
+          ["hybrid", "first image = trace ranking's top pick, then multi-amplifier BO + gate", "2.8 (0)", "2.2 (0)", "**1.8** (0)"]],
+      0.6, 1.75, 12.1, col_w=[2.7, 5.2, 1.3, 1.6, 1.3], size=12, row_h=0.42)
+text(s, 0.6, 5.25, 6.4, 1.9, [
+    ("**Objective:** J = w ln σe + (1 − w) ln λ, with w = 1 (noise), 0.5, 0 (dark charge)", {"level": 0}),
+    ("**Starting from one nominal image:** by hand 1.5 / 26.8 / 26.0; multi-amplifier BO + gate 3.7 / 2.5 / 2.7", {"level": 0}),
+], size=12, space=5)
+text(s, 7.2, 5.25, 5.5, 1.9, [
+    ("**Noise:** each candidate's trace measures its noise, so ranking by the trace finds it in ≈1 image", {"level": 0}),
+    ("**Dark charge:** the trace cannot see charge; the best (low VSUB) is far from nominal, so by hand ≈27, BO ≈2", {"level": 0}),
+    ("**Hybrid:** ≤ 3 images for every objective, no image wasted", {"level": 0}),
+], size=12, space=5)
+
 # ------------------------------------------------------------------ backup: prefix titles
 for k in range(17, len(S)):
     for sh in S[k].shapes:
