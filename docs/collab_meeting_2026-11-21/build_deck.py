@@ -791,15 +791,197 @@ text(s, 7.2, 5.25, 5.5, 1.9, [
     ("**Hybrid:** ≤ 3 images for every objective, no image wasted", {"level": 0}),
 ], size=12, space=5)
 
-# ------------------------------------------------------------------ backup: prefix titles
-for k in range(17, len(S)):
-    for sh in S[k].shapes:
+
+# ===================================================== v6: ML-focused main talk (run after slides_main.py)
+
+# ------------------------------------------------------------------ 1: motivation, two questions, flow
+s = S[1]; clear(s); title(s, "Why Look at the Raw Trace?")
+text(s, 0.6, 1.35, 6.5, 5.5, [
+    "Finding good CCD voltages takes many images, minutes each: by hand, ≈27 images to get close to the lowest dark charge in our test",
+    "The **trace** is the amplifier's raw output at 15 MHz while the CCD is read out: 0.2 s per amplifier, no image needed",
+    ("**Two questions**", {"space": 4}),
+    ("1.  What numbers can we calculate from the trace?", {"level": None, "size": 16}),
+    ("2.  With the voltages, can they predict image quality and find good voltages faster? (ML)", {"level": None, "size": 16}),
+], size=17, space=10)
+box(s, 7.5, 1.6, 2.4, 0.8, "Trace (0.2 s)", fill=LIGHT, size=15)
+box(s, 10.3, 1.6, 2.4, 0.8, "Voltage settings", fill=ORANGE, size=15)
+box(s, 7.5, 3.0, 2.4, 1.0, "Numbers from the trace\nnoise levels, signal sizes", fill=LIGHT, size=13)
+box(s, 8.6, 4.6, 3.0, 0.8, "Model (EDT, GP)", fill=GREEN, size=16, bold=True)
+box(s, 8.3, 5.95, 3.6, 0.95, "Prediction: noise, gain, usable?\nwhich setting to image next", fill=GREY, size=13)
+arrow(s, 8.7, 2.4, 8.7, 3.0); arrow(s, 8.7, 4.0, 9.4, 4.6); arrow(s, 11.5, 2.4, 10.8, 4.6); arrow(s, 10.1, 5.4, 10.1, 5.95)
+
+# ------------------------------------------------------------------ V / H clocks: point to the setting effect
+for k, ttl, b3 in [(17, "Trace Breakdown: Vertical Clocks",
+                    "Its size follows the V clock voltages (right): the trace records the setting before any image is taken"),
+                   (18, "Trace Breakdown: Horizontal Clocks",
+                    "Its size follows the H clock voltages (right); its peak-to-peak is one of the gain inputs (“signal sizes”)")]:
+    s = S[k]
+    tb = [sh for sh in s.shapes if not sh.is_placeholder and sh.has_text_frame and sh.text_frame.text.startswith(("V1", "H1"))][0]
+    p = tb.text_frame.paragraphs[2]
+    for r in p.runs[1:]:
+        r._r.getparent().remove(r._r)
+    p.runs[0].text = b3
+
+# ------------------------------------------------------------------ 6: what we calculate (model inputs)
+s = S[6]; clear(s); title(s, "What We Calculate from the Trace (Model Inputs)")
+table(s, [["number (ADU)", "how", "used to predict"],
+          ["single-skip noise σ₁ at 6 window lengths (2–9.3 µs)", "spread of neighbouring-skip differences", "noise"],
+          ["white level S_w and 1/f level K", "fit of σ₁² vs window length (right)", "noise, usable?"],
+          ["predicted 500-skip noise σ₅₀₀", "S_w and K passed through the 500-skip filter", "noise, usable?"],
+          ["signal sizes: reset jump, H waveform peak-to-peak, skip pulse, CDS offset", "sizes of fixed steps in the waveform (charge × gain)", "gain, usable?"]],
+      0.6, 1.4, 7.6, col_w=[3.3, 2.75, 1.55], size=13, row_h=0.7, align_num=False)
+caption(s, 0.6, 5.0, 7.6, "From 0.2 s of trace at each setting. The models also get the voltages. Details of each step in the backup slides.", size=12, h=0.5)
+pic(s, "sigtau.png", 8.5, 1.4, w=4.2)
+caption(s, 8.5, 4.3, 4.2, "White and 1/f noise separated by changing the length of the measurement window (board 101 ch1).", size=12, h=0.6)
+box(s, 0.6, 5.65, 12.1, 0.85, "", fill=GREY, shape=MSO_SHAPE.RECTANGLE)
+text(s, 0.75, 5.75, 11.8, 1.0, [("**Work in progress:** the same numbers also describe the amplifier itself: oxide trap density from K (≈1–2 × 10¹⁶ eV⁻¹cm⁻³), clock couplings to the sense node (≈3 fF-equivalent), and possibly the reset-gate overlap and implant depth (backup).", {"level": None})], size=14)
+
+# ------------------------------------------------------------------ 30: what is a decision tree (main)
+s = S[30]; clear(s); title(s, "What Is a Decision Tree?")
+pic(s, "tree.png", 0.6, 1.3, w=5.6)
+pic(s, "tree_one.png", 0.9, 4.6, w=4.6)
+text(s, 6.9, 1.25, 5.8, 3.0, [
+    ("**Training data:** ≈150 images. Each has inputs x (trace numbers, voltages) and a label y (here ln σe)", {"level": None, "space": 8}),
+    ("**Predicting:** answer each yes/no question from the top, end in a leaf; the prediction is the average label of the training images in that leaf", {"level": None, "space": 8}),
+    ("**Growing it:**", {"level": None}),
+    ("1.  Put all training images in one node", {"level": None}),
+    ("2.  Try questions of the form “input j < t ?”", {"level": None}),
+    ("3.  Keep the one that leaves the smallest squared error, Σ (y − its group's average)², i.e. the largest drop:", {"level": None}),
+], size=14, space=3)
+eq(s, "split", 7.1, 4.4, scale=0.78)
+text(s, 6.9, 4.95, 5.8, 2.0, [
+    ("4.  Repeat in each new node; stop when a leaf would have fewer than 3 images", {"level": None, "space": 8}),
+    ("Var: spread of the labels in a group; |S|: number of images. A single tree is easy to read but jumpy: a step function, and a small change in the data can change the whole tree.", {"level": None, "size": 13}),
+], size=14)
+cite(s, "Breiman, Friedman, Olshen & Stone, Classification and Regression Trees (1984). Tree diagram: illustration with made-up numbers.")
+
+# ------------------------------------------------------------------ 31: EDT (main)
+s = S[31]; clear(s); title(s, "Extremely Randomized Decision Trees (EDT)")
+text(s, 0.6, 1.25, 6.4, 4.0, [
+    ("**Grow one tree:**", {"level": None, "size": 15}),
+    ("1.  Put all training images in one node", {"level": None}),
+    ("2.  **Random inputs:** from the pool of all 41 inputs (9 trace numbers, 31 voltage values, σ₅₀₀ ÷ gain), draw 20", {"level": None}),
+    ("3.  **Random cuts:** for each of the 20, draw one cut t anywhere between its smallest and largest value in the node", {"level": None}),
+    ("4.  **Not random:** of these 20 questions, keep the one with the largest drop in squared error", {"level": None}),
+    ("5.  Repeat in each new node until a leaf would have fewer than 3 images", {"level": None}),
+    ("**Then:** grow 400 trees, each with its own draws, all on the same images, and average:", {"level": None, "space": 4}),
+], size=14, space=6)
+eq(s, "forest", 1.0, 4.5, scale=0.85)
+text(s, 3.2, 4.65, 3.8, 0.6, [("T_b: tree b; B = 400", {"level": None})], size=14)
+text(s, 0.6, 5.45, 6.4, 0.9, [("Random forest: best cut on resampled images. EDT: random cuts, all images, so the trees differ even more.", {"level": None})], size=13)
+pic(s, "tree_extrap.png", 7.2, 1.3, w=5.5)
+text(s, 7.2, 4.55, 5.5, 2.4, [
+    ("**Why it works:** each tree is rough, but their errors differ, so the average is smooth and stable", {"level": 0}),
+    ("**Caveat: trees cannot extrapolate.** A prediction is an average of training labels, so outside the trained range it stays flat (grey). Trust it only for voltages and amplifiers like those it was trained on", {"level": 0}),
+], size=14, space=8)
+cite(s, "Geurts, Ernst & Wehenkel, Machine Learning 63, 3 (2006); Breiman, Machine Learning 45, 5 (2001); scikit-learn ExtraTreesRegressor. Right: made-up data.")
+
+# ------------------------------------------------------------------ 9: noise + gain
+s = S[9]; clear(s); title(s, "EDT on Our Data: Predicting Image Noise and Gain")
+text(s, 0.6, 1.25, 6.7, 5.4, [
+    ("**Goal:** the read noise σe (e⁻) of a 500-skip image, before taking it", {"level": None, "space": 9}),
+    ("**1. From the trace:** 9 noise numbers in ADU: σ₁ at 6 windows, S_w, K, σ₅₀₀", {"level": None, "space": 9}),
+    ("**2. Gain EDT:** predicts the gain (ADU per e⁻) from the voltages, to **3.6 %** on a new amplifier (≈5 % on 104 LSM amplifiers). Needed because the trace is in ADU", {"level": None, "space": 9}),
+    ("**3. Formula, no ML for the noise:** σe ≈ σ₅₀₀ ÷ gain: 11.9 %", {"level": None, "space": 9}),
+    ("**4. Noise EDT:** 41 inputs = 9 trace numbers + 31 voltage values + σ₅₀₀ ÷ gain → ln σe: **8.6 %** (95 % interval 6.2–11.2 %)", {"level": None, "space": 9}),
+    ("**What the trace adds:** this amplifier's noise at this setting is measured, not guessed from the voltages: 18.2 % → 8.6 %", {"level": None}),
+], size=15)
+pic(s, "noise_gain_bars.png", 7.5, 1.3, w=5.2)
+caption(s, 8.9, 4.4, 3.8, "Typical error = RMS of ln(predicted / measured). Test: train on session G of two amplifiers, test once on the sealed session H of the third; rotate (67 test images). Amplifier seen in training: noise 6.5 %.", size=12, h=1.0)
+for i, (t1, fill) in enumerate([("9 trace noise numbers (ADU)", LIGHT), ("σ₅₀₀ ÷ g  (g from the gain EDT)", GREY), ("31 voltage values", ORANGE)]):
+    box(s, 0.6, 4.85 + i * 0.68, 3.4, 0.52, t1, fill=fill, size=13)
+    arrow(s, 4.0, 5.11 + i * 0.68, 4.7, 5.53)
+box(s, 4.7, 5.18, 1.8, 0.7, "Noise EDT", fill=GREEN, size=15, bold=True)
+arrow(s, 6.5, 5.53, 7.0, 5.53)
+box(s, 7.0, 5.18, 1.6, 0.7, "ln σe", fill=LIGHT, size=15, bold=True)
+cite(s, "Interval: bootstrap over the 23 session-H packets (Efron 1979). LSM: offset of ≈5 % between test stands. One board, one night, three amplifiers.")
+
+# ------------------------------------------------------------------ 10: usability
+s = S[10]; clear(s); title(s, "EDT on Our Data: Usable or Not?")
+pic(s, "usable.png", 0.6, 1.3, w=7.4)
+caption(s, 0.6, 4.8, 7.4, "Left: usable, nominal setting (3 Nov, ch0): clear 0, 1, 2 e⁻ peaks. Right: unusable (2 Nov, ch2), horizontal clock delays halved (1800 → 900 cycles): the fit fails (χ²/ndf = 11). At that setting ch0, ch1 and ch3 were still usable.", size=11, h=0.55)
+text(s, 8.3, 1.3, 4.4, 3.0, [
+    "**82 of 381** v3 images (22 %) unusable: the fit failed or raised a flag",
+    "**Classifier:** EDT on the voltages + 8 trace numbers (σ₅₀₀ total and white only, S_w, K, 4 signal sizes) → P(usable)",
+    "In the search: never image a setting with P < 0.5",
+], size=14, space=6)
+text(s, 8.3, 3.4, 4.4, 3.1, [
+    ("**Same setting, different amplifiers?** Of 106 settings: 74 usable on all three amplifiers, 22 on none, **10 on only some** (mostly borderline: χ²/ndf just above 3, or dark charge too small to fit)", {"level": None, "space": 8}),
+    ("The trace catches settings that break every amplifier. It missed both amplifier-specific failures: it sees a broken readout, it has not learned which amplifier will fail", {"level": None}),
+], size=13)
+table(s, [["sealed test (H)", "AUC", "unusable caught", "broken on all 3", "broken on 1", "usable blocked"],
+          ["voltages only", "0.990", "11 of 20", "11 of 18", "0 of 2", "0 of 67"],
+          ["voltages + trace", "0.985", "**18 of 20**", "18 of 18", "0 of 2", "0 of 67"]],
+      0.6, 5.45, 7.4, col_w=[1.75, 0.8, 1.3, 1.3, 1.1, 1.15], size=12, row_h=0.42)
+cite(s, "AUC: the chance that a random usable image gets a higher P(usable) than a random unusable one (1 = perfect, 0.5 = guessing). Trained on session G, tested once on H, test amplifier left out. Split by setting type: re-run of the classifier.")
+
+# ------------------------------------------------------------------ 33: multi-amplifier GP, why it suits us
+s = S[33]
+for sh in s.shapes:
+    if sh.has_text_frame and sh.text_frame.text.startswith("Why this fixes"):
+        p = sh.text_frame.add_paragraph()
+        _bullet(p, 0)
+        p.space_before = Pt(8)
+        for k2, part in enumerate("Uses the **≈200 images** of the amplifiers already measured; the new amplifier needs only a few".split("**")):
+            r = p.add_run(); r.text = part; r.font.size = Pt(14); r.font.bold = (k2 % 2 == 1)
+title(s, "Multi-Amplifier GP: Why It Suits Our Case")
+
+# ------------------------------------------------------------------ 37: caveats
+s = S[37]; clear(s); title(s, "Caveats: What Has Not Been Tested Yet")
+table(s, [["", "tested so far", "still needed"],
+          ["data", "one board (PA03 101), 3 amplifiers, one night: 381 images", "more amplifiers and CCDs"],
+          ["search (BO)", "replay: choose among 63–64 settings already measured", "a live search on a new CCD in a new setup, over a broader range of settings"],
+          ["voltage response", "similar shape on 3 sibling amplifiers", "check the same-shape assumption on more amplifiers"],
+          ["other modules", "LSM (104 amplifiers): typical noise right, no ranking of amplifiers", "train or calibrate per test stand"]],
+      0.6, 1.4, 12.1, col_w=[2.0, 5.0, 5.1], size=14, row_h=0.72, bold_first_col=True, align_num=False)
+text(s, 0.6, 5.2, 12.1, 1.8, [
+    "**Trees cannot extrapolate:** predictions hold only inside the voltages and kinds of amplifier they were trained on",
+    "**Dark charge** depends on temperature and history, which are not inputs: on LSM (180 K vs 130 K) the predicted 0.33 e⁻/pixel was 0.53 measured",
+], size=15, space=8)
+
+# ------------------------------------------------------------------ 15: summary
+s = S[15]; clear(s); title(s, "Summary and Next Steps")
+text(s, 0.6, 1.4, 12.1, 5.0, [
+    ("**1. From the trace:** 0.2 s gives the amplifier's white and 1/f noise, its predicted 500-skip noise and signal sizes, the inputs to the models", {"level": None, "space": 16}),
+    ("**2. Noise:** image noise on a new amplifier predicted to 8.6 % (18.2 % from the voltages alone); gain to 3.6 %", {"level": None, "space": 16}),
+    ("**3. Usability:** 18 of 20 broken settings flagged before imaging, no good one blocked; amplifier-specific failures not yet caught", {"level": None, "space": 16}),
+    ("**4. Search:** lowest dark charge in ≈2 images instead of ≈27 by hand", {"level": None, "space": 24}),
+    ("**Next:** a live search on a CCD the model has never seen; more amplifiers to test the same-shape assumption", {"level": None}),
+], size=19)
+text(s, 0.6, 6.0, 12.1, 0.7, [("Thank you. Questions?", {"level": None, "bold": True})], size=26, align=PP_ALIGN.CENTER)
+
+# ------------------------------------------------------------------ order: main talk, divider, backup
+MAIN = [0, 1, 2, 17, 18, 3, 6, 7, 30, 31, 9, 10, 11, 32, 33, 13, 14, 37, 15]
+BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 34, 35, 36]
+DROP = [8, 12]                                   # superseded by the tree and GP slides now in the main talk
+assert sorted(MAIN + [16] + BACK + DROP) == list(range(len(S)))
+sldIdLst = prs.slides._sldIdLst
+ids = list(sldIdLst)
+for k in DROP:
+    prs.part.drop_rel(ids[k].rId)
+for e in ids:
+    sldIdLst.remove(e)
+for k in MAIN + [16] + BACK:
+    sldIdLst.append(ids[k])
+
+def set_prefix(sl, on):
+    for sh in sl.shapes:
         if sh.is_placeholder and sh.placeholder_format.type in (1, 3):
             runs = [r for p in sh.text_frame.paragraphs for r in p.runs]
-            if runs and not runs[0].text.startswith("Backup"):
-                runs[0].text = "Backup: " + runs[0].text
+            if not runs:
+                return
+            t0 = runs[0].text
+            if on and not t0.startswith("Backup"):
+                runs[0].text = "Backup: " + t0
                 for r in runs:
                     r.font.size = Pt(26)
+            if not on and t0.startswith("Backup: "):
+                runs[0].text = t0[len("Backup: "):]
+
+for k in MAIN:
+    set_prefix(S[k], False)
+for k in BACK:
+    set_prefix(S[k], True)
 
 prs.save(OUT)
 print("saved", OUT, len(prs.slides))
