@@ -69,16 +69,17 @@ if want("gp"):
     from sklearn.gaussian_process.kernels import Matern, ConstantKernel
     from scipy.stats import norm
     x = np.linspace(0, 5, 400)[:, None]
-    X = np.array([0.4, 1.3, 2.1, 3.6, 4.6])[:, None]; y = toy(X.ravel())
+    X = np.array([0.4, 1.0, 2.9, 3.6, 4.6])[:, None]; y = toy(X.ravel())   # best image so far is NOT at the minimum
     gp = GaussianProcessRegressor(ConstantKernel(0.3) * Matern(0.9, nu=2.5), alpha=1e-4, optimizer=None).fit(X, y - y.mean())
     m, s = gp.predict(x, return_std=True); m = m + y.mean()
     b = y.min(); z = (b - m) / np.maximum(s, 1e-9); ei = (b - m) * norm.cdf(z) + s * norm.pdf(z)
     fig, a1 = plt.subplots(figsize=(7, 3.4))
     a1.plot(x, m, color="C0", label="GP mean m(x)"); a1.fill_between(x.ravel(), m - 2 * s, m + 2 * s, color="C0", alpha=0.2, label="± 2 s(x)")
+    a1.plot(x, toy(x.ravel()), "k--", lw=1, label="true J (unknown)")
     a1.plot(X, y, "o", color="C3", ms=7, label="images so far"); a1.axhline(b, color="C3", ls=":", lw=1)
     a1.text(0.05, b - 0.13, "best so far b", color="C3", fontsize=11)
     a1.set_ylabel("J"); a1.set_xlabel("one voltage (standardised)"); a1.set_title("1. The GP's guess m(x) and uncertainty s(x)")
-    a1.legend(fontsize=9, loc="upper center", ncol=3)
+    a1.legend(fontsize=9, loc="upper center", ncol=4)
     fig.tight_layout(); fig.savefig(f"{OUT}/bo_gp.png"); plt.close(fig)
     fig, a2 = plt.subplots(figsize=(7, 2.9))
     a2.plot(x, ei, color="C2"); xi = x.ravel()[np.argmax(ei)]; a2.axvline(xi, color="C2", ls="--", lw=1)
