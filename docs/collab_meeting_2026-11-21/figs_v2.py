@@ -157,7 +157,7 @@ if want("sigtau"):
     ax.plot(tt, Sw * Iwt, "--", color="C0", label="white part (falls as 1/τ)")
     ax.plot(tt, K * Ift, "--", color="C3", label=f"1/f part (K = {K:.1f} ADU²)")
     ax.set_xlabel("window length τ (µs)"); ax.set_ylabel("σ₁² (ADU²)"); ax.set_ylim(0, None)
-    ax.set_title("Board 101 ch1: noise vs window length")
+    ax.set_title("PA03 ch1: noise vs window length")
     ax.legend(); fig.tight_layout(); fig.savefig(f"{OUT}/sigtau.png"); plt.close(fig)
     print("sigtau fit K %.2f (csv %.2f), Sw %.3e" % (K, r["1/f K (ADU^2)"], Sw))
 

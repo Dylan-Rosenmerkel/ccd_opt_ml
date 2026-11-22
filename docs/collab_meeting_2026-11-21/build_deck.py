@@ -950,10 +950,236 @@ text(s, 0.6, 1.4, 12.1, 5.0, [
 ], size=19)
 text(s, 0.6, 6.0, 12.1, 0.7, [("Thank you. Questions?", {"level": None, "bold": True})], size=26, align=PP_ALIGN.CENTER)
 
+
+# ===================================================== v7 (run after slides_v6_body.py); base40: 38 = new GP slide, 39 = formula backup
+
+def pics_off(slide):
+    for sh in list(slide.shapes):
+        if sh.shape_type == 13:                      # picture
+            sh._element.getparent().remove(sh._element)
+
+# ------------------------------------------------------------------ 30: decision tree, what the drop means
+s = S[30]; clear(s); title(s, "What Is a Decision Tree?")
+pic(s, "tree.png", 0.6, 1.3, w=5.6)
+pic(s, "tree_one.png", 0.9, 4.6, w=4.6)
+text(s, 6.9, 1.2, 5.8, 2.6, [
+    ("**Training data:** ≈150 images, each with inputs x (trace numbers, voltages) and a label y (e.g. ln σe)", {"level": None, "space": 6}),
+    ("**Predicting:** answer the yes/no questions from the top; the prediction is the average label of the training images in the leaf", {"level": None, "space": 6}),
+    ("**Growing it:**  1. all training images in one node.  2. try questions “input j < t ?”.  3. keep the one with the largest drop Δ in squared error:", {"level": None}),
+], size=13, space=3)
+eq(s, "split", 7.1, 3.55, scale=0.72)
+text(s, 6.9, 4.05, 5.8, 3.0, [
+    ("**What Δ means:** |S| Var(S) = Σ (y − ȳ)², the error if every image in S is predicted by S's average. Δ = error with one average for the node − error with one average per side", {"level": None, "space": 6}),
+    ("**Example,** labels 1, 2, 8, 9:  one average (5): error 16 + 9 + 9 + 16 = 50.  Split {1, 2} | {8, 9}: averages 1.5 and 8.5, error 1, so **Δ = 49**.  Split {1, 8} | {2, 9}: error 49, Δ = 1. The first question is kept", {"level": None, "space": 6}),
+    ("4.  Repeat in each new node; stop when a leaf would have fewer than 3 images", {"level": None, "space": 6}),
+    ("A single tree is jumpy: a step function that changes a lot with small changes in the data.", {"level": None, "size": 12}),
+], size=13)
+cite(s, "Breiman, Friedman, Olshen & Stone, Classification and Regression Trees (1984). Tree diagram: illustration with made-up numbers.")
+
+# ------------------------------------------------------------------ 31: EDT, general
+s = S[31]; clear(s); title(s, "Extremely Randomized Decision Trees (EDT)")
+text(s, 0.6, 1.25, 6.4, 4.0, [
+    ("**Grow one tree:**", {"level": None, "size": 15}),
+    ("1.  Put all training images in one node", {"level": None}),
+    ("2.  **Random inputs:** from the pool of all inputs, draw a random subset (we draw half)", {"level": None}),
+    ("3.  **Random cuts:** for each drawn input, one cut t, drawn anywhere between its smallest and largest value in the node", {"level": None}),
+    ("4.  **Not random:** of these questions, keep the one with the largest drop Δ (previous slide)", {"level": None}),
+    ("5.  Repeat in each new node until a leaf would have too few images (we use 3)", {"level": None}),
+    ("**Then:** grow many trees (we use 400), each with its own draws, all on the same images, and average:", {"level": None, "space": 4}),
+], size=14, space=6)
+eq(s, "forest", 1.0, 4.5, scale=0.85)
+text(s, 3.2, 4.65, 3.8, 0.6, [("T_b: tree b; B trees", {"level": None})], size=14)
+text(s, 0.6, 5.45, 6.4, 0.9, [("Random forest: best cut on resampled images. EDT: random cuts, all images, so the trees differ even more.", {"level": None})], size=13)
+pic(s, "tree_extrap.png", 7.2, 1.3, w=5.5)
+text(s, 7.2, 4.55, 5.5, 2.4, [
+    ("**Why it works:** each tree is rough, but their errors differ, so the average is smooth and stable", {"level": 0}),
+    ("**Caveat: trees cannot extrapolate.** A prediction is an average of training labels, so outside the trained range it stays flat (grey). Trust it only for voltages and amplifiers like those it was trained on", {"level": 0}),
+], size=14, space=8)
+cite(s, "Geurts, Ernst & Wehenkel, Machine Learning 63, 3 (2006); Breiman, Machine Learning 45, 5 (2001); scikit-learn ExtraTreesRegressor. Right: made-up data.")
+
+# ------------------------------------------------------------------ 9: noise EDT (no gain plot, no formula)
+s = S[9]; clear(s); title(s, "EDT on Our Data: Predicting Image Noise")
+text(s, 0.6, 1.2, 7.4, 2.6, [
+    ("**Goal:** the read noise σe (e⁻) of a 500-skip image, before taking it", {"level": None, "space": 7}),
+    ("**Test:** train on session G of two amplifiers, test once on the sealed session H of the third; rotate (67 test images)", {"level": None, "space": 7}),
+    ("**Result:** voltages only **18.2 %** → trace + voltages **8.6 %** (95 % interval 6.2–11.2 %)", {"level": None}),
+], size=15)
+for i, (t1, fill) in enumerate([("9 trace noise numbers (ADU)", LIGHT), ("σ₅₀₀ in e⁻ (gain from a gain EDT, 3.6 %)", GREY), ("31 voltage values", ORANGE)]):
+    box(s, 0.6, 3.25 + i * 0.6, 3.6, 0.48, t1, fill=fill, size=12)
+    arrow(s, 4.2, 3.49 + i * 0.6, 4.8, 3.85)
+box(s, 4.8, 3.5, 1.7, 0.7, "Noise EDT", fill=GREEN, size=15, bold=True)
+arrow(s, 6.5, 3.85, 7.0, 3.85)
+box(s, 7.0, 3.5, 1.0, 0.7, "ln σe", fill=LIGHT, size=15, bold=True)
+box(s, 0.6, 5.15, 7.4, 1.8, "", fill=GREY, shape=MSO_SHAPE.RECTANGLE)
+text(s, 0.7, 5.2, 7.2, 1.75, [
+    ("**What the trace adds**", {"level": None, "space": 3}),
+    ("Voltages only: learns “these voltages → this noise” from the training amplifiers. It does well here because the new amplifier is a sibling: same CCD, electronics and night", {"level": 0, "size": 13}),
+    ("The trace measures this amplifier's own noise at this setting, so it does not need the new amplifier to look like the training ones. A voltages-only model should break down on CCDs less similar to the training ones; to be tested", {"level": 0, "size": 13}),
+], size=14, space=3)
+pic(s, "noise_bars_v7.png", 8.5, 1.3, w=4.2)
+caption(s, 8.5, 4.75, 4.2, "Typical error = RMS of ln(predicted / measured) on the sealed test. Amplifier seen in training: 6.5 %. A physics formula without ML: backup.", size=12, h=1.0)
+cite(s, "Interval: bootstrap over the 23 session-H packets (Efron 1979). One CCD (PA03), one night, three amplifiers.")
+
+# ------------------------------------------------------------------ 39 (backup): the physics formula
+s = S[39]; clear(s); title(s, "Image Noise Without ML: σ₅₀₀ ÷ Gain")
+text(s, 0.6, 1.3, 6.9, 5.5, [
+    "**Formula:** σe ≈ σ₅₀₀ ÷ g. σ₅₀₀ is the 500-skip noise predicted from the trace (ADU); g is the gain (ADU per e⁻). No ML for the noise itself",
+    ("gain from the gain EDT (voltages): **11.9 %**", {"level": 1}),
+    ("gain measured on the new amplifier at nominal: 9.2 %; each image's own gain: 9.0 %", {"level": 1}),
+    "**Noise EDT:** 8.6 %, so with a good gain the formula does almost as well; most of the trace's value is σ₅₀₀ itself",
+    "**Why not below ≈8–9 %:** each amplifier has its own offset (−6 % to +2 %), and the image sees charge-related effects the trace cannot. The label itself repeats to 2.3 %",
+], size=15, space=8)
+pic(s, "noise_formula.png", 7.8, 1.4, w=4.9)
+caption(s, 7.8, 5.2, 4.9, "Same sealed test as the main slide (new amplifier, 67 images).", size=12)
+
+# ------------------------------------------------------------------ 10: broken settings
+s = S[10]; clear(s); title(s, "EDT on Our Data: Spotting Broken Settings")
+pic(s, "img_good.png", 0.6, 1.2, w=3.05)
+pic(s, "img_bad.png", 3.75, 1.2, w=3.05)
+caption(s, 0.6, 4.05, 6.2, "Good: clear 0, 1, 2 e⁻ peaks. Bad: the fit fails (here the horizontal clock delays were halved).", size=11, h=0.45)
+text(s, 0.6, 4.55, 6.3, 2.5, [
+    "**Classifier:** EDT on the voltages + 8 trace numbers → P(good image); the search never images a setting with P < 0.5",
+    "**It predicts settings at which every amplifier gives a bad image:** settings that break the readout",
+    "**New settings, not remembered ones:** the test session shares 1 of its 25 settings with training, and none of its 6 broken ones",
+    "**The trace makes it sure:** P drops from ≈0.45 (a coin flip) to ≈0.13 and catches the bad images the voltages let through",
+], size=13, space=5)
+pic(s, "pgood.png", 7.4, 1.15, w=4.6)
+table(s, [["sealed test", "bad images caught", "good images blocked"],
+          ["voltages only", "11–13 of 18", "0 of 67"],
+          ["voltages + trace", "**17–18 of 18**", "0 of 67"]],
+      7.1, 4.85, 5.6, col_w=[1.9, 1.9, 1.8], size=13, row_h=0.42)
+caption(s, 7.1, 6.15, 5.6, "6 broken settings × 3 amplifiers = 18 bad images. Trained on session G, tested once on H, test amplifier left out; range over 10 random seeds.", size=11, h=0.8)
+
+# ------------------------------------------------------------------ 32 -> backup: GP math (title only changes)
+title(S[32], "Gaussian Process: The Math")
+
+# ------------------------------------------------------------------ 38: GP, what it does
+s = S[38]; clear(s); title(s, "Gaussian Process (GP): A Smooth Guess with Error Bars")
+text(s, 0.6, 1.25, 6.6, 5.7, [
+    ("**What it fits:** J(x) = ln(dark charge) as a function of the 18 voltages x, from the images taken so far. No fixed formula: the data decide the shape", {"level": None, "space": 8}),
+    ("**What it gives:** at any setting a guess m(x) and an uncertainty s(x); s is small near measured settings and grows away from them (top right)", {"level": None, "space": 8}),
+    ("**Assumptions:**", {"level": None}),
+    ("J is smooth: settings close in voltage have similar J. How close is “close” is a length scale ℓⱼ for each voltage (bottom right)", {"level": 0}),
+    ("Each image's J has random scatter of size n", {"level": 0, "space": 8}),
+    ("**What is fitted:** about 20 numbers: the 18 ℓⱼ, the size of the response s² and the scatter n², chosen to make the measured J most probable. No weights, nothing set by hand", {"level": None, "space": 8}),
+    ("**The guess** is a weighted average of the measured J, with more weight on nearby settings:", {"level": None}),
+], size=14, space=4)
+eq(s, "post", 0.8, 5.0, scale=0.72)
+text(s, 0.6, 5.55, 6.6, 0.45, [("**Smoothness** (correlation of J at two settings; bottom right):", {"level": None})], size=14)
+eq(s, "kernel", 0.8, 6.0, scale=0.72)
+pic(s, "gp.png", 7.5, 1.2, w=5.2)
+pic(s, "gp_kernel.png", 7.75, 4.4, w=4.7)
+cite(s, "Rasmussen & Williams, Gaussian Processes for Machine Learning (MIT Press, 2006). Plots: one voltage, made-up response. Kernel: Matérn-5/2; full math in backup.")
+
+# ------------------------------------------------------------------ 33: multi-amplifier GP, less math, figure per step
+s = S[33]; clear(s); title(s, "Multi-Amplifier GP: Why It Suits Our Case")
+text(s, 0.6, 1.2, 6.3, 0.9, [("**Model:** each amplifier's J = a shape f(x) shared by all amplifiers + its own level cₐ (+ a small own deviation)", {"level": None})], size=14)
+eq(s, "mt", 0.8, 2.0, scale=0.85)
+text(s, 0.6, 2.6, 6.3, 1.1, [("**Training** on the amplifiers already measured, in two steps (below): first the shape, then how far the levels differ (c²) and how alike the shapes are (ρ)", {"level": None})], size=14)
+text(s, 7.1, 1.2, 5.6, 2.6, [
+    ("**Why it suits our case**", {"level": None}),
+    ("The dark-charge level differs by amplifier and cannot be predicted (previous slide); here cₐ is learned, not predicted", {"level": 0}),
+    ("A constant level does not move the minimum, so the ≈200 images of the amplifiers already measured rank the settings for a new one", {"level": 0}),
+    ("The new amplifier needs only a few images: the first fixes its level", {"level": 0}),
+], size=13, space=4)
+for k, f in enumerate(["mt_step1.png", "mt_step2.png", "mt_new.png"]):
+    pic(s, f, 0.6 + k * 4.08, 3.8, w=3.95)
+cite(s, "Multi-task GP: Bonilla, Chai & Williams, NeurIPS (2007); Swersky, Snoek & Adams, NeurIPS (2013). Plots: one voltage, made-up response.")
+
+# ------------------------------------------------------------------ 13: BO loop, b / m / s, what makes it BO
+s = S[13]
+pics_off(s)
+for sh in list(s.shapes):
+    if sh.has_text_frame and sh.text_frame.text.startswith("Expected improvement over b"):
+        sh._element.getparent().remove(sh._element)
+eq(s, "ei", 7.1, 1.3, scale=0.78)
+text(s, 7.0, 1.8, 5.7, 1.3, [
+    ("**b:** the best (lowest) J of the images so far", {"level": 0}),
+    ("**m(x), s(x):** the GP's guess of J at setting x, and its uncertainty", {"level": 0}),
+    ("**EI(x):** how much better than b we expect x to be. Large if m is low (exploit) or s is large (explore)", {"level": 0}),
+], size=12, space=2)
+pic(s, "bo_gp.png", 7.3, 3.0, w=4.6)
+pic(s, "bo_ei.png", 7.3, 5.2, w=4.6)
+text(s, 0.6, 6.05, 6.2, 1.0, [("**What makes it Bayesian optimization:** a probability model of the unknown J (the GP), updated after every image (prior + data → posterior), and a rule that picks the next image from that belief: guess and uncertainty both.", {"level": None})], size=13)
+
+# ------------------------------------------------------------------ 34 (backup BO loop): separate GP and EI images
+s = S[34]
+for sh in list(s.shapes):
+    if sh.shape_type == 13 and sh.top > Inches(2.5):
+        sh._element.getparent().remove(sh._element)
+pic(s, "bo_gp.png", 7.2, 2.95, w=4.4)
+pic(s, "bo_ei.png", 7.2, 5.1, w=4.4)
+
+# ------------------------------------------------------------------ 14: BO results, the test first
+s = S[14]; clear(s); title(s, "BO Results: Finding the Lowest Dark Charge")
+text(s, 0.6, 1.2, 12.1, 1.75, [
+    ("**The test, a replay of the v3 night:** each amplifier in turn is treated as new. Its 63–64 measured settings, broken ones included, are the menu: the search sees their voltages and traces, and “taking an image” reveals the stored result. The model learns only from the other two amplifiers, in the other half of the night. 6 searches, averaged", {"level": 0}),
+    ("**Score:** images until the lowest dark charge found is within 2 % of the best in the menu; **wasted:** images at broken settings", {"level": 0}),
+], size=14, space=6)
+table(s, [["method", "what it does", "images", "wasted"],
+          ["random order", "image the menu in a random order", "38.5", "5.7"],
+          ["by hand", "always image the untested setting closest to the best so far", "26.8", "3.4"],
+          ["BO, new amplifier only", "the GP learns only from this amplifier's own images", "4.0", "0.5"],
+          ["**BO, multi-amplifier + EDT gate**", "the GP also learns from the other amplifiers; the EDT blocks likely-broken settings", "**1.8**", "**0**"]],
+      0.6, 2.8, 7.4, col_w=[2.2, 3.4, 0.9, 0.9], size=13, row_h=0.6)
+pic(s, "results.png", 8.3, 2.8, w=4.4)
+text(s, 0.6, 6.25, 12.1, 0.75, [("**Using the other amplifiers cuts the search from ≈27 images by hand to ≈2, and no image is wasted.** Noise and noise + dark charge: backup.", {"level": None})], size=15)
+
+# ------------------------------------------------------------------ 37: caveats, no dark-charge bullet
+s = S[37]
+for sh in list(s.shapes):
+    if sh.has_text_frame and sh.text_frame.text.startswith("Trees cannot extrapolate"):
+        p = sh.text_frame.paragraphs[1]; p._p.getparent().remove(p._p)
+
+# ------------------------------------------------------------------ 15: summary
+s = S[15]; clear(s); title(s, "Summary and Next Steps")
+text(s, 0.6, 1.4, 12.1, 5.0, [
+    ("**1. From the trace:** 0.2 s gives the amplifier's white and 1/f noise, its predicted 500-skip noise and signal sizes, the inputs to the models", {"level": None, "space": 16}),
+    ("**2. Noise:** image noise on a new amplifier predicted to 8.6 % (18.2 % from the voltages alone); gain to 3.6 %", {"level": None, "space": 16}),
+    ("**3. Broken settings:** spotted before imaging, also at settings never seen (17–18 of 18 bad images), no good image blocked", {"level": None, "space": 16}),
+    ("**4. Search:** lowest dark charge in ≈2 images instead of ≈27 by hand", {"level": None, "space": 24}),
+    ("**Next:** a live search on a CCD the model has never seen; more amplifiers to test the same-shape assumption", {"level": None}),
+], size=19)
+text(s, 0.6, 6.0, 12.1, 0.7, [("Thank you. Questions?", {"level": None, "bold": True})], size=26, align=PP_ALIGN.CENTER)
+
+# ------------------------------------------------------------------ 5 (backup): amplifiers apart, two separate images
+s = S[5]
+for sh in list(s.shapes):
+    if sh.shape_type == 13:
+        sh._element.getparent().remove(sh._element)
+pic(s, "amps_pulse.png", 0.6, 1.3, h=4.25)
+pic(s, "amps_decay.png", 8.1, 1.3, h=4.25)
+
+# ------------------------------------------------------------------ wording: PA03 instead of board 101; good / bad image
+REPL = [("PA03 module, board 101", "PA03 module"), ("PA03 board 101", "PA03"), ("(PA03 101)", "(PA03)"), ("PA03 101", "PA03"),
+        ("one board (PA03)", "one CCD (PA03)"), ("Board 101", "PA03"), ("board 101", "PA03"),
+        ("P(usable)", "P(good)"), ("usable?", "good image?"), ("best usable setting", "best setting with a good image"),
+        ("unusable images", "bad images"), ("unusable", "bad"), ("Usable", "Good"), ("usable images", "good images"), ("usable", "good")]
+
+def fix_runs(tf):
+    for p in tf.paragraphs:
+        for r in p.runs:
+            t = r.text
+            for a, b in REPL:
+                t = t.replace(a, b)
+            if t != r.text:
+                r.text = t
+
+for sl in prs.slides:
+    for sh in sl.shapes:
+        if sh.has_text_frame:
+            fix_runs(sh.text_frame)
+        if sh.has_table:
+            for row in sh.table.rows:
+                for c in row.cells:
+                    fix_runs(c.text_frame)
+    if sl.has_notes_slide:
+        fix_runs(sl.notes_slide.notes_text_frame)
+
 # ------------------------------------------------------------------ order: main talk, divider, backup
-MAIN = [0, 1, 2, 17, 18, 3, 6, 7, 30, 31, 9, 10, 11, 32, 33, 13, 14, 37, 15]
-BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 34, 35, 36]
-DROP = [8, 12]                                   # superseded by the tree and GP slides now in the main talk
+MAIN = [0, 1, 2, 17, 18, 3, 6, 7, 30, 31, 9, 10, 11, 38, 33, 13, 14, 37, 15]
+BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 39, 28, 29, 32, 34, 35, 36]
+DROP = [8, 12]
 assert sorted(MAIN + [16] + BACK + DROP) == list(range(len(S)))
 sldIdLst = prs.slides._sldIdLst
 ids = list(sldIdLst)
