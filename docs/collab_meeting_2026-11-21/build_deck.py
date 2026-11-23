@@ -1170,16 +1170,16 @@ text(s, 7.0, 6.15, 5.7, 0.9, [
 cite(s, "Only VSUB stands out for dark charge (r = 0.43). Voltages are not independent: H high and low rails move together (r ≈ 0.8), as do V1 and V3 low (0.68), so one voltage can borrow another's correlation. ln DC and ln noise: r = 0.36.", y=6.9)
 
 
-# ------------------------------------------------------------------ 41 (backup): the trace features the models use, shown on plots
-s = S[41]; clear(s); title(s, "Trace Features the Models Use, Shown on the Trace")
-cells = [("sigtau.png", 0.5, 1.15, ["**σ₁ at 6 windows**", "noise of one skip vs window length (dots)", "**S_w, K**", "white and 1/f levels from the fit", "used by: noise, broken"]),
-         ("sigma500.png", 6.75, 1.15, ["**σ₅₀₀**", "S_w and K passed through the 500-skip average", "white + 1/f, and white only", "used by: noise, broken"]),
-         ("feat_skip.png", 0.5, 4.1, ["**skip pulse**", "size of the reset pulse in each skip", "**CDS offset**", "signal − pedestal with no charge (inset)", "used by: gain, broken"]),
-         ("feat_hwave.png", 6.75, 4.1, ["**H waveform peak-to-peak**", "**reset jump**", "size of the reset edge", "used by: gain, broken"])]
+# ------------------------------------------------------------------ 41 (backup): the protected features (tier P), always given to every model
+s = S[41]; clear(s); title(s, "The Always-Included Trace Features (Tier P)")
+cells = [("p_cds.png", 0.5, 1.15, ["**CDS rms (detrended)**", "spread of the CDS along one pixel after removing its slow trend", "**jump-robust CDS σ**", "same, ignoring sudden jumps", "→ noise"]),
+         ("p_avg.png", 6.75, 1.15, ["**white noise per skip**", "from how the noise of N-skip averages falls with N", "**Allan deviation, n = 50**", "scatter between neighbouring 50-skip averages", "→ noise"]),
+         ("p_ped.png", 0.5, 4.1, ["**reset-level scatter**", "each reset sets a new level (kTC); the CDS cancels it", "**null-CDS noise**", "one pedestal window minus itself: noise with no charge moved", "→ gain, noise"]),
+         ("p_edges.png", 6.75, 4.1, ["**SW dip per volt**", "**RG pulse per volt**", "clock feedthrough, divided by the clock swing", "→ gain"])]
 for f, x, y, lines in cells:
     pic(s, f, x, y, w=4.25, h=2.8)
-    text(s, x + 4.35, y + 0.15, 1.75, 2.6, [(t, {"level": None, "space": 5}) for t in lines], size=11)
-cite(s, "PA03, nominal voltages. Top: one ch1 trace; bottom: one ch0 trace. “broken”: the broken-setting classifier.", y=7.0)
+    text(s, x + 4.35, y + 0.1, 1.8, 2.7, [(t, {"level": None, "space": 4}) for t in lines], size=11)
+cite(s, "Tier P: the direct physical estimators of the noise and gain, chosen by physics and given to every model in the training plan (lvl1/feature_study.py, train_lvl1.py); the other 133 features enter by evidence tier (A1, A2, B, C). PA03 ch0, one nominal trace.", y=6.95)
 
 # ------------------------------------------------------------------ wording: PA03 instead of board 101; good / bad image
 REPL = [("PA03 module, board 101", "PA03 module"), ("PA03 board 101", "PA03"), ("(PA03 101)", "(PA03)"), ("PA03 101", "PA03"),
