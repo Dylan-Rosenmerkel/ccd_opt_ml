@@ -5,7 +5,7 @@ plt.rcParams.update({"font.size": 13, "savefig.dpi": 200, "axes.grid": True, "gr
 OUT = sys.argv[1]
 for fn, ttl, lab, v, cols in [
         ("noise_new.png", "New amplifier (not in training)", ["voltages\nonly", "trace +\nvoltages"], [18.2, 8.6], ["0.6", "C3"]),
-        ("noise_seen.png", "Amplifier seen in training", ["voltages\nonly", "trace +\nvoltages", "everything\n(+ 141 features,\nsignal sizes)"], [13.8, 6.5, 6.1], ["0.6", "C3", "C2"])]:
+        ("noise_seen.png", "Amplifier seen in training", ["voltages\nonly", "everything\n(trace physics, 141 features,\nsignal sizes, voltages)"], [13.6, 6.1], ["0.6", "C2"])]:
     fig, ax = plt.subplots(figsize=(5.2, 3.5))
     b = ax.bar(range(len(v)), v, color=cols, edgecolor="k", width=0.6)
     for r in b: ax.text(r.get_x() + r.get_width() / 2, r.get_height() + 0.3, f"{r.get_height():.1f} %", ha="center", fontsize=12)
