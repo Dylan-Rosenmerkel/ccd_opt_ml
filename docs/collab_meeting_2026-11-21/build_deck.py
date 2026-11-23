@@ -1170,16 +1170,30 @@ text(s, 7.0, 6.15, 5.7, 0.9, [
 cite(s, "Only VSUB stands out for dark charge (r = 0.43). Voltages are not independent: H high and low rails move together (r ≈ 0.8), as do V1 and V3 low (0.68), so one voltage can borrow another's correlation. ln DC and ln noise: r = 0.36.", y=6.9)
 
 
-# ------------------------------------------------------------------ 41 (backup): the protected features (tier P), always given to every model
-s = S[41]; clear(s); title(s, "The Always-Included Trace Features (Tier P)")
-cells = [("p_cds.png", 0.5, 1.15, ["**CDS rms (detrended)**", "spread of the CDS along one pixel after removing its slow trend", "**jump-robust CDS σ**", "same, ignoring sudden jumps", "→ noise"]),
-         ("p_avg.png", 6.75, 1.15, ["**white noise per skip**", "from how the noise of N-skip averages falls with N", "**Allan deviation, n = 50**", "scatter between neighbouring 50-skip averages", "→ noise"]),
-         ("p_ped.png", 0.5, 4.1, ["**reset-level scatter**", "each reset sets a new level (kTC); the CDS cancels it", "**null-CDS noise**", "one pedestal window minus itself: noise with no charge moved", "→ gain, noise"]),
-         ("p_edges.png", 6.75, 4.1, ["**SW dip per volt**", "**RG pulse per volt**", "clock feedthrough, divided by the clock swing", "→ gain"])]
+# ------------------------------------------------------------------ 41, 42 (backup): the protected features (tier P), always given to every model
+s = S[41]; clear(s); title(s, "Always-Included Trace Features (Tier P) 1: Noise")
+cells = [("p_jump.png", 0.5, 1.15, ["**CDS rms (detrended)**", "plain spread of one pixel's CDS around its slow trend; every skip counts",
+                                       "**jump-robust CDS σ**", "same spread, but each skip is judged by the median of it and its two neighbours, so a lone outlying skip is ignored"]),
+         ("p_jumpratio.png", 6.75, 1.15, ["**On PA03 the two agree:**", "the plain rms is never more than 10 % above the robust one, so there are no jumps", "A jumpy amplifier (e.g. telegraph noise) would show a tail to the right"]),
+         ("p_avg.png", 0.5, 4.1, ["**white noise per skip**", "from how the noise of N-skip averages falls with N", "**Allan deviation, n = 50**", "scatter between neighbouring 50-skip averages"]),
+         ("p_null.png", 6.75, 4.1, ["**null-CDS noise**", "one pedestal window, first half minus second half", "No charge is moved, so it is the readout noise alone"])]
 for f, x, y, lines in cells:
     pic(s, f, x, y, w=4.25, h=2.8)
-    text(s, x + 4.35, y + 0.1, 1.8, 2.7, [(t, {"level": None, "space": 4}) for t in lines], size=11)
-cite(s, "Tier P: the direct physical estimators of the noise and gain, chosen by physics and given to every model in the training plan (lvl1/feature_study.py, train_lvl1.py); the other 133 features enter by evidence tier (A1, A2, B, C). PA03 ch0, one nominal trace.", y=6.95)
+    text(s, x + 4.35, y + 0.1, 1.8, 2.75, [(t, {"level": None, "space": 4}) for t in lines], size=11)
+cite(s, "Tier P: direct estimators of the noise and gain, chosen by physics and given to every model in the training plan (lvl1/feature_study.py, train_lvl1.py); the other 133 trace features enter by evidence tier (A1, A2, B, C). Right top: 17 770 PA03 pixels.", y=6.95)
+
+s = S[42]; clear(s); title(s, "Always-Included Trace Features (Tier P) 2: Gain-Related")
+pic(s, "p_reset.png", 0.6, 1.3, w=5.9)
+pic(s, "p_edges.png", 6.8, 1.3, w=5.9)
+text(s, 0.6, 5.0, 5.9, 2.0, [
+    ("**reset-level scatter:** each reset leaves the output at a new random level (kTC noise, ≈150 ADU here). Its size depends on the sense-node capacitance, so it tracks the gain", {"level": 0}),
+    ("The CDS subtracts the pedestal from the signal of the same skip, so this level cancels (blue, ≈6 ADU)", {"level": 0}),
+], size=13, space=6)
+text(s, 6.8, 5.0, 5.9, 2.0, [
+    ("**SW dip per volt, RG pulse per volt:** how much of the summing-well and reset-gate clocks leaks into the output, divided by the clock swing", {"level": 0}),
+    ("The leak passes through the same amplifier as the charge, so it scales with the gain", {"level": 0}),
+], size=13, space=6)
+cite(s, "PA03 ch0, one nominal trace (3 Nov).", y=7.0)
 
 # ------------------------------------------------------------------ wording: PA03 instead of board 101; good / bad image
 REPL = [("PA03 module, board 101", "PA03 module"), ("PA03 board 101", "PA03"), ("(PA03 101)", "(PA03)"), ("PA03 101", "PA03"),
@@ -1209,7 +1223,7 @@ for sl in prs.slides:
 
 # ------------------------------------------------------------------ order: main talk, divider, backup
 MAIN = [0, 1, 2, 17, 18, 3, 6, 7, 30, 31, 9, 10, 11, 38, 33, 13, 14, 37, 15]
-BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 41, 39, 40, 28, 29, 32, 34, 35, 36]
+BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 41, 42, 39, 40, 28, 29, 32, 34, 35, 36]
 DROP = [8, 12]
 assert sorted(MAIN + [16] + BACK + DROP) == list(range(len(S)))
 sldIdLst = prs.slides._sldIdLst
