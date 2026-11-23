@@ -1062,21 +1062,20 @@ title(S[32], "Gaussian Process: The Math")
 
 # ------------------------------------------------------------------ 38: GP, what it does
 s = S[38]; clear(s); title(s, "Gaussian Process (GP): A Smooth Guess with Error Bars")
-text(s, 0.6, 1.25, 6.6, 5.7, [
-    ("**What it fits:** J(x) = ln(dark charge) as a function of the 18 voltages x, from the training images. No fixed formula: the data decide the shape", {"level": None, "space": 8}),
-    ("**What it gives:** at any setting a guess m(x) and an uncertainty s(x); s is small near training images and grows away from them (top right)", {"level": None, "space": 8}),
-    ("**Assumptions:**", {"level": None}),
-    ("J is smooth: settings close in voltage have similar J. How close is “close” is a length scale ℓⱼ for each voltage (bottom right)", {"level": 0}),
-    ("Each image's J has random scatter of size n", {"level": 0, "space": 8}),
-    ("**What is fitted:** about 20 numbers: the 18 ℓⱼ, the size of the response s² and the scatter n², chosen to make the training images' J most probable. No weights, nothing set by hand", {"level": None, "space": 8}),
-    ("**The guess** is a weighted average of the training images' J, with more weight on nearby settings:", {"level": None}),
-], size=14, space=4)
-eq(s, "post", 0.8, 5.0, scale=0.72)
-text(s, 0.6, 5.55, 6.6, 0.45, [("**Smoothness** (correlation of J at two settings; bottom right):", {"level": None})], size=14)
-eq(s, "kernel", 0.8, 6.0, scale=0.72)
-pic(s, "gp.png", 7.5, 1.2, w=5.2)
-pic(s, "gp_kernel.png", 7.75, 4.4, w=4.7)
-cite(s, "Rasmussen & Williams, Gaussian Processes for Machine Learning (MIT Press, 2006). Plots: one voltage, made-up response. Kernel: Matérn-5/2; full math in backup.")
+L = lambda y, h, items, size=13: text(s, 0.6, y, 6.7, h, [(t, {"level": None, "space": 3}) for t in items], size=size)
+L(1.15, 0.6, ["**What it fits:** J(x) = ln(dark charge) as a function of the 18 voltages x, from the training images. No fixed formula: the data decide the shape"])
+L(1.8, 0.6, ["**Assumption 1, smooth:** settings close in voltage have similar J. The **kernel** puts a number on this: the correlation of J at two settings x and x′"])
+eq(s, "kernel2", 0.8, 2.42, scale=0.6)
+L(2.92, 0.9, ["**Length scale ℓⱼ** (one per voltage): move voltage j by ℓⱼ and the correlation falls to ≈ 0.5 (bottom right). Short ℓⱼ: J is sensitive to that voltage; very long: the voltage is ignored. σf²: the overall size of the swings in J"])
+L(3.85, 0.35, ["**Assumption 2, scatter:** each image's J also has random scatter of size n"])
+L(4.25, 0.6, ["**Training:** choose ℓⱼ, σf² and n² by minimizing the **negative log marginal likelihood**, how unlikely the training J are under the model:"])
+eq(s, "nlml", 0.8, 4.85, scale=0.5)
+L(5.25, 0.35, ["first term: misfit (model too stiff); second: complexity (model too flexible)"], size=12)
+L(5.65, 0.6, ["**The guess** at a new setting x*: a weighted average of the training J, with weights from the kernel (k*: x* vs each training image). s(x) is its uncertainty (top right)"])
+eq(s, "mpost", 0.8, 6.3, scale=0.62)
+pic(s, "gp.png", 7.6, 1.15, w=5.0)
+pic(s, "gp_kernel.png", 8.0, 4.2, w=4.2)
+cite(s, "Kernel: Matérn-5/2, the usual default for Bayesian optimization (Snoek, Larochelle & Adams 2012): smooth, but less rigid than the squared-exponential kernel, which assumes infinitely smooth responses and is overconfident between points. Other kernels were not compared in detail. Rasmussen & Williams (2006). Plots: made-up response.", y=6.85)
 
 # ------------------------------------------------------------------ 33: multi-amplifier GP, less math, figure per step
 s = S[33]; clear(s); title(s, "Multi-Amplifier GP: Why It Suits Our Case")
