@@ -61,6 +61,15 @@ def main():
             if k == "curve_names":
                 continue
             vals = [z[k] for z in zs]
+            # metadata arrays (not one row per measurement, e.g. allan_ns: the averaging lengths of the Allan curve)
+            # must be identical in every set and are kept once, not concatenated
+            nrows = [len(z["packet_id"]) if "packet_id" in z else None for z in zs]
+            is_meta = (np.ndim(vals[0]) >= 1 and all(n is not None for n in nrows)
+                       and any(len(v) != n for v, n in zip(vals, nrows)))
+            if is_meta:
+                assert all(np.array_equal(np.asarray(v), np.asarray(vals[0])) for v in vals), f"{fam}: {k} differ"
+                merged[k] = vals[0]
+                continue
             if isinstance(vals[0], str) or k in NAME_KEYS or np.ndim(vals[0]) == 0:
                 if k in NAME_KEYS:
                     assert all(np.array_equal(np.asarray(v), np.asarray(vals[0])) for v in vals), f"{fam}: {k} differ"

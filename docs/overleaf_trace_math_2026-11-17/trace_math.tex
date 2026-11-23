@@ -1,0 +1,1112 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=2.1cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,tabularx,array}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=1.4em}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\sinc}{\operatorname{sinc}}
+\newcommand{\std}{\operatorname{std}}
+\newcommand{\med}{\operatorname{median}}
+\newcommand{\caveat}[1]{\par\smallskip\noindent\colorbox{orange!10}{\parbox{\dimexpr\linewidth-2\fboxsep}{\small\textbf{Assumption / status.} #1}}\par\smallskip}
+
+\title{From the readout trace to the amplifier physics:\\ every formula, as implemented}
+\author{ccd\_opt\_ml amplifier-physics study (PA03 boards 101/102, LSM ACM106/109/110)}
+\date{17 November 2026; setup section added 20 November 2026; lines along the skips, corrected $K$, VSUB dependence and white floor added the same day}
+
+\begin{document}
+\maketitle
+
+\noindent This note writes down, step by step, how each physics number in the two-page summary is computed from the raw
+traces. Every equation is the one the code evaluates (script names in \code{monospace}, all in \code{amp\_phys/}).
+Where the code makes an approximation or an assumption, a shaded box says so. Image-side inputs (the image gain
+$g$ and image read noise $\sigma_e$ from the peak fits) are taken as given. Standard results are cited to the
+literature; design and process values come from the internal documents listed at the end
+\cite{recipe,acmguide,feschem,micrograph}. Where no reference is given, the step is our own derivation or method.
+
+\tableofcontents
+
+%=====================================================================
+\section{Constants and notation}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}llX@{}}\toprule
+symbol & value & meaning / source\\\midrule
+$f_s$ & $15\times10^6$\,s$^{-1}$ & ADC sample rate (LTC2387-18 \cite{ltc2387}) \\
+$v[n]$ & ADU & raw sample $n$ of one channel \\
+$b_k[n]$ & 0/1 & sequencer flag bit $k$: 0 pedestal window, 1 signal window, 4 low during reset, 6 H transfer, 7 V transfer\\
+$\tau$ & 10\,\textmu s (150 samples) nominal & CDS integration window\\
+$\Delta t$ & 13.8\,\textmu s (207 samples) & pedestal-to-signal window centre spacing\\
+$T$ & 32.58\,\textmu s (488.70 samples) & skip period; the ADC is not locked to the sequencer, so edges fall on whole samples and the median edge spacing is 489 (Sec.~\ref{sec:place})\\
+$G$ & 0.875\,ADU/\textmu V & chain gain at the video input: $27.34\ \text{V/V} / 31.25\ \text{\textmu V/LSB}$ (design \cite{feschem,acmguide})\\
+$g$ & ADU/e$^-$ & image gain (peak fit)\\
+$A$ & 0.85 & source-follower gain (layout-based, model)\\
+$C_{\rm ox}$ & 0.454\,fF/\textmu m$^2$ & ON stack: $\varepsilon_0/(t_{\rm ox}/3.9+t_{\rm n}/7.5)$, 50\,nm + 50\,nm \cite{recipe}; permittivities \cite{sze}\\
+$t_{\rm eq}$ & 76\,nm & oxide-equivalent thickness $50+50\cdot3.9/7.5$\\
+$WL$ & 345\,\textmu m$^2$ & output-FET gate area (layout \cite{micrograph}, 330--360)\\
+$W_{\rm RG}L_{\rm RG}$ & $6\times6$\,\textmu m$^2$ & reset-FET gate (layout \cite{micrograph})\\
+$T_{\rm ccd}$ & 130\,K (PA03), 180\,K (LSM) & \\
+$\lambda_t$ & 0.1\,nm & oxide tunnelling length \cite{ghibaudo2022}\\
+$q,\ k_B$ & & elementary charge, Boltzmann constant\\\bottomrule
+\end{tabularx}
+\end{center}
+
+\caveat{$G=0.875$ is the design value. The earlier dead-channel Johnson calibration (0.853, thermal noise $4k_BTR$ of the 20\,k$\Omega$ load
+\cite{johnson1928,nyquist1928}) is withdrawn: board-102
+ch0--2 have transistors and are not open inputs. Every conversion from ADU to volts carries this design-value
+uncertainty (the ACM input buffer gain is still ``to be checked''). Quantities in electrons ($\div g$) or in
+capacitance via $q/g$ do not depend on $G$ or $A$ at all.}
+
+%=====================================================================
+\section{From raw samples to skips (\code{trace\_anatomy.py})}
+
+\paragraph{Cycle segmentation.} Rising edges of bit 0 give the pedestal-window starts $e_j$. The period is
+$P=\med(e_{j+1}-e_j)$ samples. A cycle $j$ is a real skip if it is one period long ($|e_{j+1}-e_j-P|\le3$) and is
+followed by a signal window (bit 1 set at $e_j+s_0+2$, with $s_0$ the median signal-window offset). Consecutive cycles
+one period apart belong to the same pixel; a gap starts a new pixel. The first 20 skips of every pixel are dropped
+(first-skip transient). This leaves cycles $\mathbf{c}_j = (v[e_j],\dots,v[e_j+P-1])$.
+
+\paragraph{Window placement.}\label{sec:place} The true skip period is 488.70 samples, not an integer, because the ADC
+clock is not locked to the sequencer. Every extractor (\code{decode\_trace.window\_slices}, \code{trap\_from\_trace},
+\code{separate\_K}) anchors each skip to its own detected edge $e_j$, so the windows do not drift. What remains is a
+$\pm0.5$-sample placement jitter in a 10-skip pattern (3 spacings of 488 and 7 of 489 samples). The only fixed-period use
+is a time axis in \code{trace\_physics2.py} (line 100), 0.06\% off.
+
+\paragraph{Template and residual.}
+\begin{equation}
+\bar{\mathbf c}[m]=\med_j\,\mathbf c_j[m],\qquad \mathbf r_j=\mathbf c_j-\bar{\mathbf c}.
+\end{equation}
+The template $\bar{\mathbf c}$ is the deterministic waveform (reset pulse, summing-well dip, window levels); the
+residual $\mathbf r_j$ is the noise.
+
+\paragraph{CDS value per skip.} With the pedestal window length $L_w$ (from the flags) and 5 samples trimmed at each
+end,
+\begin{equation}
+p_j=\frac{1}{L_w-10}\sum_{m=5}^{L_w-6}c_j[m],\qquad
+s_j=\frac{1}{L_w-10}\sum_{m=s_0+5}^{s_0+L_w-6}c_j[m],\qquad
+x_j=s_j-p_j .
+\end{equation}
+
+\paragraph{Within-pixel differences.} A skipper CCD reads the same pixel charge many times non-destructively
+\cite{janesick1990,chandler1990,tiffenberg2017,moroni2012}. Every noise statistic uses consecutive skips of the same
+pixel, so the pixel charge cancels:
+\begin{equation}
+d_j=x_{j+1}-x_j\quad(\text{only for } j,j+1 \text{ in the same pixel}).
+\end{equation}
+
+%=====================================================================
+\section{Time-domain noise quantities}
+
+\subsection{Single-skip noise $\sigma_1$ and its input density}
+\begin{equation}
+\sigma_1=\frac{\std(d_j)}{\sqrt2}\ \ [\text{ADU}],\qquad
+\sigma_{1,e}=\frac{\sigma_1}{g}\ \ [e^-].
+\end{equation}
+For white noise of one-sided density $e_n$ (V/$\sqrt{\text{Hz}}$) a boxcar of length $\tau$ (the dual-slope / CDS
+filter \cite{hopkinson1982}) has variance
+$e_n^2/(2\tau)$, and the CDS difference of two independent boxcars has $e_n^2/\tau$. Hence
+\begin{equation}
+e_n=\frac{\sigma_1}{G}\sqrt{\tau}\quad[\text{\textmu V}\sqrt{\text s}]\ \to\ \text{nV}/\sqrt{\text{Hz}}\ (\times10^3).
+\label{eq:en}
+\end{equation}
+\caveat{The code uses $\tau=L_w/f_s$ in eq.~\eqref{eq:en} although the average runs over $L_w-10$ samples; the
+quoted density is therefore $\sqrt{150/140}-1\approx3.5\%$ high. Also, $\sigma_1$ contains every noise source (white,
+1/f, setup); calling $e_n$ a ``white density'' is exact only if the noise is white (Sec.~\ref{sec:H}).}
+
+Why consecutive skips are differenced, how $\sigma_1$ differs from the textbook $\sigma_{\rm CDS}$ obtained
+from a PSD, and why it is blind to setup noise, is in Sec.~\ref{sec:sigma1}.
+
+These give the table rows \emph{noise 3.7--4.4\,e} ($\sigma_{1,e}$) and \emph{18.7--21.1\,nV/$\sqrt{\rm Hz}$}
+($e_n$).
+
+\subsection{Other per-skip statistics}
+\begin{align}
+\rho_1 &= \operatorname{corr}(\tilde x_j,\tilde x_{j+1}),\quad \tilde x_j = x_j-\langle x\rangle_{\text{pixel}}
+&&\text{(lag-1 autocorrelation: slow noise)}\\
+\sigma_{\rm lvl} &= \std(\ell_{j+1}-\ell_j)/\sqrt2,\quad \ell_j=\tfrac12(p_j+s_j)
+&&\text{(per-skip level scatter: reset kTC + electronics)}\\
+\kappa &= \frac{\langle (d-\bar d)^4\rangle}{\langle (d-\bar d)^2\rangle^2}-3
+&&\text{(excess kurtosis of } d_j\text{; telegraph noise} \Rightarrow \kappa>0)
+\end{align}
+(pandas' bias-corrected estimator). For a Gaussian $\kappa=0$; a two-level telegraph signal with comparable white noise
+gives $\kappa$ of order 1 and more (random telegraph signals \cite{kirton1989}). ACM109 ch1 has 2.7; 101 ch2 is $\approx0$ in the median trace but large in its
+episodes (90th-percentile over traces, \code{skip\_averaging.py}).
+
+\subsection{Noise after averaging $N$ skips (\code{skip\_averaging.py})}
+Per pixel the CDS series $x_j$ is cut into consecutive blocks of $N$, the block means $X_k^{(N)}$ are differenced
+within the pixel, after removing the mean within-pixel profile (a sequence-locked drift common to all pixels):
+\begin{equation}
+\sigma_N=\frac{\std\big(X^{(N)}_{k+1}-X^{(N)}_k\big)}{\sqrt2}, \qquad N=1,4,16,\dots,512.
+\end{equation}
+White noise gives $\sigma_N=\sigma_1/\sqrt N$ \cite{tiffenberg2017}; 1/f, telegraph and setup wander make $\sigma_N$ flatten.
+
+\subsection{Image cross-check}
+\begin{equation}
+\mathcal R_{\rm img}=\frac{\sigma_e^{\rm image}(N_{\rm img})}{\sigma_{1,e}/\sqrt{N_{\rm img}}},
+\qquad N_{\rm img}=500\ (\text{PA03}),\ 1000\ (\text{LSM}).
+\end{equation}
+$\mathcal R_{\rm img}\approx1$ means the image reaches the white-noise expectation (PA03: 0.84--0.89);
+$\mathcal R>1$ means extra slow noise or charge arriving during skipping (LSM: 1.2--2.0).
+
+%=====================================================================
+\section{Frequency-domain quantities: the setup number}
+
+\paragraph{Residual spectrum.} The residuals of all skip cycles are concatenated, $r=(\mathbf r_1,\mathbf r_2,\dots)$,
+and a Welch estimate \cite{welch1967} is taken (Hann window, $2^{15}$ samples per segment):
+\begin{equation}
+\text{ASD}(f)=\frac{\sqrt{S_{rr}(f)}}{G}\ \ [\text{nV}/\sqrt{\text{Hz}}],\qquad
+\text{ASD}_{[f_1,f_2]}=\med_{f_1\le f<f_2}\text{ASD}(f).
+\end{equation}
+The \textbf{setup number} is $\text{ASD}_{[200\,\text{Hz},1\,\text{kHz}]}$ (also reported: 1--10\,kHz, 10--100\,kHz,
+0.1--1\,MHz, 1--7.5\,MHz).
+\caveat{The concatenation joins skip cycles, but drops the pixel boundaries and H/V transfers, so low-frequency
+content near $1/(\text{trace length})$ depends on the trace length. Comparing setups therefore needs equal trace
+lengths: Oct.\ 0.2\,s traces 48.8 vs Nov.\ 34.8\,\textmu V/$\sqrt{\rm Hz}$ ($-29\%$); the 1.1\,s Oct.\ traces (68.2)
+are not comparable.}
+What the ASD is, why a clocked-trace ASD cannot be integrated into a $\sigma$, and what isolates a setup number from
+the amplifier: Sec.~\ref{sec:setup2}.
+
+\paragraph{Lines.} $E(f)=S_{rr}(f)/\widetilde S_{rr}(f)$ with $\widetilde S$ a 31-bin running median; the six largest
+$E$ above 20\,kHz are listed (e.g.\ the 30.6\,kHz comb on ACM110 ch3).
+
+\paragraph{Bursts, stationarity, drift.} The residual is cut into $\approx1$\,ms blocks $B_i$ (a whole number of
+cycles):
+\begin{equation}
+\beta_{\rm burst}=\frac{\#\{i:\std(B_i)>1.5\,\med_k\std(B_k)\}}{\#\{i\}},\qquad
+\text{CV}=\frac{\std_i\,\std(B_i)}{\operatorname{mean}_i\std(B_i)},
+\end{equation}
+and the drift is the slope of a straight line through $\ell_j$ against time (ADU/ms).
+
+\paragraph{Clocking-induced noise.} The in-window residual spectrum $P_w(f)$ (Hann, window length $L_w-10$) is
+compared with the spectrum $P_g(f)$ of the last 600 samples of the static gaps after H transfers (no clock switching):
+\begin{equation}
+\mathcal C=\sqrt{\frac{\overline{P_w}/(L_w-10)}{\overline{P_g}/600}}\Big|_{0.2\text{--}3\,\text{MHz}} ,
+\end{equation}
+which is 1 if switching adds no noise.
+
+%=====================================================================
+\section{Separating white and 1/f noise with the CDS window}\label{sec:H}
+
+\subsection{The transfer function}
+The per-skip statistic $\sigma_1^2$ is a linear filter of the input noise; the CDS factors below are the standard
+ones \cite{hopkinson1982,janesick2001}, the skip-difference factor is ours. For a stationary noise of one-sided PSD
+$S(f)$:
+\begin{equation}
+\sigma_1^2=\int_0^\infty S(f)\,|H(f)|^2\dd f .
+\end{equation}
+Each factor of $H$ is one operation:
+\begin{align}
+\text{boxcar of length }\tau:&\quad \sinc^2(f\tau)=\Big(\tfrac{\sin\pi f\tau}{\pi f\tau}\Big)^2\\
+\text{signal minus pedestal, centres } \Delta t \text{ apart:}&\quad |1-e^{-2\pi i f\Delta t}|^2=4\sin^2(\pi f\Delta t)\\
+\text{consecutive-skip difference}/\sqrt2:&\quad \tfrac12|1-e^{-2\pi i fT}|^2=2\sin^2(\pi fT)
+\end{align}
+\begin{equation}
+\boxed{|H(f)|^2=4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau)\,2\sin^2(\pi fT)}
+\end{equation}
+Check: for white $S_w$, the $\sin^2$ factors average to $\tfrac12$ each and $\int_0^\infty\sinc^2(f\tau)\dd f=1/(2\tau)$,
+so $\sigma_1^2=S_w/\tau$, i.e.\ eq.~\eqref{eq:en}. At low $f$, $|H|^2\propto f^4$, so the 1/f integral converges.
+
+\subsection{Why the spectrum is modelled as $S_w+K/f$}\label{sec:form}
+The fit below assumes that, in the band the CDS is sensitive to (roughly 10\,kHz--1\,MHz), the noise spectrum is the
+sum of a flat part and a part falling as $1/f$. This is a model, not a measurement. Where each part comes from:
+
+\paragraph{The flat (white) part, $S_w$.} Thermal noise is flat in frequency up to far above our band. It enters from
+the resistors in the readout ($4k_BTR$ \cite{johnson1928,nyquist1928}), from the channel of the output transistor
+(for a MOSFET in saturation, a voltage noise $\approx4k_BT\gamma_{\rm th}/g_m$ at the gate, with $\gamma_{\rm th}\approx2/3$
+\cite{gray2009}), and from the preamplifier's own voltage noise. All of these add to one constant $S_w$.
+
+\paragraph{The $1/f$ part, $K/f$, in three steps.}
+\begin{enumerate}
+\item \emph{One trap.} A single trap in the gate oxide captures and releases a channel carrier at random, so the
+output jumps between two levels (a random telegraph signal). Its spectrum is a Lorentzian, flat below and falling as
+$1/f^2$ above a corner set by the trap's time constant $\tau$ \cite{machlup1954,kirton1989}:
+\begin{equation}
+S_{\rm trap}(f)\propto\frac{\tau}{1+(2\pi f\tau)^2}.
+\end{equation}
+\item \emph{Why the traps have very different $\tau$.} A carrier reaches a trap at depth $x$ in the oxide by
+tunnelling, so $\tau=\tau_0\,e^{x/\lambda_t}$ \cite{mcwhorter1957,christensson1968}, with $\lambda_t\approx0.1$\,nm
+\cite{ghibaudo2022}.
+If traps are spread uniformly in depth, $\mathrm dx=\lambda_t\,\mathrm d\tau/\tau$, so the number of traps per unit
+$\tau$ is proportional to $1/\tau$: equally many traps in every decade of $\tau$.
+\item \emph{Adding them up.} Summing the Lorentzians with that density, between the fastest and slowest traps
+$\tau_1$ and $\tau_2$,
+\begin{equation}
+S(f)\propto\int_{\tau_1}^{\tau_2}\frac{\tau}{1+(2\pi f\tau)^2}\,\frac{\mathrm d\tau}{\tau}
+=\frac{\arctan(2\pi f\tau_2)-\arctan(2\pi f\tau_1)}{2\pi f}\ \approx\ \frac{1}{4f}
+\quad\text{for}\ \frac1{2\pi\tau_2}\ll f\ll\frac1{2\pi\tau_1}.
+\end{equation}
+Many traps, each with its own corner, add up to an exact $1/f$ between the slowest and the fastest corner. This is
+McWhorter's model \cite{mcwhorter1957}, applied to MOS transistors by Christensson et al.\ \cite{christensson1968};
+Dutta and Horn \cite{dutta1981} give the general form of the argument (any process with a $1/\tau$ spread of time
+constants). Sec.~\ref{sec:Nt} uses the same model to turn $K$ into a trap density.
+\end{enumerate}
+
+\paragraph{What is assumed beyond that.}
+\begin{itemize}
+\item \emph{Exponent exactly 1.} If the traps are not uniform in depth, the density is not exactly $\propto1/\tau$ and
+the spectrum becomes $K/f^{\gamma}$ with $\gamma\ne1$; Jayaraman and Sodini \cite{jayaraman1989} find $\gamma$
+varying with gate voltage, and fit level and exponent together. Here $\gamma$ is fixed at 1 and has not been fitted.
+\item \emph{Nothing else in the band.} Narrow lines (Sec.~\ref{sec:lines}), the frontend roll-off, single slow traps
+(one Lorentzian, not a sum) and bursts are not in the model.
+\end{itemize}
+\caveat{How far the form is tested. On the LSM, static records (clocks frozen) show the spectrum directly from 2\,kHz
+to 4\,MHz. Fitting the same form there gives the same $K$ as the window method (ratio $1.01\pm0.13$, 9 channels), but
+not the same white level (ratio 1.28) or corner, so only $K$ is confirmed. PA03 has no static records: there the form
+is assumed, not tested. Six window lengths fix only two or three numbers, so a good window fit shows the form is
+consistent with the data, not that it is the only one.}
+
+\subsection{The model and the fit}
+With $S(f)=S_w+K/f$:
+\begin{equation}
+\sigma_1^2(\tau)=S_w\,I_w(\tau)+K\,I_f(\tau),\qquad
+I_w=\int|H|^2\dd f,\quad I_f=\int\frac{|H|^2}{f}\dd f .
+\end{equation}
+The integrals are evaluated numerically on a log grid (1\,Hz--7.5\,MHz). White noise scales as $I_w\propto1/\tau$;
+the 1/f term is nearly independent of $\tau$. Measuring $\sigma_1$ at several $\tau$ and solving the weighted linear
+least-squares problem (weights $1/\sigma_1^2$, i.e.\ relative errors) gives $(S_w,K)$. Derived:
+\begin{align}
+e_w&=\sqrt{S_w}/G &&\text{white part (nV/}\sqrt{\text{Hz}}\text{): 12.6--14.2 PA03, 7.5--9.1 LSM (raw; Sec.~\ref{sec:floor})}\\
+f_c&=K/S_w &&\text{1/f corner (where } K/f=S_w\text{): 16--39\,kHz PA03, 61--334\,kHz LSM}\\
+\phi_{1/f}(\tau)&=\frac{K I_f}{S_w I_w+K I_f}\Big|_{\tau=10\,\mu\text{s}} &&\text{1/f share of the single-skip variance}
+\end{align}
+and the fit quality $\sqrt{\langle(\hat\sigma_1^2/\sigma_1^2-1)^2\rangle}$.
+
+\subsection{Three ways of varying the window}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lXX@{}}\toprule
+& how $\tau$ varies & $\Delta t$, $T$ in $|H|^2$\\\midrule
+software (\code{trap\_from\_trace.py}) &
+from one raw trace: the \emph{last} $\tau$ samples of each 10\,\textmu s window, $\tau=30,45,60,90,120,140$ samples
+(2--9.3\,\textmu s); pedestal $\frac1\tau\sum_{m=L_w-\tau}^{L_w-1}c_j[m]$, signal likewise from $s_0$ &
+$\Delta t=s_0/f_s=13.8$\,\textmu s fixed; $T=P/f_s$\\
+hardware (\code{oxide\_traps\_tau.py}) & 100 v2 strips, \code{delayInt} 300--3000 cycles & $\Delta t=\tau+3.8$\,\textmu s;
+$T=32.6+2(\tau-10)$\,\textmu s\\
+skip averaging (\code{oxide\_traps.py}) & $\tau$ fixed, average $N$ skips & skip-difference factor replaced by the $N$-skip average, eq.~\eqref{eq:HN}\\\bottomrule
+\end{tabularx}
+\end{center}
+\begin{equation}
+|H_N(f)|^2=4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau)\Big[\frac{\sin\pi fNT}{N\sin\pi fT}\Big]^2,\qquad
+\sigma_N^2=S_wI_w(N)+K I_f(N).\label{eq:HN}
+\end{equation}
+The $N$-averaging variant is weakly constraining: through the CDS, 1/f noise averages down almost like white noise, so
+$\sigma_N$ alone cannot separate them. The window variants are the ones used for the table.
+
+\paragraph{Own vs total noise.} With simultaneous strips (hardware variant) each channel's per-skip series is first
+cleaned of the part shared with the other channels of its board:
+\begin{equation}
+u_c=x_c-\beta_c\,\bar x_{\neg c},\qquad \bar x_{\neg c}=\frac1{n-1}\sum_{o\ne c}x_o,\qquad
+\beta_c=\frac{\langle x_c,\bar x_{\neg c}\rangle}{\langle\bar x_{\neg c},\bar x_{\neg c}\rangle}
+\end{equation}
+(pixel means removed first), and the fit is done on $u_c$ (``own'') and on $x_c$ (``total''). The software variant
+from single traces fits the total.
+
+\subsection{What $K$ is an upper limit on, and when it is not}
+Write the true single-skip variance as the fitted model plus whatever it leaves out, $\sigma_1^2=S_wI_w+KI_f+R(\tau)$.
+If $R$ does not depend on $\tau$ (setup wander, frontend 1/f), the fit can only absorb it into $K$, and $K$ is an
+upper limit on the transistor's 1/f. If $R$ falls with $\tau$ \emph{faster} than $I_w\propto1/\tau$, the fit can only
+reproduce the extra steepness by raising $S_w$ and lowering $K$: fitting $R=c/\tau^2$ on 2--9.3\,\textmu s with
+$a/\tau+b$ gives $a>0$, $b<0$. So the upper-limit argument holds only once every component steeper than $1/\tau$ is in
+the model. The narrow lines below are such a component.
+
+\subsection{Narrow lines along the skips}\label{sec:lines}
+\paragraph{How a line appears.} A line of frequency $f_l$ in $v[n]$ is sampled once per skip, so along the skip series
+$x_j$ it appears at the aliased frequency
+\begin{equation}
+\nu_l=\operatorname{fold}\!\big(f_lT\bmod1\big)\quad[\text{cycles/skip}],\qquad \operatorname{fold}(u)=\min(u,1-u).
+\end{equation}
+Through the CDS it is a line in $S(f)$, so with the filter of Sec.~\ref{sec:H} it adds to $\sigma_1^2$
+\begin{equation}
+P_l|H(f_l)|^2=P_l\,4\sin^2(\pi f_l\Delta t)\,\sinc^2(f_l\tau)\,2\sin^2(\pi f_lT),
+\end{equation}
+with $P_l$ its power. In the software variant $\Delta t$ and $T$ are fixed, so only $\sinc^2(f_l\tau)$ changes with $\tau$.
+
+\paragraph{The lines found} (\code{separate\_K.py}, board 101, ref traces):
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lllX@{}}\toprule
+$f_l$ & $\nu_l$ & adds to $\sigma_1^2$ at lag 1, $\tau=2$\,\textmu s & notes\\\midrule
+1185.4\,kHz & 0.382 & 14.6\,ADU$^2$ & fixed; also on the LSM ACM109/110 static records, so probably in the ACM electronics\\
+$\approx$120\,kHz & 0.073--0.110 & 8.8\,ADU$^2$ & drifts by $\sim$1\,kHz between packets; looks like a switching supply;
+absent on the LSM stand\\
+$\approx$240\,kHz & & 5.4\,ADU$^2$ & harmonic of the 120\,kHz line\\
+$\approx$5\,kHz & & 1.1\,ADU$^2$ & \\\bottomrule
+\end{tabularx}
+\end{center}
+Example N3\_001 ch0: the four lines add 29.9\,ADU$^2$ of the 96.1\,ADU$^2$ at $\tau=2$\,\textmu s and 1.6\,ADU$^2$ at
+9.3\,\textmu s (27.0 with, 25.4 without). The 120\,kHz identification rests on the line's amplitude following
+$|\sinc(f\tau)|$ with its first zero at $\tau\approx125$ samples $=1/f$; the peaks near 3.3\,MHz seen earlier are
+ordinary harmonics of the 488.70-sample skip period. Check: $120\,\text{kHz}\times T=3.91$ and
+$1185.4\,\text{kHz}\times T=38.62$ fold to $\nu=0.09$ and $0.38$, and a $\pm1$\,kHz drift moves $\nu$ by $\pm0.033$.
+The theta traces carry the same lines at the same $\nu$ (only a few quiet packets show none); nothing sits near 0 or 0.5
+cycles/skip, where a line would be hard to see.
+
+\paragraph{Two corrections.} (i) \emph{Subtraction:} for each pixel, a sinusoid at each detected $\nu_l$ is fitted to
+the skip series by least squares and subtracted, then $(S_w,K)$ are refitted. (ii) \emph{Explicit terms:} no
+subtraction; the lines enter the model as
+\begin{equation}
+\sigma_1^2(\tau)=S_wI_w(\tau)+KI_f(\tau)+\sum_l a_l\,\sinc^2(f_l\tau),\qquad a_l\ge0 .\label{eq:lines}
+\end{equation}
+The second is needed for the LSM traces, which carry the 1.19\,MHz line but have only $\sim$10 skips per pixel, too few
+to subtract per pixel. As a control, the subtraction was repeated at decoy $\nu$ where there is no line:
+\begin{center}\small
+\begin{tabular}{@{}lcccc@{}}\toprule
+trace & raw $K$ & decoys subtracted & lines subtracted & explicit terms, eq.~\eqref{eq:lines}\\\midrule
+N3\_001 ch0 & 2.54--2.59 & 2.45 & 4.65--4.90 & 4.34\\
+N3\_046 ch1 & 3.80 & 3.76 & 5.39 & \\
+N3\_090 ch0 & 1.03 & & 4.49 & 4.45\\
+N3\_120 ch2 & 2.64 & & 6.39 & 5.92\\\bottomrule
+\end{tabular}
+\end{center}
+($K$ in ADU$^2$; ranges are two runs of the same trace.) Decoys move $K$ by $-2$ to $-4\%$, the fit soaking up a little
+noise; only the real lines move it, and the fit residual falls from 2--3\% to $\sim$1\% (0.1\% on N3\_046 ch1). The two
+corrections agree within 1--9\% on five of six traces tested (29\% on the sixth). Over board 101, $K_{\rm corr}/K_{\rm raw}$ is distributed as:
+\begin{center}\small
+\begin{tabular}{@{}llccc@{}}\toprule
+method & traces & median & quartiles & 5--95\%\\\midrule
+explicit terms, eq.~\eqref{eq:lines} & 1,524 (ch1--3) & 1.58 & 1.43--1.85 & 1.29--2.45\\
+subtraction & 1,524 (ch1--3) & 1.42 & 1.16--1.65 & 1.00--2.23\\
+subtraction & 2,030 (ch0--3) & 1.53 & 1.20--1.92 & 1.0--3.1\\\bottomrule
+\end{tabular}
+\end{center}
+(subtraction by channel, ch0--3: 2.16 / 1.47 / 1.74 / 1.16; ch0 with explicit terms is still running). The explicit-term
+fit is the primary estimate: its residual is 1.1\%, and it also works where too few skips allow subtraction. Per
+trace the two agree to a median ratio of 1.06, but the 5--95\% range of that ratio is 0.92--2.07, so on about one
+trace in twenty they differ by up to $2\times$. The white part falls from $\sim$13 to $\sim$9\,nV/$\sqrt{\rm Hz}$.
+
+\caveat{The raw $K$ is \emph{underestimated for this $\tau$ set}, not in general: because $\sinc^2(f_l\tau)$
+oscillates, whether a line pulls $K$ down or up depends on which $\tau$ are fitted, and the raw $K$ shifts with the
+$\tau$ set. The lines are real noise in the measured CDS, so they stay in every prediction of $\sigma_1$ or image noise;
+only the transistor-physics numbers ($K$, $f_c$, $\phi_{1/f}$, $N_t$, $\sigma_{1/f}(500)$) use the corrected $K$. On
+board 101 these rise by the factor above; their rerun with the explicit-term $K$ is pending. The hardware window scan
+saw the same lines, which is why it agreed with the old single-trace fit. Not yet excluded: a window-placement artefact.
+The 10-skip placement pattern (Sec.~\ref{sec:place}) has its fundamental at 0.3\,cycles/skip and its third harmonic
+folding to 0.1, and a $\sim$25\,ppm clock drift would spread it over the observed range. The $\sinc$ zero at
+$\tau\approx125$ samples and the absence of a 0.3 line argue against it; the test is whether each packet's $\nu$
+follows $\operatorname{fold}(3\cdot\mathrm{frac}(P))$ for its measured period $P$.}
+
+\subsection{Slow setup wander: the lag scan}
+Differencing skips $k$ apart instead of 1,
+\begin{equation}
+D(k)=\tfrac12\operatorname{var}(x_{j+k}-x_j)\quad(\text{same pixel}),\qquad D(1)=\sigma_1^2,
+\end{equation}
+replaces the skip-difference factor $2\sin^2(\pi fT)$ by $2\sin^2(\pi fkT)$. White noise and 1/f filtered by the CDS
+give a $D(k)$ that is flat in $k$; slow drift below $1/(kT)$ grows as $k^2$; a line adds $V_l(1-\cos2\pi\nu_lk)$, with
+$V_l$ its variance along the skips. On board 101's ref traces (lags 1--448):
+\begin{itemize}
+\item Before line removal ($\tau=2$\,\textmu s), $D$ follows the line term: 96 at lag 1, about 236\,ADU$^2$ at lags 5--8,
+back to 69 at lag 13 (one cycle of the $\approx$0.08 line).
+\item After removal, $D$ is flat within $\pm10\%$ out to lag 64, at both 2 and 9.3\,\textmu s.
+\item Beyond lag 64 it grows as $k^2$, by the same amount at every $\tau$: noise below $\sim$100\,Hz (drift or mains),
+which a 15\,ms pixel cannot resolve. Extrapolated to lag 1 it is $\approx0.001$\,ADU$^2$ against $D(1)\approx27$,
+below 0.01\%.
+\end{itemize}
+So slow setup wander is not in $K$. It does matter for 500-skip images, whose skip average reaches those lags. The
+lag scan cannot exclude setup or frontend noise that is 1/f-shaped in the 10\,kHz--1\,MHz band.
+
+\paragraph{Frontend roll-off.} Adding the measured roll-off ($f_c\approx470$--690\,kHz, from the $\approx$0.9\,\textmu s
+settling) to $|H|^2$ as a single pole $1/(1+(f/f_c)^2)$, the RC factor of \cite{hopkinson1982}, makes the white/1/f split
+slightly worse and barely moves $K$ (option \code{-{}-filter-fc}). Band-limited white noise is therefore not what sits
+in $K$.
+
+\subsection{Which knobs move $K$}\label{sec:Kbias}
+Within each packet, $K$ at the test setting $\theta$ is compared with $K$ at the reference setting from traces minutes
+apart, so slow drift cancels (\code{separate\_K\_bias.py}). Over valid operating points (\code{label.ok},
+$\lambda>0.005$), about 100 packets per channel, all 18 knobs are fitted jointly:
+\begin{equation}
+\ln\frac{K_\theta}{K_{\rm ref}}=\sum_{i=1}^{18}\beta_i\,\Delta\theta_i+\varepsilon .
+\end{equation}
+Write $K=K_{\rm tr}(\text{bias})+K_{\rm other}$, with $K_{\rm other}$ independent of the bias. Then
+$K_{\rm tr}\ge K_{\max}-K_{\min}$ and $K_{\rm other}\le K_{\min}$ over the settings scanned.
+\begin{itemize}
+\item \textbf{VSUB is the only knob $K$ follows}; no other knob reaches $|t|>3$ for $K$. Slope $100\,\beta_{\rm VSUB}$
+in \%/V, all knobs fitted together:
+\begin{center}\small
+\begin{tabular}{@{}lccc@{}}\toprule
+$K$ estimate & ch1 & ch2 & ch3\\\midrule
+raw & $+1.07$ ($t=5.7$) & $+1.02$ ($t=3.5$) & $+1.40$ ($t=8.4$)\\
+lines subtracted & $+0.70$ ($t=5.2$) & $+0.53$ ($t=3.5$) & $+1.17$ ($t=8.2$)\\
+explicit terms & $+0.77$ ($t=6.8$) & $+0.44$ ($t=2.8$) & $+0.98$ ($t=8.1$)\\\bottomrule
+\end{tabular}
+\end{center}
+The line correction removes 30--50\% of the raw slope, so part of it was the lines; a slope remains with either
+correction, clear on ch1 and ch3 and marginal on ch2 (ch0 pending). With the explicit-term slopes, $K$ changes by a
+factor $e^{34\beta}\approx1.16$--1.40 over the 36--70\,V scan (our arithmetic from the slopes).
+\item $S_w$ does not follow VSUB, and the image gain is flat in VSUB ($-0.1$ to $+1.1\%$ over 36--70\,V, $t\le3.1$),
+although the same regression sees the gain follow VDD ($-1.6\%$/V) and VR (up to $-3\%$/V). So the follower gain
+$A=g_m/(g_m+g_{mb})$ does not change; the 1/f source itself does.
+\item The 120\,kHz line is not the high-voltage supply. Its frequency does not follow VSUB: theta minus ref within a
+packet, median $\Delta\nu=0.0005$, Spearman \cite{spearman1904} 0.08 with $\Delta$VSUB ($p=0.42$); its spread is
+drift over time. Its amplitude does not either: $+0.01$ / $-0.01$ / $0.00\%$/V on ch1--3, $|t|\le0.3$, while the same
+fit sees it follow VDD ($-1.4\%$/V on ch1 and ch2).
+\end{itemize}
+Two explanations remain: back-gate (substrate) modulation of the output transistor, making it transistor 1/f; or
+broadband noise of the high-voltage supply coupling through the substrate. With the bracket above,
+$1-K_{\min}/K_{\max}\approx14$--28\% of $K$ follows VSUB (explicit-term slopes, ch1--3) and is not frontend noise.
+\caveat{Pending: ch0. A VSUB scan with a quiet high-voltage supply would separate the two explanations.}
+
+\subsection{The white floor}\label{sec:floor}
+The 17.1\,nV/$\sqrt{\rm Hz}$ figure for the frontend is a broadband open-input \emph{calculation}: the thermal noise
+$4k_BTR$ \cite{johnson1928,nyquist1928} of the 16.7\,k$\Omega$ input resistance plus the preamplifier. It is not a
+measured density in the CDS band. On a live channel, the source follower's output impedance
+$\approx1/(g_m+g_{mb})$ \cite{gray2009}, a few k$\Omega$, sits in parallel with that resistance and shunts most of its
+thermal noise, so a live channel can be quieter than an open input. The measured white levels agree with the
+high-$g_m$ prediction of $\approx7$\,nV/$\sqrt{\rm Hz}$ on a live channel:
+\begin{center}\small
+\begin{tabular}{@{}ll@{}}\toprule
+source & white level (nV/$\sqrt{\rm Hz}$)\\\midrule
+board 101, window fit, lines removed & $\sim$9\\
+board 102, window fit & 7.0--7.5\\
+LSM spectra (CDS band visible directly) & 5.9--7.6\\\bottomrule
+\end{tabular}
+\end{center}
+PSD conventions were checked: the 17.1 figure, $S_w$ and $G$ are all one-sided and referred to the video input
+(without $A$). Consequences: the earlier match ``board 102 at the open floor'' was a coincidence; the noise-based gain
+0.853\,ADU/\textmu V (already withdrawn under the constants table) loses its basis entirely, leaving the design 0.875; and the
+low-$g_m$ reading ($C_{\rm sn}\approx45$\,fF, also withdrawn) is the one in conflict. The PA03 static gaps cannot give
+an absolute density by band: the settling varies from gap to gap and swamps the noise by about $10^3$.
+
+\caveat{Status of $K$. After the line correction the unmodelled terms are $\tau$-flat again, so the corrected $K$,
+$f_c$, $\phi_{1/f}$ and $N_t$ are \textbf{upper limits} on the transistor's own 1/f. Excluded as contents of $K$:
+band-limited white noise (roll-off test), slow setup wander below $\sim$100\,Hz (lag scan) and the lines (corrected).
+Shown to be in $K$: a VSUB-dependent part, $\approx$14--28\%. Not yet separable: setup or frontend noise that is
+1/f-shaped in 10\,kHz--1\,MHz. An open input sees a different source impedance from a live channel, both for the input
+resistor's thermal noise and for the preamplifier's current noise including its 1/f, so it would not measure what a
+live channel sees. The reference run should be a \textbf{terminated input}: a resistor of about the follower's output
+impedance (a few k$\Omega$) at the preamplifier input. The window optimum (5--8\,\textmu s) uses only the fitted
+$\sigma_1(\tau)$ curve and is unaffected.}
+
+%=====================================================================
+\section{Oxide trap density and single-trap steps}\label{sec:Nt}
+
+\paragraph{Referring $K$ to the gate.} $K$ is in ADU$^2$ at the ADC. In V$^2$ at the gate (= sense node):
+\begin{equation}
+K_{V_g}=\frac{K}{(G\cdot10^6\ \text{ADU/V})^2\,A^2}.
+\end{equation}
+
+\paragraph{McWhorter number fluctuation.} In the carrier-number-fluctuation model \cite{mcwhorter1957}, applied to
+MOS transistors by Christensson et al.\ \cite{christensson1968}, channel carriers tunnel into and out of oxide traps.
+A trap at depth $x$ responds with a time constant $\tau_0e^{x/\lambda_t}$; traps spread uniformly in depth give a
+uniform spread of $\ln\tau$, whose sum of Lorentzians is a $1/f$ spectrum. Only traps within $\sim k_BT$ of the Fermi
+level switch. The classical result for the trapped-charge noise per unit gate area is \cite{ghibaudo2022}
+\begin{equation}
+S_{Q_t}(f)=\frac{q^2k_BT\,\lambda_t\,N_t}{f}\qquad[\text{C}^2\,\text{cm}^{-4}\,\text{Hz}^{-1}],\label{eq:SQt}
+\end{equation}
+with $N_t$ the oxide trap density per unit energy and volume and $\lambda_t\approx0.1$\,nm the tunnelling attenuation
+length in SiO$_2$ \cite{ghibaudo2022}.
+
+\paragraph{From $S_{Q_t}$ to $S_{V_g}$ to $K_{V_g}$.} A trapped charge per area $\delta Q_t$ shifts the flat-band (and so
+the effective gate) voltage by $\delta V_g=\delta Q_t/C$, with $C$ the gate capacitance per area. Over a gate of area
+$WL$ the independent traps average, so the variance of the area-mean charge is $1/(WL)$ times the per-area one:
+\begin{equation}
+S_{V_g}(f)=\frac{S_{Q_t}(f)}{C^2\,WL}=\frac{q^2k_BT\lambda_tN_t}{WL\,C^2}\cdot\frac1f
+\end{equation}
+(the gate-referred form used for MOSFET number-fluctuation noise \cite{christensson1968,ghibaudo1991}). Our window fit
+(Sec.~\ref{sec:H}) gives the measured spectrum as $S_w+K/f$; referred to the gate it is $S_w/(GA)^2+K_{V_g}/f$.
+$K_{V_g}$ is \emph{by definition} the coefficient of $1/f$ in the gate-referred spectrum, $K_{V_g}=f\,S^{1/f}_{V_g}(f)$.
+Setting the two $1/f$ coefficients equal,
+\begin{equation}
+K_{V_g}=\frac{q^2k_BT\lambda_tN_t}{WL\,C^2}\quad\Rightarrow\quad
+\boxed{N_t=\frac{K_{V_g}\,WL\,C^2}{q^2k_BT\lambda_t}}\ \ [\text{J}^{-1}\text{cm}^{-3}]\ \times q\ \to\ [\text{eV}^{-1}\text{cm}^{-3}],
+\end{equation}
+the same inversion as the trap-density extraction of Jayaraman and Sodini \cite{jayaraman1989} and eq.~(23) of
+\cite{ghibaudo2022}. Inputs: $C=C_{\rm ox}=0.454$\,fF/\textmu m$^2$ (table) or the buried-channel $C_{\rm eff}=0.125$
+(alternative), $A=0.85$ (table) or 0.44 (withdrawn kTC route), $WL=345$\,\textmu m$^2$, $T=130$\,K (PA03). Units in the
+code: $WL$ in cm$^2$, $C$ in F/cm$^2$, $\lambda_t$ in cm. Result: $N_t\le(1.1$--$2.4)\times10^{16}$\,eV$^{-1}$cm$^{-3}$
+from the raw $K$. Since $N_t\propto K$, board 101's values rise by the line-correction factor of Sec.~\ref{sec:lines}
+(explicit terms: median 1.58, 5--95\% range 1.29--2.45); the corrected values are pending the rerun.
+For comparison, 1/f measurements on bulk CMOS report $N_t\approx2\times10^{16}$\,eV$^{-1}$cm$^{-3}$ for n-MOS with a
+12\,nm equivalent oxide, rising to $5$--$7\times10^{17}$ for the thinnest (1.4\,nm) oxides \cite{ioannidis2014}.
+\caveat{$N_t\propto K/(G^2A^2)\cdot C^2\cdot WL/(T\lambda_t)$: a 15\% error in $C_{\rm ox}$ is 30\% in $N_t$;
+$\lambda_t$ is a convention. The LSM values use $T=180$\,K (checked: $N_t/K$ is $180/130$ lower than for PA03).
+The pure number-fluctuation model is used; correlated mobility fluctuations \cite{hung1990,ghibaudo1991} would put part
+of $K$ elsewhere, so $N_t$ is again an upper limit. The classical (Boltzmann) formula is reported to overestimate $N_t$
+below 60--80\,K \cite{ghibaudo2022}; at 130--180\,K it applies. Our devices are buried \emph{p}-channel transistors on
+an oxide--nitride stack, unlike the n-MOS of \cite{ioannidis2014}, so the comparison is indicative only.}
+
+\paragraph{Telegraph (RTS) steps} (\code{oxide\_traps.py}). A single trap switching between two states gives a
+two-level (random telegraph) signal \cite{kirton1989}. Running means of $w=25$ skips,
+$\Delta_k=\bar u_{k+w}-\bar u_k$; a step is a local maximum of $|\Delta_k|>6\,\std(u)\sqrt{2/w}$. Step size of one
+trapped charge, for comparison:
+\begin{equation}
+\delta_{1q}=\frac{q}{C\,WL}\,A\,G\cdot10^6\ \ [\text{ADU}].
+\end{equation}
+
+%=====================================================================
+\section{Conversion gain and sense-node capacitance}
+
+\begin{align}
+\text{CG}_{\rm in}&=\frac{g}{G}\ \ [\text{\textmu V}/e^-] &&\text{at the video input: 1.52--1.62 (PA03), 1.44--1.58 (LSM)}\\
+C_{\rm sn}&=\frac{A\,q}{\text{CG}_{\rm in}} &&\text{84--89\,fF (PA03), 86--95\,fF (LSM)}
+\end{align}
+Worked example: $g=1.37$\,ADU/e $\Rightarrow$ CG$_{\rm in}=1.566$\,\textmu V/e,
+$C_{\rm sn}=0.85\times1.602\times10^{-19}/1.566\times10^{-6}=86.9$\,fF.
+
+\paragraph{Follower relations used to justify $A$} (\code{chain\_calibration.py}, REPORT \S6). Small-signal
+source-follower gain and the saturation gate--source capacitance are textbook results \cite{gray2009}; the bootstrapped
+node capacitance follows from the gate--source capacitance seeing only $(1-A)$ of the node swing:
+\begin{equation}
+A=\frac{g_mR_L}{1+g_mR_L},\qquad C_{\rm sn}=C_{\rm fixed}+C_{gs}(1-A),\qquad C_{gs}\approx\tfrac23C_{\rm ox}WL\approx100\text{--}109\ \text{fF}.
+\end{equation}
+With $R_L=20$\,k$\Omega$ and the measured CG$_{\rm in}=Aq/C_{\rm sn}$, each assumed $C_{\rm fixed}$ fixes $A$. Device
+estimates ($g_m\approx170$--750\,\textmu S) give $A\approx0.8$--0.9, hence $C_{\rm fixed}\approx60$--80\,fF (``most of
+the node is wiring'').
+
+\paragraph{kTC route (withdrawn).} Each reset freezes charge $\sqrt{k_BTC_{\rm sn}}$ \cite{janesick2001}, so
+$C_{\rm sn}=(q\sigma_{\rm kTC})^2/(k_BT)$ with $\sigma_{\rm kTC}$ in electrons from the per-skip level scatter
+$\sigma_{\rm lvl}$ minus the electronics part. The electronics part was taken from board-102 ch0--2 as ``dead''
+channels; they have transistors, so the subtraction (and the 45\,fF / $A=0.44$ result) is withdrawn.
+
+\caveat{$C_{\rm sn}$ is linear in $A$ and in $1/G$. The spread between amplifiers ($\pm6\%$) is robust (same $A$, $G$
+for all); the absolute value is model-dependent.}
+
+%=====================================================================
+\section{Settling and bandwidth}
+
+\paragraph{Exponential settling.} After the reset pulse (end of the bit-4-low run $r_1$) and after each H transfer,
+the template (or the static-gap segment) is fitted with
+\begin{equation}
+y(t)=a+b\,e^{-t/\tau_s},\qquad 0.05\le\tau_s\le500\ \text{\textmu s},
+\end{equation}
+on $t\in[r_1+3,\ r_1+403]$ samples (reset) or the first 400 samples of the gap. $\tau_s\approx R_{\rm out}C_{\rm line}$:
+0.9--1.1\,\textmu s (PA03), 0.3--1.0 (LSM).
+
+\paragraph{In-window slope.} A straight line through the template inside each window (trimmed by 5 samples):
+$\partial\bar c/\partial t$ in ADU/\textmu s, divided by $g$ for e/\textmu s. Non-zero means the window is not settled
+(LSM board 109 after the summing-well pulse).
+
+\paragraph{CDS offset (summing-well feedthrough).} $\overline{s}-\overline{p}$ of the template, $\div g$ in electrons.
+
+\paragraph{Rise time} (\code{src/trace\_features.py}). 10--90\% rise of the reset pulse rebuilt by equivalent-time
+sampling (samples placed at their exact time relative to the edge, 0.1-sample bins).
+
+%=====================================================================
+\section{Clock-line to sense-node capacitances}\label{sec:cpl}
+
+\caveat{\textbf{Superseded values (REPORT \S32, 21 November, final).} The method below measured a fast jump or a pulse peak
+that the readout chain never reaches, so its values (H 0.011--0.016\,fF, SW 0.08--0.13\,fF, RG 0.12--0.22\,fF) are far too
+small. Each 18\,\textmu s state of a horizontal transfer switches exactly one phase (H3$\downarrow$, H2$\uparrow$,
+H1$\downarrow$, H3$\uparrow$, H2$\downarrow$, H1$\uparrow$, then a quiet state; the transfer starts with its own reset
+at $-16.9$\,\textmu s). In each state the output relaxes to a new level with $\tau=8.2$\,\textmu s (the H line; the chain
+settles in $\approx0.56$\,\textmu s); the settled step, fitted by linear least squares and regressed on that phase's swing over
+$\approx$100 settings, divided by $g$ and times $q$, gives the coupling. Short pulses (SW, 0.300\,\textmu s = 30 sequencer
+ticks) use response area $\div$ width. Board 101, fF-equivalent, $\pm$ (channel spread) $\pm$ (systematics; the start-time term is set conservatively at
+$\pm0.05$\,\textmu s, 5--8$\times$ its repeat scatter):
+H1 $3.41\pm0.05\pm0.06$, H2 $3.09\pm0.05\pm0.07$, H3 $3.49\pm0.05\pm0.06$ (up step; the down step, right after the reset,
+gives 3.26), SW $0.54\pm0.01\pm0.02$. Checks: up = down within 1\,\% (H1, H2); the fitted couplings reproduce the full
+H-transfer waveform to 0.6\,\% rms of the swing; step $\propto$ swing ($r=0.92$--0.95; SW $r=-0.97$). RG (a turn-off kick
+that drains back to VR, not stored charge) and V (steps that do not follow the switched phase's swing) are not quoted.
+These are \emph{effective} couplings at the follower input, not layout capacitances: the step holds through the state and
+follows VDD like the image gain ($-1.1$ to $-1.5\pm0.3$\,\%/V against $-1.5$ to $-1.7$\,\%/V for the gain, all voltages
+regressed jointly); PQ04 (single CCD, same amplifier design) is $\approx18\times$ weaker per volt (fF conversion indicative)
+and has a different $\tau$ (6.2--6.3\,\textmu s), so the size comes from the module's routing and $\tau$ is the H line's.
+An amplifier-off trace would confirm the entry point.}
+
+\paragraph{Why charge per volt is a capacitance.} A step $\Delta V_k$ on line $k$, coupled by $C_k$ to a node of total
+capacitance $C_{\rm sn}$, moves the node by $\Delta V_{\rm sn}=C_k\Delta V_k/C_{\rm sn}$. Through the conversion gain
+$q/C_{\rm sn}$ this is the same as $N=C_k\Delta V_k/q$ electrons. So
+\begin{equation}
+\boxed{C_k=q\,\frac{N}{\Delta V_k}=q\,\frac{1}{g}\Big|\frac{\partial y}{\partial V_k}\Big|}\qquad(y\ \text{in ADU}),
+\end{equation}
+independent of $C_{\rm sn}$, $A$ and $G$: only the image gain $g$ enters.
+
+\paragraph{Regression on all rails at once} (board 101 voltage scan, sessions G+H: every rail's high and low varied
+together in a Sobol design). For each amplifier and each response $y$,
+\begin{equation}
+y_i=\beta_0+\sum_k\beta_k\,(V_{k,i}-\tilde V_k)+\varepsilon_i,\qquad
+\operatorname{Var}\hat\beta=(X^\top X)^{-1}\hat\sigma^2_\varepsilon ,
+\end{equation}
+with rails that moved in lockstep ($|r|>0.999$) merged. Then $C_k=q|\hat\beta_k|/g$ and significance $z_k=\hat\beta_k/
+\operatorname{se}(\hat\beta_k)$. The responses $y$:
+\begin{itemize}
+\item \textbf{settled CDS offset} of an empty skip (\code{sense\_node\_coupling.py}): only lines whose level differs
+between the two windows (SW, OG, RG through the reset) contribute; video-cable pickup has decayed ($\sim$1\,\textmu s)
+by the window, so this is pickup-free. SW: 0.08--0.13\,fF.
+\item \textbf{edge jumps} (\code{clock\_edges.py}, \code{v\_edges.py}): the median waveform $w$ around the bit-6 (H) or
+bit-7 (V) flags, edges $e$ located from the largest $|\Delta^2w|$, and
+\begin{equation}
+J_e=\frac19\sum_{m=3}^{11}w[e+m]-\frac19\sum_{m=-12}^{-4}w[e+m]
+\end{equation}
+(the fast, capacitive part before relaxation). H$_{1,2,3}$: 0.011--0.016\,fF ($z>4$); V$_{1,2,3}$: not detected,
+$<0.003$\,fF (3$\sigma$); RG low rail at the reset edges: 0.15--0.22\,fF.
+\item \textbf{feedthrough per volt} (relative, all setups): reset-pulse height above the signal level / $(\text{RG}_H-\text{RG}_L)$,
+summing-well dip / SW swing, H/V waveform peak-to-peak / swing, each $\div g$ (e/V). These include board pickup and the
+whole transfer waveform, so they compare channels, not absolute $C_k$.
+\end{itemize}
+
+\paragraph{Reset gate to sense node: coupling, and what it says about the overlap.} \emph{(On hold: the RG
+numbers below come from the fast-jump method, superseded above and in Sec.~\ref{sec:cpl}'s status box.)}
+What the trace measures is the \emph{total} capacitance $C_{\rm RG}$ between the reset-gate line and the sense node
+(the coefficients above, through $C_k=q\,N/\Delta V_k$). That total is the sum of several paths in parallel:
+\begin{itemize}
+\item the \emph{overlap strip}, where the RG electrode lies over the edge of the sense-node implant (the implant
+spreads a little under the gate by lateral diffusion and alignment), a parallel-plate capacitor of area
+$W_{\rm RG}L_{\rm ov}$ through the gate dielectric;
+\item \emph{fringing} fields from the gate's edge and sidewall to the implant next to it;
+\item \emph{wiring}: the RG line routed near the sense node, the output gate or the sense line;
+\item \emph{pickup} on the board and cable at the same edge, which can have either sign.
+\end{itemize}
+The trace sees only the sum, so it cannot say how much of $C_{\rm RG}$ is overlap. Measured values:
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}\toprule
+method & $C_{\rm RG}$ & status\\\midrule
+feedthrough feature minus board-102 pickup & 0.21--0.37\,fF (101 ch2 0.37, $\approx1.7\times$ the others) &
+subtraction withdrawn (board 102 not dead)\\
+rail regression, RG low at the reset edges & 0.15--0.22\,fF & no subtraction; edge window may contain cable pickup\\\bottomrule
+\end{tabularx}
+\end{center}
+Because parallel capacitances only add, the overlap part cannot exceed the total, which gives a bound:
+\begin{equation}
+L_{\rm ov}\ \le\ \frac{C_{\rm RG}}{C_{\rm ox}W_{\rm RG}}
+=\frac{0.15\text{--}0.22\ \text{fF}}{0.454\ \text{fF/\textmu m}^2\times6\ \text{\textmu m}}\approx0.06\text{--}0.08\ \text{\textmu m}.
+\end{equation}
+\caveat{The bound holds only if the measured $C_{\rm RG}$ contains no pickup. Pickup can add or subtract (the ch0--ch2
+cross-coupling is negative), so this is not guaranteed. $L_{\rm ov}$ also scales with $t_{\rm eq}$ through $C_{\rm ox}$
+and uses the layout width $W_{\rm RG}=6$\,\textmu m. \textbf{Not verified}: nothing here measures the overlap itself.
+The earlier value $L_{\rm ov}=0.08$--0.14\,\textmu m treated all of the withdrawn 0.21--0.37\,fF as overlap and is
+superseded. ch2's higher coupling is a channel-to-channel difference from one method, not confirmed. Verification
+would need (i) the settled node shift from a step of RG low alone, with the reset FET off and the cable pickup decayed
+(total coupling without injection or pickup); (ii) a parasitic extraction or field solution of the layout to split
+overlap, fringing and wiring; (iii) a cross-section (SEM/TEM) or process simulation of the sense-node implant edge.}
+
+%=====================================================================
+\section{Reset charge injection and the buried-channel depth}
+
+\caveat{\textbf{On hold (REPORT \S32).} The reset response used here is a turn-off transient: during the 0.47\,\textmu s
+reset state the node sits at VR, and the +50\,kADU pulse appears after the switch releases and decays in 1--3\,\textmu s.
+The step that actually remains on the node is only +230 to +360\,ADU, equal and opposite on RG$_H$ and VR, i.e.\
+0.02--0.03\,fF-equivalent per volt. The slope $C_{\rm inj}=2.1$--2.4\,fF/V below, and the depth built on it, therefore do
+not measure charge left on the node. An RG edge-speed or pulse-width scan is needed before the depth can be redone.}
+
+\paragraph{Measurement.} In the rail regression of the reset-edge jumps (and their relaxation), the coefficients of
+RG$_H$ and VR come out equal and opposite (+17\,500 to +20\,200 and $-$16\,000 to $-$18\,700 ADU/V): the response depends
+on $V_G-V_R$. With Sec.~\ref{sec:cpl},
+\begin{equation}
+C_{\rm inj}=\frac{q}{g}\,\frac{\partial J}{\partial(\text{RG}_H-\text{VR})}=2.1\text{--}2.4\ \text{fF/V}.
+\end{equation}
+
+\paragraph{Channel charge of the reset FET.} When the reset FET turns off, its inversion charge
+\begin{equation}
+Q_{\rm ch}=C_{\rm eff}\,W_{\rm RG}L_{\rm RG}\,(V_G-V_{\rm ch}-V_T)
+\end{equation}
+splits between source (sense node) and drain \cite{sheu1984,wegmann1987}; with a fraction $\alpha\approx\tfrac12$
+onto the node (the even split of a fast turn-off; the fraction depends on the edge speed and on the impedances on the two
+sides \cite{wegmann1987}),
+$C_{\rm inj}=\alpha C_{\rm eff}W_{\rm RG}L_{\rm RG}$, so
+\begin{equation}
+C_{\rm eff}=\frac{C_{\rm inj}}{\alpha\,W_{\rm RG}L_{\rm RG}}=\frac{2.1\text{--}2.4}{0.5\times36}=0.117\text{--}0.133\ \text{fF/\textmu m}^2 .
+\end{equation}
+
+\paragraph{Depth.} In a buried channel the gate couples through the dielectric and the silicon above the potential
+maximum in series (two parallel-plate capacitors; permittivities from \cite{sze}):
+\begin{equation}
+\frac1{C_{\rm eff}}=\frac{t_{\rm eq}}{\varepsilon_{\rm ox}}+\frac{x_{\rm ch}}{\varepsilon_{\rm Si}}
+\ \Rightarrow\
+x_{\rm ch}=\varepsilon_{\rm Si}\Big(\frac1{C_{\rm eff}}-\frac{t_{\rm eq}}{\varepsilon_{\rm ox}}\Big).
+\end{equation}
+Numbers ($\varepsilon_{\rm ox}=0.0345$, $\varepsilon_{\rm Si}=0.1036$\,fF/\textmu m): $1/C_{\rm eff}\approx8.0$\,\textmu
+m$^2$/fF, $t_{\rm eq}/\varepsilon_{\rm ox}=0.076/0.0345=2.20$, remainder $5.8\times0.1036\Rightarrow
+\boxed{x_{\rm ch}\approx0.6\ \text{\textmu m}}$ (0.3--0.9 for $\alpha$ and gate area $\pm30\%$; recipe \cite{recipe}: B 150\,keV;
+the projected range of $\approx0.45$\,\textmu m is our estimate and has not yet been checked against range tables such
+as SRIM \cite{srim2010}).
+\caveat{Only the combination $1/C_{\rm eff}$ is measured. $t_{\rm eq}$ and $x_{\rm ch}$ are degenerate: assuming
+$x_{\rm ch}=0.45$\,\textmu m instead gives $t_{\rm eq}\approx126$\,nm. An LCR measurement of a clock-line capacitance
+($C_{\rm line}=\varepsilon_{\rm ox}A/t_{\rm eq}$) breaks the degeneracy; an RG-edge-speed scan pins $\alpha$.}
+
+%=====================================================================
+\section{Knees and channel potentials (\code{channel\_knees.py})}
+
+\paragraph{Hinge fit.} For each rail $x$ and output $y$ (log of $\sigma_e$, $\lambda$, $g$, CIC, white noise), with all
+other rails as linear regressors $X$:
+\begin{equation}
+\ln y=X\beta+c\,\max(0,x-k)+\varepsilon,
+\end{equation}
+$k$ by grid search (33 quantiles of $x$, 10--90\%) minimising the residual sum of squares $\text{RSS}_1(k)$. Against the
+straight line ($\text{RSS}_0$):
+\begin{equation}
+F=\frac{\text{RSS}_0-\text{RSS}_1}{\text{RSS}_1/(n-p-2)}\sim F_{2,\,n-p-2},
+\end{equation}
+kept if $p<0.01$ and found on $\ge2$ CCDs; error on $k$ by bootstrap \cite{efron1979} over packets (60 resamples).
+
+\paragraph{Dose shift from a knee offset.} A change $\Delta N_s$ of the buried-channel sheet dose shifts the channel
+potential by
+\begin{equation}
+\Delta V\approx q\,\Delta N_s\Big(\frac{t_{\rm eq}}{\varepsilon_{\rm ox}}+\frac{x_j}{\varepsilon_{\rm Si}}\Big)
+=\Delta N_s\times1.05\times10^{-11}\ \text{V\,cm}^2\quad(t_{\rm eq}=76\ \text{nm},\ x_j=0.45\ \text{\textmu m}).
+\end{equation}
+CCD\_B's H3-low knee sits $0.85\pm0.3$\,V below CCD\_C/D $\Rightarrow\Delta N_s\approx8\times10^{10}$\,cm$^{-2}$
+$\approx0.6\%$ of $1.3\times10^{13}$ (or the same density of fixed oxide charge).
+
+%=====================================================================
+\section{The setup: shared noise, crosstalk}
+
+\paragraph{Shared vs own} (\code{common\_mode.py}, \code{setup\_noise\_index.py}). Per channel, per-skip CDS with pixel
+means removed (optionally the pixel-averaged droop pattern too), averaged in blocks of $n$ skips ($y$), and the
+projection on the mean of the board's other channels ($\bar y_{\neg c}$) as in Sec.~\ref{sec:H}:
+\begin{align}
+\text{shared share}&=1-\frac{\operatorname{Var}(y-\beta\bar y_{\neg c})}{\operatorname{Var}y},\\
+\text{SNI}_n&=\sqrt{\frac{\operatorname{Var}y-\operatorname{Var}(y-\beta\bar y_{\neg c})}{\operatorname{Var}(y-\beta\bar y_{\neg c})}},\qquad
+X_n=\sqrt{1+\text{SNI}_n^2}=\frac{\sigma_{\rm total}}{\sigma_{\rm own}} .
+\end{align}
+SNI = 0: no setup noise; 1: the setup adds as much as the amplifier. Removing the shared part entirely would lower the
+per-skip noise by $1-1/X_1$ (v3: 9.46$\to$6.5\,ADU, $-30\%$).
+\caveat{``Shared'' is defined against the other channels of the same board. Noise that is common to all four (e.g.\ a
+shared return) is captured; noise entering one channel alone (its own cable, its own frontend) counts as ``own''. Applied to the per-channel \emph{traces}, which are separate
+acquisitions, the shared part is a sequence-locked pattern, not simultaneous noise (Sec.~\ref{sec:setup2}); the
+trace-based SNI values are withdrawn as setup numbers.}
+
+\paragraph{Crosstalk} (\code{crosstalk.py}, images). Source pixels with $q_A>30\,e^-$, target pixels without own
+charge ($|q_B|<4\sigma_B$, $\sigma_B$ from the MAD); $q_B$ vs $q_A$ binned in 20 quantiles, Theil--Sen slope \cite{theil1950,sen1968} of the bin
+medians:
+\begin{equation}
+k_{A\to B}=\frac{\partial q_B}{\partial q_A}\quad(\sim10^{-4}).
+\end{equation}
+Crosstalk of this order between the output amplifiers of multi-port CCDs is well known \cite{freyhammer2001}.
+
+\paragraph{Mutual capacitance from the window dependence} (\code{mutual\_capacitance.py}). With crosstalk at several
+$\tau$,
+\begin{equation}
+k(\tau)=\frac a\tau+b,\qquad C_m^{\rm video}=\frac a{R_{\rm out}}\ (R_{\rm out}=2.5\text{--}5\ \text{k}\Omega),\qquad
+C_m^{\rm sn}=b\,C_{\rm sn} :
+\end{equation}
+a step on one video line injects a pulse of area $R_{\rm out}C_m\Delta V$ into the other, which a window of length
+$\tau$ averages to $R_{\rm out}C_m\Delta V/\tau$; the $\tau$-independent part is coupling before the followers (or a
+shared impedance, if negative).
+
+%=====================================================================
+\section{What characterises the setup, and the cabling change}\label{sec:setup2}
+
+By \emph{the setup} we mean everything between the output transistor and the number written to disk: the video line
+on the flex and cable, the frontend board (20\,k$\Omega$ load, preamplifier, AC coupling), the ADC and its clock, and
+the grounds, supplies and bias lines the channels share. A number characterises the setup only if the amplifier's own
+physics cannot produce it. This section says how each setup number is isolated from the amplifier, why the familiar
+per-skip noise $\sigma_1$ is \emph{not} one of them, and works through the one setup change in these data: the
+grounding/cabling change made between the October runs (Oct.\ 6--12) and the November runs (from Nov.\ 2).
+
+%---------------------------------------------------------------------
+\subsection{How a number is separated from the amplifier}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lXX@{}}\toprule
+handle & why the amplifier cannot produce it & used for\\\midrule
+before/after, same CCDs and voltages &
+the transistors, their traps and their sense nodes do not change when a cable is moved; anything that moves at fixed
+voltages is the setup. Amplifier-only numbers are \emph{controls} and must stay put &
+the cabling change (Sec.~\ref{sec:cabling})\\
+simultaneity &
+four output transistors on four CCDs have independent white and 1/f noise; a part that is correlated \emph{in the same
+instant} on all of them must enter through something they share (return, supply, bias, clock lines, cable) &
+$\rho_{\rm sim}$, common-mode gain, strip shared/own ratio\\
+same on a board, different between boards &
+a circuit constant of the readout path, not of a transistor (the four amplifiers of a board are on different CCDs) &
+ringing, baseline recovery, gain-scale step\\
+independent of the CCD voltages &
+a transistor-limited quantity follows its operating point (VDD, VR); one that does not is set by the interconnect &
+rise time ($-0.1$ to $+0.8$\,\%/V in VDD)\\
+spectral shape &
+transistor noise is featureless (white + 1/f); narrow lines are interference &
+the 2.5\,kHz line and its harmonic\\\bottomrule
+\end{tabularx}
+\end{center}
+\caveat{The per-channel \emph{traces} are separate acquisitions about 1\,s apart (the other three streams of each file
+are empty frames). Their cross-channel ``shared'' part is a pattern locked to the readout sequence, not simultaneous
+noise, so the simultaneity handle needs images or level-1 strips, which record the four amplifiers together. A trace on
+its own can only use the other handles.}
+
+%---------------------------------------------------------------------
+\subsection{$\sigma_1$ in detail, and why it does not see the setup}\label{sec:sigma1}
+
+\paragraph{What $\sigma_1$ is.} A skipper amplifier measures the same pixel charge $Q$ many times without destroying it.
+Skip $j$ of a pixel gives $x_j=gQ+n_j$, where $n_j$ is the noise of that one CDS measurement (pedestal window minus
+signal window). Because $Q$ is identical in every skip of the pixel, the difference of two consecutive skips contains
+\emph{no charge}:
+\begin{equation}
+d_j=x_{j+1}-x_j=n_{j+1}-n_j,\qquad
+\operatorname{Var}d_j=2\sigma_n^2\ \text{(if consecutive } n_j \text{ are independent)}
+\ \Rightarrow\ \sigma_1=\frac{\std(d_j)}{\sqrt2}.
+\end{equation}
+So $\sigma_1$ is the noise of a single CDS measurement, obtained from a raw trace with no image, no gain fit and no
+knowledge of the charge (differences across a pixel boundary are excluded, since $Q$ changes there). It is in ADU;
+$\sigma_1/g$ is electrons and $\sigma_1\sqrt\tau/G$ an input density (eq.~\eqref{eq:en}).
+
+\paragraph{The textbook route.} Usually the CDS noise is \emph{predicted} \cite{hopkinson1982,janesick2001} from a noise spectrum $S(f)$ taken with the
+clocks stopped (or from a device model), by integrating it through the CDS filter:
+\begin{equation}
+\sigma_{\rm CDS}^2=\int_0^\infty S(f)\,|H_{\rm CDS}(f)|^2\dd f,\qquad |H_{\rm CDS}|^2=4\sin^2(\pi f\Delta t)\,\sinc^2(f\tau).
+\end{equation}
+
+\paragraph{How ours differs.}
+\begin{enumerate}
+\item \textbf{Measured, not integrated.} $\sigma_1$ is read off the clocked trace in the time domain. It contains every
+noise the clocking adds (clock-induced noise, bursts, sampling jitter) and needs no stationarity. The integral is used
+only to \emph{interpret} it (Sec.~\ref{sec:H}).
+\item \textbf{One extra filter factor.} The skip difference multiplies the filter by $2\sin^2(\pi fT)$ (Sec.~\ref{sec:H}).
+For white noise this averages to 1, so $\sigma_1=\sigma_{\rm CDS}$. At low frequency it does not:
+$|H_{\rm CDS}|^2\approx4(\pi f\Delta t)^2\propto f^2$, while $|H|^2\propto f^4$. At 200\,Hz the extra factor is
+$8.4\times10^{-4}$, at 1\,kHz $2.1\times10^{-2}$.
+\end{enumerate}
+
+\paragraph{Consequence: $\sigma_1$ is an amplifier number.} The share of each statistic's variance that a flat noise,
+at the same density as the white floor, contributes from a band,
+$w_{\rm band}=\int_{\rm band}|H|^2\dd f\big/\int_0^\infty|H|^2\dd f$ (computed with $\Delta t=13.8$, $\tau=10$,
+$T=32.6$\,\textmu s):
+\begin{center}\small
+\begin{tabular}{lccc}\toprule
+band & $\sigma_1$ (skip difference) & one CDS & 500-skip pixel, $|H_{500}|^2$ of eq.~\eqref{eq:HN}\\\midrule
+20--200\,Hz & $1.0\times10^{-10}$ & $2.0\times10^{-7}$ & $1.3\times10^{-6}$\\
+200\,Hz--1\,kHz & $3.2\times10^{-7}$ & $2.5\times10^{-5}$ & $5.8\times10^{-6}$\\
+1--10\,kHz & $2.3\times10^{-2}$ & $2.4\times10^{-2}$ & $7.1\times10^{-5}$\\\bottomrule
+\end{tabular}
+\end{center}
+Relative to its own white noise, a 500-skip pixel is $\sim10^4$ times more sensitive to 20--200\,Hz noise than
+$\sigma_1$. Setup noise (ground loops, supply and bias wander) lives at these low frequencies, so it shows up in
+$N$-skip images and long-$N$ strip statistics, and hardly at all in $\sigma_1$. This is why $\sigma_1$ serves as a
+\emph{control} for a setup change: across the cabling change it moved by $-3\,\%$ while the image noise fell by 30\,\%.
+\caveat{The 500-skip column uses one pixel's filter, without the pixel-to-pixel difference and row-baseline subtraction
+that the image analysis applies (these remove even slower noise). The orders of magnitude, not the exact values, are
+the point.}
+
+%---------------------------------------------------------------------
+\subsection{The ASD and why the trace one is only a relative setup number}
+
+\paragraph{Definition.} The power spectral density $S_{rr}(f)$ (one-sided, ADU$^2$/Hz, so $\int_0^\infty S_{rr}\dd f$
+is the variance of $r$) is estimated by Welch's method \cite{welch1967}; the amplitude spectral density is its square root, referred to
+the video input with the chain gain:
+\begin{equation}
+\text{ASD}(f)=\frac{\sqrt{S_{rr}(f)}}{G}\qquad[\text{V}/\sqrt{\text{Hz}}].
+\end{equation}
+It says how much noise amplitude sits at each frequency. A narrow line is interference; the 200\,Hz--1\,kHz level is
+where setup wander sits.
+
+\paragraph{Why it is not integrated to a $\sigma$.} On a clocked trace, $r$ is the cycle minus the median template.
+The ADC is not phase-locked to the sequencer (Sec.~\ref{sec:circuit}), so every reset pulse ($\sim$50\,kADU) is
+sampled at a random phase and leaves a large residual, and the cycle joins add steps. Integrating that spectrum through
+the CDS filter gives $\sigma_1\approx1400$\,e on PA03 (\code{setup\_noise\_N.py}), which is meaningless. The clocked
+ASD is therefore used only \emph{like for like}: the same sequencer and the same trace length, before and after a
+change. The textbook forward integration works on \emph{static} records (all clocks frozen, LSM): there
+$\sigma^2_{N,\rm band}=\int_{\rm band}S(f)|H_N(f)|^2\dd f$ predicts the measured per-skip $\sigma$ to a median ratio of
+0.97, and gives the setup's share of a 500-skip pixel in electrons (0.012--0.14\,e on the LSM channels).
+
+%---------------------------------------------------------------------
+\subsection{The setup numbers, as computed}\label{sec:circuit}
+
+\paragraph{Simultaneous correlation and common-mode gain} (\code{oct\_nov.py}, images; the four amplifiers of a board
+in one file). Per image, each amplifier's map minus its median, then minus each row's median (``row baseline''). Robust
+width $s_c=1.4826\,\med|X_c|$. Only pixels where \emph{every} amplifier is in its 0-e$^-$ peak ($|X_c|<2.5s_c$) are
+kept, so no charge enters. Then
+\begin{align}
+\rho_{\rm sim,c}&=\tfrac13\sum_{o\ne c}\operatorname{corr}(X_c,X_o),\\
+\text{CMS gain}_c&=1-\frac{\sigma\big(X_c-\beta_c\bar X_{\neg c}\big)}{\sigma(X_c)},\quad
+\beta_c=\frac{\langle X_c,\bar X_{\neg c}\rangle}{\langle\bar X_{\neg c},\bar X_{\neg c}\rangle}
+\ \text{fitted on alternate pixels, applied to the others,}
+\end{align}
+with $\sigma$ the MAD width and $\sigma_{0e,c}=s_c/g_c$ in electrons.
+\emph{Splitting a pixel's noise.} If each amplifier sees $X_c=s+n_c$, with a common part $s$ and independent own
+noise $n_c$ of similar size on every channel, then $\rho_{\rm sim}=\operatorname{Var}s/\operatorname{Var}X$, so
+\begin{equation}
+\sigma_{\rm common}=\sqrt{\rho_{\rm sim}}\;\sigma_{0e},\qquad \sigma_{\rm own}=\sqrt{1-\rho_{\rm sim}}\;\sigma_{0e}.
+\end{equation}
+
+\paragraph{Shared/own power ratio from a level-1 strip.} A strip records all four amplifiers together and keeps every
+skip. Per channel the per-skip CDS minus its pixel mean is $r_c[j]$; the shared series is the channel mean
+$\bar r[j]=\frac14\sum_c r_c[j]$ and the own series $r_c-\bar r$. Welch spectra of both give
+\begin{equation}
+R_{\rm band}=\frac{\int_{\rm band}S_{\bar r\bar r}\dd f}{\big\langle\int_{\rm band}S_{(r_c-\bar r)(r_c-\bar r)}\dd f\big\rangle_c},
+\end{equation}
+reported for 0--200\,Hz, 0.2--1\,kHz and 1--5\,kHz, together with the narrow lines present on every channel.
+\caveat{The band ratios were computed in an analysis recorded in REPORT \S24; \code{strip\_noise.py} computes the
+time-domain counterpart (correlation $\rho_N$ and shared fraction of $N$-skip block differences).}
+
+\paragraph{Readout-chain scale.} With the image gains of two periods,
+$r_c=g_c^{\rm after}/g_c^{\rm before}$. A step equal on all four amplifiers (four CCDs, four transistors) is in the
+chain they share, not in the sense nodes.
+
+\paragraph{Circuit constants of the readout path} (\code{trace\_physics2.py}, \code{src/trace\_features.py}).
+\begin{itemize}
+\item \textbf{Baseline recovery.} The median, over pixels, of the pedestal level against time within a pixel, fitted
+with $\ell(t)=a+b\,e^{-t/\tau_{\rm rec}}$: the video chain's AC coupling recharging after each H transfer.
+Board 101: $\tau_{\rm rec}=8.2\pm0.3$\,ms, $b=-1.8$\,kADU, identical on all four channels; board 102: none
+($\tau\ge130$\,ms). The within-pixel CDS drift has the same 8\,ms constant.
+\item \textbf{Baseline leakage into the CDS.} The per-skip CDS regressed on the per-skip level within a pixel gives the
+fraction $\varepsilon$ of a level fluctuation that survives the CDS; rejection $=20\log_{10}(1/|\varepsilon|)$:
+$\varepsilon=-0.18\,\%$ (101, 55\,dB), $+0.48\,\%$ (102, 46\,dB).
+\item \textbf{Sampling-phase jitter.} The half-height crossing time of each reset pulse (linear interpolation), its
+consecutive differences $/\sqrt2$: 20--25\,ns. A sampling clock that is not locked to the sequencer gives a uniformly
+random phase, $1/(f_s\sqrt{12})=19.2$\,ns. So the ADC runs asynchronously to the 10\,ns sequencer clock: a firmware
+property of the setup.
+\item \textbf{Ringing.} The strongest frequency in the residual of the reset-edge fit, over the 25 samples after the
+peak (zero-padded spectrum, peak refined by a parabola): 3.1\,MHz on board 101 (160--240\,e rms), 0.55--0.7\,MHz on
+board 102. It is the same on a board's four amplifiers, differs between boards, and the rise time does not follow VDD,
+so it is an LC resonance of the readout path, not the transistor.
+\end{itemize}
+\caveat{25 samples span 1.67\,\textmu s, less than one period at 0.55--0.7\,MHz: board 102's ringing is ``much slower
+than board 101'', not a precise frequency.}
+
+%---------------------------------------------------------------------
+\subsection{Worked example: the cabling change}\label{sec:cabling}
+
+\paragraph{The data.} Board 101, 500-skip unbinned images at the October nominal voltages (VSUB 45.1\,V, VR
+$-3.0$\,V, VDD $-19.0$\,V, H1 high 9.5\,V, V1 high 9.9\,V, H delay 1800): 12 October images, 19 from Nov.\ 10--12
+(medians below; $\rho_{\rm sim}$ and CMS gain with the row baseline removed). Traces of equal length (0.2\,s, three in October). One October level-1 strip
+($100\times1000\times3000$) and the November v3 strips.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}Xccl@{}}\toprule
+quantity & October & November & role\\\midrule
+\multicolumn{4}{@{}l}{\emph{setup numbers}}\\
+$\rho_{\rm sim}$, ch0--3 & 0.28 / 0.26 / 0.19 / 0.22 & 0.07 / 0.07 / 0.05 / 0.02 & simultaneity\\
+CMS gain, ch0--3 & 8.0 / 6.3 / 4.8 / 6.2\,\% & 0.1 / 0.0 / 0.2 / 0.2\,\% & simultaneity\\
+strip shared/own, 0--200\,Hz & 23 & 3.9 & simultaneity\\
+strip shared/own, 0.2--1 / 1--5\,kHz & 1.3 / 1.6 & 0.7 / 1.5 & simultaneity\\
+trace ASD 0.2--1\,kHz & 48.8\,\textmu V/$\sqrt{\rm Hz}$ & 34.8 ($-29\,\%$) & before/after\\
+trace ASD 1--10 / 10--100\,kHz & 5.2 / ref. & 3.7 ($-28\,\%$) / $-15\,\%$ & before/after\\
+gain scale $r_c$, ch0--3 & 1 (ref.) & 1.056 / 1.061 / 1.067 / 1.064 & same on a board\\
+shared narrow lines & 2532, 5064\,Hz & 2240--2490, 5050--5240\,Hz & spectral shape\\\midrule
+\multicolumn{4}{@{}l}{\emph{result}}\\
+image $\sigma_{0e}$, ch0 / ch1 & 0.207 / 0.210\,e & 0.145 / 0.148\,e ($-30\,\%$) & \\\midrule
+\multicolumn{4}{@{}l}{\emph{controls (amplifier numbers)}}\\
+$\sigma_1$ (per skip) & ref. & $-3\,\%$ & \\
+white density ch0/1/3 (nV/$\sqrt{\rm Hz}$) & 20.2--20.7 / 20.8--21.2 / 23.7--23.8 & 19.8 / 20.2 / 21.9 & \\\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Step 1: the amplifiers did not change.} $\sigma_1$ moved by $-3\,\%$ and the white density by 2--8\,\%.
+Both are dominated by the transistor and the frontend's white noise (Sec.~\ref{sec:sigma1}), so the amplifiers are the
+same before and after.
+
+\paragraph{Step 2: the pixel noise did change.} At the same voltages, ch0 went from 0.207 to 0.145\,e
+($\sigma^2$: 0.0428 $\to$ 0.0210\,e$^2$, half the variance gone).
+
+\paragraph{Step 3: how much of it was shared.} With the split above, ch0 in October:
+$\sigma_{\rm common}=\sqrt{0.279}\times0.207=0.109$\,e and $\sigma_{\rm own}=\sqrt{0.721}\times0.207=0.176$\,e.
+November: $\sqrt{0.070}\times0.145=0.038$\,e and $\sqrt{0.930}\times0.145=0.140$\,e. The common variance fell
+$\times8.1$ (ch1: 0.107 $\to$ 0.039\,e, $\times7.4$). The strips say the same thing in frequency: below 200\,Hz the
+shared power fell from 23 to 3.9 times the own power, about $\times6$; above 1\,kHz it did not change.
+
+\paragraph{Step 4: the ``own'' part fell too.} $\sigma_{\rm own}$ went from 0.176 to 0.140\,e ($-20\,\%$; ch1 $-21\,\%$)
+while the amplifier controls moved by only a few per cent. A correlation counts noise picked up by one channel's own
+cable as ``own''; the before/after handle shows that this part was also setup. The change therefore removed both the
+common slow noise (eight times less variance) and some per-channel pickup.
+
+\paragraph{Step 5: what is left.} In November the common part is 0.04\,e and subtracting it gains nothing (CMS gain
+$\approx0$). The 2.5\,kHz line and its harmonic are on every channel in both months, so the cabling did not touch
+their source (a switching converter or a periodic digital process). The 500-skip pixel (16.3\,ms) averages them out;
+other skip counts may not.
+
+\paragraph{The recommended setup numbers.} From one image: $\rho_{\rm sim}$ (target 0) and the CMS gain. From one
+$\sim$30\,s strip: the shared/own ratio below 200\,Hz (target 0) and the list of shared lines. Always quote $\sigma_1$
+and the white density alongside, as the controls showing the amplifiers did not change.
+\caveat{(i) The October image gains are 6\,\% lower ($r_c$); $\sigma_{0e}$ uses each period's gain, so the 30\,\% is in
+electrons. The step is equal on all four channels, consistent with a chain change made at the same time; the trace
+densities use the design $G$ in both months, so the 2--8\,\% control figure carries that uncertainty. (ii) The split
+assumes the common part couples equally into all four channels. (iii) The October strip is one acquisition with
+3000-skip pixels (November 480), so 23 vs 3.9 is indicative. (iv) October images had 10--100\,s exposures (November
+0--1\,s); at 40--75\,e/pix/day this is $\le0.1$\,e/pix and the 0-e$^-$ selection excludes it. (v) ch2 (own telegraph
+problem) and ch3 also improved but scatter more and are not used in the example.}
+
+%=====================================================================
+\section{Summary: which inputs each number depends on}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}\toprule
+quantity & depends on & status\\\midrule
+$\sigma_1$ (ADU, e), $\sigma_N$, $\kappa$, $\rho_1$, $\mathcal R_{\rm img}$ & trace (+ $g$) & measured\\
+$e_n$, ASD, setup number & $G$ (design) & measured, $G$-scaled\\
+$f_c$, $\phi_{1/f}$ & window fit, lines & upper limit (Sec.~\ref{sec:lines}, \ref{sec:floor})\\
+line powers $a_l$, $\nu_l$ & trace & measured (setup)\\
+VSUB slope of $K$ & within-packet regression & measured\\
+$e_w$ & window fit, $G$ & model\\
+$N_t$ & $K$, $G^2A^2$, $C^2$, $WL$, $T$, $\lambda_t$ & upper limit, model; rerun pending\\
+CG$_{\rm in}$ & $g$, $G$ & measured, $G$-scaled\\
+$C_{\rm sn}$ & $g$, $G$, $A$ & model ($\pm6\%$ spread robust)\\
+$C_k$ (H1--H3, SW) & settled level per volt, $g$ & measured, validated (REPORT \S32); RG, V not quoted\\
+$C_{\rm RG}$ (total RG--node) & fast jump & superseded (transient)\\
+$L_{\rm ov}$ & $C_{\rm RG}$, $C_{\rm ox}$, $W_{\rm RG}$ & on hold\\
+$C_{\rm eff}$, $x_{\rm ch}$ & $C_{\rm inj}$, $\alpha$, $W_{\rm RG}L_{\rm RG}$, $t_{\rm eq}$ & on hold ($C_{\rm inj}$ is a transient)\\
+knee $k$, $\Delta N_s$ & hinge fit; $t_{\rm eq}$, $x_j$ & knee measured; dose model\\
+$\tau_s$, slopes, CDS offset & template & measured\\
+SNI, shared share, $k_{A\to B}$ & simultaneous channels / images & measured\\
+$\rho_{\rm sim}$, CMS gain, strip shared/own ratio & simultaneous images / strips & measured (setup)\\
+clocked-trace ASD bands & trace, $G$ & relative only (equal length, same sequencer)\\
+$\tau_{\rm rec}$, leakage $\varepsilon$, phase jitter, ringing & trace & measured (setup constants)\\
+$C_{\rm sn}$ from kTC & ``dead'' board-102 channels & withdrawn\\\bottomrule
+\end{tabularx}
+\end{center}
+
+%=====================================================================
+\begin{thebibliography}{99}\small
+\bibitem{mcwhorter1957} A.~L. McWhorter, ``1/f noise and germanium surface properties,'' in \emph{Semiconductor
+Surface Physics} (Univ.\ of Pennsylvania Press, Philadelphia, 1957), pp.~207--228.
+\bibitem{christensson1968} S.~Christensson, I.~Lundstr\"om, C.~Svensson, ``Low frequency noise in MOS transistors---I
+Theory,'' Solid-State Electron.\ \textbf{11}, 797--812 (1968), doi:10.1016/0038-1101(68)90100-7.
+\bibitem{jayaraman1989} R.~Jayaraman, C.~G. Sodini, ``A 1/f noise technique to extract the oxide trap density near the
+conduction band edge of silicon,'' IEEE Trans.\ Electron Devices \textbf{36}(9), 1773--1782 (1989).
+\bibitem{hung1990} K.~K. Hung, P.~K. Ko, C.~Hu, Y.~C. Cheng, ``A unified model for the flicker noise in
+metal-oxide-semiconductor field-effect transistors,'' IEEE Trans.\ Electron Devices \textbf{37}(3), 654--665 (1990),
+doi:10.1109/16.47770.
+\bibitem{ghibaudo1991} G.~Ghibaudo, O.~Roux, C.~Nguyen-Duc, F.~Balestra, J.~Brini, ``Improved analysis of low
+frequency noise in field-effect MOS transistors,'' phys.\ stat.\ sol.\ (a) \textbf{124}, 571--581 (1991).
+\bibitem{ghibaudo2022} G.~Ghibaudo, ``On the fluctuation-dissipation of the oxide trapped charge in a MOSFET operated
+down to deep cryogenic temperatures,'' arXiv:2204.04958.
+\bibitem{ioannidis2014} E.~G. Ioannidis, S.~Haendler, C.~G. Theodorou, S.~Lasserre, C.~A. Dimitriadis, G.~Ghibaudo,
+``Evolution of low frequency noise and noise variability through CMOS bulk technology nodes from 0.5\,\textmu m down to
+20\,nm,'' Solid-State Electron.\ \textbf{95}, 28--31 (2014).
+\bibitem{machlup1954} S.~Machlup, ``Noise in semiconductors: spectrum of a two-parameter random signal,'' J.\ Appl.\
+Phys.\ \textbf{25}, 341 (1954), doi:10.1063/1.1721637.
+\bibitem{dutta1981} P.~Dutta, P.~M. Horn, ``Low-frequency fluctuations in solids: 1/f noise,'' Rev.\ Mod.\ Phys.\
+\textbf{53}(3), 497--516 (1981), doi:10.1103/RevModPhys.53.497.
+\bibitem{kirton1989} M.~J. Kirton, M.~J. Uren, ``Noise in solid-state microstructures: a new perspective on individual
+defects, interface states and low-frequency (1/f) noise,'' Adv.\ Phys.\ \textbf{38}(4), 367--468 (1989).
+\bibitem{janesick1990} J.~Janesick, T.~Elliott, A.~Dingizian, R.~Bredthauer, C.~Chandler, J.~Westphal, J.~Gunn, ``New
+advancements in charge-coupled device technology: sub-electron noise and 4096$\times$4096 pixel CCDs,'' Proc.\ SPIE
+\textbf{1242}, 223 (1990).
+\bibitem{chandler1990} C.~E. Chandler, R.~A. Bredthauer, J.~R. Janesick, J.~A. Westphal, ``Sub-electron noise charge
+coupled devices,'' Proc.\ SPIE \textbf{1242}, 238 (1990).
+\bibitem{tiffenberg2017} J.~Tiffenberg et al., ``Single-electron and single-photon sensitivity with a silicon Skipper
+CCD,'' Phys.\ Rev.\ Lett.\ \textbf{119}, 131802 (2017), arXiv:1706.00028.
+\bibitem{moroni2012} G.~Fern\'andez Moroni, J.~Estrada, G.~Cancelo, S.~E. Holland, E.~E. Paolini, H.~T. Diehl,
+``Sub-electron readout noise in a Skipper CCD fabricated on high resistivity silicon,'' Exp.\ Astron.\ \textbf{34},
+43--64 (2012), doi:10.1007/s10686-012-9298-x.
+\bibitem{janesick2001} J.~R. Janesick, \emph{Scientific Charge-Coupled Devices} (SPIE Press, Bellingham, 2001), PM83.
+\bibitem{hopkinson1982} G.~R. Hopkinson, D.~H. Lumb, ``Noise reduction techniques for CCD image sensors,'' J.\ Phys.\ E
+\textbf{15}, 1214--1222 (1982), doi:10.1088/0022-3735/15/11/020.
+\bibitem{welch1967} P.~D. Welch, ``The use of fast Fourier transform for the estimation of power spectra: a method based
+on time averaging over short, modified periodograms,'' IEEE Trans.\ Audio Electroacoust.\ \textbf{15}(2), 70--73
+(1967), doi:10.1109/TAU.1967.1161901.
+\bibitem{johnson1928} J.~B. Johnson, ``Thermal agitation of electricity in conductors,'' Phys.\ Rev.\ \textbf{32}, 97
+(1928).
+\bibitem{nyquist1928} H.~Nyquist, ``Thermal agitation of electric charge in conductors,'' Phys.\ Rev.\ \textbf{32}, 110
+(1928).
+\bibitem{gray2009} P.~R. Gray, P.~J. Hurst, S.~H. Lewis, R.~G. Meyer, \emph{Analysis and Design of Analog Integrated
+Circuits}, 5th ed.\ (Wiley, 2009).
+\bibitem{sheu1984} B.~J. Sheu, C.~Hu, ``Switch-induced error voltage on a switched capacitor,'' IEEE J.\ Solid-State
+Circuits \textbf{19}(4), 519--525 (1984), doi:10.1109/JSSC.1984.1052176.
+\bibitem{wegmann1987} G.~Wegmann, E.~A. Vittoz, F.~Rahali, ``Charge injection in analog MOS switches,'' IEEE J.\
+Solid-State Circuits \textbf{22}(6), 1091--1097 (1987), doi:10.1109/JSSC.1987.1052859.
+\bibitem{sze} S.~M. Sze, K.~K. Ng, \emph{Physics of Semiconductor Devices}, 3rd ed.\ (Wiley-Interscience, Hoboken,
+2007).
+\bibitem{srim2010} J.~F. Ziegler, M.~D. Ziegler, J.~P. Biersack, ``SRIM -- The stopping and range of ions in matter
+(2010),'' Nucl.\ Instrum.\ Methods B \textbf{268}, 1818 (2010).
+\bibitem{theil1950} H.~Theil, ``A rank-invariant method of linear and polynomial regression analysis, I,'' Proc.\ Royal
+Netherlands Academy of Sciences \textbf{53}, 386--392 (1950).
+\bibitem{sen1968} P.~K. Sen, ``Estimates of the regression coefficient based on Kendall's tau,'' J.\ Am.\ Stat.\ Assoc.\
+\textbf{63}, 1379--1389 (1968), doi:10.1080/01621459.1968.10480934.
+\bibitem{spearman1904} C.~Spearman, ``The proof and measurement of association between two things,'' Am.\ J.\
+Psychol.\ \textbf{15}(1), 72--101 (1904).
+\bibitem{efron1979} B.~Efron, ``Bootstrap methods: another look at the jackknife,'' Ann.\ Statist.\ \textbf{7}(1), 1--26
+(1979), doi:10.1214/aos/1176344552.
+\bibitem{freyhammer2001} L.~M. Freyhammer, M.~I. Andersen, T.~Arentoft, C.~Sterken, P.~N\o rregaard, ``On cross-talk
+correction of images from multiple-port CCDs,'' Exp.\ Astron.\ \textbf{12}, 147--162 (2001).
+\bibitem{ltc2387} Analog Devices (Linear Technology), LTC2387-18 18-bit 15\,Msps SAR ADC, data sheet.
+\bibitem{recipe} CCD process recipe (``CCD Recipe.pdf''), internal; values in \code{amp\_phys/priors.toml}.
+\bibitem{acmguide} D.~Rosenmerkel, C.~Zhu, ACM circuitry guide v1.3, internal.
+\bibitem{feschem} DAMIC-M frontend board schematic FE\_ADA4817\_MK2 (UZH, 2024-03-06), internal.
+\bibitem{micrograph} Micrograph / layout screenshot of one output corner (2026-11-16), internal; dimensions in
+\code{amp\_phys/priors.toml}.
+\end{thebibliography}
+
+\end{document}

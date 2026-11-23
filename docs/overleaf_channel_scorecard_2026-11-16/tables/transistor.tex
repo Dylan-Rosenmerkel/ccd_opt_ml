@@ -1,0 +1,29 @@
+\begin{table}[H]\centering\small
+\caption{Output transistor: white and 1/f noise, oxide trap density, telegraph noise.}\label{tab:tr}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{llrrrrrrrr}\toprule
+setup & channel & 1/f at 500 skips (e) & white (nV/$\sqrt{\text{Hz}}$) & 1/f corner (kHz) & 1/f share & $N_t$ ($10^{16}$/eV/cm$^3$) & kurtosis & kurtosis p90 & fit resid.\\\midrule
+PA03, 130 K & 101 ch0 & \cellcolor{good}0.084 & 14.2 & 16 & 0.37 & \cellcolor{good}1.10 & \cellcolor{good}$-$0.02 & \cellcolor{good}0.06 & \cellcolor{good}0.026\\
+ & 101 ch1 & \cellcolor{fair}0.109 & 12.7 & 33 & 0.55 & \cellcolor{good}1.80 & \cellcolor{good}0.03 & \cellcolor{good}0.09 & \cellcolor{good}0.019\\
+ & 101 ch2 & \cellcolor{fair}0.117 & 14.0 & 29 & 0.52 & \cellcolor{good}1.87 & \cellcolor{good}0.02 & \cellcolor{fair}0.17 & \cellcolor{good}0.020\\
+ & 101 ch3 & \cellcolor{fair}0.128 & 13.0 & 39 & 0.59 & \cellcolor{good}2.27 & \cellcolor{good}$-$0.01 & \cellcolor{good}0.09 & \cellcolor{good}0.010\\
+ & 102 ch3 & \cellcolor{fair}0.141 & 7.7 & 128 & 0.83 & \cellcolor{good}2.54 & \cellcolor{good}$-$0.05 & \cellcolor{good}0.10 & \cellcolor{good}0.011\\
+ & 102 ch0 \textit{(no charge)} & -- & 7.7 & 95 & 0.78 & \cellcolor{good}1.98 & \cellcolor{good}$-$0.05 & -- & \cellcolor{good}0.006\\
+ & 102 ch1 \textit{(no charge)} & -- & 7.3 & 132 & 0.83 & \cellcolor{good}2.41 & -- & -- & \cellcolor{good}0.009\\
+ & 102 ch2 \textit{(no charge)} & -- & 7.3 & 107 & 0.80 & \cellcolor{good}1.94 & -- & -- & \cellcolor{good}0.010\\
+\midrule
+LSM, 180 K & ACM\,106 ch0 & \cellcolor{fair}0.124 & 7.5 & 99 & 0.79 & \cellcolor{good}1.36 & \cellcolor{good}0.20 & -- & \cellcolor{good}0.019\\
+ & ACM\,106 ch1 & \cellcolor{fair}0.121 & 8.4 & 75 & 0.74 & \cellcolor{good}1.30 & \cellcolor{good}0.09 & -- & \cellcolor{good}0.019\\
+ & ACM\,106 ch2 & \cellcolor{fair}0.117 & 9.1 & 61 & 0.70 & \cellcolor{good}1.24 & \cellcolor{good}$-$0.02 & -- & \cellcolor{good}0.013\\
+ & ACM\,106 ch3 & \cellcolor{fair}0.119 & 8.4 & 77 & 0.74 & \cellcolor{good}1.35 & \cellcolor{good}$-$0.08 & -- & \cellcolor{good}0.008\\
+ & ACM\,109 ch0 & \cellcolor{fair}0.106 & 8.6 & 66 & 0.71 & \cellcolor{good}1.21 & \cellcolor{good}$-$0.16 & -- & \cellcolor{good}0.015\\
+ & ACM\,109 ch1 & \cellcolor{poor}0.151 & 5.4 & 334 & 0.93 & \cellcolor{good}2.40 & \cellcolor{poor}2.66 & -- & \cellcolor{good}0.012\\
+ & ACM\,109 ch2 & \cellcolor{fair}0.120 & 8.3 & 83 & 0.76 & \cellcolor{good}1.43 & \cellcolor{good}$-$0.29 & -- & \cellcolor{good}0.019\\
+ & ACM\,109 ch3 & -- & -- & -- & -- & -- & \cellcolor{good}$-$0.23 & -- & \cellcolor{poor}0.210\\
+ & ACM\,110 ch0 & \cellcolor{fair}0.122 & 7.9 & 93 & 0.78 & \cellcolor{good}1.43 & \cellcolor{good}$-$0.03 & -- & \cellcolor{good}0.014\\
+ & ACM\,110 ch1 & \cellcolor{poor}0.155 & 7.4 & 174 & 0.87 & \cellcolor{good}2.37 & \cellcolor{good}$-$0.02 & -- & \cellcolor{good}0.010\\
+ & ACM\,110 ch2 & \cellcolor{fair}0.120 & 8.6 & 83 & 0.76 & \cellcolor{good}1.51 & \cellcolor{good}0.07 & -- & \cellcolor{good}0.010\\
+ & ACM\,110 ch3 & \cellcolor{fair}0.147 & 8.3 & 117 & 0.81 & \cellcolor{good}1.97 & \cellcolor{fair}0.76 & -- & \cellcolor{good}0.009\\
+\bottomrule\end{tabular}\end{adjustbox}
+\par\smallskip\footnotesize Grades --- 1/f at 500 skips: \colorbox{good}{$x\le0.1$} \colorbox{fair}{$x\le0.15$}; $N_t$: \colorbox{good}{$x\le3$} \colorbox{fair}{$x\le10$}; kurtosis: \colorbox{good}{$|x|\le0.5$} \colorbox{fair}{$|x|\le1.5$}; kurtosis p90: \colorbox{good}{$|x|\le0.15$} \colorbox{fair}{$|x|\le0.5$}; otherwise \colorbox{poor}{poor}. Fit residual above 5\,\% $\Rightarrow$ the trap numbers are withheld.
+\end{table}

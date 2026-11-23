@@ -1,0 +1,149 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=1.4cm,top=1.2cm,bottom=1.2cm]{geometry}
+\usepackage[table]{xcolor}
+\usepackage{booktabs,graphicx,amsmath,enumitem,tabularx,array}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\setlength{\parindent}{0pt}\setlength{\parskip}{2.5pt}
+\setlist{nosep,leftmargin=1.2em}
+\pagestyle{empty}
+\definecolor{acc}{RGB}{30,80,140}
+\definecolor{boxbg}{RGB}{236,242,250}
+\definecolor{warnbg}{RGB}{252,244,228}
+\definecolor{good}{RGB}{190,232,190}\definecolor{fair}{RGB}{252,226,160}\definecolor{poor}{RGB}{244,182,176}
+\newcommand{\head}[1]{\par\smallskip{\color{acc}\large\bfseries #1}\par\vspace{1pt}}
+\newcommand{\key}[2][boxbg]{\par\colorbox{#1}{\parbox{\dimexpr\linewidth-2\fboxsep}{#2}}\par}
+\newcommand{\rtHz}{$\sqrt{\text{Hz}}$}
+\newcommand{\st}[1]{\textit{\color{gray}#1}}
+
+\begin{document}
+{\color{acc}\LARGE\bfseries What the readout traces tell us about the amplifiers, the setup and the performance}\\[2pt]
+{\small Skipper-CCD output amplifiers: PA03 (130\,K, boards 101/102) and LSM production modules DM07/09/10 (180\,K)
+\textperiodcentered{} 16 November 2026}
+
+\key{\textbf{In short.} We dissected the raw readout traces of 17 live amplifiers on two test stands and checked the
+results against the images. \textbf{The amplifiers} are the same design on both module sets: an 84--95\,fF sense node
+(mostly wiring), 1.4--1.6\,\textmu V per electron, 3.3--4.4\,e$^-$ per skip, much of it apparently the output
+transistor's 1/f noise; the gate oxides are good; two channels have heavy-tailed noise (noise bursts, a modulated noise level), single-trap steps are too small to resolve.
+\textbf{The setup} of PA03 board 101 carries 3--13$\times$ the LSM's slow pickup (cut by 29\,\% by the cabling change).
+\textbf{The performance} is nonetheless set by the per-skip noise: PA03's 500-skip images reach 0.144--0.173\,e$^-$, at the
+white-noise expectation, while the LSM images at 180\,K lose 1.2--2$\times$ to charge arriving during the skipping.}
+
+\head{1.\ What was done}
+\begin{itemize}
+\item \textbf{Whole-trace dissection} (0.2\,s, every ADC sample): the repeating skip waveform is subtracted; the remainder
+  is the noise of the setup plus amplifier, from 200\,Hz to 7.5\,MHz. From the waveform itself: reset and settling times,
+  the CDS offset, the clock edges.
+\item \textbf{White vs 1/f noise} from how the noise changes with the CDS window: in hardware (100 v2 strips with 3--30\,\textmu s
+  windows) and in software (2--9\,\textmu s windows formed from the raw samples of one trace). Heavy tails (bursts, noise-level modulation) from the
+  kurtosis of the noise.
+\item \textbf{Device parameters from voltage scans} (80 v3 settings): clock-to-sense-node couplings from the edge sizes,
+  charge injected at reset, channel-potential ``knees''.
+\item \textbf{Cross-checks on images}: read noise at 500 skips, noise shared between amplifiers, dark charge, glows.
+  Data: PA03 board 101 (October and November), board 102 (no charge sent to it: a same-cryostat reference), LSM ACM106/109/110.
+\end{itemize}
+
+\head{2.\ The amplifiers: physics values}
+{\footnotesize\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\linewidth}{@{}Xccc@{}}\toprule
+quantity & PA03 101 ch0--ch3 (130\,K) & LSM, 9 good channels (180\,K) & LSM flagged (3)\\\midrule
+gain (ADU/e$^-$) / conversion gain at the video input (\textmu V/e$^-$) & 1.33--1.41 / 1.52--1.62 & 1.26--1.38 / 1.44--1.58 & 1.28--1.37 / 1.46--1.57\\
+sense-node capacitance (fF; follower gain 0.85 from the layout) & 84--89 & 86--95 & 87--93\\
+\quad of which wiring + diffusion (fF) & 60--80 & -- & --\\
+noise per skip (e$^-$) / at the video input (nV/\rtHz) & 3.7--4.4 / 18.7--21.1 & 3.3--3.7 / 16.4--17.8 & 4.1--4.3 / 19.7--20.9\\
+white part of the transistor noise (nV/\rtHz) & 12.6--14.2 & 7.5--9.1 & 5.4--8.3\\
+1/f corner (kHz) & 16--39 & 61--99 & \textbf{117--334}\\
+gate-oxide trap density, upper limit ($10^{16}$\,eV$^{-1}$cm$^{-3}$) & $\le$1.1--2.3 & $\le$1.2--1.5 & $\le$2.0--2.4\\
+heavy-tailed noise (excess kurtosis) & $\approx$0; 101 ch2 episodic & $\le$0.2 & \textbf{2.7} (ACM109 ch1, bursts)\\
+settling after reset (\textmu s) & 0.9--1.1 & 0.3--1.0 & 0.3--0.9\\\midrule
+\multicolumn{4}{@{}l}{\textit{PA03 only (needs voltage scans):}}\\
+clock coupling to the sense node (fF) & \multicolumn{3}{l}{RG 0.15--0.37 \quad SW 0.08--0.13 \quad H 0.011--0.016 \quad V $<$0.003}\\
+charge injected at reset & \multicolumn{3}{l}{2.1--2.4\,fF per volt of RG$_\text{high}-$VR, the same on all four CCDs}\\
+buried-channel depth / reset-gate overlap & \multicolumn{3}{l}{$\approx$0.6\,\textmu m (0.3--0.9; recipe 0.5--0.7) \quad / \quad $\approx$0.1\,\textmu m, 1.7$\times$ larger on ch2}\\
+channel potential & \multicolumn{3}{l}{CCD\_B shifted by 0.85\,V against the other three ($\approx$0.6\,\% implant dose)}\\\bottomrule
+\end{tabularx}}
+
+\begin{minipage}[t]{0.49\linewidth}\vspace{0pt}
+\includegraphics[width=\linewidth]{figures/oxide_traps_tau.png}\\[-2pt]
+{\footnotesize Noise per skip against the CDS window (PA03, 100 strips): white noise falls with the window, the 1/f part
+does not. The fit separates them.}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\linewidth}\vspace{0pt}
+\includegraphics[width=\linewidth]{figures/charge_injection.png}\\[-2pt]
+{\footnotesize Charge injected at reset against RG$_\text{high}-$VR (80 settings): one slope on four CCDs, which gives the
+buried-channel depth.}
+\end{minipage}
+
+\textbf{What we learned about the amplifiers}
+\begin{itemize}
+\item \textbf{One design, reproducible.} All 17 sense nodes lie within $\pm$6\,\% (84--95\,fF); PA03 is representative of
+  the production amplifiers. Most of the node is the $\sim$100\,\textmu m sense line and diffusion, not the gate: a
+  shorter line is where conversion gain would be gained.
+\item \textbf{A large part of the single-skip noise does not shrink with a longer window}: most likely the transistor's
+  1/f noise, which the CDS does not remove (an upper limit until the fit is run on an open input). The thermal noise of the transistor is $\le$4.9\,nV/\rtHz{} at 130\,K, a small part.
+\item \textbf{Good gate oxides everywhere} ($\le$1--2.4$\times10^{16}$\,eV$^{-1}$cm$^{-3}$, the range of good thermal oxide). The
+  1/f corners are higher at 180\,K than at 130\,K, consistent with trap noise growing with $kT$ (different devices, to be
+  checked on one module).
+\item \textbf{Problem channels are identifiable}: ACM109 ch1 has $\sim$1\,ms noise bursts (kurtosis 2.7, trace corner
+  334\,kHz; its static spectrum is normal); ACM110 ch1 has extra 1/f noise; PA03 101 ch2 has a modulated noise level, the largest reset-gate overlap, and emits
+  light into its register ($\sim$22\,e$^-$/pixel at the amplifier end, decaying over $\sim$1300 columns).
+\item \textbf{The reset injects the same charge per volt on all four PA03 CCDs}, so their buried channels are equally deep
+  ($\approx$0.6\,\textmu m); the potential knees show one CCD (CCD\_B) with a slightly different implant.
+\item \textbf{The reset gate couples 10--20$\times$ more strongly than the horizontal clocks} and 100$\times$ more than the
+  vertical ones; noise on VDD would cost read noise at $\sim$0.6\,\textmu V/\rtHz, while VSUB tolerates $\sim$60.
+\end{itemize}
+
+\head{3.\ The setup}
+\begin{minipage}[t]{0.46\linewidth}\vspace{0pt}\footnotesize
+\begin{tabularx}{\linewidth}{@{}Xr@{}}\toprule
+slow pickup, 0.2--1\,kHz (\textmu V/\rtHz) & \\\midrule
+PA03 board 101, October (0.2\,s traces) & \cellcolor{poor}48.8\\
+PA03 board 101, November (after cabling) & \cellcolor{poor}34.8\\
+LSM ACM106 / ACM109, typical & \cellcolor{fair}5--15\\
+LSM ACM110, quietest & \cellcolor{good}2.6--4.2\\
+PA03 board 102 (same cryostat) & \cellcolor{good}1.5--1.6\\\bottomrule
+\end{tabularx}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.51\linewidth}\vspace{0pt}
+\includegraphics[width=\linewidth]{figures/raw_psd_low.png}\\[-2pt]
+{\footnotesize Noise of one board-101 channel before and after the cabling change, against board 102.}
+\end{minipage}
+\begin{itemize}
+\item \textbf{The pickup enters on board 101's side} (its CCD connection, cable or ACM): board 102 in the same cryostat is
+  20$\times$ quieter. Board 101 also shows 2--4$\times$ larger clock waveforms at its outputs and 10\,\% bursty
+  millisecond blocks.
+\item \textbf{The cabling change worked}: pickup $-$29\,\% at equal trace length; in the images the noise shared between the
+  four amplifiers fell from 25\,\% to 5\,\% and the ch0/ch1 read noise by 30\,\%.
+\item \textbf{Specific interferences}: a $\sim$2.5\,kHz line and its harmonic on all PA03 channels; a 30.6\,kHz comb on
+  ACM110 ch3 (only while clocking). PA03 ch0/ch2 and ch1/ch3 share a 2--4\,$\Omega$ return (crosstalk 1--2$\times10^{-4}$).
+\end{itemize}
+
+\head{4.\ The performance}
+\begin{itemize}
+\item \textbf{PA03 is limited by the per-skip noise, not by the pickup:} the 500-skip images reach 0.144--0.173\,e$^-$,
+  0.84--0.89 of the white-noise expectation. The CDS rejects most of board 101's pickup; it mattered in October, when
+  25\,\% of the pixel noise was shared.
+\item \textbf{LSM images are worse than their traces predict} (0.19--0.33\,e$^-$, 1.2--2.0$\times$ the expectation): at 180\,K
+  blank images carry $\sim$1\,e$^-$/pixel, and charge arriving while a pixel is skipped broadens the zero-electron peak.
+\item \textbf{CDS window:} 5--8\,\textmu s is optimal at fixed readout time; 20--30\,\textmu s windows cost 9--32\,\%, because
+  the 1/f part does not shrink while the number of skips does.
+\item \textbf{Timing:} LSM board 109's signal windows are still settling (7--21\,e$^-$/\textmu s) and LSM CDS offsets reach
+  $-1550$\,e$^-$ (PA03: $-20$): the wait after the summing-well pulse is too short there; PA03 drifts $+5$\,e$^-$/\textmu s.
+\end{itemize}
+
+\head{5.\ How solid, and what would settle it}
+{\small \textbf{Solid:} conversion gains, noise per skip and in images, the cabling change, the setup comparison,
+clock couplings, timing flags. \textbf{Model-dependent:} sense-node capacitance (assumes the follower gain), buried-channel
+depth (assumes half the reset charge reaches the node), the dose shift. \textbf{Upper limits / candidates:} trap densities
+(the window fit has not been run on an open input), ACM109 ch1 (one trace). \textbf{Withdrawn:} results that treated
+board 102 as bare electronics (it has transistors): the 0.853\,ADU/\textmu V calibration, the board share of the reset
+feedthrough, the kTC estimate. \textbf{Next:} a trace with an open input; one module at two temperatures; the DC level of
+the video lines; an RC-slowed reset edge; the amplifier off during exposure; more LSM traces per channel.}
+
+{\scriptsize\par\smallskip\textbf{Note on prior work.} The individual techniques are established: the window optimum and
+the white/1/f separation from the window length agree with Wüthrich et al., arXiv:2607.20126 ($\approx$9\,\textmu s); software
+windows follow digital CDS and optimal filtering of skipper video (Chierchie et al.\ 2020, FERMILAB-PUB-20-319;
+arXiv:1510.09105); amplifier light is a known single-electron source (SENSEI, Phys.\ Rev.\ Applied 17, 014022). We found no
+published trap densities for skipper amplifiers and no depth extracted from reset charge injection; the single-trace setup
+number is new as a tool.}
+\end{document}

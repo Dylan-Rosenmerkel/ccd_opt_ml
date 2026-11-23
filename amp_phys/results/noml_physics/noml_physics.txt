@@ -1,0 +1,7 @@
+302 rows; 67 H; nominal G rows per amp: {0: 14, 1: 14, 3: 14}
+σ500 ÷ image gain of that same image                                             n=67  RMS 9.0 %  median|e| 7.0 %  mean 2.5 %
+σ500 ÷ gain from the new amplifier's nominal images                              n=67  RMS 9.2 %  median|e| 6.6 %  mean 2.0 %
+σ500 ÷ typical gain of the other amplifiers                                      n=67  RMS 11.0 %  median|e| 8.8 %  mean 2.5 %
+σ500 ÷ image gain of that same image + 1 constant fitted on the other amplifiers n=67  RMS 9.4 %  median|e| 5.5 %  mean -1.1 %
+σ500 ÷ gain from the new amplifier's nominal images + 1 constant fitted on the other amplifiers n=67  RMS 9.8 %  median|e| 5.6 %  mean -1.5 %
+σ500 ÷ typical gain of the other amplifiers + 1 constant fitted on the other amplifiers n=67  RMS 11.9 %  median|e| 7.8 %  mean -0.7 %

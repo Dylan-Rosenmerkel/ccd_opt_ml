@@ -1,0 +1,29 @@
+\begin{table}[H]\centering\small
+\caption{The setup (and the charge in blank images).}\label{tab:setup}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{llrrrrrrrrr}\toprule
+setup & channel & setup at 500 skips (e) & its share & slow 0.2--1\,kHz (\textmu V/$\sqrt{\text{Hz}}$) & 1--10\,kHz (\textmu V/$\sqrt{\text{Hz}}$) & skip corr. & bursts & static 0.2--1\,kHz & blank-image charge (e/pix) & charge / board median\\\midrule
+PA03, 130 K & 101 ch0 & -- & -- & \cellcolor{poor}34.2 & 3.69 & \cellcolor{poor}0.70 & \cellcolor{fair}0.10 & -- & 0.20 & \cellcolor{good}0.57\\
+ & 101 ch1 & -- & -- & \cellcolor{poor}34.8 & 3.72 & \cellcolor{poor}0.68 & \cellcolor{fair}0.11 & -- & 0.28 & \cellcolor{good}0.78\\
+ & 101 ch2 & -- & -- & \cellcolor{poor}33.9 & 3.72 & \cellcolor{poor}0.67 & \cellcolor{fair}0.08 & -- & 0.49 & \cellcolor{fair}1.40\\
+ & 101 ch3 & -- & -- & \cellcolor{poor}33.6 & 3.73 & \cellcolor{poor}0.64 & \cellcolor{fair}0.11 & -- & 0.43 & \cellcolor{good}1.22\\
+ & 102 ch3 & -- & -- & \cellcolor{good}1.6 & 1.12 & \cellcolor{good}0.20 & \cellcolor{good}0.00 & -- & 1.35 & \cellcolor{good}1.00\\
+ & 102 ch0 \textit{(no charge)} & -- & -- & \cellcolor{good}1.6 & 1.10 & \cellcolor{good}0.26 & \cellcolor{good}0.00 & -- & -- & --\\
+ & 102 ch1 \textit{(no charge)} & -- & -- & -- & -- & -- & -- & -- & -- & --\\
+ & 102 ch2 \textit{(no charge)} & -- & -- & -- & -- & -- & -- & -- & -- & --\\
+\midrule
+LSM, 180 K & ACM\,106 ch0 & \cellcolor{poor}0.139 & 0.67 & \cellcolor{fair}6.1 & 1.66 & \cellcolor{good}0.03 & \cellcolor{good}0.00 & \cellcolor{fair}3.65 & 1.10 & \cellcolor{good}0.97\\
+ & ACM\,106 ch1 & \cellcolor{good}0.040 & 0.11 & \cellcolor{fair}12.9 & 2.28 & \cellcolor{good}0.01 & \cellcolor{good}0.00 & \cellcolor{good}1.26 & 1.15 & \cellcolor{good}1.03\\
+ & ACM\,106 ch2 & \cellcolor{poor}0.091 & 0.41 & \cellcolor{fair}9.5 & 1.79 & \cellcolor{good}$-$0.00 & \cellcolor{good}0.00 & \cellcolor{fair}2.90 & 1.06 & \cellcolor{good}0.94\\
+ & ACM\,106 ch3 & \cellcolor{fair}0.056 & 0.13 & \cellcolor{fair}5.2 & 1.59 & \cellcolor{good}$-$0.01 & \cellcolor{good}0.00 & \cellcolor{good}1.46 & 1.20 & \cellcolor{good}1.06\\
+ & ACM\,109 ch0 & \cellcolor{poor}0.112 & 0.40 & \cellcolor{fair}7.9 & 1.89 & \cellcolor{good}0.05 & \cellcolor{good}0.00 & \cellcolor{fair}2.07 & 1.02 & \cellcolor{good}1.07\\
+ & ACM\,109 ch1 & \cellcolor{poor}0.119 & 0.36 & \cellcolor{poor}29.2 & 3.89 & \cellcolor{good}0.10 & \cellcolor{poor}0.21 & \cellcolor{fair}2.33 & 0.85 & \cellcolor{good}0.89\\
+ & ACM\,109 ch2 & \cellcolor{fair}0.055 & 0.11 & \cellcolor{poor}15.1 & 2.73 & \cellcolor{good}0.16 & \cellcolor{good}0.00 & \cellcolor{good}1.13 & 1.02 & \cellcolor{good}1.06\\
+ & ACM\,109 ch3 & \cellcolor{fair}0.065 & 0.22 & \cellcolor{fair}7.3 & 1.75 & \cellcolor{good}0.08 & \cellcolor{good}0.00 & \cellcolor{good}1.22 & 0.90 & \cellcolor{good}0.94\\
+ & ACM\,110 ch0 & \cellcolor{good}0.020 & 0.01 & \cellcolor{good}3.6 & 1.53 & \cellcolor{good}0.03 & \cellcolor{good}0.02 & \cellcolor{good}0.58 & 1.11 & \cellcolor{good}1.00\\
+ & ACM\,110 ch1 & \cellcolor{good}0.024 & 0.02 & \cellcolor{good}4.2 & 1.45 & \cellcolor{good}0.01 & \cellcolor{good}0.00 & \cellcolor{good}0.53 & 1.12 & \cellcolor{good}1.00\\
+ & ACM\,110 ch2 & \cellcolor{good}0.012 & 0.01 & \cellcolor{good}2.6 & 1.57 & \cellcolor{good}0.02 & \cellcolor{good}0.00 & \cellcolor{good}0.27 & 0.85 & \cellcolor{good}0.76\\
+ & ACM\,110 ch3 & \cellcolor{good}0.020 & 0.02 & \cellcolor{poor}19.8 & 2.48 & \cellcolor{fair}0.37 & \cellcolor{poor}0.33 & \cellcolor{good}0.41 & 1.12 & \cellcolor{good}1.01\\
+\bottomrule\end{tabular}\end{adjustbox}
+\par\smallskip\footnotesize Grades --- setup at 500 skips: \colorbox{good}{$x\le0.04$} \colorbox{fair}{$x\le0.08$}; slow noise: \colorbox{good}{$x\le5$} \colorbox{fair}{$x\le15$}; corr.: \colorbox{good}{$x\le0.3$} \colorbox{fair}{$x\le0.6$}; bursts: \colorbox{good}{$x\le0.05$} \colorbox{fair}{$x\le0.15$}; static: \colorbox{good}{$x\le2$} \colorbox{fair}{$x\le4$}; charge/median: \colorbox{good}{$x\le1.3$} \colorbox{fair}{$x\le2$}; otherwise \colorbox{poor}{poor}. Setup at 500 skips: the static-record spectrum at 100\,Hz--1\,kHz integrated through the exact CDS + 500-skip filter, in electrons (LSM only: PA03 has no static records). Blank-image charge depends on temperature and exposure, so it is graded only against the other channels of the same board.
+\end{table}

@@ -78,6 +78,8 @@ def load(data: Path, plans: list[Path], sessions, channels, extra=None):
     ok = (d.board == 101) & d.session.isin(sessions) & d.channel.isin(channels)
     ok &= d["label.ok"].astype(str).str.lower().eq("true")
     ok &= ~d["label.fractional_window"].astype(str).str.lower().eq("true")
+    # a lambda at the fit's floor (0.001 e-/pixel) is a failed fit, not a measurement
+    ok &= pd.to_numeric(d[LAB["lambda"]], errors="coerce") > 0.005
     d = d[ok].reset_index(drop=True)
     cols = {**LAB, **(extra or {})}
     for t, c in cols.items():
