@@ -1030,7 +1030,7 @@ text(s, 0.6, 1.3, 6.9, 5.5, [
     "**Why not below ≈8–9 %:** each amplifier has its own offset (−6 % to +2 %), and the image sees charge-related effects the trace cannot. The label itself repeats to 2.3 %",
 ], size=15, space=8)
 pic(s, "noise_formula.png", 7.8, 1.4, w=4.9)
-caption(s, 7.8, 5.2, 4.9, "Same sealed test as the main slide (new amplifier, 67 images).", size=12)
+caption(s, 7.8, 4.25, 4.9, "Same sealed test as the main slide (new amplifier, 67 images).", size=12)
 
 # ------------------------------------------------------------------ 10: broken settings
 s = S[10]; clear(s); title(s, "EDT on Our Data: Spotting Broken Settings")
@@ -1165,7 +1165,7 @@ for r in rows:
 table(s, data, 0.6, 1.2, 6.2, col_w=[1.2, 0.95, 1.6, 0.95, 1.5], size=10, row_h=0.27)
 pic(s, "corr_matrix.png", 7.0, 1.15, w=5.7)
 text(s, 7.0, 6.15, 5.7, 0.9, [
-    ("Pearson r on the 302 good v3 images (PA03 ch0, ch1, ch3, sessions G + H); bold: |r| ≥ 0.3. “per amp”: range of r over the three amplifiers alone", {"level": None}),
+    ("Pearson r on the 302 good v3 images (PA03 ch0, ch1, ch3, sessions G + H); bold: |r| ≥ 0.3. “per amp”: range of r over the three amplifiers alone; the pooled r can be smaller, since each amplifier has its own level", {"level": None}),
 ], size=10, color=GRAY)
 cite(s, "Only VSUB stands out for dark charge (r = 0.43). Voltages are not independent: H high and low rails move together (r ≈ 0.8), as do V1 and V3 low (0.68), so one voltage can borrow another's correlation. ln DC and ln noise: r = 0.36.", y=6.9)
 
