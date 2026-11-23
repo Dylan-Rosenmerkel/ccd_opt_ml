@@ -1196,6 +1196,18 @@ text(s, 6.8, 5.0, 5.9, 2.0, [
 ], size=13, space=6)
 cite(s, "PA03 ch0, one nominal trace (3 Nov).", y=7.0)
 
+
+# ------------------------------------------------------------------ 6: how sigma_1(tau) is measured (top right), sigma_1^2(tau) fit below
+s = S[6]
+for sh in list(s.shapes):
+    txt = sh.text_frame.text if sh.has_text_frame else ""
+    if sh.shape_type == 13 or txt.startswith("White and 1/f") or txt.startswith("Work in progress") or (sh.shape_type == 1 and not txt):
+        sh._element.getparent().remove(sh._element)
+pic(s, "sigma1_tau.png", 8.35, 1.15, w=4.45)
+pic(s, "sigtau.png", 8.75, 3.7, w=3.6)
+box(s, 0.6, 6.15, 12.1, 0.8, "", fill=GREY, shape=MSO_SHAPE.RECTANGLE)
+text(s, 0.75, 6.22, 11.8, 0.75, [("**Work in progress:** the same numbers also describe the amplifier itself: oxide trap density from K (≈1–2 × 10¹⁶ eV⁻¹cm⁻³), clock couplings to the sense node (≈3 fF-equivalent), and possibly the reset-gate overlap and implant depth (backup).", {"level": None})], size=13)
+
 # ------------------------------------------------------------------ wording: PA03 instead of board 101; good / bad image
 REPL = [("PA03 module, board 101", "PA03 module"), ("PA03 board 101", "PA03"), ("(PA03 101)", "(PA03)"), ("PA03 101", "PA03"),
         ("one board (PA03)", "one CCD (PA03)"), ("Board 101", "PA03"), ("board 101", "PA03"),
