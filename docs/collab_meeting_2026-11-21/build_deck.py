@@ -962,18 +962,24 @@ def pics_off(slide):
 s = S[30]; clear(s); title(s, "What Is a Decision Tree?")
 pic(s, "tree.png", 0.6, 1.3, w=5.6)
 pic(s, "tree_one.png", 0.9, 4.6, w=4.6)
-text(s, 6.9, 1.2, 5.8, 2.6, [
+text(s, 6.9, 1.2, 5.8, 1.5, [
     ("**Training data:** ≈150 images, each with inputs x (trace numbers, voltages) and a label y (e.g. ln σe)", {"level": None, "space": 6}),
-    ("**Predicting:** answer the yes/no questions from the top; the prediction is the average label of the training images in the leaf", {"level": None, "space": 6}),
-    ("**Growing it:**  1. all training images in one node.  2. try questions “input j < t ?”.  3. keep the one with the largest drop Δ in squared error:", {"level": None}),
-], size=13, space=3)
-eq(s, "split", 7.1, 3.55, scale=0.72)
-text(s, 6.9, 4.05, 5.8, 3.0, [
-    ("**What Δ means:** |S| Var(S) = Σ (y − ȳ)², the error if every image in S is predicted by S's average. Δ = error with one average for the node − error with one average per side", {"level": None, "space": 6}),
-    ("**Example,** labels 1, 2, 8, 9:  one average (5): error 16 + 9 + 9 + 16 = 50.  Split {1, 2} | {8, 9}: averages 1.5 and 8.5, error 1, so **Δ = 49**.  Split {1, 8} | {2, 9}: error 49, Δ = 1. The first question is kept", {"level": None, "space": 6}),
-    ("4.  Repeat in each new node; stop when a leaf would have fewer than 3 images", {"level": None, "space": 6}),
-    ("A single tree is jumpy: a step function that changes a lot with small changes in the data.", {"level": None, "size": 12}),
+    ("**Predicting:** answer the questions from the top; the prediction is the average label of the training images in that leaf", {"level": None}),
 ], size=13)
+text(s, 6.9, 2.3, 5.8, 2.1, [
+    ("**Growing it, step by step**", {"level": None, "space": 5}),
+    ("1.  Start with all training images in one group", {"level": None}),
+    ("2.  Try questions “input j < t ?”; each splits the group in two", {"level": None}),
+    ("3.  Score each question: predict every image by its side's average; error = Σ (y − side average)²", {"level": None}),
+    ("4.  Keep the question with the smallest error, i.e. the largest drop Δ:", {"level": None}),
+], size=13, space=4)
+eq(s, "split", 7.1, 4.0, scale=0.62)
+text(s, 6.9, 4.45, 5.8, 0.6, [("5.  Repeat in each new group; stop when a group would have fewer than 3 images", {"level": None})], size=13)
+table(s, [["example: labels 1, 2, 8, 9", "error", "Δ"],
+          ["no split (average 5)", "50", ""],
+          ["{1, 2} | {8, 9}  (averages 1.5, 8.5)", "1", "50 − 1 = 49 → **kept**"],
+          ["{1, 8} | {2, 9}  (averages 4.5, 5.5)", "49", "50 − 49 = 1"]],
+      6.95, 5.3, 5.75, col_w=[3.35, 0.7, 1.7], size=11, row_h=0.3)
 cite(s, "Breiman, Friedman, Olshen & Stone, Classification and Regression Trees (1984). Tree diagram: illustration with made-up numbers.")
 
 # ------------------------------------------------------------------ 31: EDT, general
