@@ -1118,18 +1118,31 @@ pic(s, "bo_ei.png", 7.2, 5.1, w=4.4)
 
 # ------------------------------------------------------------------ 14: BO results, the test first
 s = S[14]; clear(s); title(s, "BO Results: Finding the Lowest Dark Charge")
-text(s, 0.6, 1.2, 12.1, 1.75, [
-    ("**The test, a replay of the v3 night:** each amplifier in turn is treated as new. Its 63–64 measured settings, broken ones included, are the menu: the search sees their voltages and traces, and “taking an image” reveals the stored result. The model learns only from the other two amplifiers, in the other half of the night. 6 searches, averaged", {"level": 0}),
-    ("**Score:** images until the lowest dark charge found is within 2 % of the best in the menu; **wasted:** images at broken settings", {"level": 0}),
-], size=14, space=6)
+text(s, 0.6, 1.1, 8.3, 2.5, [
+    ("**The test: a replay of the v3 night we already measured**", {"level": None, "space": 4}),
+    ("1.  Treat one amplifier as new (e.g. ch0) and split the night in time into two halves", {"level": None}),
+    ("2.  **Menu:** its 63–64 settings from one half, broken ones included. The search sees their voltages and traces, not their results", {"level": None}),
+    ("3.  **The model learns only from the other two amplifiers, in the other half** (no shared moment, so no shared temperature or drift)", {"level": None}),
+    ("4.  “Taking an image” reveals the stored result. **Score:** images until the lowest dark charge found is within 2 % of the menu's best; **wasted:** images at broken settings", {"level": None}),
+    ("5.  3 amplifiers × 2 halves = **6 searches**, averaged", {"level": None}),
+], size=12, space=3)
+gx, gy, cw, ch = 10.3, 1.55, 1.2, 0.5
+text(s, gx, gy - 0.38, cw, 0.35, [("1st half", {"level": None, "bold": True})], size=11, align=PP_ALIGN.CENTER)
+text(s, gx + cw, gy - 0.38, cw, 0.35, [("2nd half", {"level": None, "bold": True})], size=11, align=PP_ALIGN.CENTER)
+for r, amp in enumerate(["ch0 (new)", "ch1", "ch3"]):
+    text(s, gx - 1.15, gy + r * ch + 0.1, 1.1, 0.35, [(amp, {"level": None})], size=11, align=PP_ALIGN.RIGHT)
+    for c in range(2):
+        fill, lab = (ORANGE, "menu") if (r == 0 and c == 0) else ((GREEN, "model learns") if (r > 0 and c == 1) else (GREY, "not used"))
+        box(s, gx + c * cw, gy + r * ch, cw - 0.06, ch - 0.06, lab, fill=fill, size=10, shape=MSO_SHAPE.RECTANGLE)
+caption(s, 9.15, gy + 3 * ch + 0.02, 3.6, "one of the 6 searches", size=10)
 table(s, [["method", "what it does", "images", "wasted"],
           ["random order", "image the menu in a random order", "38.5", "5.7"],
           ["by hand", "always image the untested setting closest to the best so far", "26.8", "3.4"],
           ["BO, new amplifier only", "the GP learns only from this amplifier's own images", "4.0", "0.5"],
           ["**BO, multi-amplifier + EDT gate**", "the GP also learns from the other amplifiers; the EDT blocks likely-broken settings", "**1.8**", "**0**"]],
-      0.6, 2.8, 7.4, col_w=[2.2, 3.4, 0.9, 0.9], size=13, row_h=0.6)
-pic(s, "results.png", 8.3, 2.8, w=4.4)
-text(s, 0.6, 6.25, 12.1, 0.75, [("**Using the other amplifiers cuts the search from ≈27 images by hand to ≈2, and no image is wasted.** Noise and noise + dark charge: backup.", {"level": None})], size=15)
+      0.6, 3.75, 7.4, col_w=[2.2, 3.4, 0.9, 0.9], size=12, row_h=0.5)
+pic(s, "results.png", 8.3, 3.75, w=4.4)
+text(s, 0.6, 6.45, 12.1, 0.6, [("**Using the other amplifiers cuts the search from ≈27 images by hand to ≈2, and no image is wasted.** Noise and noise + dark charge: backup.", {"level": None})], size=14)
 
 # ------------------------------------------------------------------ 37: caveats, no dark-charge bullet
 s = S[37]
