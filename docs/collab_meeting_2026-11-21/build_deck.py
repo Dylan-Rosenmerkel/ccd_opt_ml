@@ -1063,13 +1063,13 @@ title(S[32], "Gaussian Process: The Math")
 # ------------------------------------------------------------------ 38: GP, what it does
 s = S[38]; clear(s); title(s, "Gaussian Process (GP): A Smooth Guess with Error Bars")
 text(s, 0.6, 1.25, 6.6, 5.7, [
-    ("**What it fits:** J(x) = ln(dark charge) as a function of the 18 voltages x, from the images taken so far. No fixed formula: the data decide the shape", {"level": None, "space": 8}),
-    ("**What it gives:** at any setting a guess m(x) and an uncertainty s(x); s is small near measured settings and grows away from them (top right)", {"level": None, "space": 8}),
+    ("**What it fits:** J(x) = ln(dark charge) as a function of the 18 voltages x, from the training images. No fixed formula: the data decide the shape", {"level": None, "space": 8}),
+    ("**What it gives:** at any setting a guess m(x) and an uncertainty s(x); s is small near training images and grows away from them (top right)", {"level": None, "space": 8}),
     ("**Assumptions:**", {"level": None}),
     ("J is smooth: settings close in voltage have similar J. How close is “close” is a length scale ℓⱼ for each voltage (bottom right)", {"level": 0}),
     ("Each image's J has random scatter of size n", {"level": 0, "space": 8}),
-    ("**What is fitted:** about 20 numbers: the 18 ℓⱼ, the size of the response s² and the scatter n², chosen to make the measured J most probable. No weights, nothing set by hand", {"level": None, "space": 8}),
-    ("**The guess** is a weighted average of the measured J, with more weight on nearby settings:", {"level": None}),
+    ("**What is fitted:** about 20 numbers: the 18 ℓⱼ, the size of the response s² and the scatter n², chosen to make the training images' J most probable. No weights, nothing set by hand", {"level": None, "space": 8}),
+    ("**The guess** is a weighted average of the training images' J, with more weight on nearby settings:", {"level": None}),
 ], size=14, space=4)
 eq(s, "post", 0.8, 5.0, scale=0.72)
 text(s, 0.6, 5.55, 6.6, 0.45, [("**Smoothness** (correlation of J at two settings; bottom right):", {"level": None})], size=14)
