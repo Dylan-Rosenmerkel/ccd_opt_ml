@@ -1002,23 +1002,24 @@ s = S[9]; clear(s); title(s, "EDT on Our Data: Predicting Image Noise")
 text(s, 0.6, 1.2, 7.4, 2.6, [
     ("**Goal:** the read noise σe (e⁻) of a 500-skip image, before taking it", {"level": None, "space": 7}),
     ("**Test:** train on session G of two amplifiers, test once on the sealed session H of the third; rotate (67 test images)", {"level": None, "space": 7}),
-    ("**Result:** voltages only **18.2 %** → trace + voltages **8.6 %** (95 % interval 6.2–11.2 %)", {"level": None}),
-], size=15)
+    ("**New amplifier:** voltages only **18.2 %** → trace + voltages **8.6 %** (95 % interval 6.2–11.2 %)", {"level": None, "space": 7}),
+    ("**Seen amplifier:** adding everything (also the 141 general trace features and the signal sizes) does best, **6.1 %**, but falls to 12.7 % on a new amplifier", {"level": None}),
+], size=14)
 for i, (t1, fill) in enumerate([("9 trace noise numbers (ADU)", LIGHT), ("σ₅₀₀ in e⁻ (gain from a gain EDT, 3.6 %)", GREY), ("31 voltage values", ORANGE)]):
-    box(s, 0.6, 3.25 + i * 0.6, 3.6, 0.48, t1, fill=fill, size=12)
-    arrow(s, 4.2, 3.49 + i * 0.6, 4.8, 3.85)
-box(s, 4.8, 3.5, 1.7, 0.7, "Noise EDT", fill=GREEN, size=15, bold=True)
-arrow(s, 6.5, 3.85, 7.0, 3.85)
-box(s, 7.0, 3.5, 1.0, 0.7, "ln σe", fill=LIGHT, size=15, bold=True)
+    box(s, 0.6, 3.5 + i * 0.52, 3.6, 0.42, t1, fill=fill, size=12)
+    arrow(s, 4.2, 3.71 + i * 0.52, 4.8, 4.23)
+box(s, 4.8, 3.9, 1.7, 0.66, "Noise EDT", fill=GREEN, size=15, bold=True)
+arrow(s, 6.5, 4.23, 7.0, 4.23)
+box(s, 7.0, 3.9, 1.0, 0.66, "ln σe", fill=LIGHT, size=15, bold=True)
 box(s, 0.6, 5.15, 7.4, 1.8, "", fill=GREY, shape=MSO_SHAPE.RECTANGLE)
 text(s, 0.7, 5.2, 7.2, 1.75, [
     ("**What the trace adds**", {"level": None, "space": 3}),
     ("Voltages only: learns “these voltages → this noise” from the training amplifiers. It does well here because the new amplifier is a sibling: same CCD, electronics and night", {"level": 0, "size": 13}),
     ("The trace measures this amplifier's own noise at this setting, so it does not need the new amplifier to look like the training ones. A voltages-only model should break down on CCDs less similar to the training ones; to be tested", {"level": 0, "size": 13}),
 ], size=14, space=3)
-pic(s, "noise_bars_v7.png", 8.5, 1.3, w=4.2)
-caption(s, 8.5, 4.75, 4.2, "Typical error = RMS of ln(predicted / measured) on the sealed test. Amplifier seen in training: 6.5 %. A physics formula without ML: backup.", size=12, h=1.0)
-cite(s, "Interval: bootstrap over the 23 session-H packets (Efron 1979). One CCD (PA03), one night, three amplifiers.")
+pic(s, "noise_new.png", 8.4, 1.15, w=4.3)
+pic(s, "noise_seen.png", 8.4, 4.1, w=4.3)
+cite(s, "Typical error = RMS of ln(predicted / measured) on the 67 sealed test images. Interval: bootstrap over the 23 session-H packets (Efron 1979). “Everything”: same trees, amp_phys/ert_inputs.py. Physics formula without ML: backup.")
 
 # ------------------------------------------------------------------ 39 (backup): the physics formula
 s = S[39]; clear(s); title(s, "Image Noise Without ML: σ₅₀₀ ÷ Gain")
