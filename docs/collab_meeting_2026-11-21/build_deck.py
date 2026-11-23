@@ -1150,6 +1150,25 @@ for sh in list(s.shapes):
 pic(s, "amps_pulse.png", 0.6, 1.3, h=4.25)
 pic(s, "amps_decay.png", 8.1, 1.3, h=4.25)
 
+
+# ------------------------------------------------------------------ 40 (backup): voltage correlations with dark charge and noise
+import csv
+s = S[40]; clear(s); title(s, "How Each Voltage Correlates with Dark Charge and Noise")
+rows = list(csv.DictReader(open(os.path.join(D, "volt_corr.csv"))))
+def fr(v): 
+    v = float(v); t = f"{v:+.2f}".replace("+", "") if v >= 0 else f"−{abs(v):.2f}"
+    return f"**{t}**" if abs(v) >= 0.3 else t
+data = [["voltage", "ln DC", "per amp", "ln noise", "per amp"]]
+for r in rows:
+    lo = lambda a, b: f"{fr(a).strip('*')} to {fr(b).strip('*')}"
+    data.append([r["voltage"], fr(r["r_dc"]), lo(r["dc_lo"], r["dc_hi"]), fr(r["r_noise"]), lo(r["n_lo"], r["n_hi"])])
+table(s, data, 0.6, 1.2, 6.2, col_w=[1.2, 0.95, 1.6, 0.95, 1.5], size=10, row_h=0.27)
+pic(s, "corr_matrix.png", 7.0, 1.15, w=5.7)
+text(s, 7.0, 6.15, 5.7, 0.9, [
+    ("Pearson r on the 302 good v3 images (PA03 ch0, ch1, ch3, sessions G + H); bold: |r| ≥ 0.3. “per amp”: range of r over the three amplifiers alone", {"level": None}),
+], size=10, color=GRAY)
+cite(s, "Only VSUB stands out for dark charge (r = 0.43). Voltages are not independent: H high and low rails move together (r ≈ 0.8), as do V1 and V3 low (0.68), so one voltage can borrow another's correlation. ln DC and ln noise: r = 0.36.", y=6.9)
+
 # ------------------------------------------------------------------ wording: PA03 instead of board 101; good / bad image
 REPL = [("PA03 module, board 101", "PA03 module"), ("PA03 board 101", "PA03"), ("(PA03 101)", "(PA03)"), ("PA03 101", "PA03"),
         ("one board (PA03)", "one CCD (PA03)"), ("Board 101", "PA03"), ("board 101", "PA03"),
@@ -1178,7 +1197,7 @@ for sl in prs.slides:
 
 # ------------------------------------------------------------------ order: main talk, divider, backup
 MAIN = [0, 1, 2, 17, 18, 3, 6, 7, 30, 31, 9, 10, 11, 38, 33, 13, 14, 37, 15]
-BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 39, 28, 29, 32, 34, 35, 36]
+BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 39, 40, 28, 29, 32, 34, 35, 36]
 DROP = [8, 12]
 assert sorted(MAIN + [16] + BACK + DROP) == list(range(len(S)))
 sldIdLst = prs.slides._sldIdLst
