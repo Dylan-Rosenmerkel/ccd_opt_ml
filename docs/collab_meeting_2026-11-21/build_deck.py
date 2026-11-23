@@ -1169,6 +1169,18 @@ text(s, 7.0, 6.15, 5.7, 0.9, [
 ], size=10, color=GRAY)
 cite(s, "Only VSUB stands out for dark charge (r = 0.43). Voltages are not independent: H high and low rails move together (r ≈ 0.8), as do V1 and V3 low (0.68), so one voltage can borrow another's correlation. ln DC and ln noise: r = 0.36.", y=6.9)
 
+
+# ------------------------------------------------------------------ 41 (backup): the trace features the models use, shown on plots
+s = S[41]; clear(s); title(s, "Trace Features the Models Use, Shown on the Trace")
+cells = [("sigtau.png", 0.5, 1.15, ["**σ₁ at 6 windows**", "noise of one skip vs window length (dots)", "**S_w, K**", "white and 1/f levels from the fit", "used by: noise, broken"]),
+         ("sigma500.png", 6.75, 1.15, ["**σ₅₀₀**", "S_w and K passed through the 500-skip average", "white + 1/f, and white only", "used by: noise, broken"]),
+         ("feat_skip.png", 0.5, 4.1, ["**skip pulse**", "size of the reset pulse in each skip", "**CDS offset**", "signal − pedestal with no charge (inset)", "used by: gain, broken"]),
+         ("feat_hwave.png", 6.75, 4.1, ["**H waveform peak-to-peak**", "**reset jump**", "size of the reset edge", "used by: gain, broken"])]
+for f, x, y, lines in cells:
+    pic(s, f, x, y, w=4.25, h=2.8)
+    text(s, x + 4.35, y + 0.15, 1.75, 2.6, [(t, {"level": None, "space": 5}) for t in lines], size=11)
+cite(s, "PA03, nominal voltages. Top: one ch1 trace; bottom: one ch0 trace. “broken”: the broken-setting classifier.", y=7.0)
+
 # ------------------------------------------------------------------ wording: PA03 instead of board 101; good / bad image
 REPL = [("PA03 module, board 101", "PA03 module"), ("PA03 board 101", "PA03"), ("(PA03 101)", "(PA03)"), ("PA03 101", "PA03"),
         ("one board (PA03)", "one CCD (PA03)"), ("Board 101", "PA03"), ("board 101", "PA03"),
@@ -1197,7 +1209,7 @@ for sl in prs.slides:
 
 # ------------------------------------------------------------------ order: main talk, divider, backup
 MAIN = [0, 1, 2, 17, 18, 3, 6, 7, 30, 31, 9, 10, 11, 38, 33, 13, 14, 37, 15]
-BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 39, 40, 28, 29, 32, 34, 35, 36]
+BACK = [4, 5, 19, 20, 21, 22, 23, 24, 25, 26, 27, 41, 39, 40, 28, 29, 32, 34, 35, 36]
 DROP = [8, 12]
 assert sorted(MAIN + [16] + BACK + DROP) == list(range(len(S)))
 sldIdLst = prs.slides._sldIdLst
