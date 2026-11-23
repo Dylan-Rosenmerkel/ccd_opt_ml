@@ -78,7 +78,7 @@ if want("clocks"):
         else:
             ax.plot(tt, w0 / 1e3, color=col, label=f"nominal (H low {m0['H1_A_L']} V)")
             ax.plot(tt, w1 / 1e3, color="C3", label=f"H low {mB['H1_A_L']} V")
-        ax.set_xlabel(f"time within one {lab.lower()} transfer (µs)"); ax.set_ylabel("ADU, relative (k)")
+        ax.set_xlabel(f"time within one {lab.lower()} transfer (µs)"); ax.set_ylabel("kADU relative")
         ax.set_title(f"Average {lab.lower()}-transfer waveform, two settings")
         ax.legend(loc="best", fontsize=10); fig.tight_layout(); fig.savefig(f"{OUT}/{name}_setting.png"); plt.close(fig)
         print(name, "period us %.1f" % (per / FS * 1e6), "p2p nominal/changed kADU %.1f %.1f" % (np.ptp(w0) / 1e3, np.ptp(w1) / 1e3))
